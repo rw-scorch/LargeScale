@@ -178,3 +178,41 @@ test("clients get events that involve players, not bot chatter", () => {
   ];
   assert.deepEqual(publicEvents(w, events).map(e => e.type), ["plot_lost", "eliminated", "stack_created"]);
 });
+
+test("a stack forms on any plot you own that you pick", () => {
+  const { w, a, order } = setup();
+  const n = w.nations.get(a);
+  n.troops = 500;
+  const far = [...w.borderOf(a)].sort((p, q) => w.grid.dist(q, n.capital) - w.grid.dist(p, n.capital))[0];
+  const r = order(a, { t: "stack", share: 0.3, at: far });
+  assert.equal(r.ok, true);
+  assert.equal(w.stacks.get(r.stack).pos, far);
+  assert.notEqual(far, n.capital);
+});
+
+test("a lost capital moves to the nearest plot still owned, with an event", () => {
+  const { w, a, b } = setup();
+  const n = w.nations.get(a), old = n.capital;
+  w.claim(old, b);
+  w.events.length = 0;
+  w.tick(0.25);
+  assert.notEqual(n.capital, old);
+  assert.equal(w.owner[n.capital], a);
+  assert.equal(w.grid.cheb(n.capital, old), 1, "a neighbour of the old capital is the nearest owned plot");
+  const e = w.events.find(x => x.type === "capital_moved");
+  assert.deepEqual([e.nation, e.from, e.to], [a, old, n.capital]);
+  w.tick(0.25);
+  assert.equal(w.events.filter(x => x.type === "capital_moved").length, 1, "it only moves once");
+});
+
+test("a short route inside one block of the route graph still has a length and a time", () => {
+  const { w, a, order } = setup();
+  const s = w.stacks.get(order(a, { t: "stack", share: 0.5 }).stack);
+  const co = w.pathGraph(), home = co.regionOf(s.pos);
+  const near = [...Array(w.grid.size).keys()].find(i => i !== s.pos && co.regionOf(i) === home && w.grid.dist(i, s.pos) >= 3);
+  const r = order(a, { t: "route", stack: s.id, to: near });
+  assert.equal(r.ok, true);
+  const straight = Math.abs(w.grid.x(near) - w.grid.x(s.pos)) + Math.abs(w.grid.y(near) - w.grid.y(s.pos));
+  assert.equal(r.plots, straight);
+  assert.ok(r.seconds >= 1);
+});

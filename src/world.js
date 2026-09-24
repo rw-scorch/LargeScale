@@ -5,10 +5,10 @@ import { isLand } from "./shared/terrain.js";
 import { cropRect, cropLayer, baseLayer, terrainDiff } from "./shared/maps.js";
 import { PROTOCOL, MSG, CLOSE, frame, partFrames } from "./shared/protocol.js";
 import { encodeRuns, decodeRuns, splitParts, joinParts, gzip, gunzip, hashBytes, hashRuns } from "./shared/codec.js";
-import { parseWorldConfig, defaultBots, MIN_MAP_SIDE } from "./worldconfig.js";
+import { parseWorldConfig, defaultBots, scaledRules, MIN_MAP_SIDE, MAX_PLOTS, BASE_WIDTH } from "./worldconfig.js";
 import rules from "../data/rules.json" with { type: "json" };
 import { planCatchUp, runCatchUp } from "./sim/offline.js";
-import { installCombat, COMBAT } from "./sim/combat.js";
+import { installCombat } from "./sim/combat.js";
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
 import { makeRng } from "./shared/rng.js";
 import { runOrder, RateLimit, applyPresence, victory, StateFeed, publicEvents } from "./game.js";
@@ -18,7 +18,7 @@ import { postWebhook, directMessage, mention } from "./discord.js";
 const SAVE_VERSION = 2;
 const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
-const COLOURS = ["#4f8fe0", "#d94a3a", "#4fae4a", "#e0b53a", "#9a5fd0", "#3fb0a8", "#e07ab0", "#8a8a8a"];
+const COLOURS = ["#e0413a", "#f08a24", "#d63fbf", "#f2d02b", "#8e4fe0", "#f4f4f4", "#ff7ab8", "#1f1f1f"];
 
 export class World extends DurableObject {
   constructor(ctx, env) {
@@ -67,15 +67,21 @@ export class World extends DurableObject {
     return r;
   }
 
+  async baseTerrain(dir = "map") {
+    return gunzip(new Uint8Array(await (await this.asset(`${dir}/terrain.bin.gz`)).arrayBuffer()));
+  }
+
   async buildMap(map) {
     if (map.kind === "test") return { map, w: map.w, h: map.h, terrain: makeTestMap(map.w, map.h, map.seed).terrain };
-    const meta = await (await this.asset("map/meta.json")).json();
-    const terrain = new Uint8Array(await (await this.asset("map/terrain.bin")).arrayBuffer());
-    if (terrain.length !== meta.w * meta.h) return { error: "map/terrain.bin does not match map/meta.json" };
-    const base = { ...map, baseHash: hashBytes(terrain), srcW: meta.w, srcH: meta.h };
+    const dir = map.dir ?? "map";
+    const meta = await (await this.asset(`${dir}/meta.json`)).json();
+    const terrain = await this.baseTerrain(dir);
+    if (terrain.length !== meta.w * meta.h) return { error: `${dir}/terrain.bin.gz does not match ${dir}/meta.json` };
+    const base = { ...map, baseHash: hashBytes(terrain), srcW: meta.w, srcH: meta.h, scale: meta.w / BASE_WIDTH };
     if (map.kind === "earth") return { map: base, w: meta.w, h: meta.h, terrain };
     const rect = cropRect(meta, map.box);
     if (!rect || rect.w < MIN_MAP_SIDE || rect.h < MIN_MAP_SIDE) return { error: "the crop is outside the map or too small" };
+    if (rect.w * rect.h > MAX_PLOTS) return { error: `that region is ${rect.w} by ${rect.h} plots, over the ${MAX_PLOTS} limit; pick a smaller box or normal detail` };
     return { map: { ...base, rect }, w: rect.w, h: rect.h, terrain: cropLayer(terrain, meta.w, rect) };
   }
 
@@ -86,7 +92,8 @@ export class World extends DurableObject {
     const t0 = Date.now();
     const terrain = await gunzip(this.readRows("terrain"));
     if (terrain.length !== info.w * info.h) throw new Error(`saved terrain has ${terrain.length} plots, expected ${info.w * info.h}`);
-    this.sim = new Sim({ w: info.w, h: info.h, terrain }, { ...rules.territory, ...info.rules });
+    const scaled = scaledRules(info.map.scale ?? 1);
+    this.sim = new Sim({ w: info.w, h: info.h, terrain }, { ...scaled.territory, ...info.rules });
     const owner = this.readRows("owner");
     if (owner.length) decodeRuns(owner, this.sim.owner);
     this.sim.rebuildBorders();
@@ -100,7 +107,7 @@ export class World extends DurableObject {
       for (const s of saved.stacks) this.sim.stacks.set(s.id, s);
       for (const [nid, acc] of saved.accounts ?? []) this.accounts.set(nid, acc);
     }
-    installCombat(this.sim, { ...COMBAT, ...rules.combat });
+    installCombat(this.sim, scaled.combat);
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.updatePresence();
@@ -127,7 +134,7 @@ export class World extends DurableObject {
     for (const t of base.terrain) if (isLand(t)) land++;
     const info = {
       save: SAVE_VERSION, name: config.name ?? "World", map: base.map, w: base.w, h: base.h, landPlots: land,
-      bots: cfg.bots ?? defaultBots(land), rules: config.rules ?? {}, maxCatchupHours: config.maxCatchupHours ?? 72,
+      bots: cfg.bots ?? defaultBots(land, base.map.scale ?? 1), rules: config.rules ?? {}, maxCatchupHours: config.maxCatchupHours ?? 72,
       seed: crypto.getRandomValues(new Uint32Array(1))[0],
     };
     this.writeRows("terrain", await gzip(base.terrain));
@@ -238,7 +245,7 @@ export class World extends DurableObject {
   async joinData() {
     if (!this.terrainJoin) {
       const info = this.meta("info");
-      const base = await baseLayer(info.map, info.w, info.h, async () => new Uint8Array(await (await this.asset("map/terrain.bin")).arrayBuffer()));
+      const base = await baseLayer(info.map, info.w, info.h, () => this.baseTerrain(info.map.dir));
       this.terrainJoin = { map: base.hash ? { ...info.map, baseHash: base.hash } : info.map, pairs: terrainDiff(base.terrain, this.sim.terrain) };
     }
     return this.terrainJoin;
@@ -288,7 +295,7 @@ export class World extends DurableObject {
   }
 
   nationList() {
-    return [...this.sim.nations.values()].map(n => ({ id: n.id, name: n.name, colour: n.colour, plots: n.plots, troops: Math.floor(n.troops), alive: n.alive, spawned: n.spawned, bot: n.bot }));
+    return [...this.sim.nations.values()].map(n => ({ id: n.id, name: n.name, colour: n.colour, plots: n.plots, troops: Math.floor(n.troops), alive: n.alive, spawned: n.spawned, bot: n.bot, capital: n.capital ?? null }));
   }
 
   recentChat() {

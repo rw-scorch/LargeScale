@@ -14,5 +14,7 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Directory", "World"] }],
   "vars": { "ADMIN_NAMES": "rw_scorch", "TICK_MS": "250", "DISCORD_APP_ID": "" },
   "triggers": { "crons": ["*/10 * * * *"] },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "workers_dev": true,
+  "preview_urls": false
 }

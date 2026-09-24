@@ -1,0 +1,1695 @@
+{
+ "image": "commercial.png",
+ "size": [
+  512,
+  482
+ ],
+ "frames": {
+  "market_stall": {
+   "x": 255,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_construction": {
+   "x": 408,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_damaged": {
+   "x": 425,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_rubble": {
+   "x": 442,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post": {
+   "x": 34,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_construction": {
+   "x": 204,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_damaged": {
+   "x": 221,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_rubble": {
+   "x": 255,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_lights": {
+   "x": 238,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "general_store": {
+   "x": 0,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_construction": {
+   "x": 187,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_damaged": {
+   "x": 204,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_rubble": {
+   "x": 238,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_lights": {
+   "x": 221,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "bakery": {
+   "x": 264,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_construction": {
+   "x": 434,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_damaged": {
+   "x": 451,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_rubble": {
+   "x": 485,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_lights": {
+   "x": 468,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "tavern": {
+   "x": 132,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_construction": {
+   "x": 0,
+   "y": 398,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_damaged": {
+   "x": 33,
+   "y": 398,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_rubble": {
+   "x": 99,
+   "y": 398,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_lights": {
+   "x": 66,
+   "y": 398,
+   "w": 32,
+   "h": 16
+  },
+  "inn": {
+   "x": 165,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_construction": {
+   "x": 0,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "inn_damaged": {
+   "x": 33,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "inn_rubble": {
+   "x": 99,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "inn_lights": {
+   "x": 66,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "restaurant": {
+   "x": 34,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_construction": {
+   "x": 221,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_damaged": {
+   "x": 238,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_rubble": {
+   "x": 272,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_lights": {
+   "x": 255,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "cafe": {
+   "x": 85,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_construction": {
+   "x": 272,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_damaged": {
+   "x": 289,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_rubble": {
+   "x": 323,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_lights": {
+   "x": 306,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "bar": {
+   "x": 0,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "bar_construction": {
+   "x": 17,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "bar_damaged": {
+   "x": 34,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "bar_rubble": {
+   "x": 68,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "bar_lights": {
+   "x": 51,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fast_food": {
+   "x": 340,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fast_food_construction": {
+   "x": 357,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fast_food_damaged": {
+   "x": 374,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fast_food_rubble": {
+   "x": 408,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fast_food_lights": {
+   "x": 391,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fine_dining": {
+   "x": 425,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fine_dining_construction": {
+   "x": 442,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fine_dining_damaged": {
+   "x": 459,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fine_dining_rubble": {
+   "x": 493,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "fine_dining_lights": {
+   "x": 476,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "shop": {
+   "x": 289,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_construction": {
+   "x": 476,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_damaged": {
+   "x": 493,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_rubble": {
+   "x": 17,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "shop_lights": {
+   "x": 0,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "supermarket": {
+   "x": 264,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "supermarket_construction": {
+   "x": 297,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "supermarket_damaged": {
+   "x": 330,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "supermarket_rubble": {
+   "x": 396,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "supermarket_lights": {
+   "x": 363,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "department_store": {
+   "x": 132,
+   "y": 248,
+   "w": 32,
+   "h": 38
+  },
+  "department_store_construction": {
+   "x": 165,
+   "y": 248,
+   "w": 32,
+   "h": 38
+  },
+  "department_store_damaged": {
+   "x": 198,
+   "y": 248,
+   "w": 32,
+   "h": 38
+  },
+  "department_store_rubble": {
+   "x": 264,
+   "y": 248,
+   "w": 32,
+   "h": 38
+  },
+  "department_store_lights": {
+   "x": 231,
+   "y": 248,
+   "w": 32,
+   "h": 38
+  },
+  "mall": {
+   "x": 66,
+   "y": 150,
+   "w": 48,
+   "h": 48
+  },
+  "mall_construction": {
+   "x": 115,
+   "y": 150,
+   "w": 48,
+   "h": 48
+  },
+  "mall_damaged": {
+   "x": 164,
+   "y": 150,
+   "w": 48,
+   "h": 48
+  },
+  "mall_rubble": {
+   "x": 262,
+   "y": 150,
+   "w": 48,
+   "h": 48
+  },
+  "mall_lights": {
+   "x": 213,
+   "y": 150,
+   "w": 48,
+   "h": 48
+  },
+  "car_dealership": {
+   "x": 297,
+   "y": 248,
+   "w": 32,
+   "h": 32
+  },
+  "car_dealership_construction": {
+   "x": 330,
+   "y": 248,
+   "w": 32,
+   "h": 32
+  },
+  "car_dealership_damaged": {
+   "x": 363,
+   "y": 248,
+   "w": 32,
+   "h": 32
+  },
+  "car_dealership_rubble": {
+   "x": 429,
+   "y": 248,
+   "w": 32,
+   "h": 32
+  },
+  "car_dealership_lights": {
+   "x": 396,
+   "y": 248,
+   "w": 32,
+   "h": 32
+  },
+  "gas_station": {
+   "x": 0,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "gas_station_construction": {
+   "x": 33,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "gas_station_damaged": {
+   "x": 66,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "gas_station_rubble": {
+   "x": 132,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "gas_station_lights": {
+   "x": 99,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "bank_early": {
+   "x": 187,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "bank_early_construction": {
+   "x": 220,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "bank_early_damaged": {
+   "x": 253,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "bank_early_rubble": {
+   "x": 286,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "bank_modern": {
+   "x": 311,
+   "y": 150,
+   "w": 32,
+   "h": 48
+  },
+  "bank_modern_construction": {
+   "x": 344,
+   "y": 150,
+   "w": 32,
+   "h": 48
+  },
+  "bank_modern_damaged": {
+   "x": 377,
+   "y": 150,
+   "w": 32,
+   "h": 48
+  },
+  "bank_modern_rubble": {
+   "x": 443,
+   "y": 150,
+   "w": 32,
+   "h": 48
+  },
+  "bank_modern_lights": {
+   "x": 410,
+   "y": 150,
+   "w": 32,
+   "h": 48
+  },
+  "stock_exchange": {
+   "x": 132,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "stock_exchange_construction": {
+   "x": 165,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "stock_exchange_damaged": {
+   "x": 198,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "stock_exchange_rubble": {
+   "x": 231,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "office_small": {
+   "x": 429,
+   "y": 291,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_construction": {
+   "x": 119,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_damaged": {
+   "x": 136,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_rubble": {
+   "x": 170,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_lights": {
+   "x": 153,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_mid": {
+   "x": 476,
+   "y": 150,
+   "w": 32,
+   "h": 44
+  },
+  "office_mid_construction": {
+   "x": 0,
+   "y": 203,
+   "w": 32,
+   "h": 44
+  },
+  "office_mid_damaged": {
+   "x": 33,
+   "y": 203,
+   "w": 32,
+   "h": 44
+  },
+  "office_mid_rubble": {
+   "x": 99,
+   "y": 203,
+   "w": 32,
+   "h": 44
+  },
+  "office_mid_lights": {
+   "x": 66,
+   "y": 203,
+   "w": 32,
+   "h": 44
+  },
+  "skyscraper_a": {
+   "x": 410,
+   "y": 0,
+   "w": 32,
+   "h": 66
+  },
+  "skyscraper_a_construction": {
+   "x": 443,
+   "y": 0,
+   "w": 32,
+   "h": 66
+  },
+  "skyscraper_a_damaged": {
+   "x": 476,
+   "y": 0,
+   "w": 32,
+   "h": 66
+  },
+  "skyscraper_a_rubble": {
+   "x": 33,
+   "y": 83,
+   "w": 32,
+   "h": 66
+  },
+  "skyscraper_a_lights": {
+   "x": 0,
+   "y": 83,
+   "w": 32,
+   "h": 66
+  },
+  "skyscraper_b": {
+   "x": 231,
+   "y": 83,
+   "w": 32,
+   "h": 60
+  },
+  "skyscraper_b_construction": {
+   "x": 264,
+   "y": 83,
+   "w": 32,
+   "h": 60
+  },
+  "skyscraper_b_damaged": {
+   "x": 297,
+   "y": 83,
+   "w": 32,
+   "h": 60
+  },
+  "skyscraper_b_rubble": {
+   "x": 363,
+   "y": 83,
+   "w": 32,
+   "h": 60
+  },
+  "skyscraper_b_lights": {
+   "x": 330,
+   "y": 83,
+   "w": 32,
+   "h": 60
+  },
+  "skyscraper_c": {
+   "x": 66,
+   "y": 83,
+   "w": 32,
+   "h": 64
+  },
+  "skyscraper_c_construction": {
+   "x": 99,
+   "y": 83,
+   "w": 32,
+   "h": 64
+  },
+  "skyscraper_c_damaged": {
+   "x": 132,
+   "y": 83,
+   "w": 32,
+   "h": 64
+  },
+  "skyscraper_c_rubble": {
+   "x": 198,
+   "y": 83,
+   "w": 32,
+   "h": 64
+  },
+  "skyscraper_c_lights": {
+   "x": 165,
+   "y": 83,
+   "w": 32,
+   "h": 64
+  },
+  "skyscraper_d": {
+   "x": 245,
+   "y": 0,
+   "w": 32,
+   "h": 68
+  },
+  "skyscraper_d_construction": {
+   "x": 278,
+   "y": 0,
+   "w": 32,
+   "h": 68
+  },
+  "skyscraper_d_damaged": {
+   "x": 311,
+   "y": 0,
+   "w": 32,
+   "h": 68
+  },
+  "skyscraper_d_rubble": {
+   "x": 377,
+   "y": 0,
+   "w": 32,
+   "h": 68
+  },
+  "skyscraper_d_lights": {
+   "x": 344,
+   "y": 0,
+   "w": 32,
+   "h": 68
+  },
+  "corporate_hq": {
+   "x": 0,
+   "y": 0,
+   "w": 48,
+   "h": 82
+  },
+  "corporate_hq_construction": {
+   "x": 49,
+   "y": 0,
+   "w": 48,
+   "h": 82
+  },
+  "corporate_hq_damaged": {
+   "x": 98,
+   "y": 0,
+   "w": 48,
+   "h": 82
+  },
+  "corporate_hq_rubble": {
+   "x": 196,
+   "y": 0,
+   "w": 48,
+   "h": 82
+  },
+  "corporate_hq_lights": {
+   "x": 147,
+   "y": 0,
+   "w": 48,
+   "h": 82
+  },
+  "motel": {
+   "x": 132,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_construction": {
+   "x": 0,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "motel_damaged": {
+   "x": 33,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "motel_rubble": {
+   "x": 99,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "motel_lights": {
+   "x": 66,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "hotel": {
+   "x": 132,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_construction": {
+   "x": 0,
+   "y": 248,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_damaged": {
+   "x": 33,
+   "y": 248,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_rubble": {
+   "x": 99,
+   "y": 248,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_lights": {
+   "x": 66,
+   "y": 248,
+   "w": 32,
+   "h": 42
+  },
+  "luxury_hotel": {
+   "x": 396,
+   "y": 83,
+   "w": 32,
+   "h": 52
+  },
+  "luxury_hotel_construction": {
+   "x": 429,
+   "y": 83,
+   "w": 32,
+   "h": 52
+  },
+  "luxury_hotel_damaged": {
+   "x": 462,
+   "y": 83,
+   "w": 32,
+   "h": 52
+  },
+  "luxury_hotel_rubble": {
+   "x": 33,
+   "y": 150,
+   "w": 32,
+   "h": 52
+  },
+  "luxury_hotel_lights": {
+   "x": 0,
+   "y": 150,
+   "w": 32,
+   "h": 52
+  },
+  "cinema": {
+   "x": 319,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "cinema_construction": {
+   "x": 352,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "cinema_damaged": {
+   "x": 385,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "cinema_rubble": {
+   "x": 451,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "cinema_lights": {
+   "x": 418,
+   "y": 324,
+   "w": 32,
+   "h": 16
+  },
+  "theatre": {
+   "x": 132,
+   "y": 398,
+   "w": 32,
+   "h": 16
+  },
+  "theatre_construction": {
+   "x": 165,
+   "y": 398,
+   "w": 32,
+   "h": 16
+  },
+  "theatre_damaged": {
+   "x": 198,
+   "y": 398,
+   "w": 32,
+   "h": 16
+  },
+  "theatre_rubble": {
+   "x": 231,
+   "y": 398,
+   "w": 32,
+   "h": 16
+  },
+  "nightclub": {
+   "x": 459,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "nightclub_construction": {
+   "x": 476,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "nightclub_damaged": {
+   "x": 493,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "nightclub_rubble": {
+   "x": 17,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "nightclub_lights": {
+   "x": 0,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "casino": {
+   "x": 462,
+   "y": 248,
+   "w": 32,
+   "h": 32
+  },
+  "casino_construction": {
+   "x": 0,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "casino_damaged": {
+   "x": 33,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "casino_rubble": {
+   "x": 99,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "casino_lights": {
+   "x": 66,
+   "y": 291,
+   "w": 32,
+   "h": 32
+  },
+  "general_store_b": {
+   "x": 17,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_b_construction": {
+   "x": 34,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_b_damaged": {
+   "x": 51,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_b_rubble": {
+   "x": 85,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_b_lights": {
+   "x": 68,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_c": {
+   "x": 102,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_c_construction": {
+   "x": 119,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_c_damaged": {
+   "x": 136,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_c_rubble": {
+   "x": 170,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "general_store_c_lights": {
+   "x": 153,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_b": {
+   "x": 281,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_b_construction": {
+   "x": 298,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_b_damaged": {
+   "x": 315,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_b_rubble": {
+   "x": 349,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_b_lights": {
+   "x": 332,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_c": {
+   "x": 366,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_c_construction": {
+   "x": 383,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_c_damaged": {
+   "x": 400,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "bakery_c_rubble": {
+   "x": 417,
+   "y": 398,
+   "w": 16,
+   "h": 16
+  },
+  "tavern_b": {
+   "x": 165,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_b_construction": {
+   "x": 198,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_b_damaged": {
+   "x": 231,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_b_rubble": {
+   "x": 297,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_b_lights": {
+   "x": 264,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_c": {
+   "x": 330,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_c_construction": {
+   "x": 363,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_c_damaged": {
+   "x": 396,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_c_rubble": {
+   "x": 462,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "tavern_c_lights": {
+   "x": 429,
+   "y": 381,
+   "w": 32,
+   "h": 16
+  },
+  "inn_b": {
+   "x": 198,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_b_construction": {
+   "x": 231,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_b_damaged": {
+   "x": 264,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_b_rubble": {
+   "x": 297,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_c": {
+   "x": 330,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_c_construction": {
+   "x": 363,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_c_damaged": {
+   "x": 396,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_c_rubble": {
+   "x": 462,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "inn_c_lights": {
+   "x": 429,
+   "y": 347,
+   "w": 32,
+   "h": 16
+  },
+  "restaurant_b": {
+   "x": 51,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_b_construction": {
+   "x": 68,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_b_damaged": {
+   "x": 85,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_b_rubble": {
+   "x": 119,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_b_lights": {
+   "x": 102,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_c": {
+   "x": 136,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_c_construction": {
+   "x": 153,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_c_damaged": {
+   "x": 170,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_c_rubble": {
+   "x": 204,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "restaurant_c_lights": {
+   "x": 187,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_b": {
+   "x": 102,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_b_construction": {
+   "x": 119,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_b_damaged": {
+   "x": 136,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_b_rubble": {
+   "x": 170,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_b_lights": {
+   "x": 153,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_c": {
+   "x": 187,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_c_construction": {
+   "x": 204,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_c_damaged": {
+   "x": 221,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_c_rubble": {
+   "x": 255,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "cafe_c_lights": {
+   "x": 238,
+   "y": 415,
+   "w": 16,
+   "h": 16
+  },
+  "shop_b": {
+   "x": 306,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_b_construction": {
+   "x": 323,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_b_damaged": {
+   "x": 340,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_b_rubble": {
+   "x": 374,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_b_lights": {
+   "x": 357,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_c": {
+   "x": 391,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_c_construction": {
+   "x": 408,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_c_damaged": {
+   "x": 425,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_c_rubble": {
+   "x": 459,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "shop_c_lights": {
+   "x": 442,
+   "y": 449,
+   "w": 16,
+   "h": 16
+  },
+  "office_small_b": {
+   "x": 446,
+   "y": 291,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_b_construction": {
+   "x": 463,
+   "y": 291,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_b_damaged": {
+   "x": 480,
+   "y": 291,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_b_rubble": {
+   "x": 17,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_b_lights": {
+   "x": 0,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_c": {
+   "x": 34,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_c_construction": {
+   "x": 51,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_c_damaged": {
+   "x": 68,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_c_rubble": {
+   "x": 102,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "office_small_c_lights": {
+   "x": 85,
+   "y": 324,
+   "w": 16,
+   "h": 22
+  },
+  "hotel_b": {
+   "x": 165,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_b_construction": {
+   "x": 198,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_b_damaged": {
+   "x": 231,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_b_rubble": {
+   "x": 297,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_b_lights": {
+   "x": 264,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_c": {
+   "x": 330,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_c_construction": {
+   "x": 363,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_c_damaged": {
+   "x": 396,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_c_rubble": {
+   "x": 462,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "hotel_c_lights": {
+   "x": 429,
+   "y": 203,
+   "w": 32,
+   "h": 42
+  },
+  "motel_b": {
+   "x": 165,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_b_construction": {
+   "x": 198,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_b_damaged": {
+   "x": 231,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_b_rubble": {
+   "x": 297,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_b_lights": {
+   "x": 264,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_c": {
+   "x": 330,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_c_construction": {
+   "x": 363,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_c_damaged": {
+   "x": 396,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_c_rubble": {
+   "x": 462,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "motel_c_lights": {
+   "x": 429,
+   "y": 364,
+   "w": 32,
+   "h": 16
+  },
+  "trading_post_b": {
+   "x": 51,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_b_construction": {
+   "x": 68,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_b_damaged": {
+   "x": 85,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_b_rubble": {
+   "x": 119,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_b_lights": {
+   "x": 102,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_c": {
+   "x": 136,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_c_construction": {
+   "x": 153,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_c_damaged": {
+   "x": 170,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "trading_post_c_rubble": {
+   "x": 187,
+   "y": 466,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_b": {
+   "x": 272,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_b_construction": {
+   "x": 289,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_b_damaged": {
+   "x": 306,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_b_rubble": {
+   "x": 323,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_c": {
+   "x": 340,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_c_construction": {
+   "x": 357,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_c_damaged": {
+   "x": 374,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  },
+  "market_stall_c_rubble": {
+   "x": 391,
+   "y": 432,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

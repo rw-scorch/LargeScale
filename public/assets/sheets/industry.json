@@ -1,0 +1,885 @@
+{
+ "image": "industry.png",
+ "size": [
+  512,
+  323
+ ],
+ "frames": {
+  "woodcutter_camp": {
+   "x": 187,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "woodcutter_camp_construction": {
+   "x": 204,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "woodcutter_camp_damaged": {
+   "x": 221,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "woodcutter_camp_rubble": {
+   "x": 238,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "sawmill": {
+   "x": 132,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "sawmill_construction": {
+   "x": 165,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "sawmill_damaged": {
+   "x": 198,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "sawmill_rubble": {
+   "x": 264,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "sawmill_lights": {
+   "x": 231,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "quarry": {
+   "x": 429,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "clay_pit": {
+   "x": 264,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "brickworks": {
+   "x": 99,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "brickworks_construction": {
+   "x": 132,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "brickworks_damaged": {
+   "x": 165,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "brickworks_rubble": {
+   "x": 231,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "brickworks_lights": {
+   "x": 198,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "forge": {
+   "x": 281,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "forge_construction": {
+   "x": 298,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "forge_damaged": {
+   "x": 315,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "forge_rubble": {
+   "x": 349,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "forge_lights": {
+   "x": 332,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "foundry": {
+   "x": 264,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "foundry_construction": {
+   "x": 297,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "foundry_damaged": {
+   "x": 330,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "foundry_rubble": {
+   "x": 396,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "foundry_lights": {
+   "x": 363,
+   "y": 240,
+   "w": 32,
+   "h": 24
+  },
+  "steel_mill": {
+   "x": 49,
+   "y": 49,
+   "w": 48,
+   "h": 44
+  },
+  "steel_mill_construction": {
+   "x": 98,
+   "y": 49,
+   "w": 48,
+   "h": 44
+  },
+  "steel_mill_damaged": {
+   "x": 147,
+   "y": 49,
+   "w": 48,
+   "h": 44
+  },
+  "steel_mill_rubble": {
+   "x": 245,
+   "y": 49,
+   "w": 48,
+   "h": 44
+  },
+  "steel_mill_lights": {
+   "x": 196,
+   "y": 49,
+   "w": 48,
+   "h": 44
+  },
+  "mine_pit": {
+   "x": 366,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "mine_pit_construction": {
+   "x": 383,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "mine_pit_damaged": {
+   "x": 400,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "mine_pit_rubble": {
+   "x": 417,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "mine_shaft": {
+   "x": 434,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "mine_shaft_construction": {
+   "x": 451,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "mine_shaft_damaged": {
+   "x": 468,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "mine_shaft_rubble": {
+   "x": 485,
+   "y": 290,
+   "w": 16,
+   "h": 16
+  },
+  "mine_openpit": {
+   "x": 245,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "mine_automated": {
+   "x": 462,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "mine_automated_construction": {
+   "x": 0,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "mine_automated_damaged": {
+   "x": 33,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "mine_automated_rubble": {
+   "x": 99,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "mine_automated_lights": {
+   "x": 66,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "oil_derrick": {
+   "x": 0,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "oil_derrick_construction": {
+   "x": 17,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "oil_derrick_damaged": {
+   "x": 34,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "oil_derrick_rubble": {
+   "x": 51,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "pumpjack": {
+   "x": 68,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "pumpjack_construction": {
+   "x": 85,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "pumpjack_damaged": {
+   "x": 102,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "pumpjack_rubble": {
+   "x": 119,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "offshore_rig": {
+   "x": 297,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "offshore_rig_construction": {
+   "x": 330,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "offshore_rig_damaged": {
+   "x": 363,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "offshore_rig_rubble": {
+   "x": 396,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "refinery": {
+   "x": 377,
+   "y": 98,
+   "w": 48,
+   "h": 32
+  },
+  "refinery_construction": {
+   "x": 426,
+   "y": 98,
+   "w": 48,
+   "h": 32
+  },
+  "refinery_damaged": {
+   "x": 0,
+   "y": 141,
+   "w": 48,
+   "h": 32
+  },
+  "refinery_rubble": {
+   "x": 98,
+   "y": 141,
+   "w": 48,
+   "h": 32
+  },
+  "refinery_lights": {
+   "x": 49,
+   "y": 141,
+   "w": 48,
+   "h": 32
+  },
+  "gas_plant": {
+   "x": 132,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "gas_plant_construction": {
+   "x": 165,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "gas_plant_damaged": {
+   "x": 198,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "gas_plant_rubble": {
+   "x": 264,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "gas_plant_lights": {
+   "x": 231,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "chemical_plant": {
+   "x": 147,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "chemical_plant_construction": {
+   "x": 180,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "chemical_plant_damaged": {
+   "x": 213,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "chemical_plant_rubble": {
+   "x": 279,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "chemical_plant_lights": {
+   "x": 246,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "textile_mill": {
+   "x": 459,
+   "y": 49,
+   "w": 32,
+   "h": 42
+  },
+  "textile_mill_construction": {
+   "x": 0,
+   "y": 98,
+   "w": 32,
+   "h": 42
+  },
+  "textile_mill_damaged": {
+   "x": 33,
+   "y": 98,
+   "w": 32,
+   "h": 42
+  },
+  "textile_mill_rubble": {
+   "x": 99,
+   "y": 98,
+   "w": 32,
+   "h": 42
+  },
+  "textile_mill_lights": {
+   "x": 66,
+   "y": 98,
+   "w": 32,
+   "h": 42
+  },
+  "factory_early": {
+   "x": 294,
+   "y": 49,
+   "w": 32,
+   "h": 42
+  },
+  "factory_early_construction": {
+   "x": 327,
+   "y": 49,
+   "w": 32,
+   "h": 42
+  },
+  "factory_early_damaged": {
+   "x": 360,
+   "y": 49,
+   "w": 32,
+   "h": 42
+  },
+  "factory_early_rubble": {
+   "x": 426,
+   "y": 49,
+   "w": 32,
+   "h": 42
+  },
+  "factory_early_lights": {
+   "x": 393,
+   "y": 49,
+   "w": 32,
+   "h": 42
+  },
+  "factory_modern": {
+   "x": 477,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "factory_modern_construction": {
+   "x": 0,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "factory_modern_damaged": {
+   "x": 33,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "factory_modern_rubble": {
+   "x": 99,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "factory_modern_lights": {
+   "x": 66,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "vehicle_factory": {
+   "x": 132,
+   "y": 98,
+   "w": 48,
+   "h": 40
+  },
+  "vehicle_factory_construction": {
+   "x": 181,
+   "y": 98,
+   "w": 48,
+   "h": 40
+  },
+  "vehicle_factory_damaged": {
+   "x": 230,
+   "y": 98,
+   "w": 48,
+   "h": 40
+  },
+  "vehicle_factory_rubble": {
+   "x": 328,
+   "y": 98,
+   "w": 48,
+   "h": 40
+  },
+  "vehicle_factory_lights": {
+   "x": 279,
+   "y": 98,
+   "w": 48,
+   "h": 40
+  },
+  "aircraft_factory": {
+   "x": 0,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "aircraft_factory_construction": {
+   "x": 49,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "aircraft_factory_damaged": {
+   "x": 98,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "aircraft_factory_rubble": {
+   "x": 196,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "aircraft_factory_lights": {
+   "x": 147,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "shipyard_small": {
+   "x": 462,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "shipyard_small_construction": {
+   "x": 0,
+   "y": 240,
+   "w": 32,
+   "h": 32
+  },
+  "shipyard_small_damaged": {
+   "x": 33,
+   "y": 240,
+   "w": 32,
+   "h": 32
+  },
+  "shipyard_small_rubble": {
+   "x": 66,
+   "y": 240,
+   "w": 32,
+   "h": 32
+  },
+  "shipyard_large": {
+   "x": 294,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "shipyard_large_construction": {
+   "x": 343,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "shipyard_large_damaged": {
+   "x": 392,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "shipyard_large_rubble": {
+   "x": 0,
+   "y": 49,
+   "w": 48,
+   "h": 48
+  },
+  "shipyard_large_lights": {
+   "x": 441,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "munitions_factory": {
+   "x": 132,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "munitions_factory_construction": {
+   "x": 165,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "munitions_factory_damaged": {
+   "x": 198,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "munitions_factory_rubble": {
+   "x": 264,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "munitions_factory_lights": {
+   "x": 231,
+   "y": 207,
+   "w": 32,
+   "h": 32
+  },
+  "electronics_plant": {
+   "x": 312,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "electronics_plant_construction": {
+   "x": 345,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "electronics_plant_damaged": {
+   "x": 378,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "electronics_plant_rubble": {
+   "x": 444,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "electronics_plant_lights": {
+   "x": 411,
+   "y": 141,
+   "w": 32,
+   "h": 32
+  },
+  "warehouse": {
+   "x": 297,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_construction": {
+   "x": 132,
+   "y": 290,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_damaged": {
+   "x": 165,
+   "y": 290,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_rubble": {
+   "x": 231,
+   "y": 290,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_lights": {
+   "x": 198,
+   "y": 290,
+   "w": 32,
+   "h": 16
+  },
+  "storage_yard": {
+   "x": 136,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "silo": {
+   "x": 429,
+   "y": 240,
+   "w": 16,
+   "h": 24
+  },
+  "silo_construction": {
+   "x": 446,
+   "y": 240,
+   "w": 16,
+   "h": 24
+  },
+  "silo_damaged": {
+   "x": 463,
+   "y": 240,
+   "w": 16,
+   "h": 24
+  },
+  "silo_rubble": {
+   "x": 480,
+   "y": 240,
+   "w": 16,
+   "h": 24
+  },
+  "logistics_depot": {
+   "x": 297,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "logistics_depot_construction": {
+   "x": 330,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "logistics_depot_damaged": {
+   "x": 363,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "logistics_depot_rubble": {
+   "x": 429,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "logistics_depot_lights": {
+   "x": 396,
+   "y": 174,
+   "w": 32,
+   "h": 32
+  },
+  "fuel_tanks": {
+   "x": 0,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "fuel_tanks_construction": {
+   "x": 33,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "fuel_tanks_damaged": {
+   "x": 66,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "fuel_tanks_rubble": {
+   "x": 99,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_b": {
+   "x": 330,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_b_construction": {
+   "x": 363,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_b_damaged": {
+   "x": 396,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_b_rubble": {
+   "x": 429,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_c": {
+   "x": 462,
+   "y": 273,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_c_construction": {
+   "x": 0,
+   "y": 290,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_c_damaged": {
+   "x": 33,
+   "y": 290,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_c_rubble": {
+   "x": 99,
+   "y": 290,
+   "w": 32,
+   "h": 16
+  },
+  "warehouse_c_lights": {
+   "x": 66,
+   "y": 290,
+   "w": 32,
+   "h": 16
+  },
+  "storage_yard_b": {
+   "x": 153,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  },
+  "storage_yard_c": {
+   "x": 170,
+   "y": 307,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

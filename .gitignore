@@ -1,8 +1,9 @@
 node_modules/
 .wrangler/
 .dev.vars
-public/assets/
-public/map/
+public/map/terrain.bin
+public/map/elevation.bin
+public/map/preview.png
 data/map/
 **/__pycache__/
 

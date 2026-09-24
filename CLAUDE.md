@@ -24,13 +24,19 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (38; 2 skip without public/map)
+npm test                  # unit tests (48)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, fails if a tick is over 50 ms
+npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
 npm run dev               # wrangler dev on http://localhost:8787
-$env:INVITE = "code-from-.dev.vars"; $env:MAP = "europe"; npm run smoke   # MAP is test, europe or earth
+$env:INVITE = "code-from-.dev.vars"; $env:MAP = "europe"; npm run smoke   # MAP is test, europe (fine), europe-normal or earth
 $env:RECHECK = "1"; npm run smoke   # after restarting npm run dev: the last smoke world reloads identically
+$env:MAP = "europe"; npm run ui     # headless browser session with screenshots in .screens; needs Playwright
 ```
+
+`npm run map:fine` rebuilds the fine map from the sources in `data/map` (see `reference/docs/map-data-sources.md`).
+
+`npm run ui` needs Playwright, which is not a project dependency: `npm install --no-save playwright` then `npx playwright install chromium`.
 
 `npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
 
@@ -43,7 +49,8 @@ src/world.js       World object: one per world. Sockets, tick loop, saving, catc
 src/worldconfig.js map choice (test, earth, europe, lat/long box) and bot count validation
 src/sim/           the simulation, 21 modules, plain JavaScript
 src/shared/        the only code both server and client import: protocol, codec, maps, pathfinding, terrain
-public/            the client. public/map and public/assets are generated, not committed
+public/            the client: index.html, js/app.js, js/net.js, js/input.js, js/render/, js/ui/ (one file per panel);
+                   test.html is the old server test page. public/map holds the gzipped maps and public/assets the art kit, both committed
 data/              stat files. Tuning numbers live in data/rules.json
 tools/             build_earth.py, bench_earth.mjs, one-off scripts
 test/              node --test unit tests plus smoke.mjs
@@ -55,7 +62,7 @@ plans/             milestone plans
 
 1. `src/sim/` never imports anything from Cloudflare. That keeps tests fast in plain Node, and lets the client reuse the code.
 2. `src/shared/` is the only code crossing between server and client.
-3. Generated files are not committed: `public/map/`, `public/assets/`, `.wrangler/`, `.dev.vars`.
+3. Generated files are not committed: `.wrangler/`, `.dev.vars`, `public/js/shared/`, and the raw `public/map/terrain.bin`, `elevation.bin` and `preview.png`. The gzipped maps and the art kit in `public/assets/` are committed (since 24 September 2026, at Ryan's request), so a fresh clone deploys as it is.
 4. Never edit or remove the `migrations` block in `wrangler.jsonc`. A class rename needs a new migration entry. Deleting a class deletes its saved worlds.
 5. Tuning constants go in `data/rules.json`, never as numbers typed into the simulation.
 6. New systems are one module in `src/sim/`, installed once in `world.js`. New message types are a validated case in `world.js`. Panels are one file each in `public/js/ui/`.
@@ -81,16 +88,28 @@ The modules in `src/sim/` are the tested kit examples, identical apart from impo
 - **Deploy.** Not deployed. The Cloudflare account had no Workers.
 - **Admin.** `ADMIN_NAMES` is `rw_scorch`. Ryan registers that name right after the first deploy.
 - **Deploy commands.** Ryan deploys himself: `npx wrangler login`, `npx wrangler secret put INVITE_CODE`, `npx wrangler secret put PEPPER`, `npx wrangler deploy`. The first deploy creates both Durable Object classes.
+- **Fine map.** `public/map/fine/terrain.bin.gz` (7200 by 2880, 0.05 degrees, about 634 KB) and `meta.json`, built 24 September 2026. Committed, like the normal map's `terrain.bin.gz` and the art kit.
 - **Map.** The Earth map is already in `public/map/`: `terrain.bin` (3600 by 1440 bytes), `elevation.bin` (Int16) and `meta.json`. The terrain indexes match `src/shared/terrain.js`.
 
 ## Milestone one progress
 
-Steps 1 to 4 are done (September 2026). Step 5, the real client, is next:
+Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, is under way: first deployed 24 September 2026 from `claude/keen-ride-u8zdz9` to https://large-scale.rwscorch.workers.dev (free plan). He deploys from his clone in `C:\Users\striv\large-scale-gh`, with `public/map` and `public/assets` copied in from the handoff zip.
 
 - **Maps.** Worlds are `test`, `earth`, `europe` or a lat/long box, read through `env.ASSETS` at creation. Each world stores its terrain as one gzipped row and its owner layer run-length encoded; a save writes 2 to 4 rows.
 - **Join.** Protocol version 2 (version 1 until step 4). The client fetches `/map/terrain.bin.gz` (243 KB, cacheable); the socket sends `hello`, terrain differences and the owner layer in run-length frames. About 150 KB on Earth with 400 bots.
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
+- **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, M move, S split, G merge, X disband, Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
+- **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
+- **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
+
+Open items as of 24 September 2026, in order:
+
+1. Ryan deploys the fine map: `git pull`, `npm test`, `npx wrangler deploy`, then tries a new Europe world. The maps and assets now come with the repository.
+2. Pull request https://github.com/rw-scorch/LargeScale/pull/3 (step 5 plus the playtest fixes, maps and assets) is open for Ryan to merge.
+3. `plans/milestone-2.md` is written (the first towns: construction, civilians, resources, research, bulk upgrades, offline economy). It waits for Ryan's approval and his answers to its seven questions. Do not start it before then.
+4. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset.
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 

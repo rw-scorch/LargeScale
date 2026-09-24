@@ -1,0 +1,3129 @@
+{
+ "image": "units.png",
+ "size": [
+  512,
+  305
+ ],
+ "frames": {
+  "club_warrior_e_idle": {
+   "x": 187,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_e_walk1": {
+   "x": 204,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_e_walk2": {
+   "x": 221,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_e_attack": {
+   "x": 170,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_s_idle": {
+   "x": 323,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_s_walk1": {
+   "x": 340,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_s_walk2": {
+   "x": 357,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_s_attack": {
+   "x": 306,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_n_idle": {
+   "x": 255,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_n_walk1": {
+   "x": 272,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_n_walk2": {
+   "x": 289,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_n_attack": {
+   "x": 238,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "club_warrior_dead": {
+   "x": 153,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_e_idle": {
+   "x": 408,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_e_walk1": {
+   "x": 425,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_e_walk2": {
+   "x": 442,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_e_attack": {
+   "x": 391,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_s_idle": {
+   "x": 34,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_s_walk1": {
+   "x": 51,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_s_walk2": {
+   "x": 68,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_s_attack": {
+   "x": 17,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_n_idle": {
+   "x": 476,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_n_walk1": {
+   "x": 493,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_n_walk2": {
+   "x": 0,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_n_attack": {
+   "x": 459,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "spear_thrower_dead": {
+   "x": 374,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_e_idle": {
+   "x": 119,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_e_walk1": {
+   "x": 136,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_e_walk2": {
+   "x": 153,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_e_attack": {
+   "x": 102,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_s_idle": {
+   "x": 255,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_s_walk1": {
+   "x": 272,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_s_walk2": {
+   "x": 289,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_s_attack": {
+   "x": 238,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_n_idle": {
+   "x": 187,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_n_walk1": {
+   "x": 204,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_n_walk2": {
+   "x": 221,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_n_attack": {
+   "x": 170,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "spearman_dead": {
+   "x": 85,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "archer_e_idle": {
+   "x": 34,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_e_walk1": {
+   "x": 51,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_e_walk2": {
+   "x": 68,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_e_attack": {
+   "x": 17,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_s_idle": {
+   "x": 170,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_s_walk1": {
+   "x": 187,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_s_walk2": {
+   "x": 204,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_s_attack": {
+   "x": 153,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_n_idle": {
+   "x": 102,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_n_walk1": {
+   "x": 119,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_n_walk2": {
+   "x": 136,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_n_attack": {
+   "x": 85,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "archer_dead": {
+   "x": 0,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_e_idle": {
+   "x": 272,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_e_walk1": {
+   "x": 289,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_e_walk2": {
+   "x": 306,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_e_attack": {
+   "x": 255,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_s_idle": {
+   "x": 408,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_s_walk1": {
+   "x": 425,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_s_walk2": {
+   "x": 442,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_s_attack": {
+   "x": 391,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_n_idle": {
+   "x": 340,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_n_walk1": {
+   "x": 357,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_n_walk2": {
+   "x": 374,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_n_attack": {
+   "x": 323,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "swordsman_dead": {
+   "x": 238,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_e_idle": {
+   "x": 459,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_e_walk1": {
+   "x": 476,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_e_walk2": {
+   "x": 493,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_e_attack": {
+   "x": 442,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_s_idle": {
+   "x": 85,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_s_walk1": {
+   "x": 102,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_s_walk2": {
+   "x": 119,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_s_attack": {
+   "x": 68,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_n_idle": {
+   "x": 17,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_n_walk1": {
+   "x": 34,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_n_walk2": {
+   "x": 51,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_n_attack": {
+   "x": 0,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "pikeman_dead": {
+   "x": 425,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_e_idle": {
+   "x": 306,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_e_walk1": {
+   "x": 323,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_e_walk2": {
+   "x": 340,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_e_attack": {
+   "x": 289,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_s_idle": {
+   "x": 442,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_s_walk1": {
+   "x": 459,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_s_walk2": {
+   "x": 476,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_s_attack": {
+   "x": 425,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_n_idle": {
+   "x": 374,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_n_walk1": {
+   "x": 391,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_n_walk2": {
+   "x": 408,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_n_attack": {
+   "x": 357,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "musketeer_dead": {
+   "x": 272,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_e_idle": {
+   "x": 204,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_e_walk1": {
+   "x": 221,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_e_walk2": {
+   "x": 238,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_e_attack": {
+   "x": 187,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_s_idle": {
+   "x": 340,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_s_walk1": {
+   "x": 357,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_s_walk2": {
+   "x": 374,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_s_attack": {
+   "x": 323,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_n_idle": {
+   "x": 272,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_n_walk1": {
+   "x": 289,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_n_walk2": {
+   "x": 306,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_n_attack": {
+   "x": 255,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "grenadier_dead": {
+   "x": 170,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_e_idle": {
+   "x": 476,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_e_walk1": {
+   "x": 493,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_e_walk2": {
+   "x": 0,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_e_attack": {
+   "x": 459,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_s_idle": {
+   "x": 102,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_s_walk1": {
+   "x": 119,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_s_walk2": {
+   "x": 136,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_s_attack": {
+   "x": 85,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_n_idle": {
+   "x": 34,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_n_walk1": {
+   "x": 51,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_n_walk2": {
+   "x": 68,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_n_attack": {
+   "x": 17,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_crew_dead": {
+   "x": 442,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_e_idle": {
+   "x": 391,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_e_walk1": {
+   "x": 408,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_e_walk2": {
+   "x": 425,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_e_attack": {
+   "x": 374,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_s_idle": {
+   "x": 17,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_s_walk1": {
+   "x": 34,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_s_walk2": {
+   "x": 51,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_s_attack": {
+   "x": 0,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_n_idle": {
+   "x": 459,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_n_walk1": {
+   "x": 476,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_n_walk2": {
+   "x": 493,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_n_attack": {
+   "x": 442,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "rifleman_dead": {
+   "x": 357,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_e_idle": {
+   "x": 442,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_e_walk1": {
+   "x": 459,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_e_walk2": {
+   "x": 476,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_e_attack": {
+   "x": 425,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_s_idle": {
+   "x": 68,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_s_walk1": {
+   "x": 85,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_s_walk2": {
+   "x": 102,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_s_attack": {
+   "x": 51,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_n_idle": {
+   "x": 0,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_n_walk1": {
+   "x": 17,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_n_walk2": {
+   "x": 34,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_n_attack": {
+   "x": 493,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "machine_gunner_dead": {
+   "x": 408,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_e_idle": {
+   "x": 85,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_e_walk1": {
+   "x": 102,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_e_walk2": {
+   "x": 119,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_e_attack": {
+   "x": 68,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_s_idle": {
+   "x": 221,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_s_walk1": {
+   "x": 238,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_s_walk2": {
+   "x": 255,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_s_attack": {
+   "x": 204,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_n_idle": {
+   "x": 153,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_n_walk1": {
+   "x": 170,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_n_walk2": {
+   "x": 187,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_n_attack": {
+   "x": 136,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "mortar_team_dead": {
+   "x": 51,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_e_idle": {
+   "x": 187,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_e_walk1": {
+   "x": 204,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_e_walk2": {
+   "x": 221,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_e_attack": {
+   "x": 170,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_s_idle": {
+   "x": 323,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_s_walk1": {
+   "x": 340,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_s_walk2": {
+   "x": 357,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_s_attack": {
+   "x": 306,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_n_idle": {
+   "x": 255,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_n_walk1": {
+   "x": 272,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_n_walk2": {
+   "x": 289,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_n_attack": {
+   "x": 238,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "soldier_dead": {
+   "x": 153,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_e_idle": {
+   "x": 340,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_e_walk1": {
+   "x": 357,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_e_walk2": {
+   "x": 374,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_e_attack": {
+   "x": 323,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_s_idle": {
+   "x": 476,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_s_walk1": {
+   "x": 493,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_s_walk2": {
+   "x": 0,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_s_attack": {
+   "x": 459,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_n_idle": {
+   "x": 408,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_n_walk1": {
+   "x": 425,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_n_walk2": {
+   "x": 442,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_n_attack": {
+   "x": 391,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "special_forces_dead": {
+   "x": 306,
+   "y": 255,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_e_idle": {
+   "x": 476,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_e_walk1": {
+   "x": 493,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_e_walk2": {
+   "x": 0,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_e_attack": {
+   "x": 459,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_s_idle": {
+   "x": 102,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_s_walk1": {
+   "x": 119,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_s_walk2": {
+   "x": 136,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_s_attack": {
+   "x": 85,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_n_idle": {
+   "x": 34,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_n_walk1": {
+   "x": 51,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_n_walk2": {
+   "x": 68,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_n_attack": {
+   "x": 17,
+   "y": 238,
+   "w": 16,
+   "h": 16
+  },
+  "sniper_dead": {
+   "x": 442,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_e_idle": {
+   "x": 51,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_e_walk1": {
+   "x": 68,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_e_walk2": {
+   "x": 85,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_e_attack": {
+   "x": 34,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_s_idle": {
+   "x": 187,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_s_walk1": {
+   "x": 204,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_s_walk2": {
+   "x": 221,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_s_attack": {
+   "x": 170,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_n_idle": {
+   "x": 119,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_n_walk1": {
+   "x": 136,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_n_walk2": {
+   "x": 153,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_n_attack": {
+   "x": 102,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "engineer_dead": {
+   "x": 17,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "medic_e_idle": {
+   "x": 374,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_e_walk1": {
+   "x": 391,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_e_walk2": {
+   "x": 408,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_e_attack": {
+   "x": 357,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_s_idle": {
+   "x": 0,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "medic_s_walk1": {
+   "x": 17,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "medic_s_walk2": {
+   "x": 34,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "medic_s_attack": {
+   "x": 493,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_n_idle": {
+   "x": 442,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_n_walk1": {
+   "x": 459,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_n_walk2": {
+   "x": 476,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_n_attack": {
+   "x": 425,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "medic_dead": {
+   "x": 340,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_e_idle": {
+   "x": 238,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_e_walk1": {
+   "x": 255,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_e_walk2": {
+   "x": 272,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_e_attack": {
+   "x": 221,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_s_idle": {
+   "x": 374,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_s_walk1": {
+   "x": 391,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_s_walk2": {
+   "x": 408,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_s_attack": {
+   "x": 357,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_n_idle": {
+   "x": 306,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_n_walk1": {
+   "x": 323,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_n_walk2": {
+   "x": 340,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_n_attack": {
+   "x": 289,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "paratrooper_dead": {
+   "x": 204,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_e_idle": {
+   "x": 272,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_e_walk1": {
+   "x": 289,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_e_walk2": {
+   "x": 306,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_e_attack": {
+   "x": 255,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_s_idle": {
+   "x": 408,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_s_walk1": {
+   "x": 425,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_s_walk2": {
+   "x": 442,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_s_attack": {
+   "x": 391,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_n_idle": {
+   "x": 340,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_n_walk1": {
+   "x": 357,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_n_walk2": {
+   "x": 374,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_n_attack": {
+   "x": 323,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "exo_soldier_dead": {
+   "x": 238,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_e_idle": {
+   "x": 102,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_e_walk1": {
+   "x": 119,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_e_walk2": {
+   "x": 136,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_e_attack": {
+   "x": 85,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_s_idle": {
+   "x": 238,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_s_walk1": {
+   "x": 255,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_s_walk2": {
+   "x": 272,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_s_attack": {
+   "x": 221,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_n_idle": {
+   "x": 170,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_n_walk1": {
+   "x": 187,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_n_walk2": {
+   "x": 204,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_n_attack": {
+   "x": 153,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "sapper_dead": {
+   "x": 68,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_e_idle": {
+   "x": 119,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_e_walk1": {
+   "x": 136,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_e_walk2": {
+   "x": 153,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_e_attack": {
+   "x": 102,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_s_idle": {
+   "x": 255,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_s_walk1": {
+   "x": 272,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_s_walk2": {
+   "x": 289,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_s_attack": {
+   "x": 238,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_n_idle": {
+   "x": 187,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_n_walk1": {
+   "x": 204,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_n_walk2": {
+   "x": 221,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_n_attack": {
+   "x": 170,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "demolition_team_dead": {
+   "x": 85,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_e_idle": {
+   "x": 493,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_e_walk1": {
+   "x": 0,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_e_walk2": {
+   "x": 17,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_e_attack": {
+   "x": 476,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_s_idle": {
+   "x": 119,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_s_walk1": {
+   "x": 136,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_s_walk2": {
+   "x": 153,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_s_attack": {
+   "x": 102,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_n_idle": {
+   "x": 51,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_n_walk1": {
+   "x": 68,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_n_walk2": {
+   "x": 85,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_n_attack": {
+   "x": 34,
+   "y": 289,
+   "w": 16,
+   "h": 16
+  },
+  "tunneller_dead": {
+   "x": 459,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_e_idle": {
+   "x": 255,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_e_walk1": {
+   "x": 272,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_e_walk2": {
+   "x": 289,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_e_attack": {
+   "x": 238,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_s_idle": {
+   "x": 391,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_s_walk1": {
+   "x": 408,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_s_walk2": {
+   "x": 425,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_s_attack": {
+   "x": 374,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_n_idle": {
+   "x": 323,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_n_walk1": {
+   "x": 340,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_n_walk2": {
+   "x": 357,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_n_attack": {
+   "x": 306,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "slinger_dead": {
+   "x": 221,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_e_idle": {
+   "x": 68,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_e_walk1": {
+   "x": 85,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_e_walk2": {
+   "x": 102,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_e_attack": {
+   "x": 51,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_s_idle": {
+   "x": 204,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_s_walk1": {
+   "x": 221,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_s_walk2": {
+   "x": 238,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_s_attack": {
+   "x": 187,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_n_idle": {
+   "x": 136,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_n_walk1": {
+   "x": 153,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_n_walk2": {
+   "x": 170,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_n_attack": {
+   "x": 119,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "hunter_dead": {
+   "x": 34,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_e_idle": {
+   "x": 408,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_e_walk1": {
+   "x": 425,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_e_walk2": {
+   "x": 442,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_e_attack": {
+   "x": 391,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_s_idle": {
+   "x": 34,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_s_walk1": {
+   "x": 51,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_s_walk2": {
+   "x": 68,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_s_attack": {
+   "x": 17,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_n_idle": {
+   "x": 476,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_n_walk1": {
+   "x": 493,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_n_walk2": {
+   "x": 0,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_n_attack": {
+   "x": 459,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "crossbowman_dead": {
+   "x": 374,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_e_idle": {
+   "x": 153,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_e_walk1": {
+   "x": 170,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_e_walk2": {
+   "x": 187,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_e_attack": {
+   "x": 136,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_s_idle": {
+   "x": 289,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_s_walk1": {
+   "x": 306,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_s_walk2": {
+   "x": 323,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_s_attack": {
+   "x": 272,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_n_idle": {
+   "x": 221,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_n_walk1": {
+   "x": 238,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_n_walk2": {
+   "x": 255,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_n_attack": {
+   "x": 204,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "man_at_arms_dead": {
+   "x": 119,
+   "y": 136,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_e_idle": {
+   "x": 425,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_e_walk1": {
+   "x": 442,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_e_walk2": {
+   "x": 459,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_e_attack": {
+   "x": 408,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_s_idle": {
+   "x": 51,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_s_walk1": {
+   "x": 68,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_s_walk2": {
+   "x": 85,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_s_attack": {
+   "x": 34,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_n_idle": {
+   "x": 493,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_n_walk1": {
+   "x": 0,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_n_walk2": {
+   "x": 17,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_n_attack": {
+   "x": 476,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "halberdier_dead": {
+   "x": 391,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_e_idle": {
+   "x": 221,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_e_walk1": {
+   "x": 238,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_e_walk2": {
+   "x": 255,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_e_attack": {
+   "x": 204,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_s_idle": {
+   "x": 357,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_s_walk1": {
+   "x": 374,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_s_walk2": {
+   "x": 391,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_s_attack": {
+   "x": 340,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_n_idle": {
+   "x": 289,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_n_walk1": {
+   "x": 306,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_n_walk2": {
+   "x": 323,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_n_attack": {
+   "x": 272,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "line_infantry_dead": {
+   "x": 187,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_e_idle": {
+   "x": 34,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_e_walk1": {
+   "x": 51,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_e_walk2": {
+   "x": 68,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_e_attack": {
+   "x": 17,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_s_idle": {
+   "x": 170,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_s_walk1": {
+   "x": 187,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_s_walk2": {
+   "x": 204,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_s_attack": {
+   "x": 153,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_n_idle": {
+   "x": 102,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_n_walk1": {
+   "x": 119,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_n_walk2": {
+   "x": 136,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_n_attack": {
+   "x": 85,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "skirmisher_dead": {
+   "x": 0,
+   "y": 221,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_e_idle": {
+   "x": 51,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_e_walk1": {
+   "x": 68,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_e_walk2": {
+   "x": 85,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_e_attack": {
+   "x": 34,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_s_idle": {
+   "x": 187,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_s_walk1": {
+   "x": 204,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_s_walk2": {
+   "x": 221,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_s_attack": {
+   "x": 170,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_n_idle": {
+   "x": 119,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_n_walk1": {
+   "x": 136,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_n_walk2": {
+   "x": 153,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_n_attack": {
+   "x": 102,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "stormtrooper_dead": {
+   "x": 17,
+   "y": 272,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_e_idle": {
+   "x": 493,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_e_walk1": {
+   "x": 0,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_e_walk2": {
+   "x": 17,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_e_attack": {
+   "x": 476,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_s_idle": {
+   "x": 119,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_s_walk1": {
+   "x": 136,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_s_walk2": {
+   "x": 153,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_s_attack": {
+   "x": 102,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_n_idle": {
+   "x": 51,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_n_walk1": {
+   "x": 68,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_n_walk2": {
+   "x": 85,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_n_attack": {
+   "x": 34,
+   "y": 68,
+   "w": 16,
+   "h": 16
+  },
+  "flamethrower_dead": {
+   "x": 459,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_e_idle": {
+   "x": 136,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_e_walk1": {
+   "x": 153,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_e_walk2": {
+   "x": 170,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_e_attack": {
+   "x": 119,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_s_idle": {
+   "x": 272,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_s_walk1": {
+   "x": 289,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_s_walk2": {
+   "x": 306,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_s_attack": {
+   "x": 255,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_n_idle": {
+   "x": 204,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_n_walk1": {
+   "x": 221,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_n_walk2": {
+   "x": 238,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_n_attack": {
+   "x": 187,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_gunner_dead": {
+   "x": 102,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_e_idle": {
+   "x": 255,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_e_walk1": {
+   "x": 272,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_e_walk2": {
+   "x": 289,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_e_attack": {
+   "x": 238,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_s_idle": {
+   "x": 391,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_s_walk1": {
+   "x": 408,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_s_walk2": {
+   "x": 425,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_s_attack": {
+   "x": 374,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_n_idle": {
+   "x": 323,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_n_walk1": {
+   "x": 340,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_n_walk2": {
+   "x": 357,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_n_attack": {
+   "x": 306,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "at_team_dead": {
+   "x": 221,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "scout_e_idle": {
+   "x": 323,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_e_walk1": {
+   "x": 340,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_e_walk2": {
+   "x": 357,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_e_attack": {
+   "x": 306,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_s_idle": {
+   "x": 459,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_s_walk1": {
+   "x": 476,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_s_walk2": {
+   "x": 493,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_s_attack": {
+   "x": 442,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_n_idle": {
+   "x": 391,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_n_walk1": {
+   "x": 408,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_n_walk2": {
+   "x": 425,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_n_attack": {
+   "x": 374,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "scout_dead": {
+   "x": 289,
+   "y": 204,
+   "w": 16,
+   "h": 16
+  },
+  "officer_e_idle": {
+   "x": 17,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_e_walk1": {
+   "x": 34,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_e_walk2": {
+   "x": 51,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_e_attack": {
+   "x": 0,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_s_idle": {
+   "x": 153,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_s_walk1": {
+   "x": 170,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_s_walk2": {
+   "x": 187,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_s_attack": {
+   "x": 136,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_n_idle": {
+   "x": 85,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_n_walk1": {
+   "x": 102,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_n_walk2": {
+   "x": 119,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_n_attack": {
+   "x": 68,
+   "y": 170,
+   "w": 16,
+   "h": 16
+  },
+  "officer_dead": {
+   "x": 493,
+   "y": 153,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_e_idle": {
+   "x": 340,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_e_walk1": {
+   "x": 357,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_e_walk2": {
+   "x": 374,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_e_attack": {
+   "x": 323,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_s_idle": {
+   "x": 476,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_s_walk1": {
+   "x": 493,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_s_walk2": {
+   "x": 0,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_s_attack": {
+   "x": 459,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_n_idle": {
+   "x": 408,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_n_walk1": {
+   "x": 425,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_n_walk2": {
+   "x": 442,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_n_attack": {
+   "x": 391,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "drone_operator_dead": {
+   "x": 306,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_e_idle": {
+   "x": 170,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_e_walk1": {
+   "x": 187,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_e_walk2": {
+   "x": 204,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_e_attack": {
+   "x": 153,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_s_idle": {
+   "x": 306,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_s_walk1": {
+   "x": 323,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_s_walk2": {
+   "x": 340,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_s_attack": {
+   "x": 289,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_n_idle": {
+   "x": 238,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_n_walk1": {
+   "x": 255,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_n_walk2": {
+   "x": 272,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_n_attack": {
+   "x": 221,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "power_armour_dead": {
+   "x": 136,
+   "y": 187,
+   "w": 16,
+   "h": 16
+  },
+  "knight_e_idle": {
+   "x": 289,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_e_walk1": {
+   "x": 306,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_e_walk2": {
+   "x": 323,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_e_attack": {
+   "x": 272,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_s_idle": {
+   "x": 425,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_s_walk1": {
+   "x": 442,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_s_walk2": {
+   "x": 459,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_s_attack": {
+   "x": 408,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_n_idle": {
+   "x": 357,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_n_walk1": {
+   "x": 374,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_n_walk2": {
+   "x": 391,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_n_attack": {
+   "x": 340,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "knight_dead": {
+   "x": 255,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_e_idle": {
+   "x": 0,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_e_walk1": {
+   "x": 17,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_e_walk2": {
+   "x": 34,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_e_attack": {
+   "x": 493,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_s_idle": {
+   "x": 136,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_s_walk1": {
+   "x": 153,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_s_walk2": {
+   "x": 170,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_s_attack": {
+   "x": 119,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_n_idle": {
+   "x": 68,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_n_walk1": {
+   "x": 85,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_n_walk2": {
+   "x": 102,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_n_attack": {
+   "x": 51,
+   "y": 119,
+   "w": 16,
+   "h": 16
+  },
+  "light_cavalry_dead": {
+   "x": 476,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_e_idle": {
+   "x": 357,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_e_walk1": {
+   "x": 374,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_e_walk2": {
+   "x": 391,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_e_attack": {
+   "x": 340,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_s_idle": {
+   "x": 493,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_s_walk1": {
+   "x": 0,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_s_walk2": {
+   "x": 17,
+   "y": 102,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_s_attack": {
+   "x": 476,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_n_idle": {
+   "x": 425,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_n_walk1": {
+   "x": 442,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_n_walk2": {
+   "x": 459,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_n_attack": {
+   "x": 408,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  },
+  "horse_archer_dead": {
+   "x": 323,
+   "y": 85,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

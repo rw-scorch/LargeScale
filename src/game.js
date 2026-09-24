@@ -66,7 +66,9 @@ export const ORDERS = {
       const c = co.cellOfRegion[k];
       return [Math.min(sim.grid.w - 1, (c % co.cw) * co.size + (co.size >> 1)), Math.min(sim.grid.h - 1, Math.floor(c / co.cw) * co.size + (co.size >> 1))];
     });
-    return { ok: true, plots: Math.round(r.plots), seconds: Math.round(r.cost / speed), points };
+    const g = sim.grid, straight = Math.abs(g.x(s.pos) - g.x(m.to)) + Math.abs(g.y(s.pos) - g.y(m.to));
+    const cost = r.regions.length > 1 ? r.cost : straight * co.mean[r.regions[0]];
+    return { ok: true, plots: Math.max(r.plots ?? 0, straight), seconds: Math.max(1, Math.round(cost / speed)), points };
   },
 };
 

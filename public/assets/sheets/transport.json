@@ -1,0 +1,1461 @@
+{
+ "image": "transport.png",
+ "size": [
+  512,
+  337
+ ],
+ "frames": {
+  "station_small": {
+   "x": 204,
+   "y": 224,
+   "w": 32,
+   "h": 21
+  },
+  "station_small_construction": {
+   "x": 237,
+   "y": 224,
+   "w": 32,
+   "h": 21
+  },
+  "station_small_damaged": {
+   "x": 270,
+   "y": 224,
+   "w": 32,
+   "h": 21
+  },
+  "station_small_rubble": {
+   "x": 336,
+   "y": 224,
+   "w": 32,
+   "h": 21
+  },
+  "station_small_lights": {
+   "x": 303,
+   "y": 224,
+   "w": 32,
+   "h": 21
+  },
+  "station_large": {
+   "x": 196,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "station_large_construction": {
+   "x": 245,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "station_large_damaged": {
+   "x": 294,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "station_large_rubble": {
+   "x": 392,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "station_large_lights": {
+   "x": 343,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "metro_entrance": {
+   "x": 408,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "metro_entrance_construction": {
+   "x": 425,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "metro_entrance_damaged": {
+   "x": 442,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "metro_entrance_rubble": {
+   "x": 459,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "tunnel_entrance": {
+   "x": 408,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "jetty": {
+   "x": 391,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "harbour": {
+   "x": 198,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "harbour_construction": {
+   "x": 231,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "harbour_damaged": {
+   "x": 264,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "harbour_rubble": {
+   "x": 330,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "harbour_lights": {
+   "x": 297,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "port_commercial": {
+   "x": 196,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "port_commercial_construction": {
+   "x": 245,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "port_commercial_damaged": {
+   "x": 294,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "port_commercial_rubble": {
+   "x": 392,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "port_commercial_lights": {
+   "x": 343,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "container_terminal": {
+   "x": 0,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "container_terminal_construction": {
+   "x": 49,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "container_terminal_damaged": {
+   "x": 98,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "container_terminal_rubble": {
+   "x": 147,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "naval_dock": {
+   "x": 279,
+   "y": 49,
+   "w": 32,
+   "h": 34
+  },
+  "naval_dock_construction": {
+   "x": 312,
+   "y": 49,
+   "w": 32,
+   "h": 34
+  },
+  "naval_dock_damaged": {
+   "x": 345,
+   "y": 49,
+   "w": 32,
+   "h": 34
+  },
+  "naval_dock_rubble": {
+   "x": 411,
+   "y": 49,
+   "w": 32,
+   "h": 34
+  },
+  "naval_dock_lights": {
+   "x": 378,
+   "y": 49,
+   "w": 32,
+   "h": 34
+  },
+  "lighthouse": {
+   "x": 448,
+   "y": 191,
+   "w": 16,
+   "h": 28
+  },
+  "lighthouse_construction": {
+   "x": 465,
+   "y": 191,
+   "w": 16,
+   "h": 28
+  },
+  "lighthouse_damaged": {
+   "x": 482,
+   "y": 191,
+   "w": 16,
+   "h": 28
+  },
+  "lighthouse_rubble": {
+   "x": 17,
+   "y": 224,
+   "w": 16,
+   "h": 28
+  },
+  "lighthouse_lights": {
+   "x": 0,
+   "y": 224,
+   "w": 16,
+   "h": 28
+  },
+  "canal_lock": {
+   "x": 255,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "grass_airstrip": {
+   "x": 369,
+   "y": 224,
+   "w": 48,
+   "h": 16
+  },
+  "airfield": {
+   "x": 444,
+   "y": 49,
+   "w": 48,
+   "h": 32
+  },
+  "airfield_construction": {
+   "x": 0,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "airfield_damaged": {
+   "x": 49,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "airfield_rubble": {
+   "x": 147,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "airfield_lights": {
+   "x": 98,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "terminal": {
+   "x": 441,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "terminal_construction": {
+   "x": 0,
+   "y": 158,
+   "w": 48,
+   "h": 32
+  },
+  "terminal_damaged": {
+   "x": 49,
+   "y": 158,
+   "w": 48,
+   "h": 32
+  },
+  "terminal_rubble": {
+   "x": 147,
+   "y": 158,
+   "w": 48,
+   "h": 32
+  },
+  "terminal_lights": {
+   "x": 98,
+   "y": 158,
+   "w": 48,
+   "h": 32
+  },
+  "hangar": {
+   "x": 33,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "hangar_construction": {
+   "x": 66,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "hangar_damaged": {
+   "x": 99,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "hangar_rubble": {
+   "x": 165,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "hangar_lights": {
+   "x": 132,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "control_tower": {
+   "x": 363,
+   "y": 191,
+   "w": 16,
+   "h": 30
+  },
+  "control_tower_construction": {
+   "x": 380,
+   "y": 191,
+   "w": 16,
+   "h": 30
+  },
+  "control_tower_damaged": {
+   "x": 397,
+   "y": 191,
+   "w": 16,
+   "h": 30
+  },
+  "control_tower_rubble": {
+   "x": 431,
+   "y": 191,
+   "w": 16,
+   "h": 30
+  },
+  "control_tower_lights": {
+   "x": 414,
+   "y": 191,
+   "w": 16,
+   "h": 30
+  },
+  "heliport": {
+   "x": 374,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bus_stop": {
+   "x": 204,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "parking_lot": {
+   "x": 476,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "border_checkpoint": {
+   "x": 468,
+   "y": 224,
+   "w": 16,
+   "h": 16
+  },
+  "border_checkpoint_construction": {
+   "x": 485,
+   "y": 224,
+   "w": 16,
+   "h": 16
+  },
+  "border_checkpoint_damaged": {
+   "x": 0,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "border_checkpoint_rubble": {
+   "x": 17,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "cable_car_station": {
+   "x": 34,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "cable_car_station_construction": {
+   "x": 51,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "cable_car_station_damaged": {
+   "x": 68,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "cable_car_station_rubble": {
+   "x": 102,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "cable_car_station_lights": {
+   "x": 85,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "ferry_landing": {
+   "x": 306,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "ferry_landing_construction": {
+   "x": 323,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "ferry_landing_damaged": {
+   "x": 340,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "ferry_landing_rubble": {
+   "x": 357,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "stairs_cliff": {
+   "x": 289,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "stairs_cliff_construction": {
+   "x": 306,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "stairs_cliff_damaged": {
+   "x": 323,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "stairs_cliff_rubble": {
+   "x": 340,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "dry_dock": {
+   "x": 196,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "dry_dock_construction": {
+   "x": 245,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "dry_dock_damaged": {
+   "x": 294,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "dry_dock_rubble": {
+   "x": 343,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "container_gantry": {
+   "x": 441,
+   "y": 0,
+   "w": 48,
+   "h": 42
+  },
+  "container_gantry_construction": {
+   "x": 0,
+   "y": 49,
+   "w": 48,
+   "h": 42
+  },
+  "container_gantry_damaged": {
+   "x": 49,
+   "y": 49,
+   "w": 48,
+   "h": 42
+  },
+  "container_gantry_rubble": {
+   "x": 98,
+   "y": 49,
+   "w": 48,
+   "h": 42
+  },
+  "grain_terminal": {
+   "x": 147,
+   "y": 49,
+   "w": 32,
+   "h": 40
+  },
+  "grain_terminal_construction": {
+   "x": 180,
+   "y": 49,
+   "w": 32,
+   "h": 40
+  },
+  "grain_terminal_damaged": {
+   "x": 213,
+   "y": 49,
+   "w": 32,
+   "h": 40
+  },
+  "grain_terminal_rubble": {
+   "x": 246,
+   "y": 49,
+   "w": 32,
+   "h": 40
+  },
+  "fuel_farm": {
+   "x": 394,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "fuel_farm_construction": {
+   "x": 427,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "fuel_farm_damaged": {
+   "x": 460,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "fuel_farm_rubble": {
+   "x": 0,
+   "y": 191,
+   "w": 32,
+   "h": 32
+  },
+  "engine_shed": {
+   "x": 392,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "engine_shed_construction": {
+   "x": 441,
+   "y": 92,
+   "w": 48,
+   "h": 32
+  },
+  "engine_shed_damaged": {
+   "x": 0,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "engine_shed_rubble": {
+   "x": 98,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "engine_shed_lights": {
+   "x": 49,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "signal_box": {
+   "x": 119,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "signal_box_construction": {
+   "x": 136,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "signal_box_damaged": {
+   "x": 153,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "signal_box_rubble": {
+   "x": 187,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "signal_box_lights": {
+   "x": 170,
+   "y": 224,
+   "w": 16,
+   "h": 22
+  },
+  "marshalling_yard": {
+   "x": 147,
+   "y": 125,
+   "w": 48,
+   "h": 32
+  },
+  "jet_bridge": {
+   "x": 418,
+   "y": 224,
+   "w": 32,
+   "h": 16
+  },
+  "cargo_apron": {
+   "x": 196,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "fishing_harbour": {
+   "x": 229,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "fishing_harbour_construction": {
+   "x": 262,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "fishing_harbour_damaged": {
+   "x": 295,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "fishing_harbour_rubble": {
+   "x": 361,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "fishing_harbour_lights": {
+   "x": 328,
+   "y": 158,
+   "w": 32,
+   "h": 32
+  },
+  "road_dirt_dot": {
+   "x": 340,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_N": {
+   "x": 153,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_E": {
+   "x": 85,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_NE": {
+   "x": 170,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_S": {
+   "x": 289,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_NS": {
+   "x": 238,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_ES": {
+   "x": 102,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_NES": {
+   "x": 187,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_W": {
+   "x": 323,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_NW": {
+   "x": 272,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_EW": {
+   "x": 136,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_NEW": {
+   "x": 221,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_SW": {
+   "x": 306,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_NSW": {
+   "x": 255,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_ESW": {
+   "x": 119,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_dirt_NESW": {
+   "x": 204,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_dot": {
+   "x": 68,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_N": {
+   "x": 391,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_E": {
+   "x": 323,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_NE": {
+   "x": 408,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_S": {
+   "x": 17,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_NS": {
+   "x": 476,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_ES": {
+   "x": 340,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_NES": {
+   "x": 425,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_W": {
+   "x": 51,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_NW": {
+   "x": 0,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_EW": {
+   "x": 374,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_NEW": {
+   "x": 459,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_SW": {
+   "x": 34,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_NSW": {
+   "x": 493,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_ESW": {
+   "x": 357,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_cobble_NESW": {
+   "x": 442,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_dot": {
+   "x": 136,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_N": {
+   "x": 459,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_E": {
+   "x": 391,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_NE": {
+   "x": 476,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_S": {
+   "x": 85,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_NS": {
+   "x": 34,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_ES": {
+   "x": 408,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_NES": {
+   "x": 493,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_W": {
+   "x": 119,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_NW": {
+   "x": 68,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_EW": {
+   "x": 442,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_NEW": {
+   "x": 17,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_SW": {
+   "x": 102,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_NSW": {
+   "x": 51,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_ESW": {
+   "x": 425,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_paved_NESW": {
+   "x": 0,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_dot": {
+   "x": 102,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_N": {
+   "x": 425,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_E": {
+   "x": 357,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_NE": {
+   "x": 442,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_S": {
+   "x": 51,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_NS": {
+   "x": 0,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_ES": {
+   "x": 374,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_NES": {
+   "x": 459,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_W": {
+   "x": 85,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_NW": {
+   "x": 34,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_EW": {
+   "x": 408,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_NEW": {
+   "x": 493,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_SW": {
+   "x": 68,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_NSW": {
+   "x": 17,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_ESW": {
+   "x": 391,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_highway_NESW": {
+   "x": 476,
+   "y": 287,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_dot": {
+   "x": 374,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_N": {
+   "x": 187,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_E": {
+   "x": 119,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_NE": {
+   "x": 204,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_S": {
+   "x": 323,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_NS": {
+   "x": 272,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_ES": {
+   "x": 136,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_NES": {
+   "x": 221,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_W": {
+   "x": 357,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_NW": {
+   "x": 306,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_EW": {
+   "x": 170,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_NEW": {
+   "x": 255,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_SW": {
+   "x": 340,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_NSW": {
+   "x": 289,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_ESW": {
+   "x": 153,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "road_mountain_NESW": {
+   "x": 238,
+   "y": 304,
+   "w": 16,
+   "h": 16
+  },
+  "rail_dot": {
+   "x": 306,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_N": {
+   "x": 119,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_E": {
+   "x": 51,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_NE": {
+   "x": 136,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_S": {
+   "x": 255,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_NS": {
+   "x": 204,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_ES": {
+   "x": 68,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_NES": {
+   "x": 153,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_W": {
+   "x": 289,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_NW": {
+   "x": 238,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_EW": {
+   "x": 102,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_NEW": {
+   "x": 187,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_SW": {
+   "x": 272,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_NSW": {
+   "x": 221,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_ESW": {
+   "x": 85,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "rail_NESW": {
+   "x": 170,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_wood_h": {
+   "x": 170,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_wood_v": {
+   "x": 187,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_stone_h": {
+   "x": 85,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_stone_v": {
+   "x": 102,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_steel_h": {
+   "x": 34,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_steel_v": {
+   "x": 68,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_steel_tower": {
+   "x": 51,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_suspension_h": {
+   "x": 119,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_suspension_v": {
+   "x": 153,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "bridge_suspension_tower": {
+   "x": 136,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "runway_h": {
+   "x": 204,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "runway_e": {
+   "x": 187,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "runway_w": {
+   "x": 272,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "runway_v": {
+   "x": 255,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "runway_n": {
+   "x": 221,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "runway_s": {
+   "x": 238,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "taxiway_h": {
+   "x": 357,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "taxiway_v": {
+   "x": 374,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "taxiway_x": {
+   "x": 391,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "apron": {
+   "x": 451,
+   "y": 224,
+   "w": 16,
+   "h": 16
+  },
+  "pontoon_bridge_h": {
+   "x": 17,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "pontoon_bridge_v": {
+   "x": 34,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  },
+  "causeway_h": {
+   "x": 272,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "causeway_v": {
+   "x": 289,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "rope_bridge_h": {
+   "x": 153,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "rope_bridge_v": {
+   "x": 170,
+   "y": 321,
+   "w": 16,
+   "h": 16
+  },
+  "cable_line_h": {
+   "x": 221,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "cable_line_v": {
+   "x": 238,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "pipeline_mountain_h": {
+   "x": 493,
+   "y": 253,
+   "w": 16,
+   "h": 16
+  },
+  "pipeline_mountain_v": {
+   "x": 0,
+   "y": 270,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

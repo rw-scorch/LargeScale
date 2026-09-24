@@ -1,6 +1,6 @@
 import test from "node:test";
+import { hasMap, readMap } from "./mapfile.js";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
 import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
 import { installBots, spawnBots } from "../src/sim/bots.js";
@@ -135,10 +135,8 @@ test("plot_lost is sent once per losing nation per tick, with a count", () => {
   assert.ok(total >= 10, `${total} plots lost in all`);
 });
 
-const MAP = "public/map/terrain.bin";
-test("long moves on the Earth map plan within the tick budget and stay close to the best path", { skip: !existsSync(MAP) }, () => {
-  const meta = JSON.parse(readFileSync("public/map/meta.json", "utf8"));
-  const terrain = new Uint8Array(readFileSync(MAP));
+test("long moves on the Earth map plan within the tick budget and stay close to the best path", { skip: !hasMap() }, () => {
+  const { meta, terrain } = readMap();
   const w = new World({ w: meta.w, h: meta.h, terrain });
   const t0 = performance.now();
   w.pathGraph();

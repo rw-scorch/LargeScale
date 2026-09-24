@@ -378,7 +378,40 @@ export class World {
     for (const s of this.stacks.values()) this.stepStack(s, dt);
     for (const f of this.hooks.postMove) f(this, dt);
     this.checkEliminations();
+    this.checkCapitals();
     for (const f of this.hooks.postTick) f(this, dt);
+  }
+
+  checkCapitals() {
+    for (const n of this.nations.values()) {
+      if (!n.alive || !n.spawned || n.capital === undefined || this.owner[n.capital] === n.id) continue;
+      const to = this.nearestOwned(n.id, n.capital);
+      if (to === null) continue;
+      this.emit("capital_moved", { nation: n.id, from: n.capital, to });
+      n.capital = to;
+    }
+  }
+
+  nearestOwned(nid, from) {
+    const g = this.grid, ow = this.owner, fx = g.x(from), fy = g.y(from);
+    for (let r = 1, near = Math.min(64, Math.max(g.w, g.h)); r <= near; r++) {
+      let best = null, bd = Infinity;
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx += Math.abs(dy) === r ? 1 : 2 * r) {
+          const x = fx + dx, y = fy + dy;
+          if (x < 0 || y < 0 || x >= g.w || y >= g.h || ow[y * g.w + x] !== nid) continue;
+          if (dx * dx + dy * dy < bd) { bd = dx * dx + dy * dy; best = y * g.w + x; }
+        }
+      if (best !== null) return best;
+    }
+    let best = null, bd = Infinity;
+    const border = this.borderOf(nid);
+    for (const i of border.size ? border : ow.keys()) {
+      if (ow[i] !== nid) continue;
+      const d = (g.x(i) - fx) ** 2 + (g.y(i) - fy) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
   }
 
   takeDirty() {

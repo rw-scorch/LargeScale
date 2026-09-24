@@ -1,0 +1,513 @@
+{
+ "image": "tourism.png",
+ "size": [
+  512,
+  318
+ ],
+ "frames": {
+  "park": {
+   "x": 133,
+   "y": 302,
+   "w": 16,
+   "h": 16
+  },
+  "plaza": {
+   "x": 150,
+   "y": 302,
+   "w": 16,
+   "h": 16
+  },
+  "campground": {
+   "x": 99,
+   "y": 302,
+   "w": 16,
+   "h": 16
+  },
+  "campground_lights": {
+   "x": 116,
+   "y": 302,
+   "w": 16,
+   "h": 16
+  },
+  "zoo": {
+   "x": 429,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "museum": {
+   "x": 462,
+   "y": 269,
+   "w": 32,
+   "h": 16
+  },
+  "museum_construction": {
+   "x": 0,
+   "y": 302,
+   "w": 32,
+   "h": 16
+  },
+  "museum_damaged": {
+   "x": 33,
+   "y": 302,
+   "w": 32,
+   "h": 16
+  },
+  "museum_rubble": {
+   "x": 66,
+   "y": 302,
+   "w": 32,
+   "h": 16
+  },
+  "theme_park": {
+   "x": 147,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "theme_park_construction": {
+   "x": 196,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "theme_park_damaged": {
+   "x": 245,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "theme_park_rubble": {
+   "x": 294,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "golf_course": {
+   "x": 395,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "marina": {
+   "x": 428,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "arena": {
+   "x": 98,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "arena_construction": {
+   "x": 131,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "arena_damaged": {
+   "x": 164,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "arena_rubble": {
+   "x": 197,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "stadium": {
+   "x": 462,
+   "y": 75,
+   "w": 48,
+   "h": 48
+  },
+  "stadium_construction": {
+   "x": 0,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "stadium_damaged": {
+   "x": 49,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "stadium_rubble": {
+   "x": 98,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "beach_resort": {
+   "x": 230,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "beach_resort_construction": {
+   "x": 263,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "beach_resort_damaged": {
+   "x": 296,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "beach_resort_rubble": {
+   "x": 362,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "beach_resort_lights": {
+   "x": 329,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "ski_resort": {
+   "x": 461,
+   "y": 230,
+   "w": 32,
+   "h": 32
+  },
+  "ski_resort_construction": {
+   "x": 0,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "ski_resort_damaged": {
+   "x": 33,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "ski_resort_rubble": {
+   "x": 99,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "ski_resort_lights": {
+   "x": 66,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_pyramid": {
+   "x": 343,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "wonder_pyramid_construction": {
+   "x": 392,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "wonder_pyramid_damaged": {
+   "x": 441,
+   "y": 132,
+   "w": 48,
+   "h": 48
+  },
+  "wonder_pyramid_rubble": {
+   "x": 0,
+   "y": 181,
+   "w": 48,
+   "h": 48
+  },
+  "wonder_colossus": {
+   "x": 132,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_colossus_construction": {
+   "x": 165,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_colossus_damaged": {
+   "x": 198,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_colossus_rubble": {
+   "x": 264,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_colossus_lights": {
+   "x": 231,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_clocktower": {
+   "x": 165,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_clocktower_construction": {
+   "x": 198,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_clocktower_damaged": {
+   "x": 231,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_clocktower_rubble": {
+   "x": 297,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_clocktower_lights": {
+   "x": 264,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_grand_tower": {
+   "x": 330,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_grand_tower_construction": {
+   "x": 363,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_grand_tower_damaged": {
+   "x": 396,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_grand_tower_rubble": {
+   "x": 429,
+   "y": 75,
+   "w": 32,
+   "h": 52
+  },
+  "wonder_orbital_elevator": {
+   "x": 0,
+   "y": 75,
+   "w": 32,
+   "h": 56
+  },
+  "wonder_orbital_elevator_construction": {
+   "x": 33,
+   "y": 75,
+   "w": 32,
+   "h": 56
+  },
+  "wonder_orbital_elevator_damaged": {
+   "x": 66,
+   "y": 75,
+   "w": 32,
+   "h": 56
+  },
+  "wonder_orbital_elevator_rubble": {
+   "x": 132,
+   "y": 75,
+   "w": 32,
+   "h": 56
+  },
+  "wonder_orbital_elevator_lights": {
+   "x": 99,
+   "y": 75,
+   "w": 32,
+   "h": 56
+  },
+  "wonder_stone_circle": {
+   "x": 297,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_stone_circle_construction": {
+   "x": 330,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_stone_circle_damaged": {
+   "x": 363,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_stone_circle_rubble": {
+   "x": 396,
+   "y": 269,
+   "w": 32,
+   "h": 32
+  },
+  "wonder_hanging_gardens": {
+   "x": 245,
+   "y": 0,
+   "w": 48,
+   "h": 58
+  },
+  "wonder_hanging_gardens_construction": {
+   "x": 294,
+   "y": 0,
+   "w": 48,
+   "h": 58
+  },
+  "wonder_hanging_gardens_damaged": {
+   "x": 343,
+   "y": 0,
+   "w": 48,
+   "h": 58
+  },
+  "wonder_hanging_gardens_rubble": {
+   "x": 441,
+   "y": 0,
+   "w": 48,
+   "h": 58
+  },
+  "wonder_hanging_gardens_lights": {
+   "x": 392,
+   "y": 0,
+   "w": 48,
+   "h": 58
+  },
+  "wonder_triumphal_arch": {
+   "x": 214,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_triumphal_arch_construction": {
+   "x": 247,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_triumphal_arch_damaged": {
+   "x": 280,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_triumphal_arch_rubble": {
+   "x": 313,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_great_exhibition": {
+   "x": 346,
+   "y": 181,
+   "w": 48,
+   "h": 38
+  },
+  "wonder_great_exhibition_construction": {
+   "x": 395,
+   "y": 181,
+   "w": 48,
+   "h": 38
+  },
+  "wonder_great_exhibition_damaged": {
+   "x": 444,
+   "y": 181,
+   "w": 48,
+   "h": 38
+  },
+  "wonder_great_exhibition_rubble": {
+   "x": 49,
+   "y": 230,
+   "w": 48,
+   "h": 38
+  },
+  "wonder_great_exhibition_lights": {
+   "x": 0,
+   "y": 230,
+   "w": 48,
+   "h": 38
+  },
+  "wonder_observatory": {
+   "x": 49,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_observatory_construction": {
+   "x": 82,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_observatory_damaged": {
+   "x": 115,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_observatory_rubble": {
+   "x": 181,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_observatory_lights": {
+   "x": 148,
+   "y": 181,
+   "w": 32,
+   "h": 40
+  },
+  "wonder_launch_complex": {
+   "x": 0,
+   "y": 0,
+   "w": 48,
+   "h": 74
+  },
+  "wonder_launch_complex_construction": {
+   "x": 49,
+   "y": 0,
+   "w": 48,
+   "h": 74
+  },
+  "wonder_launch_complex_damaged": {
+   "x": 98,
+   "y": 0,
+   "w": 48,
+   "h": 74
+  },
+  "wonder_launch_complex_rubble": {
+   "x": 196,
+   "y": 0,
+   "w": 48,
+   "h": 74
+  },
+  "wonder_launch_complex_lights": {
+   "x": 147,
+   "y": 0,
+   "w": 48,
+   "h": 74
+  }
+ }
+}
