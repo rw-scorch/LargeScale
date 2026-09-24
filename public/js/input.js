@@ -1,10 +1,15 @@
-export function attachInput(canvas, view, { onTap, onChange }) {
+export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChange }) {
   const pts = new Map();
   let gesture = null;
   const ratio = () => view.ratio ?? 1;
   const at = e => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * ratio(), (e.clientY - r.top) * ratio()]; };
 
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
   canvas.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse" && e.button !== 0) {
+      if (e.button === 2) onSecondary?.(...at(e));
+      return;
+    }
     canvas.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, at(e));
     if (pts.size === 1) gesture = { start: at(e), t: performance.now(), moved: 0, multi: false };
@@ -12,6 +17,7 @@ export function attachInput(canvas, view, { onTap, onChange }) {
   });
 
   canvas.addEventListener("pointermove", e => {
+    if (e.pointerType === "mouse") onHover?.(...at(e));
     if (!pts.has(e.pointerId)) return;
     const prev = pts.get(e.pointerId), now = at(e);
     if (pts.size === 1) {
@@ -37,6 +43,7 @@ export function attachInput(canvas, view, { onTap, onChange }) {
     if (!g.multi && g.moved < 8 * ratio() && performance.now() - g.t < 500) onTap?.(...at(e));
   };
   canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointerleave", e => e.pointerType === "mouse" && onHover?.(null, null));
   canvas.addEventListener("pointercancel", e => { pts.delete(e.pointerId); gesture = null; });
 
   canvas.addEventListener("wheel", e => {

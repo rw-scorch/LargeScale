@@ -3,6 +3,7 @@ import { loadAtlas } from "./render/atlas.js";
 import { MapRenderer } from "./render/renderer.js";
 import { attachInput } from "./input.js";
 import { Connection } from "./net.js";
+import { keyMap, actionFor } from "./keys.js";
 import { api, session } from "./api.js";
 import { showLogin } from "./ui/login.js";
 import { showWorlds } from "./ui/worlds.js";
@@ -37,6 +38,9 @@ class Game {
     this.world = null;
     this.view = null;
     this.selected = null;
+    this.placing = false;
+    this.hover = null;
+    this.keys = keyMap();
     this.frameTimes = [];
     this.lastToast = new Map();
     overlay.replaceChildren();
@@ -52,14 +56,19 @@ class Game {
       get ratio() { return self.view?.ratio ?? 1; },
       pan: (dx, dy) => this.view?.pan(dx, dy),
       zoomAt: (x, y, f) => this.view?.zoomAt(x, y, f),
-    }, { onTap: (x, y) => this.tap(x, y) });
+    }, {
+      onTap: (x, y) => this.tap(x, y),
+      onSecondary: (x, y) => this.secondary(x, y),
+      onHover: (x, y) => (this.hover = x === null ? null : [x, y]),
+    });
     this.onResize = () => this.resize();
     addEventListener("resize", this.onResize);
     this.onKey = e => {
-      if (e.target.tagName === "INPUT") return;
-      if (e.key === "Escape") { this.stack.cancel(); this.select(null); }
-      if (e.key === "+" || e.key === "=") this.zoom(1.6);
-      if (e.key === "-") this.zoom(1 / 1.6);
+      if (e.target.tagName === "INPUT" && e.target.type !== "range") return;
+      const action = actionFor(this.keys, e);
+      if (!action || !this.world?.ready) return;
+      e.preventDefault();
+      this.key(action);
     };
     addEventListener("keydown", this.onKey);
     this.ui = setInterval(() => this.updatePanels(), 250);
@@ -145,14 +154,75 @@ class Game {
     if (e.type === "stack_destroyed" && e.nation !== you) say(`kill${e.stack}`, `A stack of ${name(e.nation)} was destroyed.`, 0);
     if (e.type === "eliminated") say(`elim${e.nation}`, e.nation === you ? "Your nation has been eliminated." : `${name(e.nation)} has been eliminated.`, 0);
     if (e.type === "stalled" && w.stacks.get(e.stack)?.owner === you) say(`stall${e.stack}`, "A stack stopped: not enough troops to go on.");
+    if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0);
+  }
+
+  plotAt(sx, sy) {
+    const w = this.world, v = this.view;
+    if (!w?.ready || !v || sx === null || sx === undefined) return null;
+    const [fx, fy] = v.screenToPlot(sx, sy), x = Math.floor(fx), y = Math.floor(fy);
+    return x < 0 || y < 0 || x >= w.w || y >= w.h ? null : y * w.w + x;
+  }
+
+  key(action) {
+    const act = this.stack.act, w = this.world;
+    if (action === "form") {
+      const plot = this.hover && this.plotAt(...this.hover);
+      if (plot !== null && w.owner[plot] === w.you) this.formAt(plot);
+      else this.togglePlacing();
+    }
+    if (action === "advance" || action === "move" || action === "split" || action === "merge" || action === "disband") act[action]();
+    if (action === "next") this.nextStack();
+    if (action === "home") this.home();
+    if (action === "zoomIn") this.zoom(1.6);
+    if (action === "zoomOut") this.zoom(1 / 1.6);
+    if (action === "cancel") {
+      if (this.placing) this.togglePlacing(false);
+      else if (this.stack.choosing) this.stack.cancel();
+      else this.select(null);
+    }
+  }
+
+  togglePlacing(on = !this.placing) {
+    const me = this.world?.nations.get(this.world.you);
+    this.placing = on && !!me?.spawned && me.alive && !this.world.frozen;
+    if (this.placing) this.stack.cancel();
+    this.updatePanels();
+  }
+
+  async formAt(plot) {
+    const r = await this.conn.request({ t: "stack", share: this.hud.share, at: plot });
+    if (!r.ok) return this.toast(r.error ?? "could not form a stack");
+    this.placing = false;
+    this.select(r.stack);
+  }
+
+  nextStack() {
+    const mine = this.world.myStacks().sort((a, b) => a.id - b.id);
+    if (!mine.length) return this.toast("You have no stacks. Press F to form one.");
+    const next = mine.find(s => s.id > (this.selected ?? -1)) ?? mine[0];
+    this.select(next.id);
+    this.focus(next.pos, Math.max(this.view.cam.scale / this.view.ratio, 4));
+  }
+
+  async secondary(sx, sy) {
+    const plot = this.plotAt(sx, sy);
+    if (plot === null) return;
+    if (this.placing) return this.togglePlacing(false);
+    const s = this.world.stacks.get(this.selected);
+    if (!s || s.owner !== this.world.you) return this.toast("Select one of your stacks first, then right-click where it should go.");
+    await this.stack.act.moveNow(plot);
   }
 
   tap(sx, sy) {
     const w = this.world, v = this.view;
-    if (!w?.ready || !v) return;
-    const [fx, fy] = v.screenToPlot(sx, sy), x = Math.floor(fx), y = Math.floor(fy);
-    if (x < 0 || y < 0 || x >= w.w || y >= w.h) return;
-    const plot = y * w.w + x;
+    const plot = this.plotAt(sx, sy);
+    if (plot === null) return;
+    const x = plot % w.w, y = (plot / w.w) | 0;
+    if (this.placing) {
+      if (w.owner[plot] !== w.you) return this.toast("Pick a plot of your own land.");
+      return this.formAt(plot);
+    }
     if (this.stack.choosing) return this.stack.pickTarget(plot);
     const hit = v.stackAt(sx, sy);
     if (hit !== null) return this.select(hit);

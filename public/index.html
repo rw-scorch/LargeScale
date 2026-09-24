@@ -64,6 +64,9 @@ tr.dead td{opacity:.45;text-decoration:line-through}
 .banner.big{top:40%;font-size:17px;display:flex;flex-direction:column;gap:10px;align-items:center}
 #toasts{position:absolute;left:8px;bottom:8px;display:flex;flex-direction:column;gap:4px;pointer-events:none}
 .toast{margin:0;background:var(--panel);border-left:4px solid var(--signal);padding:6px 10px;border-radius:3px;max-width:320px}
+kbd.key{font:11px/1 ui-monospace,monospace;border:1px solid var(--mute);border-radius:3px;padding:1px 4px;margin-left:2px;color:var(--mute);vertical-align:middle}
+button.on{border-color:var(--signal)}
+@media (pointer:coarse){kbd.key,.fine-only{display:none!important}}
 [hidden]{display:none!important}
 #rotate{display:none}
 @media (max-height:500px){
