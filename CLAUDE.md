@@ -107,8 +107,8 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 Open items as of 24 September 2026, in order:
 
 1. Ryan deploys the fine map: `git pull`, `npm test`, `npx wrangler deploy`, then tries a new Europe world. The maps and assets now come with the repository.
-2. Open a pull request from `claude/keen-ride-u8zdz9` into `main` for step 5 plus the playtest fixes (controls, stack placement, capital moves, fine maps, route preview fix). Ask Ryan first.
-3. Write `plans/milestone-2.md` for his approval: civilians, resources, logistics, construction, tech tree (the handover's next pieces). Stack forming may then be limited to near towns.
+2. Pull request https://github.com/rw-scorch/LargeScale/pull/3 (step 5 plus the playtest fixes, maps and assets) is open for Ryan to merge.
+3. `plans/milestone-2.md` is written (the first towns: construction, civilians, resources, research, bulk upgrades, offline economy). It waits for Ryan's approval and his answers to its seven questions. Do not start it before then.
 4. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset.
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
