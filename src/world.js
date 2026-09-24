@@ -6,6 +6,7 @@ import { cropRect, cropLayer, baseLayer, terrainDiff } from "./shared/maps.js";
 import { PROTOCOL, MSG, CLOSE, frame, partFrames } from "./shared/protocol.js";
 import { encodeRuns, decodeRuns, splitParts, joinParts, gzip, gunzip, hashBytes, hashRuns } from "./shared/codec.js";
 import { parseWorldConfig, defaultBots, MIN_MAP_SIDE } from "./worldconfig.js";
+import rules from "../data/rules.json" with { type: "json" };
 import { planCatchUp, runCatchUp } from "./sim/offline.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
@@ -75,11 +76,14 @@ export class World extends DurableObject {
     const info = this.meta("info");
     if (!info) return;
     if (info.save !== SAVE_VERSION) { this.stale = true; return; }
+    const t0 = Date.now();
     const terrain = await gunzip(this.readRows("terrain"));
     if (terrain.length !== info.w * info.h) throw new Error(`saved terrain has ${terrain.length} plots, expected ${info.w * info.h}`);
-    this.sim = new Sim({ w: info.w, h: info.h, terrain }, info.rules ?? {});
+    this.sim = new Sim({ w: info.w, h: info.h, terrain }, { ...rules.territory, ...info.rules });
     const owner = this.readRows("owner");
     if (owner.length) decodeRuns(owner, this.sim.owner);
+    this.sim.rebuildBorders();
+    this.sim.pathGraph();
     const saved = this.meta("state");
     if (saved) {
       this.sim.time = saved.time;
@@ -98,6 +102,7 @@ export class World extends DurableObject {
       this.caughtUp = job.capped;
     }
     this.sim.dirty.clear();
+    this.loadMs = Date.now() - t0;
   }
 
   async init(config) {
@@ -389,7 +394,7 @@ export class World extends DurableObject {
     return {
       initialised: !!this.sim, players: this.accounts.size, online: this.sockets().length, looping: !!this.loop, time: this.sim?.time ?? 0,
       map: info?.map ?? null, w: info?.w, h: info?.h, landPlots: info?.landPlots, bots: info?.bots,
-      hashes: this.hashes ?? null, loadCheck: this.loadCheck ?? null, lastSave: this.saveStats ?? null,
+      hashes: this.hashes ?? null, loadCheck: this.loadCheck ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
     };
   }
 }
