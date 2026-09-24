@@ -117,18 +117,21 @@ await page.keyboard.press("Tab");
 check(await page.evaluate(() => window.__ls.game.selected) === second.id, "Tab again comes back round");
 await page.screenshot({ path: `${OUT}/3b-keys-${MAP}.png` });
 await page.keyboard.press("m");
-const target = await page.evaluate(() => {
+const reachable = page => page.evaluate(async () => {
   const g = window.__ls.game, w = g.world, v = g.view, s = w.stacks.get(g.selected);
   const sx = s.pos % w.w, sy = (s.pos / w.w) | 0;
-  for (const [dx, dy] of [[25, 0], [-25, 0], [0, 20], [0, -20], [18, 14], [-18, -14]]) {
-    const x = sx + dx, y = sy + dy, i = y * w.w + x;
-    if (x < 0 || y < 0 || x >= w.w || y >= w.h || !(w.terrain[i] >= 7 && w.terrain[i] <= 26)) continue;
-    const [px, py] = v.plotToScreen(x + 0.5, y + 0.5);
-    if (px < 40 || py < 80 || px > v.canvas.width - 40 || py > v.canvas.height - 120) continue;
-    return { x: px / v.ratio, y: py / v.ratio };
-  }
+  for (let r = 12; r <= 40; r += 4)
+    for (let a = 0; a < 16; a++) {
+      const x = Math.round(sx + r * Math.cos(a * Math.PI / 8)), y = Math.round(sy + r * Math.sin(a * Math.PI / 8)), i = y * w.w + x;
+      if (x < 0 || y < 0 || x >= w.w || y >= w.h || !(w.terrain[i] >= 7 && w.terrain[i] <= 26) || w.owner[i] === w.you) continue;
+      const [px, py] = v.plotToScreen(x + 0.5, y + 0.5);
+      if (px < 40 || py < 80 || px > v.canvas.width - 40 || py > v.canvas.height - 160) continue;
+      if (!(await g.conn.request({ t: "route", stack: s.id, to: i })).ok) continue;
+      return { id: s.id, x: px / v.ratio, y: py / v.ratio };
+    }
   return null;
 });
+const target = await reachable(page);
 if (target) await page.mouse.click(target.x, target.y);
 const preview = await page.waitForSelector("#move-go", { timeout: 5000 }).then(() => true, () => false);
 const hint = preview ? await page.textContent("#stack-hint") : "";
@@ -137,26 +140,16 @@ await page.screenshot({ path: `${OUT}/4-route-${MAP}.png` });
 if (preview) await page.click("#move-go");
 await page.waitForTimeout(2500);
 const moving = await page.evaluate(() => { const g = window.__ls.game; return g.world.stacks.get(g.selected)?.order; });
-check(moving === "move" || moving === "hold", `the stack takes the order (now ${moving})`);
+check(moving === "move", `the stack takes the order (now ${moving})`);
 await page.screenshot({ path: `${OUT}/5-moving-${MAP}.png` });
 
 await page.keyboard.press("Tab");
-const rc = await page.evaluate(() => {
-  const g = window.__ls.game, w = g.world, v = g.view, s = w.stacks.get(g.selected);
-  const sx = s.pos % w.w, sy = (s.pos / w.w) | 0;
-  for (const [dx, dy] of [[-15, 0], [15, 0], [0, 12], [0, -12], [10, 10], [-10, -10]]) {
-    const x = sx + dx, y = sy + dy, i = y * w.w + x;
-    if (x < 0 || y < 0 || x >= w.w || y >= w.h || !(w.terrain[i] >= 7 && w.terrain[i] <= 26)) continue;
-    const [px, py] = v.plotToScreen(x + 0.5, y + 0.5);
-    if (px < 40 || py < 80 || px > v.canvas.width - 40 || py > v.canvas.height - 120) continue;
-    return { id: s.id, x: px / v.ratio, y: py / v.ratio };
-  }
-  return null;
-});
+const rc = await reachable(page);
+const rcFrom = rc && await page.evaluate(id => window.__ls.game.world.stacks.get(id)?.pos, rc.id);
 if (rc) await page.mouse.click(rc.x, rc.y, { button: "right" });
-await page.waitForTimeout(1200);
-const rcOrder = rc && await page.evaluate(id => window.__ls.game.world.stacks.get(id)?.order, rc.id);
-check(rcOrder === "move" || rcOrder === "hold", `right-click sends the selected stack with no Go step (now ${rcOrder})`);
+await page.waitForTimeout(1500);
+const rcNow = rc && await page.evaluate(id => { const s = window.__ls.game.world.stacks.get(id); return s && { order: s.order, pos: s.pos }; }, rc.id);
+check(rcNow && (rcNow.order === "move" || rcNow.pos !== rcFrom), `right-click sends the selected stack with no Go step (now ${rcNow?.order}, moved ${rcNow?.pos !== rcFrom})`);
 check(!(await page.isVisible("#move-go")), "no route preview is left open after a right-click");
 await page.keyboard.press("Escape");
 check(await page.evaluate(() => window.__ls.game.selected) === null, "Esc clears the selection");

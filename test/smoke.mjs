@@ -1,13 +1,16 @@
+import { isLand } from "../src/shared/terrain.js";
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const INVITE = process.env.INVITE ?? "test-invite";
 const ADMIN = process.env.ADMIN ?? "rw_scorch";
 const MAP = process.env.MAP ?? "test";
 const MAPS = {
   test: { config: { w: 160, h: 100, seed: 7 }, w: 160, h: 100 },
-  europe: { config: { map: "europe" }, w: 700, h: 380 },
+  europe: { config: { map: "europe" }, w: 1400, h: 760, scale: 2 },
+  "europe-normal": { config: { map: "europe", detail: "normal" }, w: 700, h: 380 },
   earth: { config: { map: "earth" }, w: 3600, h: 1440 },
 };
 const M = MAPS[MAP];
+const K = M.scale ?? 1;
 if (!M) throw new Error(`MAP must be one of ${Object.keys(MAPS).join(", ")}`);
 console.log(`map: ${MAP}`);
 import { PROTOCOL, MSG, CLOSE } from "../src/shared/protocol.js";
@@ -59,7 +62,7 @@ class Mirror {
   async load() {
     try {
       await this.world.loadBase(async () => {
-        const gz = new Uint8Array(await (await fetch(BASE + "/map/terrain.bin.gz")).arrayBuffer());
+        const gz = new Uint8Array(await (await fetch(`${BASE}/${this.world.map.dir ?? "map"}/terrain.bin.gz`)).arrayBuffer());
         this.staticBytes = gz.length;
         return gz;
       });
@@ -125,7 +128,7 @@ const ta = alogin.body.token, tb = b.body.token;
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
-const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6, enemyCostFactor: 0.01, advanceRate: 30 } } }, ta);
+const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K } } }, ta);
 check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
@@ -150,7 +153,22 @@ const land = [];
 for (let i = 0; i < terrain.length; i++) if (terrain[i] >= 11 && terrain[i] <= 15) land.push(i);
 const view = mirror, you = hello.you;
 const cx = M.w / 2, cy = M.h / 2;
-const nearMiddle = land.filter((_, k) => k % 97 === 0).sort((p, q) => Math.hypot((p % M.w) - cx, Math.floor(p / M.w) - cy) - Math.hypot((q % M.w) - cx, Math.floor(q / M.w) - cy));
+const region = new Int32Array(terrain.length).fill(-1), sizes = [];
+for (let i = 0; i < terrain.length; i++) {
+  if (region[i] >= 0 || !isLand(terrain[i])) continue;
+  const id = sizes.length, todo = [i];
+  region[i] = id;
+  let n = 0;
+  while (todo.length) {
+    const c = todo.pop(), x = c % M.w;
+    n++;
+    for (const d of [c - M.w, c + M.w, x > 0 ? c - 1 : -1, x < M.w - 1 ? c + 1 : -1])
+      if (d >= 0 && d < terrain.length && region[d] < 0 && isLand(terrain[d])) { region[d] = id; todo.push(d); }
+  }
+  sizes.push(n);
+}
+const mainland = sizes.indexOf(Math.max(...sizes));
+const nearMiddle = land.filter((i, k) => k % 97 === 0 && region[i] === mainland).sort((p, q) => Math.hypot((p % M.w) - cx, Math.floor(p / M.w) - cy) - Math.hypot((q % M.w) - cx, Math.floor(q / M.w) - cy));
 let aSpawn = -1;
 for (const i of nearMiddle) {
   A.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
@@ -177,7 +195,7 @@ A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
 const st2 = await nextResult(A, "stack");
 const from = (await until(() => view.pump().stacks.get(st2?.stack)))?.pos;
 let moved = null;
-const far = Math.min(250, Math.floor(hello.w / 3));
+const far = Math.min(250 * K, Math.floor(hello.w / 3));
 for (const i of land.filter((_, k) => k % 211 === 0)) {
   if (from === undefined || Math.abs((i % hello.w) - (from % hello.w)) + Math.abs(Math.floor(i / hello.w) - Math.floor(from / hello.w)) < far) continue;
   const sent = Date.now();
@@ -190,7 +208,7 @@ const bHello = await waitFor(B, m => m.t === "hello");
 const bNation = bHello.you;
 const dist = i => Math.hypot((i % M.w) - (aSpawn % M.w), Math.floor(i / M.w) - Math.floor(aSpawn / M.w));
 let bSpawn = -1;
-for (const i of land.filter(i => dist(i) >= 22 && dist(i) <= 45).sort((p, q) => dist(p) - dist(q)).filter((_, k) => k % 5 === 0)) {
+for (const i of land.filter(i => dist(i) >= 22 * K && dist(i) <= 45 * K).sort((p, q) => dist(p) - dist(q)).filter((_, k) => k % 5 === 0)) {
   A.ws.send(JSON.stringify({ t: "route", stack: st.stack, to: i }));
   if (!(await nextResult(A, "route"))?.ok) continue;
   B.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
