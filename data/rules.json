@@ -8,5 +8,5 @@
   "cbd": { "radius": 14, "maxBonus": 0.5, "attackShare": 0.6 },
   "offline": { "defenceMult": 0.95, "offlineOutputShare": 0.9, "maxCatchupSeconds": 259200 },
   "landing": { "penalty": 0.15, "beachPenalty": 0.05, "dropPenalty": 0.1 },
-  "world": { "botsPerMillionLand": 200, "maxBots": 400, "minMapSide": 64, "maxTestSide": 2000 }
+  "world": { "botsPerMillionLand": 200, "maxBots": 400, "minMapSide": 64, "maxTestSide": 2000, "messagesPerSecond": 20, "messageBurst": 40, "botTroopShare": 0.01, "botStateEvery": 5 }
 }

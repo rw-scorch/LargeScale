@@ -147,7 +147,7 @@ export function coarseRoute(co, from, to, minStep = 0.9) {
   if (!(dist[to] < Infinity)) return null;
   const route = [to];
   for (let r = to; r !== from; ) { r = prev[r]; route.push(r); }
-  return { regions: route.reverse(), cost: dist[to] };
+  return { regions: route.reverse(), cost: dist[to], plots: (route.length - 1) * size };
 }
 
 export function planSegment(grid, co, start, regions, goal, cost, { ahead = 8, radius = 1, maxNodes = 60000 } = {}) {
