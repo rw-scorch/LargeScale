@@ -231,20 +231,34 @@ export class World {
     }
   }
 
-  frontier(s) {
-    const g = this.grid, R = this.rules.advanceRadius;
-    const sx = g.x(s.pos), sy = g.y(s.pos), out = [];
-    for (let y = Math.max(0, sy - R); y <= Math.min(g.h - 1, sy + R); y++)
-      for (let x = Math.max(0, sx - R); x <= Math.min(g.w - 1, sx + R); x++) {
-        const i = g.idx(x, y), o = this.owner[i];
-        const d = Math.hypot(x - sx, y - sy);
-        if (d > R + 0.5 || o === s.owner || !isLand(this.terrain[i])) continue;
-        if (o && !this.hostile(s.owner, o)) continue;
-        if (!g.neighbours4(i).some(n => this.owner[n] === s.owner)) continue;
-        out.push([d, i]);
+  discOffsets() {
+    const R = this.rules.advanceRadius;
+    if (this.disc?.R === R) return this.disc.list;
+    const list = [];
+    for (let dy = -R; dy <= R; dy++)
+      for (let dx = -R; dx <= R; dx++) {
+        const d = Math.hypot(dx, dy);
+        if (d <= R + 0.5) list.push([d, dy, dx]);
       }
-    out.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    return out.map(v => v[1]);
+    list.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+    this.disc = { R, list };
+    return list;
+  }
+
+  frontier(s, limit = Infinity) {
+    const g = this.grid, ow = this.owner, w = g.w, me = s.owner;
+    const sx = g.x(s.pos), sy = g.y(s.pos), out = [];
+    for (const [, dy, dx] of this.discOffsets()) {
+      const x = sx + dx, y = sy + dy;
+      if (x < 0 || y < 0 || x >= w || y >= g.h) continue;
+      const i = y * w + x, o = ow[i];
+      if (o === me || !isLand(this.terrain[i])) continue;
+      if (o && !this.hostile(me, o)) continue;
+      if (!((y > 0 && ow[i - w] === me) || (x < w - 1 && ow[i + 1] === me) || (y < g.h - 1 && ow[i + w] === me) || (x > 0 && ow[i - 1] === me))) continue;
+      out.push(i);
+      if (out.length >= limit) break;
+    }
+    return out;
   }
 
   advance(s, dt) {
@@ -252,7 +266,7 @@ export class World {
     let budget = Math.floor(s.carry);
     s.carry -= budget;
     if (!budget) return;
-    const f = this.frontier(s);
+    const f = this.frontier(s, budget);
     if (!f.length) { s.order = "hold"; this.emit("advance_done", { stack: s.id }); return; }
     for (const i of f) {
       if (budget-- <= 0) break;
@@ -271,25 +285,26 @@ export class World {
   }
 
   fillEnclaves(i, nid) {
-    const g = this.grid, lim = this.rules.enclaveLimit;
+    const g = this.grid, lim = this.rules.enclaveLimit, ow = this.owner, w = g.w, h = g.h, opened = [];
     for (const start of g.neighbours4(i)) {
-      if (this.owner[start] === nid) continue;
+      if (ow[start] === nid || opened.some(set => set.has(start))) continue;
       const seen = new Set([start]), stack = [start];
       let open = false;
       while (stack.length && !open) {
         const c = stack.pop();
-        const x = g.x(c), y = g.y(c);
-        if (x === 0 || y === 0 || x === g.w - 1 || y === g.h - 1) { open = true; break; }
-        for (const n of g.neighbours4(c)) {
-          if (this.owner[n] === nid || seen.has(n)) continue;
-          const o = this.owner[n];
+        const x = c % w, y = (c / w) | 0;
+        if (x === 0 || y === 0 || x === w - 1 || y === h - 1) { open = true; break; }
+        for (let k = 0; k < 4; k++) {
+          const n = k === 0 ? c - w : k === 1 ? c + 1 : k === 2 ? c + w : c - 1;
+          const o = ow[n];
+          if (o === nid || seen.has(n)) continue;
           if (o && !this.hostile(nid, o)) { open = true; break; }
           seen.add(n);
           stack.push(n);
           if (seen.size > lim) { open = true; break; }
         }
       }
-      if (open) continue;
+      if (open) { opened.push(seen); continue; }
       let land = 0;
       for (const c of seen) if (isLand(this.terrain[c])) land++;
       if (!land) continue;
