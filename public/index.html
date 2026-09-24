@@ -98,10 +98,10 @@ $("connect").onclick = () => {
       m.chat.forEach(c => log(`${c.who}: ${c.text}`));
       loadBase(m).catch(err => log(err.message));
     }
-    if (m.t === "state") m.nations.forEach(n => world.colours.set(n.id, n.colour));
     if (m.t === "chat") log(`${m.who}: ${m.text}`);
     if (m.t === "result") { log(`${m.of}: ${m.ok ? "ok" : m.error || "failed"}`); if (m.of === "stack" && m.ok) lastStack = m.stack; }
-    if (m.t === "joined") log(`${m.name} joined`);
+    if (m.t === "joined") { world?.colours.set(m.nation, m.colour); log(`${m.name} joined`); }
+    if (m.t === "victory") log(`${m.name ?? "Nobody"} has won. The world is frozen.`);
   };
   ws.onclose = () => log("disconnected");
 };
