@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Map renderer demo</title>
+<style>
+:root{--ink:#0f2233;--line:#24506f;--parch:#e9dcb8;--mute:#9fb3c2;--signal:#e8c84a;--body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif}
+html,body{margin:0;height:100%;overflow:hidden;background:#1d3f6e;font:14px/1.4 var(--body);color:var(--parch)}
+canvas{display:block;width:100vw;height:100vh;touch-action:none;image-rendering:pixelated;cursor:grab}
+canvas.drag{cursor:grabbing}
+.hud{position:fixed;left:calc(12px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));background:rgba(15,34,51,.92);border:2px solid var(--line);border-radius:2px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;max-width:calc(100vw - 48px)}
+.hud h1{font:600 16px/1.2 "Pixelify Sans",ui-monospace,monospace;margin:0}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button{font:inherit;color:inherit;background:#183a54;border:2px solid var(--line);border-radius:2px;padding:4px 9px;cursor:pointer}
+button[aria-pressed=true]{border-color:var(--signal)}
+button:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+.hint{color:var(--mute);font-size:12px}
+.stat{position:fixed;right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));background:rgba(15,34,51,.9);border:2px solid var(--line);padding:4px 8px;font-size:12px;color:var(--mute)}
+.load{position:fixed;inset:0;display:grid;place-items:center;font:600 18px "Pixelify Sans",monospace}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="load" id="load">Building the test world</div>
+<div class="hud" id="hud" hidden>
+  <h1>Map renderer demo</h1>
+  <div class="row" id="seasons" role="group" aria-label="Season"></div>
+  <div class="row">
+    <button id="night" aria-pressed="false">Night</button>
+    <button id="cityA">Modern city</button>
+    <button id="cityB">Medieval city</button>
+    <button id="world">World view</button>
+  </div>
+  <div class="row"><button id="zin" aria-label="Zoom in">Zoom in</button><button id="zout" aria-label="Zoom out">Zoom out</button></div>
+  <div class="hint">Drag to pan. Scroll or pinch to zoom. Sprites appear from 10 px per plot.</div>
+</div>
+<div class="stat" id="stat"></div>
+<script src="../../../assets/data.js"></script>
+<script type="module">
+import { makeDemo, stepUnits, MapRenderer } from "./demo.js";
+const canvas = document.getElementById("c");
+const demo = await makeDemo(window.PACK);
+const r = new MapRenderer(canvas, demo.atlas, demo.state, window.PACK.palettes);
+window.demo = { r, demo };
+document.getElementById("load").remove();
+document.getElementById("hud").hidden = false;
+function fit() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(innerWidth * dpr);
+  canvas.height = Math.round(innerHeight * dpr);
+}
+fit();
+addEventListener("resize", fit);
+const worldScale = () => Math.max(1, Math.min(canvas.width / demo.state.w, canvas.height / demo.state.h));
+function go(x, y, scale) { r.cam.x = x; r.cam.y = y; r.cam.scale = scale; }
+go(demo.state.w / 2, demo.state.h / 2, worldScale());
+const seasons = document.getElementById("seasons");
+for (const s of ["spring", "summer", "autumn", "winter", "dry"]) {
+  const b = document.createElement("button");
+  b.textContent = s;
+  b.setAttribute("aria-pressed", s === r.season);
+  b.onclick = () => { r.setSeason(s); [...seasons.children].forEach(x => x.setAttribute("aria-pressed", x === b)); };
+  seasons.appendChild(b);
+}
+const nightBtn = document.getElementById("night");
+nightBtn.onclick = () => { r.night = !r.night; nightBtn.setAttribute("aria-pressed", r.night); };
+document.getElementById("cityA").onclick = () => go(demo.cities.A[0] + 0.5, demo.cities.A[1] + 0.5, 32);
+document.getElementById("cityB").onclick = () => go(demo.cities.B[0] + 0.5, demo.cities.B[1] + 0.5, 32);
+document.getElementById("world").onclick = () => go(demo.state.w / 2, demo.state.h / 2, worldScale());
+document.getElementById("zin").onclick = () => r.zoomAt(canvas.width / 2, canvas.height / 2, 1.5);
+document.getElementById("zout").onclick = () => r.zoomAt(canvas.width / 2, canvas.height / 2, 1 / 1.5);
+const pointers = new Map();
+let pinch = null;
+const dpr = () => canvas.width / innerWidth;
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); canvas.classList.add("drag"); });
+canvas.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId);
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 1) {
+    r.cam.x -= (e.clientX - prev[0]) * dpr() / r.cam.scale;
+    r.cam.y -= (e.clientY - prev[1]) * dpr() / r.cam.scale;
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    if (pinch) r.zoomAt((a[0] + b[0]) / 2 * dpr(), (a[1] + b[1]) / 2 * dpr(), d / pinch);
+    pinch = d;
+  }
+});
+const up = e => { pointers.delete(e.pointerId); pinch = null; if (!pointers.size) canvas.classList.remove("drag"); };
+canvas.addEventListener("pointerup", up);
+canvas.addEventListener("pointercancel", up);
+canvas.addEventListener("wheel", e => { e.preventDefault(); r.zoomAt(e.clientX * dpr(), e.clientY * dpr(), Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+const stat = document.getElementById("stat");
+let last = performance.now(), frames = 0, acc = 0;
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  stepUnits(demo.state, dt);
+  r.render(dt);
+  frames++; acc += dt;
+  if (acc > 0.5) { stat.textContent = `${Math.round(frames / acc)} fps, ${r.cam.scale.toFixed(1)} px per plot`; frames = 0; acc = 0; }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

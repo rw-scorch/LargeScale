@@ -1,0 +1,24 @@
+{
+  "name": "large-scale",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test \"test/**/*.test.js\"",
+    "smoke": "node test/smoke.mjs",
+    "secrets": "wrangler secret put INVITE_CODE && wrangler secret put PEPPER",
+    "map": "python tools/build_earth.py --land data/map/ne_10m_land.geojson --width 3600 --out public/map",
+    "register": "node tools/register_commands.mjs",
+    "discord": "node test/discord_endpoint.mjs",
+    "bench": "node tools/bench_earth.mjs",
+    "test:reference": "node --test \"reference/tasks/**/*.test.js\" \"reference/shared/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "wrangler": "^4.136.0"
+  }
+}

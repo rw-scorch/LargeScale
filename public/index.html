@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Large Scale server test client</title>
+<style>
+:root{--ink:#0f2233;--line:#24506f;--parch:#e9dcb8;--mute:#9fb3c2;--signal:#e8c84a}
+body{margin:0;background:#16324a;color:var(--parch);font:14px/1.4 system-ui,sans-serif;display:grid;grid-template-columns:300px 1fr;height:100vh}
+aside{background:var(--ink);border-right:2px solid var(--line);padding:14px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+h1{font-size:17px;margin:0}
+input,button,select{font:inherit;color:inherit;background:#16324a;border:2px solid var(--line);border-radius:2px;padding:5px 8px}
+button{cursor:pointer;background:#183a54}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+#log{font-size:12px;color:var(--mute);white-space:pre-wrap;flex:1;min-height:120px;overflow:auto;border-top:2px solid var(--line);padding-top:8px}
+main{position:relative;overflow:hidden}
+canvas{image-rendering:pixelated;width:100%;height:100%;object-fit:contain;cursor:crosshair}
+</style>
+</head>
+<body>
+<aside>
+  <h1>Server test client</h1>
+  <div class="row"><input id="name" placeholder="name" autocomplete="username"><input id="pass" type="password" placeholder="password" autocomplete="current-password"></div>
+  <div class="row"><input id="invite" placeholder="invite code (first time)"><button id="reg">Register</button><button id="login">Log in</button></div>
+  <div class="row"><select id="map"><option>test</option><option>europe</option><option>earth</option></select><button id="create">Create world</button><input id="wid" placeholder="world id"><button id="join">Join</button><button id="connect">Connect</button></div>
+  <div class="row"><button id="stack">Send 30% as stack</button><button id="adv">Advance</button></div>
+  <div class="row"><input id="chat" placeholder="chat" style="flex:1"><button id="send">Send</button></div>
+  <div id="log"></div>
+</aside>
+<main><canvas id="c"></canvas></main>
+<script type="module">
+import { PROTOCOL, MSG, readFrame, applyPairs, PartCollector } from "/js/shared/protocol.js";
+import { decodeRuns, gunzip } from "/js/shared/codec.js";
+import { baseLayer } from "/js/shared/maps.js";
+const $ = id => document.getElementById(id);
+const log = t => { $("log").textContent = t + "\n" + $("log").textContent.slice(0, 4000); };
+let token = localStorage.getItem("ls_token") || "", ws = null, world = null, lastStack = null;
+const TER = ["#1d3f6e","#27548a","#3a78b0","#3f7fb8","#4a8ac0","#3f9ab0","#e0cc8e","#d8b872","#e2c07a","#e6e0d0","#b89868","#b8b060","#a8a868","#79ad4f","#8ab65a","#6fb05a","#8c9a58","#4c8a3c","#346a42","#2f7a3a","#4f6a3c","#5f7f4a","#3f6a44","#7f9a52","#8a8a62","#8a847a","#a8a39a","#eef2f6","#6f6a62","#5a4a44","#e0602a","#9aa88a","#e6eef4","#cfe6f2","#dcecf4","#a88a52","#9a8a60","#4a4038","#3a3430","#8a8378","#9c988c"];
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "content-type": "application/json", authorization: "Bearer " + token }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json(); if (j.error) log("error: " + j.error); return j;
+}
+async function auth(kind) {
+  const j = await api("/api/" + kind, { name: $("name").value, password: $("pass").value, invite: $("invite").value });
+  if (j.token) { token = j.token; localStorage.setItem("ls_token", token); log(`logged in as ${j.account.name}${j.account.admin ? " (admin)" : ""}`); }
+}
+$("reg").onclick = () => auth("register");
+$("login").onclick = () => auth("login");
+$("create").onclick = async () => { const j = await api("/api/worlds", { name: "Test world", config: { map: $("map").value } }); if (j.id) { $("wid").value = j.id; log(`created ${j.map} world ${j.id}, ${j.w} by ${j.h}`); } };
+$("join").onclick = async () => { const j = await api(`/api/worlds/${$("wid").value}/join`, {}); if (j.ok) log("joined"); };
+const canvas = $("c"), ctx = canvas.getContext("2d");
+let terrainImg = null;
+function draw() {
+  if (!world?.ready) return;
+  const img = ctx.createImageData(world.w, world.h);
+  for (let i = 0; i < world.terrain.length; i++) {
+    const o = world.owner[i], c = o ? world.colours.get(o) || "#ffffff" : TER[world.terrain[i]];
+    const n = parseInt(c.slice(1), 16);
+    img.data.set([n >> 16, (n >> 8) & 255, n & 255, 255], i * 4);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+async function loadBase(m) {
+  const b = await baseLayer(m.map, m.w, m.h, async () => gunzip(new Uint8Array(await (await fetch("/map/terrain.bin.gz")).arrayBuffer())));
+  if (b.hash && b.hash !== m.map.baseHash) throw new Error("the map file is out of date, reload the page");
+  world.terrain = b.terrain;
+  world.ready = true;
+  for (const f of world.queue.splice(0)) onFrame(f);
+}
+function onFrame(f) {
+  if (!world.ready) return world.queue.push(f);
+  if (f.type === MSG.DIFF) { applyPairs(world.owner, f.body); return draw(); }
+  const whole = world.parts.add(f);
+  if (!whole) return;
+  if (f.type === MSG.TERRAIN_DIFF) applyPairs(world.terrain, whole);
+  if (f.type === MSG.OWNER) decodeRuns(whole, world.owner);
+  draw();
+}
+$("connect").onclick = () => {
+  ws?.close();
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/${$("wid").value}?token=${token}&v=${PROTOCOL}`);
+  ws.binaryType = "arraybuffer";
+  ws.onmessage = e => {
+    if (typeof e.data !== "string") {
+      const f = readFrame(e.data);
+      if (f.version !== PROTOCOL) { log("The game has been updated. Reload the page."); return ws.close(); }
+      if (world) onFrame(f);
+      return;
+    }
+    const m = JSON.parse(e.data);
+    if (m.v !== PROTOCOL || m.t === "error") { log(m.text ?? "The game has been updated. Reload the page."); return ws.close(); }
+    if (m.t === "replaced") log(m.text);
+    if (m.t === "hello") {
+      world = { w: m.w, h: m.h, you: m.you, colours: new Map(), owner: new Uint16Array(m.w * m.h), parts: new PartCollector(), queue: [], ready: false };
+      canvas.width = m.w; canvas.height = m.h;
+      m.nations.forEach(n => world.colours.set(n.id, n.colour));
+      log(`connected as nation ${m.you} on ${m.map.kind}. Click the map to spawn.`);
+      m.chat.forEach(c => log(`${c.who}: ${c.text}`));
+      loadBase(m).catch(err => log(err.message));
+    }
+    if (m.t === "state") m.nations.forEach(n => world.colours.set(n.id, n.colour));
+    if (m.t === "chat") log(`${m.who}: ${m.text}`);
+    if (m.t === "result") { log(`${m.of}: ${m.ok ? "ok" : m.error || "failed"}`); if (m.of === "stack" && m.ok) lastStack = m.stack; }
+    if (m.t === "joined") log(`${m.name} joined`);
+  };
+  ws.onclose = () => log("disconnected");
+};
+canvas.onclick = e => {
+  if (!world) return;
+  const r = canvas.getBoundingClientRect(), s = Math.min(r.width / world.w, r.height / world.h);
+  const ox = (r.width - world.w * s) / 2, oy = (r.height - world.h * s) / 2;
+  const x = Math.floor((e.clientX - r.left - ox) / s), y = Math.floor((e.clientY - r.top - oy) / s);
+  if (x < 0 || y < 0 || x >= world.w || y >= world.h) return;
+  if (lastStack) ws.send(JSON.stringify({ t: "move", stack: lastStack, to: y * world.w + x }));
+  else ws.send(JSON.stringify({ t: "spawn", x, y }));
+};
+$("stack").onclick = () => ws?.send(JSON.stringify({ t: "stack", share: 0.3 }));
+$("adv").onclick = () => lastStack && ws?.send(JSON.stringify({ t: "advance", stack: lastStack }));
+$("send").onclick = () => { ws?.send(JSON.stringify({ t: "chat", text: $("chat").value })); $("chat").value = ""; };
+</script>
+</body>
+</html>

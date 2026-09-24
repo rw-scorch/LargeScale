@@ -1,0 +1,11 @@
+node_modules/
+.wrangler/
+.dev.vars
+public/assets/
+public/map/
+data/map/
+**/__pycache__/
+
+test/.last.json
+public/js/shared/
+.screens/

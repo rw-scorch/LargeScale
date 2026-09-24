@@ -1,0 +1,328 @@
+import { TERRAIN } from "../../../shared/terrain.js";
+import { hash2 } from "../../../shared/rng.js";
+
+export const ZOOM = { min: 1, max: 64, sprites: 10, icons: 3 };
+export const NIGHT = "rgba(12,18,52,0.62)";
+const ROAD_NAMES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
+const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
+const maskName = m => DIRS.filter(([b]) => m & b).map(d => d[1]).join("") || "dot";
+const ICON_FOR = { housing: "mapicon_housing", commercial: "mapicon_commercial", industry: "mapicon_industry", agriculture: "mapicon_agriculture", energy: "mapicon_energy", civic: "mapicon_civic", transport: "mapicon_transport", tourism: "mapicon_tourism", military: "mapicon_military" };
+
+function hexRGB(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+export class MapRenderer {
+  constructor(canvas, atlas, state, palettes) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.atlas = atlas;
+    this.state = state;
+    this.palettes = palettes;
+    this.season = "summer";
+    this.night = false;
+    this.cam = { x: state.w / 2, y: state.h / 2, scale: 4 };
+    this.time = 0;
+    this.terrainCanvas = document.createElement("canvas");
+    this.territoryCanvas = document.createElement("canvas");
+    this.fillCanvas = document.createElement("canvas");
+    this.terrainCanvas.width = this.territoryCanvas.width = this.fillCanvas.width = state.w;
+    this.terrainCanvas.height = this.territoryCanvas.height = this.fillCanvas.height = state.h;
+    this.occupied = new Uint8Array(state.w * state.h);
+    this.lotAt = new Map();
+    this.indexBuildings();
+    this.rebuildTerrain();
+    this.rebuildTerritory();
+  }
+
+  indexBuildings() {
+    const s = this.state;
+    this.occupied.fill(0);
+    this.lotAt.clear();
+    for (const b of s.buildings) {
+      const sp = this.atlas.get(b.type);
+      b.sprite = sp;
+      if (!sp) continue;
+      const [fw, fh] = sp.footprint.map(Math.round);
+      b.fp = [fw, fh];
+      const ax = b.anchor % s.w, ay = (b.anchor / s.w) | 0;
+      for (let dy = 0; dy < fh; dy++) for (let dx = 0; dx < fw; dx++) {
+        const i = (ay + dy) * s.w + ax + dx;
+        this.occupied[i] = 1;
+        if (sp.lot) this.lotAt.set(i, sp.lot);
+      }
+    }
+    for (let i = 0; i < s.roads.length; i++) if (s.roads[i]) this.occupied[i] = 1;
+  }
+
+  setSeason(season) { this.season = season; this.rebuildTerrain(); }
+
+  rebuildTerrain() {
+    const s = this.state, pal = this.palettes[this.season];
+    const ctx = this.terrainCanvas.getContext("2d");
+    const img = ctx.createImageData(s.w, s.h);
+    const lut = TERRAIN.map(t => pal[t.name].map(hexRGB));
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) {
+      const i = y * s.w + x;
+      const n = hash2(x, y, 11) * 0.7 + hash2(x >> 2, y >> 2, 12) * 0.3;
+      const k = Math.min(4, Math.max(0, Math.floor(n * 3.4 + 0.3)));
+      const c = lut[s.terrain[i]][k];
+      img.data.set([c[0], c[1], c[2], 255], i * 4);
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  rebuildTerritory() {
+    const s = this.state;
+    const ctx = this.territoryCanvas.getContext("2d");
+    const img = ctx.createImageData(s.w, s.h);
+    this.territoryImage = img;
+    this.fillImage = this.fillCanvas.getContext("2d").createImageData(s.w, s.h);
+    for (let i = 0; i < s.owner.length; i++) this.paintPlot(i);
+    ctx.putImageData(img, 0, 0);
+    this.fillCanvas.getContext("2d").putImageData(this.fillImage, 0, 0);
+  }
+
+  paintPlot(i) {
+    const s = this.state, o = s.owner[i], d = this.territoryImage.data, f = this.fillImage.data;
+    if (!o) { d[i * 4 + 3] = 0; f[i * 4 + 3] = 0; return; }
+    const x = i % s.w, y = (i / s.w) | 0;
+    const border = (x > 0 && s.owner[i - 1] !== o) || (x < s.w - 1 && s.owner[i + 1] !== o) || (y > 0 && s.owner[i - s.w] !== o) || (y < s.h - 1 && s.owner[i + s.w] !== o);
+    const c = hexRGB(s.nations.get(o)?.colour ?? "#ffffff");
+    d.set([c[0], c[1], c[2], border ? 235 : 70], i * 4);
+    f.set([c[0], c[1], c[2], 60], i * 4);
+  }
+
+  updatePlots(list) {
+    const s = this.state, touched = new Set();
+    for (const i of list) { touched.add(i); for (const n of [i - 1, i + 1, i - s.w, i + s.w]) if (n >= 0 && n < s.owner.length) touched.add(n); }
+    for (const i of touched) this.paintPlot(i);
+    this.territoryCanvas.getContext("2d").putImageData(this.territoryImage, 0, 0);
+    this.fillCanvas.getContext("2d").putImageData(this.fillImage, 0, 0);
+  }
+
+  screenToPlot(sx, sy) {
+    const c = this.cam, W = this.canvas.width, H = this.canvas.height;
+    return [(sx - W / 2) / c.scale + c.x, (sy - H / 2) / c.scale + c.y];
+  }
+
+  plotToScreen(x, y) {
+    const c = this.cam, W = this.canvas.width, H = this.canvas.height;
+    return [(x - c.x) * c.scale + W / 2, (y - c.y) * c.scale + H / 2];
+  }
+
+  zoomAt(sx, sy, factor) {
+    const [px, py] = this.screenToPlot(sx, sy);
+    const c = this.cam;
+    c.scale = Math.min(ZOOM.max, Math.max(ZOOM.min, c.scale * factor));
+    const [nx, ny] = this.screenToPlot(sx, sy);
+    c.x += px - nx;
+    c.y += py - ny;
+  }
+
+  roadSprite(i) {
+    const s = this.state, r = s.roads, w = s.w, x = i % w;
+    let m = 0;
+    if (i >= w && r[i - w]) m |= 1;
+    if (x < w - 1 && r[i + 1]) m |= 2;
+    if (i + w < r.length && r[i + w]) m |= 4;
+    if (x > 0 && r[i - 1]) m |= 8;
+    const kind = ROAD_NAMES[r[i]];
+    return kind === "rail" ? `rail_${maskName(m)}` : `road_${kind}_${maskName(m)}`;
+  }
+
+  lotSprite(i, type) {
+    const s = this.state, w = s.w, x = i % w;
+    let m = 0;
+    if (this.lotAt.get(i - w) === type) m |= 1;
+    if (x < w - 1 && this.lotAt.get(i + 1) === type) m |= 2;
+    if (this.lotAt.get(i + w) === type) m |= 4;
+    if (x > 0 && this.lotAt.get(i - 1) === type) m |= 8;
+    return `lot_${type}_${maskName(m)}`;
+  }
+
+  decoFor(i, x, y) {
+    const t = TERRAIN[this.state.terrain[i]].name, r = hash2(x, y, 99);
+    const winter = this.season === "winter";
+    const s = this.season === "dry" ? "summer" : this.season;
+    if (t === "forest" && r < 0.55) return r < 0.12 ? `deco_birch_${s}` : `deco_oak_${s}`;
+    if (t === "pine_forest" && r < 0.65) return `deco_pine_${winter ? "winter" : "summer"}`;
+    if (t === "jungle" && r < 0.7) return r < 0.2 ? "deco_palm" : "deco_jungle_tree";
+    if (t === "desert" && r < 0.03) return "deco_cactus";
+    if ((t === "hills" || t === "highlands") && r < 0.08) return "deco_rock_small";
+    if (t === "mountain" && r < 0.15) return "deco_rock_large";
+    if ((t === "grassland" || t === "meadow") && r < 0.04) return r < 0.02 ? "deco_flowers" : `deco_bush_${s}`;
+    if ((t === "swamp" || t === "marsh") && r < 0.3) return "deco_reeds";
+    if (t === "ocean" && r < 0.01) return "deco_waves";
+    return null;
+  }
+
+  visibleRange(pad = 2) {
+    const c = this.cam, W = this.canvas.width, H = this.canvas.height, s = this.state;
+    return {
+      x0: Math.max(0, Math.floor(c.x - W / 2 / c.scale) - pad), x1: Math.min(s.w - 1, Math.ceil(c.x + W / 2 / c.scale) + pad),
+      y0: Math.max(0, Math.floor(c.y - H / 2 / c.scale) - pad), y1: Math.min(s.h - 1, Math.ceil(c.y + H / 2 / c.scale) + pad + 4),
+    };
+  }
+
+  render(dt = 0) {
+    this.time += dt;
+    const ctx = this.ctx, c = this.cam, s = this.state, W = this.canvas.width, H = this.canvas.height;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#1d3f6e";
+    ctx.fillRect(0, 0, W, H);
+    ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
+    ctx.drawImage(this.terrainCanvas, 0, 0);
+    ctx.drawImage(c.scale >= ZOOM.sprites ? this.fillCanvas : this.territoryCanvas, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (c.scale >= ZOOM.sprites) this.drawSprites();
+    else if (c.scale >= ZOOM.icons) this.drawIcons();
+    else this.drawDots();
+    if (this.night) this.drawNight();
+  }
+
+  drawSprites() {
+    const ctx = this.ctx, s = this.state, a = this.atlas, px = this.cam.scale / 16, r = this.visibleRange();
+    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
+      const i = y * s.w + x;
+      const [sx, sy] = this.plotToScreen(x, y);
+      const lot = this.lotAt.get(i);
+      if (lot) a.draw(ctx, this.lotSprite(i, lot), sx, sy, px);
+      if (s.roads[i]) a.draw(ctx, this.roadSprite(i), sx, sy, px);
+    }
+    this.drawBorders(r);
+    const items = [];
+    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
+      const i = y * s.w + x;
+      if (this.occupied[i]) continue;
+      const d = this.decoFor(i, x, y);
+      if (d) items.push({ key: y + 1, x, draw: () => { const [sx, sy] = this.plotToScreen(x, y); a.draw(ctx, d, sx, sy, px); } });
+    }
+    for (const b of s.buildings) {
+      if (!b.sprite) continue;
+      const ax = b.anchor % s.w, ay = (b.anchor / s.w) | 0;
+      if (ax + b.fp[0] < r.x0 || ax > r.x1 || ay > r.y1 || ay + b.fp[1] < r.y0) continue;
+      items.push({ key: ay + b.fp[1], x: ax, draw: () => {
+        const [sx, sy] = this.plotToScreen(ax, ay);
+        const id = b.state && b.state !== "active" ? `${b.type}_${b.state}` : this.frameFor(b.type);
+        a.draw(ctx, id, sx, sy - (b.sprite.rise ?? 0) * px, px, s.nations.get(b.owner)?.colour);
+      } });
+    }
+    for (const u of s.units) {
+      if (u.x < r.x0 - 4 || u.x > r.x1 + 4 || u.y < r.y0 - 4 || u.y > r.y1 + 4) continue;
+      items.push({ key: u.air ? 1e9 : u.y + 1, x: u.x, draw: () => this.drawUnit(u, px) });
+    }
+    items.sort((p, q) => p.key - q.key || p.x - q.x);
+    for (const it of items) it.draw();
+    for (const m of s.markers) this.drawMarker(m, px);
+  }
+
+  drawBorders(r) {
+    const ctx = this.ctx, s = this.state, sc = this.cam.scale, t = Math.max(2, Math.round(sc / 10));
+    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
+      const i = y * s.w + x, o = s.owner[i];
+      if (!o) continue;
+      const [sx, sy] = this.plotToScreen(x, y);
+      ctx.fillStyle = s.nations.get(o)?.colour ?? "#fff";
+      if (y === 0 || s.owner[i - s.w] !== o) ctx.fillRect(sx, sy, sc, t);
+      if (y === s.h - 1 || s.owner[i + s.w] !== o) ctx.fillRect(sx, sy + sc - t, sc, t);
+      if (x === 0 || s.owner[i - 1] !== o) ctx.fillRect(sx, sy, t, sc);
+      if (x === s.w - 1 || s.owner[i + 1] !== o) ctx.fillRect(sx + sc - t, sy, t, sc);
+    }
+  }
+
+  frameFor(type) {
+    const frames = this.state.animated?.[type];
+    if (!frames) return type;
+    return frames[Math.floor(this.time * 4) % frames.length];
+  }
+
+  drawUnit(u, px) {
+    const ctx = this.ctx, a = this.atlas, s = this.state;
+    const colour = s.nations.get(u.owner)?.colour;
+    const [sx, sy] = this.plotToScreen(u.x, u.y);
+    let id = u.sprite;
+    if (u.frames) id = u.frames[Math.floor(this.time * 5 + u.x) % u.frames.length];
+    if (u.air && a.has(u.sprite + "_shadow")) {
+      const sp = a.get(u.sprite);
+      a.draw(ctx, u.sprite + "_shadow", sx - sp.w * px / 2 + 6 * px, sy - sp.h * px / 2 + 10 * px, px);
+    }
+    const sp = a.get(id);
+    if (!sp) return;
+    a.draw(ctx, id, sx - sp.w * px / 2, sy - sp.h * px / 2 - (u.air ? 6 * px : 0), px, colour, u.flip);
+  }
+
+  drawMarker(m, px) {
+    const ctx = this.ctx, a = this.atlas, colour = this.state.nations.get(m.owner)?.colour;
+    const [sx, sy] = this.plotToScreen(m.x, m.y);
+    const size = Math.max(16, 16 * px);
+    const k = size / 16;
+    a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
+    this.label(String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
+  }
+
+  label(text, x, y, size) {
+    const ctx = this.ctx;
+    ctx.font = `600 ${Math.round(size)}px "Atkinson Hyperlegible", system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(15,34,51,.9)";
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = "#e9dcb8";
+    ctx.fillText(text, x, y);
+  }
+
+  drawIcons() {
+    const ctx = this.ctx, s = this.state, a = this.atlas, c = this.cam;
+    const size = Math.max(6, Math.min(16, c.scale * 1.5)), k = size / 8;
+    for (const b of s.buildings) {
+      if (!b.sprite) continue;
+      const icon = ICON_FOR[b.sprite.category];
+      if (!icon) continue;
+      const ax = b.anchor % s.w, ay = (b.anchor / s.w) | 0;
+      const [sx, sy] = this.plotToScreen(ax + b.fp[0] / 2, ay + b.fp[1] / 2);
+      if (sx < -20 || sy < -20 || sx > this.canvas.width + 20 || sy > this.canvas.height + 20) continue;
+      if (b.fp[0] * c.scale < size && hash2(ax, ay, 5) > 0.35) continue;
+      a.draw(ctx, icon, sx - size / 2, sy - size / 2, k);
+    }
+    for (const m of s.markers) {
+      const [sx, sy] = this.plotToScreen(m.x, m.y);
+      a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - 8, sy - 8, 1, s.nations.get(m.owner)?.colour);
+      this.label(String(Math.round(m.troops)), sx, sy + 9, 11);
+    }
+  }
+
+  drawDots() {
+    const ctx = this.ctx, s = this.state;
+    for (const n of s.nations.values()) {
+      if (n.capital === undefined) continue;
+      const [sx, sy] = this.plotToScreen(n.capital % s.w + 0.5, ((n.capital / s.w) | 0) + 0.5);
+      this.atlas.draw(ctx, "mapicon_capital", sx - 4, sy - 4, 1);
+    }
+  }
+
+  drawNight() {
+    const ctx = this.ctx, s = this.state, a = this.atlas, c = this.cam;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = NIGHT;
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    const px = c.scale / 16;
+    for (const b of s.buildings) {
+      if (!b.sprite || (b.state && b.state !== "active")) continue;
+      const lights = `${b.type}_lights`;
+      if (!a.has(lights)) continue;
+      const ax = b.anchor % s.w, ay = (b.anchor / s.w) | 0;
+      const [sx, sy] = this.plotToScreen(ax, ay);
+      if (sx > this.canvas.width + 50 || sy > this.canvas.height + 80 || sx + b.fp[0] * c.scale < -50 || sy + b.fp[1] * c.scale < -50) continue;
+      if (c.scale >= ZOOM.sprites) a.draw(ctx, lights, sx, sy - (b.sprite.rise ?? 0) * px, px);
+      else {
+        ctx.fillStyle = "rgba(248,220,130,0.85)";
+        const d = Math.max(1, c.scale * 0.6);
+        ctx.fillRect(sx + (b.fp[0] * c.scale - d) / 2, sy + (b.fp[1] * c.scale - d) / 2, d, d);
+      }
+    }
+  }
+}
