@@ -13,7 +13,8 @@
     "register": "node tools/register_commands.mjs",
     "discord": "node test/discord_endpoint.mjs",
     "bench": "node tools/bench_earth.mjs",
-    "test:reference": "node --test \"reference/tasks/**/*.test.js\" \"reference/shared/*.test.js\""
+    "test:reference": "node --test \"reference/tasks/**/*.test.js\" \"reference/shared/*.test.js\"",
+    "ui": "node test/ui.mjs"
   },
   "engines": {
     "node": ">=22"
