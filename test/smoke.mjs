@@ -93,7 +93,7 @@ if (process.env.RECHECK) {
   const st = (await api(`/api/worlds/${last.wid}/status`, null, last.token)).body;
   const lc = st.loadCheck;
   check(lc?.loaded.terrain === last.hashes.terrain && lc?.loaded.owner === last.hashes.owner, `after a restart the ${st.map?.kind} world loads terrain ${lc?.loaded.terrain} and owner ${lc?.loaded.owner}, the same as before (${last.hashes.terrain}, ${last.hashes.owner})`);
-  check(lc?.saved?.owner === lc?.loaded.owner, "the owner hash stored with the save matches the decoded layer");
+  check(lc?.saved?.owner === lc?.loaded.owner, `the owner hash stored with the save matches the decoded layer (load took ${st.loadMs} ms)`);
   const again = await connect(last.wid, last.token);
   const h = await waitFor(again, m => m.t === "hello");
   const n = h?.nations.find(x => x.id === last.you);
@@ -140,7 +140,9 @@ const terrain = mirror.terrain;
 const land = [];
 for (let i = 0; i < terrain.length; i++) if (terrain[i] >= 11 && terrain[i] <= 15) land.push(i);
 let spawned = false;
-for (const i of land.filter((_, k) => k % 97 === 0)) {
+const cx = M.w / 2, cy = M.h / 2;
+const nearMiddle = land.filter((_, k) => k % 97 === 0).sort((p, q) => Math.hypot((p % M.w) - cx, Math.floor(p / M.w) - cy) - Math.hypot((q % M.w) - cx, Math.floor(q / M.w) - cy));
+for (const i of nearMiddle) {
   A.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
   const r = await waitFor(A, m => m.t === "result" && m.of === "spawn" && !m.seen && (m.seen = true));
   if (r?.ok) { spawned = true; break; }
@@ -165,6 +167,19 @@ check(hr && hashRuns(mirror.owner) === hr.owner, `after live diffs the client's 
 const state = [...A.json].reverse().find(m => m.t === "state");
 const mine = state?.nations.find(n => n.id === hello.you);
 check(mine && mine.plots > before + 5, `nation grew from ${before} to ${mine?.plots} plots`);
+A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
+const st2 = await waitFor(A, m => m.t === "result" && m.of === "stack" && m.stack !== st.stack);
+const from = (await waitFor(A, m => m.t === "state" && m.stacks.some(x => x.id === st2?.stack)))?.stacks.find(x => x.id === st2.stack).pos;
+let moved = null;
+const far = Math.min(250, Math.floor(hello.w / 3));
+for (const i of land.filter((_, k) => k % 211 === 0)) {
+  if (from === undefined || Math.abs((i % hello.w) - (from % hello.w)) + Math.abs(Math.floor(i / hello.w) - Math.floor(from / hello.w)) < far) continue;
+  const sent = Date.now();
+  A.ws.send(JSON.stringify({ t: "move", stack: st2.stack, to: i }));
+  const r = await waitFor(A, m => m.t === "result" && m.of === "move" && !m.seen && (m.seen = true));
+  if (r?.ok) { moved = { to: i, ms: Date.now() - sent }; break; }
+}
+check(moved, `a stack takes a move order at least ${far} plots away (reply seen within ${moved?.ms} ms; the test polls every 50 ms)`);
 A.ws.close(); B.ws.close();
 await sleep(800);
 const status = await api(`/api/worlds/${wid}/status`, null, ta);
