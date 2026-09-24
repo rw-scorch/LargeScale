@@ -73,3 +73,13 @@ export class Atlas {
     return true;
   }
 }
+
+export async function loadAtlas(base, categories) {
+  const pack = { sheets: {}, sprites: [] };
+  await Promise.all(categories.map(async cat => {
+    const sheet = await (await fetch(`${base}/${cat}.json`)).json();
+    pack.sheets[cat] = `${base}/${sheet.image}`;
+    for (const [id, f] of Object.entries(sheet.frames)) pack.sprites.push({ id, category: cat, ...f });
+  }));
+  return new Atlas(pack).load();
+}

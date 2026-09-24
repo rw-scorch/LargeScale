@@ -1,7 +1,8 @@
-import { TERRAIN } from "../../../shared/terrain.js";
-import { hash2 } from "../../../shared/rng.js";
+import { TERRAIN } from "../shared/terrain.js";
+import { hash2 } from "../shared/rng.js";
 
-export const ZOOM = { min: 1, max: 64, sprites: 10, icons: 3 };
+export const ZOOM = { max: 16, sprites: 10, icons: 3, maxRatio: 2 };
+export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
 const ROAD_NAMES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
@@ -19,21 +20,52 @@ export class MapRenderer {
     this.ctx = canvas.getContext("2d");
     this.atlas = atlas;
     this.state = state;
+    state.buildings ??= [];
+    state.units ??= [];
+    state.roads ??= new Uint8Array(0);
     this.palettes = palettes;
     this.season = "summer";
     this.night = false;
+    this.era = "M";
     this.cam = { x: state.w / 2, y: state.h / 2, scale: 4 };
+    this.minScale = 0.1;
     this.time = 0;
+    this.selected = null;
+    this.route = null;
     this.terrainCanvas = document.createElement("canvas");
-    this.territoryCanvas = document.createElement("canvas");
-    this.fillCanvas = document.createElement("canvas");
-    this.terrainCanvas.width = this.territoryCanvas.width = this.fillCanvas.width = state.w;
-    this.terrainCanvas.height = this.territoryCanvas.height = this.fillCanvas.height = state.h;
+    this.terrainCanvas.width = state.w;
+    this.terrainCanvas.height = state.h;
+    this.cw = Math.ceil(state.w / CHUNK);
+    this.ch = Math.ceil(state.h / CHUNK);
+    this.chunks = new Array(this.cw * this.ch).fill(null);
+    this.colours = new Map();
     this.occupied = new Uint8Array(state.w * state.h);
     this.lotAt = new Map();
     this.indexBuildings();
     this.rebuildTerrain();
     this.rebuildTerritory();
+  }
+
+  resize(cssW, cssH, ratio) {
+    const r = Math.min(ZOOM.maxRatio, ratio || 1);
+    this.ratio = r;
+    this.canvas.width = Math.max(1, Math.round(cssW * r));
+    this.canvas.height = Math.max(1, Math.round(cssH * r));
+    this.minScale = Math.min(this.canvas.width / this.state.w, this.canvas.height / this.state.h);
+    this.clampCamera();
+  }
+
+  fitWorld() {
+    this.cam.x = this.state.w / 2;
+    this.cam.y = this.state.h / 2;
+    this.cam.scale = this.minScale;
+  }
+
+  clampCamera() {
+    const c = this.cam, s = this.state;
+    c.scale = Math.min(ZOOM.max * (this.ratio ?? 1), Math.max(this.minScale, c.scale));
+    c.x = Math.min(s.w, Math.max(0, c.x));
+    c.y = Math.min(s.h, Math.max(0, c.y));
   }
 
   indexBuildings() {
@@ -73,33 +105,61 @@ export class MapRenderer {
     ctx.putImageData(img, 0, 0);
   }
 
+  colourOf(o) {
+    let c = this.colours.get(o);
+    if (!c) {
+      c = hexRGB(this.state.nations.get(o)?.colour ?? "#ffffff");
+      this.colours.set(o, c);
+    }
+    return c;
+  }
+
+  chunkAt(i, create) {
+    const s = this.state, x = i % s.w, y = (i / s.w) | 0, k = ((y / CHUNK) | 0) * this.cw + ((x / CHUNK) | 0);
+    let c = this.chunks[k];
+    if (!c && create) {
+      const cx = (k % this.cw) * CHUNK, cy = ((k / this.cw) | 0) * CHUNK;
+      const w = Math.min(CHUNK, s.w - cx), h = Math.min(CHUNK, s.h - cy);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      c = this.chunks[k] = { canvas, ctx: canvas.getContext("2d"), img: new ImageData(w, h), x: cx, y: cy, w, dirty: true };
+    }
+    return c;
+  }
+
   rebuildTerritory() {
-    const s = this.state;
-    const ctx = this.territoryCanvas.getContext("2d");
-    const img = ctx.createImageData(s.w, s.h);
-    this.territoryImage = img;
-    this.fillImage = this.fillCanvas.getContext("2d").createImageData(s.w, s.h);
-    for (let i = 0; i < s.owner.length; i++) this.paintPlot(i);
-    ctx.putImageData(img, 0, 0);
-    this.fillCanvas.getContext("2d").putImageData(this.fillImage, 0, 0);
+    this.chunks.fill(null);
+    this.colours.clear();
+    const o = this.state.owner;
+    for (let i = 0; i < o.length; i++) if (o[i]) this.paintPlot(i);
   }
 
   paintPlot(i) {
-    const s = this.state, o = s.owner[i], d = this.territoryImage.data, f = this.fillImage.data;
-    if (!o) { d[i * 4 + 3] = 0; f[i * 4 + 3] = 0; return; }
-    const x = i % s.w, y = (i / s.w) | 0;
+    const s = this.state, o = s.owner[i];
+    const c = this.chunkAt(i, o !== 0);
+    if (!c) return;
+    const x = i % s.w, y = (i / s.w) | 0, k = ((y - c.y) * c.w + (x - c.x)) * 4, d = c.img.data;
+    c.dirty = true;
+    if (!o) { d[k + 3] = 0; return; }
     const border = (x > 0 && s.owner[i - 1] !== o) || (x < s.w - 1 && s.owner[i + 1] !== o) || (y > 0 && s.owner[i - s.w] !== o) || (y < s.h - 1 && s.owner[i + s.w] !== o);
-    const c = hexRGB(s.nations.get(o)?.colour ?? "#ffffff");
-    d.set([c[0], c[1], c[2], border ? 235 : 70], i * 4);
-    f.set([c[0], c[1], c[2], 60], i * 4);
+    const rgb = this.colourOf(o);
+    d[k] = rgb[0]; d[k + 1] = rgb[1]; d[k + 2] = rgb[2]; d[k + 3] = border ? 235 : 90;
   }
 
   updatePlots(list) {
-    const s = this.state, touched = new Set();
-    for (const i of list) { touched.add(i); for (const n of [i - 1, i + 1, i - s.w, i + s.w]) if (n >= 0 && n < s.owner.length) touched.add(n); }
-    for (const i of touched) this.paintPlot(i);
-    this.territoryCanvas.getContext("2d").putImageData(this.territoryImage, 0, 0);
-    this.fillCanvas.getContext("2d").putImageData(this.fillImage, 0, 0);
+    const s = this.state, n = s.owner.length;
+    for (const i of list) {
+      this.paintPlot(i);
+      if (i >= s.w) this.paintPlot(i - s.w);
+      if (i + s.w < n) this.paintPlot(i + s.w);
+      if (i % s.w) this.paintPlot(i - 1);
+      if ((i + 1) % s.w) this.paintPlot(i + 1);
+    }
+  }
+
+  flushChunks() {
+    for (const c of this.chunks) if (c?.dirty) { c.ctx.putImageData(c.img, 0, 0); c.dirty = false; }
   }
 
   screenToPlot(sx, sy) {
@@ -115,10 +175,37 @@ export class MapRenderer {
   zoomAt(sx, sy, factor) {
     const [px, py] = this.screenToPlot(sx, sy);
     const c = this.cam;
-    c.scale = Math.min(ZOOM.max, Math.max(ZOOM.min, c.scale * factor));
+    c.scale = Math.min(ZOOM.max * (this.ratio ?? 1), Math.max(this.minScale, c.scale * factor));
     const [nx, ny] = this.screenToPlot(sx, sy);
     c.x += px - nx;
     c.y += py - ny;
+    this.clampCamera();
+  }
+
+  pan(dx, dy) {
+    this.cam.x -= dx / this.cam.scale;
+    this.cam.y -= dy / this.cam.scale;
+    this.clampCamera();
+  }
+
+  markers() {
+    const s = this.state, out = [], showBots = this.cam.scale >= ZOOM.icons * (this.ratio ?? 1);
+    for (const st of s.stacks.values()) {
+      if (!showBots && s.nations.get(st.owner)?.bot) continue;
+      const state = st.id === this.selected ? "selected" : st.order === "hold" ? "idle" : "moving";
+      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: this.era, state });
+    }
+    return out;
+  }
+
+  stackAt(sx, sy, radius = 14 * (this.ratio ?? 1)) {
+    let best = null, bestD = radius;
+    for (const m of this.markers()) {
+      const [mx, my] = this.plotToScreen(m.x, m.y);
+      const d = Math.hypot(mx - sx, my - sy);
+      if (d <= bestD) { bestD = d; best = m.id; }
+    }
+    return best;
   }
 
   roadSprite(i) {
@@ -168,19 +255,63 @@ export class MapRenderer {
 
   render(dt = 0) {
     this.time += dt;
-    const ctx = this.ctx, c = this.cam, s = this.state, W = this.canvas.width, H = this.canvas.height;
+    this.flushChunks();
+    const ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height, R = this.ratio ?? 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = "#1d3f6e";
+    ctx.fillStyle = "#10233a";
     ctx.fillRect(0, 0, W, H);
     ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
     ctx.drawImage(this.terrainCanvas, 0, 0);
-    ctx.drawImage(c.scale >= ZOOM.sprites ? this.fillCanvas : this.territoryCanvas, 0, 0);
+    if (c.scale < ZOOM.sprites * R) {
+      const r = this.visibleRange(0);
+      for (const k of this.chunks) if (k && k.x <= r.x1 && k.y <= r.y1 && k.x + CHUNK >= r.x0 && k.y + CHUNK >= r.y0) ctx.drawImage(k.canvas, k.x, k.y);
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (c.scale >= ZOOM.sprites) this.drawSprites();
-    else if (c.scale >= ZOOM.icons) this.drawIcons();
+    if (c.scale >= ZOOM.sprites * R) this.drawSprites();
+    else if (c.scale >= ZOOM.icons * R) this.drawIcons();
     else this.drawDots();
+    this.drawRoute();
     if (this.night) this.drawNight();
+  }
+
+  drawFill(r) {
+    const ctx = this.ctx, s = this.state, sc = this.cam.scale;
+    ctx.globalAlpha = 0.35;
+    for (let y = r.y0; y <= r.y1; y++) {
+      let x = r.x0;
+      while (x <= r.x1) {
+        const o = s.owner[y * s.w + x];
+        let e = x + 1;
+        while (e <= r.x1 && s.owner[y * s.w + e] === o) e++;
+        if (o) {
+          const [sx, sy] = this.plotToScreen(x, y);
+          ctx.fillStyle = s.nations.get(o)?.colour ?? "#fff";
+          ctx.fillRect(sx, sy, (e - x) * sc, sc);
+        }
+        x = e;
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  drawRoute() {
+    const rt = this.route;
+    if (!rt?.points?.length) return;
+    const ctx = this.ctx, k = this.ratio ?? 1;
+    ctx.save();
+    ctx.lineWidth = 3 * k;
+    ctx.setLineDash([8 * k, 6 * k]);
+    ctx.strokeStyle = "rgba(232,200,74,.95)";
+    ctx.beginPath();
+    rt.points.forEach(([x, y], n) => { const [sx, sy] = this.plotToScreen(x + 0.5, y + 0.5); n ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
+    ctx.stroke();
+    ctx.restore();
+    if (rt.label) {
+      const [lx, ly] = rt.points.at(-1);
+      const [sx, sy] = this.plotToScreen(lx + 0.5, ly + 0.5);
+      this.label(rt.label, sx, sy + 10 * k, 13 * k);
+    }
   }
 
   drawSprites() {
@@ -192,6 +323,7 @@ export class MapRenderer {
       if (lot) a.draw(ctx, this.lotSprite(i, lot), sx, sy, px);
       if (s.roads[i]) a.draw(ctx, this.roadSprite(i), sx, sy, px);
     }
+    this.drawFill(r);
     this.drawBorders(r);
     const items = [];
     for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
@@ -216,7 +348,7 @@ export class MapRenderer {
     }
     items.sort((p, q) => p.key - q.key || p.x - q.x);
     for (const it of items) it.draw();
-    for (const m of s.markers) this.drawMarker(m, px);
+    for (const m of this.markers()) this.drawMarker(m, px);
   }
 
   drawBorders(r) {
@@ -257,7 +389,7 @@ export class MapRenderer {
   drawMarker(m, px) {
     const ctx = this.ctx, a = this.atlas, colour = this.state.nations.get(m.owner)?.colour;
     const [sx, sy] = this.plotToScreen(m.x, m.y);
-    const size = Math.max(16, 16 * px);
+    const size = Math.max(16 * (this.ratio ?? 1), 16 * px);
     const k = size / 16;
     a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
     this.label(String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
@@ -288,19 +420,25 @@ export class MapRenderer {
       if (b.fp[0] * c.scale < size && hash2(ax, ay, 5) > 0.35) continue;
       a.draw(ctx, icon, sx - size / 2, sy - size / 2, k);
     }
-    for (const m of s.markers) {
+    const rk = this.ratio ?? 1;
+    for (const m of this.markers()) {
       const [sx, sy] = this.plotToScreen(m.x, m.y);
-      a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - 8, sy - 8, 1, s.nations.get(m.owner)?.colour);
-      this.label(String(Math.round(m.troops)), sx, sy + 9, 11);
+      a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - 8 * rk, sy - 8 * rk, rk, s.nations.get(m.owner)?.colour);
+      this.label(String(Math.round(m.troops)), sx, sy + 9 * rk, 11 * rk);
     }
   }
 
   drawDots() {
-    const ctx = this.ctx, s = this.state;
+    const ctx = this.ctx, s = this.state, k = this.ratio ?? 1;
     for (const n of s.nations.values()) {
-      if (n.capital === undefined) continue;
+      if (n.capital === undefined || n.capital === null || n.bot || !n.alive) continue;
       const [sx, sy] = this.plotToScreen(n.capital % s.w + 0.5, ((n.capital / s.w) | 0) + 0.5);
-      this.atlas.draw(ctx, "mapicon_capital", sx - 4, sy - 4, 1);
+      this.atlas.draw(ctx, "mapicon_capital", sx - 4 * k, sy - 4 * k, k);
+    }
+    for (const m of this.markers()) {
+      const [sx, sy] = this.plotToScreen(m.x, m.y);
+      this.atlas.draw(ctx, `army_${m.era}_${m.state}`, sx - 6 * k, sy - 6 * k, 0.75 * k, s.nations.get(m.owner)?.colour);
+      this.label(String(Math.round(m.troops)), sx, sy + 7 * k, 10 * k);
     }
   }
 
