@@ -1,6 +1,6 @@
 import { Grid, disc } from "../shared/grid.js";
 import { TERRAIN, isLand } from "../shared/terrain.js";
-import { findPath } from "../shared/pathfind.js";
+import { buildRegions, coarseRoute, planSegment } from "../shared/pathfind.js";
 
 export const RULES = {
   spawnRadius: 4,
@@ -17,6 +17,10 @@ export const RULES = {
   minStack: 10,
   enclaveLimit: 96,
   spawnMinGap: 12,
+  pathCell: 16,
+  pathAhead: 8,
+  pathLookahead: 24,
+  pathMaxNodes: 60000,
 };
 
 export class World {
@@ -173,15 +177,47 @@ export class World {
     return true;
   }
 
+  pathGraph() {
+    if (!this.coarse) this.coarse = buildRegions(this.grid, this.terrain, Float32Array.from({ length: 256 }, (_, t) => (TERRAIN[t] && isLand(t) ? TERRAIN[t].move : Infinity)), this.rules.pathCell);
+    return this.coarse;
+  }
+
+  route(from, target) {
+    if (!isLand(this.terrain[from]) || !isLand(this.terrain[target])) return null;
+    const co = this.pathGraph();
+    return coarseRoute(co, co.regionOf(from), co.regionOf(target));
+  }
+
+  extendPath(s) {
+    const co = this.pathGraph(), r = s.route, from = s.path.length ? s.path[s.path.length - 1] : s.pos;
+    let k = r.regions.indexOf(co.regionOf(from));
+    if (k < 0) {
+      const fresh = this.route(from, r.goal);
+      if (!fresh) return false;
+      r.regions = fresh.regions;
+      k = 0;
+    }
+    r.regions.splice(0, k);
+    const cost = (a, b) => this.moveCost(a, b);
+    cost.minStep = 0.9;
+    const seg = planSegment(this.grid, co, from, r.regions, r.goal, cost, { ahead: this.rules.pathAhead, maxNodes: this.rules.pathMaxNodes });
+    if (!seg) return false;
+    for (let j = 1; j < seg.length; j++) s.path.push(seg[j]);
+    if (seg[seg.length - 1] === r.goal) s.route = null;
+    return true;
+  }
+
   orderMove(sid, target, order = "move") {
     const s = this.stacks.get(sid);
     if (!s || !isLand(this.terrain[target])) return false;
-    const cost = (a, b) => this.moveCost(a, b);
-    cost.minStep = 0.9;
-    const path = findPath(this.grid, s.pos, target, cost, 60000);
-    if (!path) return false;
-    s.path = path.slice(1);
+    const r = this.route(s.pos, target);
+    if (!r) return false;
+    const keep = { path: s.path, route: s.route, progress: s.progress, order: s.order };
+    s.path = [];
+    s.route = { regions: r.regions, goal: target };
     s.progress = 0;
+    if (target !== s.pos && !this.extendPath(s)) { Object.assign(s, keep); return false; }
+    if (target === s.pos) s.route = null;
     s.order = order;
     return true;
   }
@@ -190,6 +226,7 @@ export class World {
     const s = this.stacks.get(sid);
     if (!s) return false;
     s.path = [];
+    s.route = null;
     s.order = "advance";
     s.carry = 0;
     return true;
@@ -218,11 +255,16 @@ export class World {
 
   stepStack(s, dt) {
     if (s.engaged) return;
+    if (s.route && s.path.length < this.rules.pathLookahead && !this.extendPath(s)) {
+      s.route = null;
+      this.emit("path_blocked", { stack: s.id, at: s.pos });
+      if (!s.path.length && s.order === "move") s.order = "hold";
+    }
     if (s.path.length) {
       s.progress += (this.rules.stackSpeed * (s.speedMult ?? 1) * dt) / this.moveCost(s.pos, s.path[0]);
       while (s.progress >= 1 && s.path.length) {
         s.progress -= 1;
-        if (!this.enter(s, s.path[0])) { s.path = []; s.progress = 0; if (s.order === "move") s.order = "hold"; break; }
+        if (!this.enter(s, s.path[0])) { s.path = []; s.route = null; s.progress = 0; if (s.order === "move") s.order = "hold"; break; }
         s.path.shift();
       }
       if (!s.path.length && s.order === "move") s.order = "hold";
