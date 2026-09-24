@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-1.md`.
+Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-2.md`. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -56,6 +56,7 @@ tools/             build_earth.py, bench_earth.mjs, one-off scripts
 test/              node --test unit tests plus smoke.mjs
 reference/         the dev kit: docs, 19 piece guides with example code, handover, question record
 plans/             milestone plans
+devpack/           one dev pack per session: summary, conversation record (secrets removed), handover and plans, zipped
 ```
 
 ## Rules
@@ -93,7 +94,7 @@ The modules in `src/sim/` are the tested kit examples, identical apart from impo
 
 ## Milestone one progress
 
-Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, is under way: first deployed 24 September 2026 from `claude/keen-ride-u8zdz9` to https://large-scale.rwscorch.workers.dev (free plan). He deploys from his clone in `C:\Users\striv\large-scale-gh`, with `public/map` and `public/assets` copied in from the handoff zip.
+Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, is under way: first deployed 24 September 2026 from `claude/keen-ride-u8zdz9` to https://large-scale.rwscorch.workers.dev (free plan). He deploys from his clone in `C:\Users\striv\large-scale-gh`. PR 3 (step 5, playtest fixes, maps and assets) is merged into `main`.
 
 - **Maps.** Worlds are `test`, `earth`, `europe` or a lat/long box, read through `env.ASSETS` at creation. Each world stores its terrain as one gzipped row and its owner layer run-length encoded; a save writes 2 to 4 rows.
 - **Join.** Protocol version 2 (version 1 until step 4). The client fetches `/map/terrain.bin.gz` (243 KB, cacheable); the socket sends `hello`, terrain differences and the owner layer in run-length frames. About 150 KB on Earth with 400 bots.
@@ -106,10 +107,10 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 
 Open items as of 24 September 2026, in order:
 
-1. Ryan deploys the fine map: `git pull`, `npm test`, `npx wrangler deploy`, then tries a new Europe world. The maps and assets now come with the repository.
-2. Pull request https://github.com/rw-scorch/LargeScale/pull/3 (step 5 plus the playtest fixes, maps and assets) is open for Ryan to merge.
-3. `plans/milestone-2.md` is written (the first towns: construction, civilians, resources, research, bulk upgrades, offline economy). It waits for Ryan's approval and his answers to its seven questions. Do not start it before then.
-4. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset.
+1. Milestone two is agreed, with Ryan's answers in `plans/milestone-2.md`. Build it one step at a time, starting with step 1.
+2. Ryan redeploys when he wants the fine map live: `git pull`, `npm test`, `npx wrangler deploy`.
+3. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset; tax and conscription sliders.
+4. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 
