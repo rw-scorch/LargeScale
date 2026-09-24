@@ -204,3 +204,15 @@ test("a lost capital moves to the nearest plot still owned, with an event", () =
   w.tick(0.25);
   assert.equal(w.events.filter(x => x.type === "capital_moved").length, 1, "it only moves once");
 });
+
+test("a short route inside one block of the route graph still has a length and a time", () => {
+  const { w, a, order } = setup();
+  const s = w.stacks.get(order(a, { t: "stack", share: 0.5 }).stack);
+  const co = w.pathGraph(), home = co.regionOf(s.pos);
+  const near = [...Array(w.grid.size).keys()].find(i => i !== s.pos && co.regionOf(i) === home && w.grid.dist(i, s.pos) >= 3);
+  const r = order(a, { t: "route", stack: s.id, to: near });
+  assert.equal(r.ok, true);
+  const straight = Math.abs(w.grid.x(near) - w.grid.x(s.pos)) + Math.abs(w.grid.y(near) - w.grid.y(s.pos));
+  assert.equal(r.plots, straight);
+  assert.ok(r.seconds >= 1);
+});
