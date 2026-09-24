@@ -24,14 +24,17 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (42; 2 skip without public/map)
+npm test                  # unit tests (48; 3 skip without public/map and public/map/fine)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, fails if a tick is over 50 ms
+npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
 npm run dev               # wrangler dev on http://localhost:8787
-$env:INVITE = "code-from-.dev.vars"; $env:MAP = "europe"; npm run smoke   # MAP is test, europe or earth
+$env:INVITE = "code-from-.dev.vars"; $env:MAP = "europe"; npm run smoke   # MAP is test, europe (fine), europe-normal or earth
 $env:RECHECK = "1"; npm run smoke   # after restarting npm run dev: the last smoke world reloads identically
 $env:MAP = "europe"; npm run ui     # headless browser session with screenshots in .screens; needs Playwright
 ```
+
+`npm run map:fine` rebuilds the fine map from the sources in `data/map` (see `reference/docs/map-data-sources.md`).
 
 `npm run ui` needs Playwright, which is not a project dependency: `npm install --no-save playwright` then `npx playwright install chromium`.
 
@@ -85,6 +88,7 @@ The modules in `src/sim/` are the tested kit examples, identical apart from impo
 - **Deploy.** Not deployed. The Cloudflare account had no Workers.
 - **Admin.** `ADMIN_NAMES` is `rw_scorch`. Ryan registers that name right after the first deploy.
 - **Deploy commands.** Ryan deploys himself: `npx wrangler login`, `npx wrangler secret put INVITE_CODE`, `npx wrangler secret put PEPPER`, `npx wrangler deploy`. The first deploy creates both Durable Object classes.
+- **Fine map.** `public/map/fine/terrain.bin.gz` (7200 by 2880, 0.05 degrees, about 634 KB) and `meta.json`, built 24 September 2026. Ryan copies these two files in by hand, like the rest of `public/map`.
 - **Map.** The Earth map is already in `public/map/`: `terrain.bin` (3600 by 1440 bytes), `elevation.bin` (Int16) and `meta.json`. The terrain indexes match `src/shared/terrain.js`.
 
 ## Milestone one progress
@@ -95,6 +99,9 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Join.** Protocol version 2 (version 1 until step 4). The client fetches `/map/terrain.bin.gz` (243 KB, cacheable); the socket sends `hello`, terrain differences and the owner layer in run-length frames. About 150 KB on Earth with 400 bots.
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
+- **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, M move, S split, G merge, X disband, Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
+- **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
