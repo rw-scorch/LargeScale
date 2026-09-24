@@ -104,6 +104,13 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
+Open items as of 24 September 2026, in order:
+
+1. Ryan deploys the fine map: copy `terrain.bin.gz` and `meta.json` into `public/map/fine`, `git pull`, `npm test`, `npx wrangler deploy`, then try a new Europe world.
+2. Open a pull request from `claude/keen-ride-u8zdz9` into `main` for step 5 plus the playtest fixes (controls, stack placement, capital moves, fine maps, route preview fix). Ask Ryan first.
+3. Write `plans/milestone-2.md` for his approval: civilians, resources, logistics, construction, tech tree (the handover's next pieces). Stack forming may then be limited to near towns.
+4. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset.
+
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 
 1. `world.js` wires territory and chat only. Combat and bots are not installed, despite what the handover says.
