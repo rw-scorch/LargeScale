@@ -1,3 +1,6 @@
+import { makeTestMap } from "./testmap.js";
+import { hashBytes } from "./codec.js";
+
 export const CROPS = {
   europe: { west: -25, east: 45, north: 72, south: 34 },
 };
@@ -19,4 +22,17 @@ export function cropLayer(src, srcW, rect) {
     out.set(src.subarray(from, from + rect.w), y * rect.w);
   }
   return out;
+}
+
+export async function baseLayer(map, w, h, loadFull) {
+  if (map.kind === "test") return { terrain: makeTestMap(w, h, map.seed).terrain, hash: null };
+  const full = await loadFull();
+  if (full.length !== map.srcW * map.srcH) throw new Error(`base map has ${full.length} plots, expected ${map.srcW * map.srcH}`);
+  return { terrain: map.kind === "crop" ? cropLayer(full, map.srcW, map.rect) : full, hash: hashBytes(full) };
+}
+
+export function terrainDiff(base, terrain) {
+  const out = [];
+  for (let i = 0; i < terrain.length; i++) if (base[i] !== terrain[i]) out.push(i, terrain[i]);
+  return Uint32Array.from(out);
 }
