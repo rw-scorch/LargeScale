@@ -178,3 +178,29 @@ test("clients get events that involve players, not bot chatter", () => {
   ];
   assert.deepEqual(publicEvents(w, events).map(e => e.type), ["plot_lost", "eliminated", "stack_created"]);
 });
+
+test("a stack forms on any plot you own that you pick", () => {
+  const { w, a, order } = setup();
+  const n = w.nations.get(a);
+  n.troops = 500;
+  const far = [...w.borderOf(a)].sort((p, q) => w.grid.dist(q, n.capital) - w.grid.dist(p, n.capital))[0];
+  const r = order(a, { t: "stack", share: 0.3, at: far });
+  assert.equal(r.ok, true);
+  assert.equal(w.stacks.get(r.stack).pos, far);
+  assert.notEqual(far, n.capital);
+});
+
+test("a lost capital moves to the nearest plot still owned, with an event", () => {
+  const { w, a, b } = setup();
+  const n = w.nations.get(a), old = n.capital;
+  w.claim(old, b);
+  w.events.length = 0;
+  w.tick(0.25);
+  assert.notEqual(n.capital, old);
+  assert.equal(w.owner[n.capital], a);
+  assert.equal(w.grid.cheb(n.capital, old), 1, "a neighbour of the old capital is the nearest owned plot");
+  const e = w.events.find(x => x.type === "capital_moved");
+  assert.deepEqual([e.nation, e.from, e.to], [a, old, n.capital]);
+  w.tick(0.25);
+  assert.equal(w.events.filter(x => x.type === "capital_moved").length, 1, "it only moves once");
+});

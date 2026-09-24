@@ -73,6 +73,7 @@ export class ClientWorld {
     if (m.t === "events") {
       for (const e of m.events) {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
+        if (e.type === "capital_moved" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.to;
         this.events.push(e);
       }
       if (this.events.length > 500) this.events.splice(0, this.events.length - 500);
