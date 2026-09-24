@@ -46,6 +46,7 @@ In another window:
 ```powershell
 npm test                 # simulation tests
 $env:INVITE = "the invite code you chose"
+$env:MAP = "europe"      # test, europe or earth
 npm run smoke            # end to end against the running server
 ```
 

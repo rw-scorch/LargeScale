@@ -24,14 +24,15 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # simulation, Discord and integration tests (10)
+npm test                  # unit tests (26; 2 skip without public/map)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
-npm run bench             # Earth-scale tick benchmark, fails if the worst tick is over 50 ms
+npm run bench             # Earth benchmark: 10 game minutes, 400 bots, fails if a tick is over 50 ms
 npm run dev               # wrangler dev on http://localhost:8787
-$env:INVITE = "code-from-.dev.vars"; npm run smoke   # end to end, needs npm run dev running
+$env:INVITE = "code-from-.dev.vars"; $env:MAP = "europe"; npm run smoke   # MAP is test, europe or earth
+$env:RECHECK = "1"; npm run smoke   # after restarting npm run dev: the last smoke world reloads identically
 ```
 
-`npm run bench` takes `-- --bots 400 --players 8 --ticks 80 --budget 50`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`).
+`npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
 
 ## Layout
 
@@ -39,8 +40,9 @@ $env:INVITE = "code-from-.dev.vars"; npm run smoke   # end to end, needs npm run
 src/index.js       Worker: routes, static files, websocket handover
 src/directory.js   Directory object: accounts, sessions, worlds, members
 src/world.js       World object: one per world. Sockets, tick loop, saving, catch-up
+src/worldconfig.js map choice (test, earth, europe, lat/long box) and bot count validation
 src/sim/           the simulation, 21 modules, plain JavaScript
-src/shared/        the only code both server and client import
+src/shared/        the only code both server and client import: protocol, codec, maps, pathfinding, terrain
 public/            the client. public/map and public/assets are generated, not committed
 data/              stat files. Tuning numbers live in data/rules.json
 tools/             build_earth.py, bench_earth.mjs, one-off scripts
@@ -81,7 +83,15 @@ The modules in `src/sim/` are the tested kit examples, identical apart from impo
 - **Deploy commands.** Ryan deploys himself: `npx wrangler login`, `npx wrangler secret put INVITE_CODE`, `npx wrangler secret put PEPPER`, `npx wrangler deploy`. The first deploy creates both Durable Object classes.
 - **Map.** The Earth map is already in `public/map/`: `terrain.bin` (3600 by 1440 bytes), `elevation.bin` (Int16) and `meta.json`. The terrain indexes match `src/shared/terrain.js`.
 
-Problems found, which milestone one fixes (details in `plans/milestone-1.md`):
+## Milestone one progress
+
+Steps 1 to 3 are done (September 2026):
+
+- **Maps.** Worlds are `test`, `earth`, `europe` or a lat/long box, read through `env.ASSETS` at creation. Each world stores its terrain as one gzipped row and its owner layer run-length encoded; a save writes 2 to 4 rows.
+- **Join.** Protocol version 1. The client fetches `/map/terrain.bin.gz` (243 KB, cacheable); the socket sends `hello`, terrain differences and the owner layer in run-length frames. About 150 KB on Earth with 400 bots.
+- **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
+
+Problems found at handoff (details in `plans/milestone-1.md`); 2 to 5 are fixed, 1 is step 4:
 
 1. `world.js` wires territory and chat only. Combat and bots are not installed, despite what the handover says.
 2. `world.js` loads `makeTestMap`, not the Earth map.
