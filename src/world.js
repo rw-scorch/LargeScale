@@ -18,7 +18,7 @@ import { postWebhook, directMessage, mention } from "./discord.js";
 const SAVE_VERSION = 2;
 const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
-const COLOURS = ["#4f8fe0", "#d94a3a", "#4fae4a", "#e0b53a", "#9a5fd0", "#3fb0a8", "#e07ab0", "#8a8a8a"];
+const COLOURS = ["#e0413a", "#f08a24", "#d63fbf", "#f2d02b", "#8e4fe0", "#f4f4f4", "#ff7ab8", "#1f1f1f"];
 
 export class World extends DurableObject {
   constructor(ctx, env) {
