@@ -15,12 +15,16 @@ function putVarint(buf, p, v) {
 }
 
 export function encodeRuns(a) {
-  const buf = new Uint8Array(countRuns(a) * 10);
-  let p = 0;
+  let buf = new Uint8Array(1 << 16), p = 0;
   for (let i = 0; i < a.length;) {
     const v = a[i];
     let j = i + 1;
     while (j < a.length && a[j] === v) j++;
+    if (p + 10 > buf.length) {
+      const bigger = new Uint8Array(buf.length * 2);
+      bigger.set(buf);
+      buf = bigger;
+    }
     p = putVarint(buf, p, j - i);
     p = putVarint(buf, p, v);
     i = j;
