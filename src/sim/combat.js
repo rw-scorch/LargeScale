@@ -29,7 +29,7 @@ export function findEngagements(world, rules = COMBAT) {
       for (let x = sx - R; x <= sx + R; x++) {
         if (!g.inside(x, y)) continue;
         for (const o of byPlot.get(g.idx(x, y)) ?? []) {
-          if (o.id <= s.id || !world.hostile(s.owner, o.owner)) continue;
+          if (o.id <= s.id || !(world.hostile(s.owner, o.owner) || world.hostile(o.owner, s.owner))) continue;
           const key = s.id + ":" + o.id;
           if (seen.has(key)) continue;
           seen.add(key);
