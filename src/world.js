@@ -2,7 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 import { World as Sim } from "./sim/territory.js";
 import { makeTestMap } from "./shared/testmap.js";
 import { isLand } from "./shared/terrain.js";
-import { cropRect, cropLayer } from "./shared/maps.js";
+import { cropRect, cropLayer, baseLayer, terrainDiff } from "./shared/maps.js";
+import { PROTOCOL, MSG, CLOSE, frame, partFrames } from "./shared/protocol.js";
 import { encodeRuns, decodeRuns, splitParts, joinParts, gzip, gunzip, hashBytes, hashRuns } from "./shared/codec.js";
 import { parseWorldConfig, defaultBots, MIN_MAP_SIDE } from "./worldconfig.js";
 import { planCatchUp, runCatchUp } from "./sim/offline.js";
@@ -13,15 +14,6 @@ const SAVE_VERSION = 2;
 const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
 const COLOURS = ["#4f8fe0", "#d94a3a", "#4fae4a", "#e0b53a", "#9a5fd0", "#3fb0a8", "#e07ab0", "#8a8a8a"];
-const MSG = { TERRAIN: 1, OWNER: 2, DIFF: 3 };
-
-function frame(type, typed) {
-  const body = new Uint8Array(typed.buffer, typed.byteOffset, typed.byteLength);
-  const out = new Uint8Array(4 + body.length);
-  out[0] = type;
-  out.set(body, 4);
-  return out;
-}
 
 export class World extends DurableObject {
   constructor(ctx, env) {
@@ -72,11 +64,11 @@ export class World extends DurableObject {
     const meta = await (await this.asset("map/meta.json")).json();
     const terrain = new Uint8Array(await (await this.asset("map/terrain.bin")).arrayBuffer());
     if (terrain.length !== meta.w * meta.h) return { error: "map/terrain.bin does not match map/meta.json" };
-    const baseHash = hashBytes(terrain);
-    if (map.kind === "earth") return { map: { ...map, baseHash }, w: meta.w, h: meta.h, terrain };
+    const base = { ...map, baseHash: hashBytes(terrain), srcW: meta.w, srcH: meta.h };
+    if (map.kind === "earth") return { map: base, w: meta.w, h: meta.h, terrain };
     const rect = cropRect(meta, map.box);
     if (!rect || rect.w < MIN_MAP_SIDE || rect.h < MIN_MAP_SIDE) return { error: "the crop is outside the map or too small" };
-    return { map: { ...map, rect, baseHash }, w: rect.w, h: rect.h, terrain: cropLayer(terrain, meta.w, rect) };
+    return { map: { ...base, rect }, w: rect.w, h: rect.h, terrain: cropLayer(terrain, meta.w, rect) };
   }
 
   async load() {
@@ -145,7 +137,8 @@ export class World extends DurableObject {
       savedAt: Date.now(), hashes: this.hashes,
     });
     this.lastSave = Date.now();
-    this.saveStats = { rows, ownerBytes, ms: Date.now() - t0, saves: (this.saveStats?.saves ?? 0) + 1, totalRows: (this.saveStats?.totalRows ?? 0) + rows };
+    const prev = this.saveStats ?? { saves: 0, totalRows: 0, maxRows: 0 };
+    this.saveStats = { rows, ownerBytes, ms: Date.now() - t0, saves: prev.saves + 1, totalRows: prev.totalRows + rows, maxRows: Math.max(prev.maxRows, rows) };
   }
 
   sockets() { return this.ctx.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN); }
@@ -217,23 +210,48 @@ export class World extends DurableObject {
     };
   }
 
+  async joinData() {
+    if (!this.terrainJoin) {
+      const info = this.meta("info");
+      const base = await baseLayer(info.map, info.w, info.h, async () => new Uint8Array(await (await this.asset("map/terrain.bin")).arrayBuffer()));
+      this.terrainJoin = { map: base.hash ? { ...info.map, baseHash: base.hash } : info.map, pairs: terrainDiff(base.terrain, this.sim.terrain) };
+    }
+    return this.terrainJoin;
+  }
+
   async fetch(request) {
     if (request.headers.get("Upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
     if (!this.sim) return new Response(this.stale ? "world uses an old save format" : "world not initialised", { status: 409 });
     const account = { id: Number(request.headers.get("X-Account")), name: request.headers.get("X-Name"), admin: request.headers.get("X-Admin") === "1" };
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
+    const [client, server] = Object.values(new WebSocketPair());
+    if (Number(new URL(request.url).searchParams.get("v")) !== PROTOCOL) {
+      server.accept();
+      server.send(JSON.stringify({ t: "error", v: PROTOCOL, code: "protocol", text: "The game has been updated. Reload the page." }));
+      server.close(CLOSE.PROTOCOL, "protocol mismatch");
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    let join;
+    try { join = await this.joinData(); } catch (e) { return new Response(`map files are missing: ${e.message}`, { status: 503 }); }
     this.ctx.acceptWebSocket(server, [`acc:${account.id}`]);
+    for (const old of this.ctx.getWebSockets(`acc:${account.id}`)) {
+      if (old === server) continue;
+      try { old.send(JSON.stringify({ t: "replaced", v: PROTOCOL, text: "This game was opened somewhere else." })); old.close(CLOSE.REPLACED, "opened somewhere else"); } catch {}
+    }
     let nation = [...this.accounts].find(([, a]) => a === account.id)?.[0] ?? null;
     if (nation === null) {
       nation = this.sim.addNation({ name: account.name, colour: COLOURS[this.accounts.size % COLOURS.length] });
       this.accounts.set(nation, account.id);
     }
     server.serializeAttachment({ account: account.id, name: account.name, admin: account.admin, nation });
-    const g = this.sim.grid;
-    server.send(JSON.stringify({ t: "hello", you: nation, w: g.w, h: g.h, caughtUp: this.caughtUp ?? 0, nations: this.nationList(), chat: this.recentChat() }));
-    server.send(frame(MSG.TERRAIN, this.sim.terrain));
-    server.send(frame(MSG.OWNER, this.sim.owner));
+    const g = this.sim.grid, runs = encodeRuns(this.sim.owner);
+    const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
+    server.send(JSON.stringify({
+      t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
+      hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length },
+      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), chat: this.recentChat(),
+    }));
+    for (const f of terrainFrames) server.send(f);
+    for (const f of ownerFrames) server.send(f);
     this.broadcast({ t: "joined", nation, name: account.name });
     this.startLoop();
     return new Response(null, { status: 101, webSocket: client });
@@ -248,7 +266,7 @@ export class World extends DurableObject {
   }
 
   broadcast(obj) {
-    const s = typeof obj === "string" || obj instanceof Uint8Array ? obj : JSON.stringify(obj);
+    const s = typeof obj === "string" || obj instanceof Uint8Array ? obj : JSON.stringify({ v: PROTOCOL, ...obj });
     for (const ws of this.sockets()) { try { ws.send(s); } catch {} }
   }
 
@@ -272,15 +290,18 @@ export class World extends DurableObject {
     this.save();
   }
 
+  flushDiffs() {
+    const changes = this.sim.takeDirty();
+    if (!changes.length) return;
+    this.ownerChanged = true;
+    const flat = new Uint32Array(changes.length * 2);
+    changes.forEach(([i, o], k) => { flat[k * 2] = i; flat[k * 2 + 1] = o; });
+    this.broadcast(frame(MSG.DIFF, flat));
+  }
+
   step(dt) {
     this.sim.tick(dt);
-    const changes = this.sim.takeDirty();
-    if (changes.length) {
-      this.ownerChanged = true;
-      const flat = new Uint32Array(changes.length * 2);
-      changes.forEach(([i, o], k) => { flat[k * 2] = i; flat[k * 2 + 1] = o; });
-      this.broadcast(frame(MSG.DIFF, flat));
-    }
+    this.flushDiffs();
     this.tickCount = (this.tickCount ?? 0) + 1;
     if (this.tickCount % 4 === 0) {
       const stacks = [...this.sim.stacks.values()].map(s => ({ id: s.id, owner: s.owner, pos: s.pos, troops: Math.floor(s.troops), order: s.order }));
@@ -309,7 +330,7 @@ export class World extends DurableObject {
     let m;
     try { m = JSON.parse(raw); } catch { return; }
     const sim = this.sim, g = sim.grid;
-    const reply = (x) => ws.send(JSON.stringify(x));
+    const reply = (x) => ws.send(JSON.stringify({ v: PROTOCOL, ...x }));
     const n = sim.nations.get(me.nation);
     switch (m.t) {
       case "ping": return reply({ t: "pong", at: m.at });
@@ -345,6 +366,10 @@ export class World extends DurableObject {
       case "admin": {
         if (!me.admin) return reply({ t: "result", of: "admin", ok: false, error: "not allowed" });
         if (m.op === "save") { this.save(true); return reply({ t: "result", of: "admin", ok: true }); }
+        if (m.op === "hashes") {
+          this.flushDiffs();
+          return reply({ t: "result", of: "admin", op: "hashes", ok: true, terrain: this.hashes.terrain, owner: hashRuns(this.sim.owner) });
+        }
         return reply({ t: "result", of: "admin", ok: false, error: "unknown op" });
       }
     }

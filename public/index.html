@@ -9,7 +9,7 @@
 body{margin:0;background:#16324a;color:var(--parch);font:14px/1.4 system-ui,sans-serif;display:grid;grid-template-columns:300px 1fr;height:100vh}
 aside{background:var(--ink);border-right:2px solid var(--line);padding:14px;overflow:auto;display:flex;flex-direction:column;gap:10px}
 h1{font-size:17px;margin:0}
-input,button{font:inherit;color:inherit;background:#16324a;border:2px solid var(--line);border-radius:2px;padding:5px 8px}
+input,button,select{font:inherit;color:inherit;background:#16324a;border:2px solid var(--line);border-radius:2px;padding:5px 8px}
 button{cursor:pointer;background:#183a54}
 .row{display:flex;gap:6px;flex-wrap:wrap}
 #log{font-size:12px;color:var(--mute);white-space:pre-wrap;flex:1;min-height:120px;overflow:auto;border-top:2px solid var(--line);padding-top:8px}
@@ -22,13 +22,16 @@ canvas{image-rendering:pixelated;width:100%;height:100%;object-fit:contain;curso
   <h1>Server test client</h1>
   <div class="row"><input id="name" placeholder="name" autocomplete="username"><input id="pass" type="password" placeholder="password" autocomplete="current-password"></div>
   <div class="row"><input id="invite" placeholder="invite code (first time)"><button id="reg">Register</button><button id="login">Log in</button></div>
-  <div class="row"><button id="create">Create world</button><input id="wid" placeholder="world id"><button id="join">Join</button><button id="connect">Connect</button></div>
+  <div class="row"><select id="map"><option>test</option><option>europe</option><option>earth</option></select><button id="create">Create world</button><input id="wid" placeholder="world id"><button id="join">Join</button><button id="connect">Connect</button></div>
   <div class="row"><button id="stack">Send 30% as stack</button><button id="adv">Advance</button></div>
   <div class="row"><input id="chat" placeholder="chat" style="flex:1"><button id="send">Send</button></div>
   <div id="log"></div>
 </aside>
 <main><canvas id="c"></canvas></main>
-<script>
+<script type="module">
+import { PROTOCOL, MSG, readFrame, applyPairs, PartCollector } from "/js/shared/protocol.js";
+import { decodeRuns, gunzip } from "/js/shared/codec.js";
+import { baseLayer } from "/js/shared/maps.js";
 const $ = id => document.getElementById(id);
 const log = t => { $("log").textContent = t + "\n" + $("log").textContent.slice(0, 4000); };
 let token = localStorage.getItem("ls_token") || "", ws = null, world = null, lastStack = null;
@@ -43,12 +46,12 @@ async function auth(kind) {
 }
 $("reg").onclick = () => auth("register");
 $("login").onclick = () => auth("login");
-$("create").onclick = async () => { const j = await api("/api/worlds", { name: "Test world" }); if (j.id) { $("wid").value = j.id; log("created world " + j.id); } };
+$("create").onclick = async () => { const j = await api("/api/worlds", { name: "Test world", config: { map: $("map").value } }); if (j.id) { $("wid").value = j.id; log(`created ${j.map} world ${j.id}, ${j.w} by ${j.h}`); } };
 $("join").onclick = async () => { const j = await api(`/api/worlds/${$("wid").value}/join`, {}); if (j.ok) log("joined"); };
 const canvas = $("c"), ctx = canvas.getContext("2d");
 let terrainImg = null;
 function draw() {
-  if (!world) return;
+  if (!world?.ready) return;
   const img = ctx.createImageData(world.w, world.h);
   for (let i = 0; i < world.terrain.length; i++) {
     const o = world.owner[i], c = o ? world.colours.get(o) || "#ffffff" : TER[world.terrain[i]];
@@ -57,21 +60,44 @@ function draw() {
   }
   ctx.putImageData(img, 0, 0);
 }
+async function loadBase(m) {
+  const b = await baseLayer(m.map, m.w, m.h, async () => gunzip(new Uint8Array(await (await fetch("/map/terrain.bin.gz")).arrayBuffer())));
+  if (b.hash && b.hash !== m.map.baseHash) throw new Error("the map file is out of date, reload the page");
+  world.terrain = b.terrain;
+  world.ready = true;
+  for (const f of world.queue.splice(0)) onFrame(f);
+}
+function onFrame(f) {
+  if (!world.ready) return world.queue.push(f);
+  if (f.type === MSG.DIFF) { applyPairs(world.owner, f.body); return draw(); }
+  const whole = world.parts.add(f);
+  if (!whole) return;
+  if (f.type === MSG.TERRAIN_DIFF) applyPairs(world.terrain, whole);
+  if (f.type === MSG.OWNER) decodeRuns(whole, world.owner);
+  draw();
+}
 $("connect").onclick = () => {
   ws?.close();
-  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/${$("wid").value}?token=${token}`);
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/${$("wid").value}?token=${token}&v=${PROTOCOL}`);
   ws.binaryType = "arraybuffer";
   ws.onmessage = e => {
     if (typeof e.data !== "string") {
-      const u8 = new Uint8Array(e.data), type = u8[0], body = e.data.slice(4);
-      if (type === 1) world.terrain = new Uint8Array(body);
-      if (type === 2) world.owner = new Uint16Array(body);
-      if (type === 3) { const d = new Uint32Array(body); for (let k = 0; k < d.length; k += 2) world.owner[d[k]] = d[k + 1]; }
-      draw();
+      const f = readFrame(e.data);
+      if (f.version !== PROTOCOL) { log("The game has been updated. Reload the page."); return ws.close(); }
+      if (world) onFrame(f);
       return;
     }
     const m = JSON.parse(e.data);
-    if (m.t === "hello") { world = { w: m.w, h: m.h, you: m.you, colours: new Map() }; canvas.width = m.w; canvas.height = m.h; m.nations.forEach(n => world.colours.set(n.id, n.colour)); log(`connected as nation ${m.you}. Click the map to spawn.`); m.chat.forEach(c => log(`${c.who}: ${c.text}`)); }
+    if (m.v !== PROTOCOL || m.t === "error") { log(m.text ?? "The game has been updated. Reload the page."); return ws.close(); }
+    if (m.t === "replaced") log(m.text);
+    if (m.t === "hello") {
+      world = { w: m.w, h: m.h, you: m.you, colours: new Map(), owner: new Uint16Array(m.w * m.h), parts: new PartCollector(), queue: [], ready: false };
+      canvas.width = m.w; canvas.height = m.h;
+      m.nations.forEach(n => world.colours.set(n.id, n.colour));
+      log(`connected as nation ${m.you} on ${m.map.kind}. Click the map to spawn.`);
+      m.chat.forEach(c => log(`${c.who}: ${c.text}`));
+      loadBase(m).catch(err => log(err.message));
+    }
     if (m.t === "state") m.nations.forEach(n => world.colours.set(n.id, n.colour));
     if (m.t === "chat") log(`${m.who}: ${m.text}`);
     if (m.t === "result") { log(`${m.of}: ${m.ok ? "ok" : m.error || "failed"}`); if (m.of === "stack" && m.ok) lastStack = m.stack; }

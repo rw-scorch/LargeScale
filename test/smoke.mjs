@@ -10,6 +10,10 @@ const MAPS = {
 const M = MAPS[MAP];
 if (!M) throw new Error(`MAP must be one of ${Object.keys(MAPS).join(", ")}`);
 console.log(`map: ${MAP}`);
+import { PROTOCOL, MSG, CLOSE, readFrame, applyPairs, PartCollector } from "../src/shared/protocol.js";
+import { decodeRuns, gunzip, hashBytes, hashRuns } from "../src/shared/codec.js";
+import { baseLayer } from "../src/shared/maps.js";
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
 const check = (ok, what) => { console.log(`${ok ? "pass" : "FAIL"}  ${what}`); if (!ok) failures++; };
@@ -19,15 +23,62 @@ async function api(path, body, token, method = body ? "POST" : "GET") {
   return { status: r.status, body: await r.json() };
 }
 
-function connect(world, token) {
+function connect(world, token, v = PROTOCOL) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(BASE.replace("http", "ws") + `/ws/${world}?token=${token}`);
+    const ws = new WebSocket(BASE.replace("http", "ws") + `/ws/${world}?token=${token}&v=${v}`);
     ws.binaryType = "arraybuffer";
-    const got = { json: [], binary: [], ws };
-    ws.onmessage = e => (typeof e.data === "string" ? got.json.push(JSON.parse(e.data)) : got.binary.push(new Uint8Array(e.data)));
+    const got = { json: [], binary: [], ws, closed: null };
+    ws.onmessage = e => {
+      if (typeof e.data !== "string") return got.binary.push(new Uint8Array(e.data));
+      const m = JSON.parse(e.data);
+      m._bin = got.binary.length;
+      m._bytes = Buffer.byteLength(e.data);
+      got.json.push(m);
+    };
+    ws.onclose = e => { got.closed = { code: e.code, reason: e.reason }; };
     ws.onopen = () => resolve(got);
     ws.onerror = reject;
   });
+}
+
+class Mirror {
+  constructor(got, hello) {
+    this.got = got;
+    this.hello = hello;
+    this.next = hello._bin;
+    this.parts = new PartCollector();
+    this.owner = new Uint16Array(hello.w * hello.h);
+    this.frameBytes = 0;
+    this.versionOk = true;
+  }
+  async load() {
+    const h = this.hello;
+    const base = await baseLayer(h.map, h.w, h.h, async () => {
+      const gz = new Uint8Array(await (await fetch(BASE + "/map/terrain.bin.gz")).arrayBuffer());
+      this.staticBytes = gz.length;
+      return gunzip(gz);
+    });
+    this.baseHashOk = h.map.kind === "test" || base.hash === h.map.baseHash;
+    this.terrain = base.terrain.slice();
+    const need = h.frames.terrain + h.frames.owner;
+    for (let k = 0; k < 200 && this.got.binary.length < this.next + need; k++) await sleep(50);
+    this.pump(this.next + need);
+    this.joinFrameBytes = this.frameBytes;
+    return this;
+  }
+  pump(upTo = this.got.binary.length) {
+    for (; this.next < upTo; this.next++) {
+      const raw = this.got.binary[this.next];
+      this.frameBytes += raw.length;
+      const f = readFrame(raw);
+      if (f.version !== PROTOCOL) this.versionOk = false;
+      if (f.type === MSG.DIFF) { applyPairs(this.owner, f.body); continue; }
+      const whole = this.parts.add(f);
+      if (!whole) continue;
+      if (f.type === MSG.TERRAIN_DIFF) { applyPairs(this.terrain, whole); this.terrainDone = true; }
+      if (f.type === MSG.OWNER) { decodeRuns(whole, this.owner); this.ownerDone = true; }
+    }
+  }
 }
 
 const waitFor = async (got, pred, ms = 5000) => {
@@ -77,10 +128,15 @@ check(!outsiderOpened, "non-members cannot connect");
 check((await api(`/api/worlds/${wid}/join`, {}, tb)).status === 200, "friend joins the world");
 const A = await connect(wid, ta), B = await connect(wid, tb);
 const hello = await waitFor(A, m => m.t === "hello");
-check(hello && hello.w === M.w && hello.h === M.h, "hello message has the map size");
-for (let k = 0; k < 100 && A.binary.length < 2; k++) await sleep(100);
-check(A.binary.length >= 2 && A.binary[0][0] === 1 && A.binary[0].length === 4 + M.w * M.h, "terrain arrives as a binary frame");
-const terrain = A.binary[0].subarray(4);
+check(hello && hello.w === M.w && hello.h === M.h && hello.v === PROTOCOL, `hello has the map size and protocol version ${hello?.v}`);
+const mirror = await new Mirror(A, hello).load();
+check(mirror.terrainDone && mirror.ownerDone && mirror.versionOk, `join arrives as ${hello.frames.terrain} terrain difference and ${hello.frames.owner} owner frames, all tagged with the protocol version`);
+check(mirror.baseHashOk, `the static map file matches the server's base map (${hello.map.baseHash ?? "generated test map"})`);
+check(hashBytes(mirror.terrain) === hello.hashes.terrain, `terrain rebuilt from the base map plus differences matches the server (${hello.hashes.terrain})`);
+check(hashRuns(mirror.owner) === hello.hashes.owner, "owner layer decoded from the snapshot matches the server");
+const joinBytes = hello._bytes + mirror.joinFrameBytes;
+check(joinBytes < 1_000_000, `join transferred ${joinBytes} bytes over the socket (hello ${hello._bytes}, frames ${mirror.joinFrameBytes}); static terrain file ${mirror.staticBytes ?? 0} bytes, cacheable`);
+const terrain = mirror.terrain;
 const land = [];
 for (let i = 0; i < terrain.length; i++) if (terrain[i] >= 11 && terrain[i] <= 15) land.push(i);
 let spawned = false;
@@ -101,7 +157,11 @@ A.ws.send(JSON.stringify({ t: "advance", stack: st.stack }));
 const adv = await waitFor(A, m => m.t === "result" && m.of === "advance");
 check(adv?.ok, "advance order accepted");
 await sleep(3000);
-check(A.binary.some(f => f[0] === 3), "territory changes stream as binary diffs");
+check(A.binary.some(f => f[0] === MSG.DIFF && f[1] === PROTOCOL), "territory changes stream as binary diffs");
+A.ws.send(JSON.stringify({ t: "admin", op: "hashes" }));
+const hr = await waitFor(A, m => m.t === "result" && m.op === "hashes");
+mirror.pump(hr._bin);
+check(hr && hashRuns(mirror.owner) === hr.owner, `after live diffs the client's owner layer still matches the server (${hr?.owner})`);
 const state = [...A.json].reverse().find(m => m.t === "state");
 const mine = state?.nations.find(n => n.id === hello.you);
 check(mine && mine.plots > before + 5, `nation grew from ${before} to ${mine?.plots} plots`);
@@ -113,11 +173,19 @@ const A2 = await connect(wid, ta);
 const hello2 = await waitFor(A2, m => m.t === "hello");
 const again = hello2?.nations.find(n => n.id === hello.you);
 check(again && again.plots >= mine.plots && hello2.you === hello.you, "same nation and territory after reconnecting");
-A2.ws.close();
+const A3 = await connect(wid, ta);
+await waitFor(A3, m => m.t === "hello");
+const replaced = await waitFor(A2, m => m.t === "replaced");
+check(replaced && A2.ws.readyState >= 2 && A3.ws.readyState === 1, `a second tab replaces the first, which is told why and closed (message ${!!replaced}, old state ${A2.ws.readyState}, new state ${A3.ws.readyState})`);
+const old = await connect(wid, ta, 0);
+await waitFor(old, m => m.t === "error");
+for (let k = 0; k < 40 && !old.closed; k++) await sleep(50);
+check(old.json[0]?.code === "protocol" && old.closed?.code === CLOSE.PROTOCOL, "a client with the wrong protocol version is told to reload");
+A3.ws.close();
 await sleep(800);
 const saved = (await api(`/api/worlds/${wid}/status`, null, ta)).body;
 const ls = saved.lastSave;
-check(ls && ls.rows <= 10, `a save wrote ${ls?.rows} rows (owner layer ${ls?.ownerBytes} bytes, ${ls?.ms} ms); ${ls?.totalRows} rows over ${ls?.saves} saves`);
+check(ls && ls.maxRows <= 10, `saves wrote at most ${ls?.maxRows} rows each, ${ls?.totalRows} rows over ${ls?.saves} saves (last: ${ls?.rows} rows, owner layer ${ls?.ownerBytes} bytes, ${ls?.ms} ms)`);
 const { writeFileSync } = await import("node:fs");
 writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ wid, token: ta, you: hello.you, plots: again.plots, hashes: saved.hashes }));
 console.log(failures ? `${failures} checks failed` : "all checks passed");
