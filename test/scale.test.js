@@ -49,6 +49,17 @@ test("a cell split by water becomes two regions, and the route goes around", () 
   assert.equal(w.orderMove(1, 23 * 40 + 39), false, "an island corner is refused at once");
 });
 
+test("a spawn claims only land it can walk to, not islands inside its radius", () => {
+  const w = flatMap(30, 30, (t, W) => {
+    for (let y = 0; y < 30; y++) for (let x = 18; x < 30; x++) t[y * W + x] = TID.ocean;
+    t[15 * W + 19] = TID.plains;
+  });
+  const a = w.addNation({ name: "A" });
+  assert.ok(w.spawn(a, 16, 15));
+  assert.equal(w.owner[15 * 30 + 17], a);
+  assert.equal(w.owner[15 * 30 + 19], 0, "the one-plot island across the water stays unclaimed");
+});
+
 test("border sets always equal a full scan while territory changes hands", () => {
   const w = new World(makeTestMap(120, 80, 5), { spawnRadius: 5 });
   const rng = makeRng(8);
