@@ -24,13 +24,16 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (38; 2 skip without public/map)
+npm test                  # unit tests (42; 2 skip without public/map)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, fails if a tick is over 50 ms
 npm run dev               # wrangler dev on http://localhost:8787
 $env:INVITE = "code-from-.dev.vars"; $env:MAP = "europe"; npm run smoke   # MAP is test, europe or earth
 $env:RECHECK = "1"; npm run smoke   # after restarting npm run dev: the last smoke world reloads identically
+$env:MAP = "europe"; npm run ui     # headless browser session with screenshots in .screens; needs Playwright
 ```
+
+`npm run ui` needs Playwright, which is not a project dependency: `npm install --no-save playwright` then `npx playwright install chromium`.
 
 `npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
 
@@ -43,7 +46,8 @@ src/world.js       World object: one per world. Sockets, tick loop, saving, catc
 src/worldconfig.js map choice (test, earth, europe, lat/long box) and bot count validation
 src/sim/           the simulation, 21 modules, plain JavaScript
 src/shared/        the only code both server and client import: protocol, codec, maps, pathfinding, terrain
-public/            the client. public/map and public/assets are generated, not committed
+public/            the client: index.html, js/app.js, js/net.js, js/input.js, js/render/, js/ui/ (one file per panel);
+                   test.html is the old server test page. public/map and public/assets are generated, not committed
 data/              stat files. Tuning numbers live in data/rules.json
 tools/             build_earth.py, bench_earth.mjs, one-off scripts
 test/              node --test unit tests plus smoke.mjs
@@ -85,12 +89,13 @@ The modules in `src/sim/` are the tested kit examples, identical apart from impo
 
 ## Milestone one progress
 
-Steps 1 to 4 are done (September 2026). Step 5, the real client, is next:
+Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, is next:
 
 - **Maps.** Worlds are `test`, `earth`, `europe` or a lat/long box, read through `env.ASSETS` at creation. Each world stores its terrain as one gzipped row and its owner layer run-length encoded; a save writes 2 to 4 rows.
 - **Join.** Protocol version 2 (version 1 until step 4). The client fetches `/map/terrain.bin.gz` (243 KB, cacheable); the socket sends `hello`, terrain differences and the owner layer in run-length frames. About 150 KB on Earth with 400 bots.
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
+- **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 
