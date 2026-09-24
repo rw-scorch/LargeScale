@@ -8,6 +8,10 @@ import { encodeRuns, decodeRuns, splitParts, joinParts, gzip, gunzip, hashBytes,
 import { parseWorldConfig, defaultBots, MIN_MAP_SIDE } from "./worldconfig.js";
 import rules from "../data/rules.json" with { type: "json" };
 import { planCatchUp, runCatchUp } from "./sim/offline.js";
+import { installCombat, COMBAT } from "./sim/combat.js";
+import { installBots, spawnBots, BOT } from "./sim/bots.js";
+import { makeRng } from "./shared/rng.js";
+import { runOrder, RateLimit, applyPresence, victory, StateFeed, publicEvents } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
@@ -24,6 +28,9 @@ export class World extends DurableObject {
     this.lastSave = 0;
     this.accounts = new Map();
     this.queue = new NotifyQueue();
+    this.limiter = new RateLimit(rules.world.messagesPerSecond, rules.world.messageBurst);
+    this.feed = new StateFeed(rules.world.botTroopShare, rules.world.botStateEvery);
+    this.tickCount = 0;
     ctx.blockConcurrencyWhile(async () => {
       ctx.storage.sql.exec(`
         CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
@@ -93,6 +100,10 @@ export class World extends DurableObject {
       for (const s of saved.stacks) this.sim.stacks.set(s.id, s);
       for (const [nid, acc] of saved.accounts ?? []) this.accounts.set(nid, acc);
     }
+    installCombat(this.sim, { ...COMBAT, ...rules.combat });
+    installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
+    this.frozen = !!(this.meta("victory") || this.meta("ended"));
+    this.updatePresence();
     this.hashes = { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner) };
     this.loadCheck = { saved: saved?.hashes ?? null, loaded: { ...this.hashes } };
     const elapsed = (Date.now() - (saved?.savedAt ?? Date.now())) / 1000;
@@ -117,12 +128,16 @@ export class World extends DurableObject {
     const info = {
       save: SAVE_VERSION, name: config.name ?? "World", map: base.map, w: base.w, h: base.h, landPlots: land,
       bots: cfg.bots ?? defaultBots(land), rules: config.rules ?? {}, maxCatchupHours: config.maxCatchupHours ?? 72,
+      seed: crypto.getRandomValues(new Uint32Array(1))[0],
     };
     this.writeRows("terrain", await gzip(base.terrain));
     this.meta("info", info);
     await this.load();
+    const bots = spawnBots(this.sim, info.bots, makeRng(info.seed)).length;
+    this.sim.takeDirty();
+    this.sim.events.length = 0;
     this.save(true);
-    return { ok: true, map: info.map.kind, w: info.w, h: info.h, bots: info.bots };
+    return { ok: true, map: info.map.kind, w: info.w, h: info.h, bots };
   }
 
   save(all = false) {
@@ -150,6 +165,11 @@ export class World extends DurableObject {
 
   online(nation) {
     return this.sockets().some(ws => ws.deserializeAttachment()?.nation === nation);
+  }
+
+  updatePresence(leaving = null) {
+    const online = new Set(this.sockets().filter(ws => ws !== leaving).map(ws => ws.deserializeAttachment()?.nation));
+    applyPresence(this.sim, online, rules.offline.defenceMult);
   }
 
   notify(nation, kind, text) {
@@ -237,6 +257,8 @@ export class World extends DurableObject {
     }
     let join;
     try { join = await this.joinData(); } catch (e) { return new Response(`map files are missing: ${e.message}`, { status: 503 }); }
+    this.flushDiffs();
+    this.sendState();
     this.ctx.acceptWebSocket(server, [`acc:${account.id}`]);
     for (const old of this.ctx.getWebSockets(`acc:${account.id}`)) {
       if (old === server) continue;
@@ -248,17 +270,20 @@ export class World extends DurableObject {
       this.accounts.set(nation, account.id);
     }
     server.serializeAttachment({ account: account.id, name: account.name, admin: account.admin, nation });
+    this.updatePresence();
     const g = this.sim.grid, runs = encodeRuns(this.sim.owner);
     const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
     server.send(JSON.stringify({
       t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
       hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length },
-      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), chat: this.recentChat(),
+      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(),
+      victory: this.meta("victory"), frozen: this.frozen,
     }));
     for (const f of terrainFrames) server.send(f);
     for (const f of ownerFrames) server.send(f);
-    this.broadcast({ t: "joined", nation, name: account.name });
-    this.startLoop();
+    const n = this.sim.nations.get(nation);
+    this.broadcast({ t: "joined", nation, name: n.name, colour: n.colour });
+    if (!this.frozen) this.startLoop();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -304,17 +329,20 @@ export class World extends DurableObject {
     this.broadcast(frame(MSG.DIFF, flat));
   }
 
+  sendState() {
+    const d = this.feed.delta(this.sim);
+    if (d) this.broadcast({ t: "state", time: Math.floor(this.sim.time), ...d });
+  }
+
   step(dt) {
+    if (this.frozen) return;
     this.sim.tick(dt);
     this.flushDiffs();
-    this.tickCount = (this.tickCount ?? 0) + 1;
-    if (this.tickCount % 4 === 0) {
-      const stacks = [...this.sim.stacks.values()].map(s => ({ id: s.id, owner: s.owner, pos: s.pos, troops: Math.floor(s.troops), order: s.order }));
-      this.broadcast({ t: "state", time: Math.floor(this.sim.time), nations: this.nationList(), stacks });
-    }
+    if (++this.tickCount % 4 === 0) this.sendState();
     const events = this.sim.events.splice(0);
     if (events.length) {
-      this.broadcast({ t: "events", events: events.slice(-50) });
+      const shown = publicEvents(this.sim, events);
+      if (shown.length) this.broadcast({ t: "events", events: shown });
       for (const e of events) {
         if (e.type === "plot_lost" && e.nation !== undefined && !this.online(e.nation)) {
           const by = this.sim.nations.get(e.by)?.name ?? "someone";
@@ -327,6 +355,20 @@ export class World extends DurableObject {
         }
       }
     }
+    const v = victory(this.sim);
+    if (v) this.finish(v);
+  }
+
+  finish(v) {
+    const info = this.meta("info") ?? {};
+    this.frozen = true;
+    this.meta("victory", { ...v, at: Date.now() });
+    this.sendState();
+    this.broadcast({ t: "victory", winner: v.winner, name: v.name });
+    const text = v.name ? `${v.name} has won ${info.name ?? "the world"}.` : `Nobody is left standing in ${info.name ?? "the world"}.`;
+    for (const nation of this.accounts.keys()) this.notify(nation, "world", text);
+    if (this.env.DISCORD_WEBHOOK_URL) postWebhook(this.env.DISCORD_WEBHOOK_URL, `**${text}**`).catch(() => {});
+    this.stopLoop();
   }
 
   async webSocketMessage(ws, raw) {
@@ -334,31 +376,11 @@ export class World extends DurableObject {
     if (typeof raw !== "string" || raw.length > 4000) return;
     let m;
     try { m = JSON.parse(raw); } catch { return; }
-    const sim = this.sim, g = sim.grid;
+    if (!m || typeof m !== "object") return;
     const reply = (x) => ws.send(JSON.stringify({ v: PROTOCOL, ...x }));
-    const n = sim.nations.get(me.nation);
+    if (!this.limiter.take(me.account, Date.now())) return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "slow down" });
     switch (m.t) {
       case "ping": return reply({ t: "pong", at: m.at });
-      case "spawn": {
-        const ok = Number.isInteger(m.x) && Number.isInteger(m.y) && sim.spawn(me.nation, m.x, m.y);
-        return reply({ t: "result", of: "spawn", ok, error: ok ? null : "cannot spawn there" });
-      }
-      case "stack": {
-        if (!n?.spawned) return reply({ t: "result", of: "stack", ok: false, error: "spawn first" });
-        const at = Number.isInteger(m.at) ? m.at : n.capital;
-        const s = sim.createStack(me.nation, at, Math.floor(n.troops * Math.min(1, Math.max(0.05, m.share ?? 0.3))));
-        return reply({ t: "result", of: "stack", ok: !!s, stack: s?.id ?? null });
-      }
-      case "move": {
-        const s = sim.stacks.get(m.stack);
-        const ok = !!s && s.owner === me.nation && Number.isInteger(m.to) && m.to >= 0 && m.to < g.size && sim.orderMove(s.id, m.to);
-        return reply({ t: "result", of: "move", ok });
-      }
-      case "advance": {
-        const s = sim.stacks.get(m.stack);
-        const ok = !!s && s.owner === me.nation && sim.orderAdvance(s.id);
-        return reply({ t: "result", of: "advance", ok });
-      }
       case "chat": {
         const text = String(m.text ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 280);
         if (!text) return;
@@ -377,15 +399,22 @@ export class World extends DurableObject {
         }
         return reply({ t: "result", of: "admin", ok: false, error: "unknown op" });
       }
+      default: {
+        if (this.frozen) return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "the world has ended" });
+        const r = runOrder(this.sim, me.nation, m);
+        if (r) reply(r);
+      }
     }
   }
 
   async webSocketClose(ws, code, reason) {
     try { ws.close(code, reason); } catch {}
+    this.updatePresence(ws);
     if (this.sockets().filter(s => s !== ws).length === 0) this.stopLoop();
   }
 
   async webSocketError(ws) {
+    this.updatePresence(ws);
     if (this.sockets().filter(s => s !== ws).length === 0) this.stopLoop();
   }
 
@@ -395,6 +424,7 @@ export class World extends DurableObject {
       initialised: !!this.sim, players: this.accounts.size, online: this.sockets().length, looping: !!this.loop, time: this.sim?.time ?? 0,
       map: info?.map ?? null, w: info?.w, h: info?.h, landPlots: info?.landPlots, bots: info?.bots,
       hashes: this.hashes ?? null, loadCheck: this.loadCheck ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
+      frozen: !!this.frozen, victory: this.meta("victory"),
     };
   }
 }
