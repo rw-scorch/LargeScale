@@ -106,7 +106,13 @@ export class World {
   spawn(nid, x, y) {
     const n = this.nations.get(nid);
     if (n.spawned || !this.canSpawnAt(x, y)) return false;
-    for (const i of disc(this.grid, x, y, this.rules.spawnRadius)) if (isLand(this.terrain[i])) this.claim(i, nid);
+    const area = new Set(disc(this.grid, x, y, this.rules.spawnRadius)), start = this.grid.idx(x, y), todo = [start];
+    area.delete(start);
+    while (todo.length) {
+      const c = todo.pop();
+      this.claim(c, nid);
+      for (const i of this.grid.neighbours4(c)) if (area.has(i) && isLand(this.terrain[i])) { area.delete(i); todo.push(i); }
+    }
     n.spawned = true;
     n.troops = this.rules.troopBase * 0.5;
     n.capital = this.grid.idx(x, y);
@@ -164,7 +170,7 @@ export class World {
     amount = Math.floor(amount);
     if (!s || amount < this.rules.minStack || s.troops - amount < this.rules.minStack) return null;
     s.troops -= amount;
-    const c = { ...s, id: this.nextStack++, troops: amount, path: [], progress: 0, order: "hold" };
+    const c = { ...s, id: this.nextStack++, troops: amount, path: [], route: null, progress: 0, order: "hold" };
     this.stacks.set(c.id, c);
     return c;
   }

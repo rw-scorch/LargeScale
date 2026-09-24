@@ -10,7 +10,7 @@ const MAPS = {
 const M = MAPS[MAP];
 if (!M) throw new Error(`MAP must be one of ${Object.keys(MAPS).join(", ")}`);
 console.log(`map: ${MAP}`);
-import { PROTOCOL, MSG, CLOSE, readFrame, applyPairs, PartCollector } from "../src/shared/protocol.js";
+import { PROTOCOL, MSG, CLOSE, ORDER_CODES, readFrame, applyPairs, PartCollector } from "../src/shared/protocol.js";
 import { decodeRuns, gunzip, hashBytes, hashRuns } from "../src/shared/codec.js";
 import { baseLayer } from "../src/shared/maps.js";
 
@@ -86,6 +86,38 @@ const waitFor = async (got, pred, ms = 5000) => {
   while (Date.now() < end) { const m = got.json.find(pred); if (m) return m; await sleep(50); }
   return null;
 };
+const nextResult = (got, of, ms) => waitFor(got, m => m.t === "result" && m.of === of && !m.seen && (m.seen = true), ms);
+const until = async (fn, ms = 8000) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { const v = fn(); if (v) return v; await sleep(50); }
+  return null;
+};
+
+class View {
+  constructor(got, hello) {
+    this.got = got;
+    this.next = got.json.indexOf(hello) + 1;
+    this.nations = new Map(hello.nations.map(n => [n.id, { ...n }]));
+    this.stacks = new Map(hello.stacks.map(r => [r[0], this.stack(r)]));
+    this.events = [];
+  }
+  stack([id, owner, pos, troops, order]) { return { id, owner, pos, troops, order: ORDER_CODES[order] }; }
+  pump() {
+    for (; this.next < this.got.json.length; this.next++) {
+      const m = this.got.json[this.next];
+      if (m.t === "joined" && !this.nations.has(m.nation)) this.nations.set(m.nation, { id: m.nation, name: m.name, colour: m.colour });
+      if (m.t === "events") this.events.push(...m.events);
+      if (m.t !== "state") continue;
+      for (const [id, plots, troops, alive, spawned] of m.n) {
+        if (!this.nations.has(id)) this.nations.set(id, { id });
+        Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned });
+      }
+      for (const r of m.s) this.stacks.set(r[0], this.stack(r));
+      for (const id of m.gone) this.stacks.delete(id);
+    }
+    return this;
+  }
+}
 
 if (process.env.RECHECK) {
   const { readFileSync } = await import("node:fs");
@@ -116,7 +148,7 @@ const ta = alogin.body.token, tb = b.body.token;
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
-const world = await api("/api/worlds", { name: "Smoke test", config: M.config }, ta);
+const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6, enemyCostFactor: 0.01, advanceRate: 30 } } }, ta);
 check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
@@ -139,47 +171,102 @@ check(joinBytes < 1_000_000, `join transferred ${joinBytes} bytes over the socke
 const terrain = mirror.terrain;
 const land = [];
 for (let i = 0; i < terrain.length; i++) if (terrain[i] >= 11 && terrain[i] <= 15) land.push(i);
-let spawned = false;
+const view = new View(A, hello), you = hello.you;
 const cx = M.w / 2, cy = M.h / 2;
 const nearMiddle = land.filter((_, k) => k % 97 === 0).sort((p, q) => Math.hypot((p % M.w) - cx, Math.floor(p / M.w) - cy) - Math.hypot((q % M.w) - cx, Math.floor(q / M.w) - cy));
+let aSpawn = -1;
 for (const i of nearMiddle) {
   A.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
-  const r = await waitFor(A, m => m.t === "result" && m.of === "spawn" && !m.seen && (m.seen = true));
-  if (r?.ok) { spawned = true; break; }
+  if ((await nextResult(A, "spawn"))?.ok) { aSpawn = i; break; }
 }
-check(spawned, "player spawns on land");
+check(aSpawn >= 0, "player spawns on land");
 B.ws.send(JSON.stringify({ t: "chat", text: "hello from friend" }));
 check(!!(await waitFor(A, m => m.t === "chat" && m.text === "hello from friend")), "chat reaches the other player");
 A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
-const st = await waitFor(A, m => m.t === "result" && m.of === "stack");
+const st = await nextResult(A, "stack");
 check(st?.ok, "stack created from the garrison");
-const firstState = await waitFor(A, m => m.t === "state" && m.nations.some(n => n.id === hello.you && n.plots > 0));
-const before = firstState.nations.find(n => n.id === hello.you).plots;
+const before = (await until(() => view.pump().nations.get(you)?.plots > 0 && view.nations.get(you)))?.plots;
 A.ws.send(JSON.stringify({ t: "advance", stack: st.stack }));
-const adv = await waitFor(A, m => m.t === "result" && m.of === "advance");
-check(adv?.ok, "advance order accepted");
+check((await nextResult(A, "advance"))?.ok, "advance order accepted");
 await sleep(3000);
 check(A.binary.some(f => f[0] === MSG.DIFF && f[1] === PROTOCOL), "territory changes stream as binary diffs");
 A.ws.send(JSON.stringify({ t: "admin", op: "hashes" }));
 const hr = await waitFor(A, m => m.t === "result" && m.op === "hashes");
 mirror.pump(hr._bin);
 check(hr && hashRuns(mirror.owner) === hr.owner, `after live diffs the client's owner layer still matches the server (${hr?.owner})`);
-const state = [...A.json].reverse().find(m => m.t === "state");
-const mine = state?.nations.find(n => n.id === hello.you);
-check(mine && mine.plots > before + 5, `nation grew from ${before} to ${mine?.plots} plots`);
+const mine = view.pump().nations.get(you);
+check(mine && mine.plots > before + 5, `nation grew from ${before} to ${mine?.plots} plots, seen through compact state updates`);
 A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
-const st2 = await waitFor(A, m => m.t === "result" && m.of === "stack" && m.stack !== st.stack);
-const from = (await waitFor(A, m => m.t === "state" && m.stacks.some(x => x.id === st2?.stack)))?.stacks.find(x => x.id === st2.stack).pos;
+const st2 = await nextResult(A, "stack");
+const from = (await until(() => view.pump().stacks.get(st2?.stack)))?.pos;
 let moved = null;
 const far = Math.min(250, Math.floor(hello.w / 3));
 for (const i of land.filter((_, k) => k % 211 === 0)) {
   if (from === undefined || Math.abs((i % hello.w) - (from % hello.w)) + Math.abs(Math.floor(i / hello.w) - Math.floor(from / hello.w)) < far) continue;
   const sent = Date.now();
   A.ws.send(JSON.stringify({ t: "move", stack: st2.stack, to: i }));
-  const r = await waitFor(A, m => m.t === "result" && m.of === "move" && !m.seen && (m.seen = true));
-  if (r?.ok) { moved = { to: i, ms: Date.now() - sent }; break; }
+  if ((await nextResult(A, "move"))?.ok) { moved = { to: i, ms: Date.now() - sent }; break; }
 }
 check(moved, `a stack takes a move order at least ${far} plots away (reply seen within ${moved?.ms} ms; the test polls every 50 ms)`);
+
+const bHello = await waitFor(B, m => m.t === "hello");
+const bNation = bHello.you;
+const dist = i => Math.hypot((i % M.w) - (aSpawn % M.w), Math.floor(i / M.w) - Math.floor(aSpawn / M.w));
+let bSpawn = -1;
+for (const i of land.filter(i => dist(i) >= 22 && dist(i) <= 45).sort((p, q) => dist(p) - dist(q)).filter((_, k) => k % 5 === 0)) {
+  A.ws.send(JSON.stringify({ t: "route", stack: st.stack, to: i }));
+  if (!(await nextResult(A, "route"))?.ok) continue;
+  B.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
+  if ((await nextResult(B, "spawn"))?.ok) { bSpawn = i; break; }
+}
+check(bSpawn >= 0, `the friend spawns ${Math.round(dist(bSpawn))} plots away`);
+B.ws.send(JSON.stringify({ t: "stack", share: 0.1 }));
+const bs = await nextResult(B, "stack");
+B.ws.send(JSON.stringify({ t: "move", stack: st2.stack, to: bSpawn }));
+check((await nextResult(B, "move"))?.error === "not your stack", "the friend cannot order the host's stack");
+A.ws.send(JSON.stringify({ t: "stack", share: 1 }));
+const as = await nextResult(A, "stack");
+A.ws.send(JSON.stringify({ t: "route", stack: as?.stack, to: bSpawn }));
+const rt = await nextResult(A, "route");
+const aStack = await until(() => view.pump().stacks.get(as?.stack));
+check(rt?.ok && rt.seconds > 0 && rt.points?.length > 0 && aStack?.order === "hold", `route preview: about ${rt?.plots} plots and ${rt?.seconds} s, ${rt?.points?.length} waypoints, stack not moved`);
+const bPlots = (await until(() => view.pump().nations.get(bNation)?.plots > 0 && view.nations.get(bNation)))?.plots;
+const bTroops = (await until(() => view.pump().stacks.get(bs?.stack)))?.troops;
+A.ws.send(JSON.stringify({ t: "move", stack: as.stack, to: bSpawn }));
+check((await nextResult(A, "move"))?.ok, "the host's stack of " + aStack?.troops + " marches on the friend's capital");
+const lost = await until(() => view.pump().events.find(e => e.type === "plot_lost" && e.nation === bNation && e.by === you), 30000);
+check(lost, `territory changes hands: plot_lost for the friend (${lost?.count} plots in one tick)`);
+const fought = await until(() => view.pump().events.find(e => e.type === "stack_destroyed" && e.stack === bs?.stack), 30000);
+const cleared = await until(() => !view.pump().stacks.has(bs?.stack));
+check(fought && cleared, `battle resolved: the friend's stack of ${bTroops} was destroyed; the host's stack has ${view.stacks.get(as.stack)?.troops} left`);
+const shrunk = await until(() => view.pump().nations.get(bNation)?.plots < bPlots && view.nations.get(bNation));
+check(shrunk, `the friend's land fell from ${bPlots} to ${shrunk?.plots} plots`);
+const burst = [];
+for (let k = 0; k < 60; k++) B.ws.send(JSON.stringify({ t: "ping", at: k }));
+await until(() => B.json.filter(m => m.t === "pong" || m.error === "slow down").length >= 60, 5000);
+const pongs = B.json.filter(m => m.t === "pong").length, slowed = B.json.filter(m => m.error === "slow down").length;
+check(pongs < 60 && slowed > 0, `rate limit: 60 messages at once gave ${pongs} answers and ${slowed} "slow down"`);
+await sleep(2100);
+let won = null;
+const cheb = (p, q) => Math.max(Math.abs((p % M.w) - (q % M.w)), Math.abs(Math.floor(p / M.w) - Math.floor(q / M.w)));
+for (const end = Date.now() + 90000; !won && Date.now() < end; ) {
+  const mine = view.pump().stacks.get(as.stack);
+  if (mine?.order === "hold") {
+    mirror.pump();
+    let target = -1;
+    for (let i = 0; i < mirror.owner.length; i++) if (mirror.owner[i] === bNation && (target < 0 || cheb(i, mine.pos) < cheb(target, mine.pos))) target = i;
+    if (target >= 0 && cheb(target, mine.pos) <= 4) A.ws.send(JSON.stringify({ t: "advance", stack: as.stack }));
+    else if (target >= 0) A.ws.send(JSON.stringify({ t: "move", stack: as.stack, to: target }));
+    await sleep(300);
+  }
+  won = await waitFor(A, m => m.t === "victory", 700);
+}
+const bSaw = await waitFor(B, m => m.t === "victory", 2000);
+check(won?.winner === you && bSaw, `the friend is eliminated and both players hear that ${won?.name} has won`);
+A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
+check((await nextResult(A, "stack"))?.error === "the world has ended", "the world is frozen after the win: orders are refused");
+const frozen = (await api(`/api/worlds/${wid}/status`, null, ta)).body;
+check(frozen.frozen && frozen.looping === false && frozen.victory?.winner === you, "the simulation has stopped and the win is saved");
 A.ws.close(); B.ws.close();
 await sleep(800);
 const status = await api(`/api/worlds/${wid}/status`, null, ta);
@@ -187,7 +274,7 @@ check(status.body.looping === false && status.body.online === 0, "loop stops whe
 const A2 = await connect(wid, ta);
 const hello2 = await waitFor(A2, m => m.t === "hello");
 const again = hello2?.nations.find(n => n.id === hello.you);
-check(again && again.plots >= mine.plots && hello2.you === hello.you, "same nation and territory after reconnecting");
+check(again && again.plots >= mine.plots && hello2.you === hello.you && hello2.frozen, "same nation and territory after reconnecting, and the world still shows as won");
 const A3 = await connect(wid, ta);
 await waitFor(A3, m => m.t === "hello");
 const replaced = await waitFor(A2, m => m.t === "replaced");

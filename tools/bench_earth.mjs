@@ -7,6 +7,7 @@ import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
 import { encodeRuns, countRuns } from "../src/shared/codec.js";
 import { MSG, partFrames } from "../src/shared/protocol.js";
+import { StateFeed, publicEvents } from "../src/game.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -73,8 +74,10 @@ function playerOrders() {
   }
 }
 
-const times = [], saveTimes = [];
-let stateBytes = 0, maxEvents = 0, maxDiffBytes = 0, blocked = 0;
+const times = [], saveTimes = [], stateSizes = [], eventSizes = [];
+const feed = new StateFeed(0.01, 5);
+feed.delta(w);
+let maxEvents = 0, maxDiffBytes = 0, blocked = 0;
 for (let i = 0; i < Number(a.ticks); i++) {
   if (i % 20 === 0) playerOrders();
   const s = performance.now();
@@ -86,10 +89,11 @@ for (let i = 0; i < Number(a.ticks); i++) {
     maxDiffBytes = Math.max(maxDiffBytes, flat.byteLength + 4);
   }
   if (i % 4 === 0) {
-    const nations = [...w.nations.values()].map(n => ({ id: n.id, name: n.name, colour: n.colour, plots: n.plots, troops: Math.floor(n.troops), alive: n.alive, spawned: n.spawned, bot: n.bot }));
-    const stacks = [...w.stacks.values()].map(x => ({ id: x.id, owner: x.owner, pos: x.pos, troops: Math.floor(x.troops), order: x.order }));
-    stateBytes = Math.max(stateBytes, Buffer.byteLength(JSON.stringify({ t: "state", time: Math.floor(w.time), nations, stacks })));
+    const d = feed.delta(w);
+    stateSizes.push(d ? Buffer.byteLength(JSON.stringify({ v: 2, t: "state", time: Math.floor(w.time), ...d })) : 0);
   }
+  const shown = publicEvents(w, w.events);
+  eventSizes.push(shown.length ? Buffer.byteLength(JSON.stringify({ v: 2, t: "events", events: shown })) : 0);
   maxEvents = Math.max(maxEvents, w.events.length);
   blocked += w.events.filter(e => e.type === "path_blocked").length;
   w.events.length = 0;
@@ -135,7 +139,11 @@ const report = {
   ownerRuns: countRuns(w.owner),
   borderPlots,
   borderSetsMatchFullScan: borderOk,
-  bytes: { join: helloBytes + ownerFrameBytes, joinHello: helloBytes, joinOwner: ownerFrameBytes, stateMessage: stateBytes, largestDiff: maxDiffBytes },
+  bytes: {
+    join: helloBytes + ownerFrameBytes, joinHello: helloBytes, joinOwner: ownerFrameBytes, largestDiff: maxDiffBytes,
+    stateMessage: { median: [...stateSizes].sort((x, y) => x - y)[stateSizes.length >> 1], worst: Math.max(...stateSizes) },
+    perPlayerPerSecond: { state: Math.round(stateSizes.reduce((x, y) => x + y, 0) / w.time), events: Math.round(eventSizes.reduce((x, y) => x + y, 0) / w.time) },
+  },
   maxEventsPerTick: maxEvents,
   budgetMs: Number(a.budget),
   memoryMB: { peakHeapPlusBuffers: peakIsolate, endHeapPlusBuffers: isolateMB(), rss: Math.round(process.memoryUsage().rss / 1e6), nodeAloneRss: bareRss },

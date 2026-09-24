@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (26; 2 skip without public/map)
+npm test                  # unit tests (38; 2 skip without public/map)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, fails if a tick is over 50 ms
 npm run dev               # wrangler dev on http://localhost:8787
@@ -85,13 +85,14 @@ The modules in `src/sim/` are the tested kit examples, identical apart from impo
 
 ## Milestone one progress
 
-Steps 1 to 3 are done (September 2026):
+Steps 1 to 4 are done (September 2026). Step 5, the real client, is next:
 
 - **Maps.** Worlds are `test`, `earth`, `europe` or a lat/long box, read through `env.ASSETS` at creation. Each world stores its terrain as one gzipped row and its owner layer run-length encoded; a save writes 2 to 4 rows.
-- **Join.** Protocol version 1. The client fetches `/map/terrain.bin.gz` (243 KB, cacheable); the socket sends `hello`, terrain differences and the owner layer in run-length frames. About 150 KB on Earth with 400 bots.
+- **Join.** Protocol version 2 (version 1 until step 4). The client fetches `/map/terrain.bin.gz` (243 KB, cacheable); the socket sends `hello`, terrain differences and the owner layer in run-length frames. About 150 KB on Earth with 400 bots.
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
+- **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
 
-Problems found at handoff (details in `plans/milestone-1.md`); 2 to 5 are fixed, 1 is step 4:
+Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 
 1. `world.js` wires territory and chat only. Combat and bots are not installed, despite what the handover says.
 2. `world.js` loads `makeTestMap`, not the Earth map.
