@@ -6,12 +6,18 @@ export async function showWorlds(root, account, { onOpen, onLogout }) {
   const list = el("div", { class: "worlds" });
   const name = el("input", { id: "world-name", placeholder: "world name", maxlength: 40, value: "New world" });
   const map = el("select", { id: "world-map" },
-    el("option", { value: "europe", text: "Europe" }), el("option", { value: "earth", text: "Whole Earth" }), el("option", { value: "test", text: "Small test map" }));
+    el("option", { value: "europe", text: "Europe (fine detail)" }), el("option", { value: "earth", text: "Whole Earth" }), el("option", { value: "test", text: "Small test map" }));
   const auto = el("input", { id: "bots-auto", type: "checkbox", checked: true });
-  const bots = el("input", { id: "bots", type: "range", min: 0, max: 400, step: 5, value: 200, disabled: true });
+  const bots = el("input", { id: "bots", type: "range", min: 0, max: 400, step: 5, value: 50, disabled: true });
   const botsLabel = el("span", { class: "muted", text: "scaled to land" });
   const syncBots = () => { bots.disabled = auto.checked; botsLabel.textContent = auto.checked ? "scaled to land" : `${bots.value} bots`; };
   auto.onchange = bots.oninput = syncBots;
+  map.onchange = () => {
+    bots.max = map.value === "europe" ? 100 : 400;
+    if (Number(bots.value) > Number(bots.max)) bots.value = bots.max;
+    syncBots();
+  };
+  map.onchange();
 
   const refresh = async () => {
     const worlds = await api("/api/worlds");

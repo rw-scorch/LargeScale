@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
+import { CROPS, cropRect, cropLayer } from "../src/shared/maps.js";
+import { scaledRules, defaultBots } from "../src/worldconfig.js";
 import { parseArgs } from "node:util";
 import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
@@ -15,6 +18,7 @@ const { values: a } = parseArgs({ options: {
   ticks: { type: "string", default: "2400" },
   budget: { type: "string", default: "50" },
   map: { type: "string", default: "public/map" },
+  crop: { type: "string" },
   seed: { type: "string", default: "1" },
 }});
 
@@ -22,11 +26,17 @@ const DT = 0.25, SAVE_EVERY = 30;
 const isolateMB = () => { const m = process.memoryUsage(); return Math.round((m.heapUsed + m.arrayBuffers) / 1e6); };
 const bareRss = Math.round(process.memoryUsage().rss / 1e6);
 let peakIsolate = 0;
-const meta = JSON.parse(readFileSync(`${a.map}/meta.json`, "utf8"));
-const terrain = new Uint8Array(readFileSync(`${a.map}/terrain.bin`));
-const w = new World({ w: meta.w, h: meta.h, terrain });
+const src = JSON.parse(readFileSync(`${a.map}/meta.json`, "utf8"));
+const raw = existsSync(`${a.map}/terrain.bin`) ? readFileSync(`${a.map}/terrain.bin`) : gunzipSync(readFileSync(`${a.map}/terrain.bin.gz`));
+const scale = src.w / 3600, rules = scaledRules(scale);
+const rect = a.crop ? cropRect(src, CROPS[a.crop]) : null;
+const meta = rect ? { w: rect.w, h: rect.h } : src;
+const terrain = rect ? cropLayer(new Uint8Array(raw), src.w, rect) : new Uint8Array(raw);
+const w = new World({ w: meta.w, h: meta.h, terrain }, rules.territory);
 const rng = makeRng(Number(a.seed));
-installCombat(w);
+installCombat(w, rules.combat);
+if (a.bots === "auto") { let land = 0; for (const v of terrain) if (isLand(v)) land++; a.bots = String(defaultBots(land, scale)); }
+console.log(`map ${a.map}${a.crop ? ` crop ${a.crop}` : ""}: ${meta.w} by ${meta.h}, scale ${scale}, ${a.bots} bots`);
 
 let t = performance.now();
 const bots = spawnBots(w, Number(a.bots), rng);

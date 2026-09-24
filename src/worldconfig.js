@@ -1,7 +1,9 @@
 import rules from "../data/rules.json" with { type: "json" };
 import { CROPS } from "./shared/maps.js";
+import { RULES } from "./sim/territory.js";
+import { COMBAT } from "./sim/combat.js";
 
-const R = rules.world;
+const R = rules.world, D = rules.detail;
 const isInt = v => Number.isInteger(v);
 
 export function parseWorldConfig(c = {}) {
@@ -24,13 +26,31 @@ export function parseWorldConfig(c = {}) {
   } else {
     return { error: `unknown map, use test, earth, ${Object.keys(CROPS).join(", ")} or a box` };
   }
-  const bots = c.bots ?? null;
-  if (bots !== null && (!isInt(bots) || bots < 0 || bots > R.maxBots)) return { error: `bots must be a whole number from 0 to ${R.maxBots}` };
+  const detail = c.detail ?? (map.kind === "crop" ? "fine" : "normal");
+  if (detail !== "fine" && detail !== "normal") return { error: "detail must be fine or normal" };
+  if (detail === "fine" && map.kind !== "crop") return { error: "fine detail is for region maps; the whole Earth uses normal detail" };
+  if (detail === "fine") map.dir = D.fineDir;
+  const bots = c.bots ?? null, most = maxBotsFor(detail);
+  if (bots !== null && (!isInt(bots) || bots < 0 || bots > most)) return { error: `bots must be a whole number from 0 to ${most}` };
   return { map, bots };
 }
 
-export function defaultBots(landPlots) {
-  return Math.min(R.maxBots, Math.round((R.botsPerMillionLand * landPlots) / 1e6));
+export function maxBotsFor(detail) {
+  return detail === "fine" ? Math.floor(R.maxBots / (D.fineScale * D.fineScale)) : R.maxBots;
 }
+
+export function defaultBots(landPlots, scale = 1) {
+  return Math.min(Math.floor(R.maxBots / (scale * scale)), Math.round((R.botsPerMillionLand * landPlots) / (scale * scale) / 1e6));
+}
+
+export function scaledRules(scale = 1) {
+  const out = { territory: { ...RULES, ...rules.territory }, combat: { ...COMBAT, ...rules.combat } };
+  for (const [group, keys] of Object.entries(D.lengthRules)) for (const k of keys) out[group][k] *= scale;
+  for (const [group, keys] of Object.entries(D.areaRules)) for (const k of keys) out[group][k] *= scale * scale;
+  return out;
+}
+
+export const MAX_PLOTS = R.maxPlots;
+export const BASE_WIDTH = R.baseWidth;
 
 export const MIN_MAP_SIDE = R.minMapSide;

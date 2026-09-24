@@ -68,3 +68,17 @@ python tools/build_earth.py `
 ```
 
 Add `--elevation` and `--koppen` when you have them. The build needs `pip install numpy pillow scipy pyshp`, plus `h5py` only if you use a NetCDF elevation file.
+
+## The fine map for region worlds
+
+Region maps such as Europe use a second base map at 0.05 degrees, 7200 by 2880 plots. It was built on 24 September 2026 from all the Natural Earth layers above, as GeoJSON, plus the 1 km Köppen file `Beck_KG_V1_present_0p0083.tif`, since the 10 km file is coarser than a fine plot. There is no elevation raster, as with the normal map.
+
+Put the files in `data/map/`, then:
+
+```powershell
+npm run map:fine
+```
+
+That takes about 90 seconds and writes `public/map/fine/terrain.bin.gz` (about 634 KB) and `public/map/fine/meta.json`. Only those two are served. The raw 20.7 MB grid and the 41 MB elevation grid stay in `data/map/fine`, because Cloudflare refuses static files over 25 MiB and the game does not read elevation.
+
+Rebuilding the normal 3600-wide map with the same sources and the 10 km Köppen file reproduces the shipped `terrain.bin` to within 670 of 5,184,000 plots.

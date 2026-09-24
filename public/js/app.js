@@ -25,8 +25,12 @@ const loadAssets = async () => (assets ??= await Promise.all([
   fetch("/assets/terrain/palettes.json").then(r => r.json()),
 ]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
 const gzCache = new Map();
-const terrainGz = async hash => {
-  if (!gzCache.has(hash)) gzCache.set(hash, new Uint8Array(await (await fetch(`/map/terrain.bin.gz?v=${hash}`)).arrayBuffer()));
+const terrainGz = async (dir, hash) => {
+  if (!gzCache.has(hash)) {
+    const r = await fetch(`/${dir}/terrain.bin.gz?v=${hash}`);
+    if (!r.ok) throw new Error(`The map file ${dir}/terrain.bin.gz is missing on the server.`);
+    gzCache.set(hash, new Uint8Array(await r.arrayBuffer()));
+  }
   return gzCache.get(hash);
 };
 
@@ -107,7 +111,7 @@ class Game {
     this.world = world;
     try {
       await loadAssets();
-      await world.loadBase(() => terrainGz(m.map.baseHash ?? "test"));
+      await world.loadBase(() => terrainGz(m.map.dir ?? "map", m.map.baseHash ?? "test"));
     } catch (e) {
       this.toast(e.message);
       return;
