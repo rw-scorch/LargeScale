@@ -26,8 +26,7 @@ export function spawnBots(world, count, rng, opts = {}) {
 function bestLaunchPlot(world, nid) {
   const g = world.grid;
   let best = -1, score = -1;
-  for (let i = 0; i < g.size; i += 1) {
-    if (world.owner[i] !== nid) continue;
+  for (const i of world.borderOf(nid)) {
     let s = 0;
     for (const n of g.neighbours4(i)) if (!world.owner[n] && isLand(world.terrain[n])) s++;
     if (s > score) { score = s; best = i; if (s >= 3) break; }

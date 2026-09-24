@@ -32,6 +32,8 @@ export class World {
     this.time = 0;
     this.events = [];
     this.dirty = new Set();
+    this.border = new Map();
+    this.lost = new Map();
     this.hostile = (a, b) => a !== b;
     this.passable = (a, b) => a === b;
     this.hooks = { preTick: [], postMove: [], postTick: [] };
@@ -48,10 +50,46 @@ export class World {
   claim(i, nid) {
     const old = this.owner[i];
     if (old === nid) return;
-    if (old) this.nations.get(old).plots--;
+    if (old) { this.nations.get(old).plots--; this.border.get(old)?.delete(i); }
     if (nid) this.nations.get(nid).plots++;
     this.owner[i] = nid;
     this.dirty.add(i);
+    this.touchBorder(i);
+    for (const n of this.grid.neighbours4(i)) this.touchBorder(n);
+  }
+
+  isBorder(i) {
+    const o = this.owner[i], ow = this.owner, t = this.terrain, w = this.grid.w, x = i % w;
+    return (i >= w && ow[i - w] !== o && isLand(t[i - w])) || (i + w < ow.length && ow[i + w] !== o && isLand(t[i + w]))
+      || (x > 0 && ow[i - 1] !== o && isLand(t[i - 1])) || (x < w - 1 && ow[i + 1] !== o && isLand(t[i + 1]));
+  }
+
+  touchBorder(i) {
+    const o = this.owner[i];
+    if (!o) return;
+    let set = this.border.get(o);
+    if (!set) this.border.set(o, (set = new Set()));
+    if (this.isBorder(i)) set.add(i); else set.delete(i);
+  }
+
+  borderOf(nid) { return this.border.get(nid) ?? new Set(); }
+
+  rebuildBorders() {
+    this.border.clear();
+    for (let i = 0; i < this.owner.length; i++) {
+      const o = this.owner[i];
+      if (!o || !this.isBorder(i)) continue;
+      let set = this.border.get(o);
+      if (!set) this.border.set(o, (set = new Set()));
+      set.add(i);
+    }
+  }
+
+  plotLost(o, by, at) {
+    const e = this.lost.get(o);
+    if (e) { e.count++; return; }
+    this.emit("plot_lost", { nation: o, by, at, count: 1 });
+    this.lost.set(o, this.events[this.events.length - 1]);
   }
 
   canSpawnAt(x, y) {
@@ -170,7 +208,7 @@ export class World {
     if (o) {
       const d = this.nations.get(o);
       d.troops = Math.max(0, d.troops - cost * this.rules.defenderLossShare);
-      this.emit("plot_lost", { nation: o, by: s.owner, at: next });
+      this.plotLost(o, s.owner, next);
     }
     this.claim(next, s.owner);
     s.pos = next;
@@ -225,7 +263,7 @@ export class World {
       if (o) {
         const d = this.nations.get(o);
         d.troops = Math.max(0, d.troops - cost * this.rules.defenderLossShare);
-        this.emit("plot_lost", { nation: o, by: s.owner, at: i });
+        this.plotLost(o, s.owner, i);
       }
       this.claim(i, s.owner);
       this.fillEnclaves(i, s.owner);
@@ -271,6 +309,7 @@ export class World {
 
   tick(dt) {
     this.time += dt;
+    this.lost.clear();
     for (const f of this.hooks.preTick) f(this, dt);
     this.growTroops(dt);
     for (const s of this.stacks.values()) this.stepStack(s, dt);
