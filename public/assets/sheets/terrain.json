@@ -1,0 +1,453 @@
+{
+ "image": "terrain.png",
+ "size": [
+  512,
+  50
+ ],
+ "frames": {
+  "deco_oak_spring": {
+   "x": 170,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_oak_summer": {
+   "x": 187,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_oak_autumn": {
+   "x": 153,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_oak_winter": {
+   "x": 204,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_birch_spring": {
+   "x": 272,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_birch_summer": {
+   "x": 289,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_birch_autumn": {
+   "x": 255,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_birch_winter": {
+   "x": 306,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_bush_spring": {
+   "x": 340,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_bush_summer": {
+   "x": 357,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_bush_autumn": {
+   "x": 323,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_bush_winter": {
+   "x": 374,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_tall_grass_spring": {
+   "x": 425,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_tall_grass_summer": {
+   "x": 442,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_tall_grass_autumn": {
+   "x": 408,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_tall_grass_winter": {
+   "x": 459,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_pine_summer": {
+   "x": 255,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_pine_winter": {
+   "x": 272,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_palm": {
+   "x": 238,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_jungle_tree": {
+   "x": 119,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_dead_tree": {
+   "x": 408,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_cactus": {
+   "x": 391,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_rock_small": {
+   "x": 323,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_rock_large": {
+   "x": 306,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_reeds": {
+   "x": 289,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_flowers": {
+   "x": 459,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_stump": {
+   "x": 391,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_snow_drift": {
+   "x": 374,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_seaweed": {
+   "x": 340,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_iceberg": {
+   "x": 102,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_waves": {
+   "x": 476,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_lava_bubble": {
+   "x": 136,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_herd_cattle": {
+   "x": 493,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_herd_sheep": {
+   "x": 85,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_herd_goats": {
+   "x": 17,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_herd_camels": {
+   "x": 476,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_herd_reindeer": {
+   "x": 68,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_herd_horses": {
+   "x": 34,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_herd_pigs": {
+   "x": 51,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_flock_chickens": {
+   "x": 442,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deco_herd_elephants": {
+   "x": 0,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_pack_wolves": {
+   "x": 221,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_shoal_fish": {
+   "x": 357,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deco_flock_birds": {
+   "x": 425,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_N": {
+   "x": 68,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_N": {
+   "x": 51,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_E": {
+   "x": 0,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_E": {
+   "x": 493,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_NE": {
+   "x": 85,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_NE": {
+   "x": 68,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_S": {
+   "x": 204,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_S": {
+   "x": 187,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_NS": {
+   "x": 153,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_NS": {
+   "x": 136,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_ES": {
+   "x": 17,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_ES": {
+   "x": 0,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_NES": {
+   "x": 102,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_NES": {
+   "x": 85,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_W": {
+   "x": 238,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_W": {
+   "x": 221,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_NW": {
+   "x": 187,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_NW": {
+   "x": 170,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_EW": {
+   "x": 51,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_EW": {
+   "x": 34,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_NEW": {
+   "x": 136,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_NEW": {
+   "x": 119,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_SW": {
+   "x": 221,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_SW": {
+   "x": 204,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_NSW": {
+   "x": 170,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_NSW": {
+   "x": 153,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_ESW": {
+   "x": 34,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_ESW": {
+   "x": 17,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "coast_foam_NESW": {
+   "x": 119,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "river_edge_NESW": {
+   "x": 102,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

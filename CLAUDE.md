@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (48; 3 skip without public/map and public/map/fine)
+npm test                  # unit tests (48)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -50,7 +50,7 @@ src/worldconfig.js map choice (test, earth, europe, lat/long box) and bot count 
 src/sim/           the simulation, 21 modules, plain JavaScript
 src/shared/        the only code both server and client import: protocol, codec, maps, pathfinding, terrain
 public/            the client: index.html, js/app.js, js/net.js, js/input.js, js/render/, js/ui/ (one file per panel);
-                   test.html is the old server test page. public/map and public/assets are generated, not committed
+                   test.html is the old server test page. public/map holds the gzipped maps and public/assets the art kit, both committed
 data/              stat files. Tuning numbers live in data/rules.json
 tools/             build_earth.py, bench_earth.mjs, one-off scripts
 test/              node --test unit tests plus smoke.mjs
@@ -62,7 +62,7 @@ plans/             milestone plans
 
 1. `src/sim/` never imports anything from Cloudflare. That keeps tests fast in plain Node, and lets the client reuse the code.
 2. `src/shared/` is the only code crossing between server and client.
-3. Generated files are not committed: `public/map/`, `public/assets/`, `.wrangler/`, `.dev.vars`.
+3. Generated files are not committed: `.wrangler/`, `.dev.vars`, `public/js/shared/`, and the raw `public/map/terrain.bin`, `elevation.bin` and `preview.png`. The gzipped maps and the art kit in `public/assets/` are committed (since 24 September 2026, at Ryan's request), so a fresh clone deploys as it is.
 4. Never edit or remove the `migrations` block in `wrangler.jsonc`. A class rename needs a new migration entry. Deleting a class deletes its saved worlds.
 5. Tuning constants go in `data/rules.json`, never as numbers typed into the simulation.
 6. New systems are one module in `src/sim/`, installed once in `world.js`. New message types are a validated case in `world.js`. Panels are one file each in `public/js/ui/`.
@@ -88,7 +88,7 @@ The modules in `src/sim/` are the tested kit examples, identical apart from impo
 - **Deploy.** Not deployed. The Cloudflare account had no Workers.
 - **Admin.** `ADMIN_NAMES` is `rw_scorch`. Ryan registers that name right after the first deploy.
 - **Deploy commands.** Ryan deploys himself: `npx wrangler login`, `npx wrangler secret put INVITE_CODE`, `npx wrangler secret put PEPPER`, `npx wrangler deploy`. The first deploy creates both Durable Object classes.
-- **Fine map.** `public/map/fine/terrain.bin.gz` (7200 by 2880, 0.05 degrees, about 634 KB) and `meta.json`, built 24 September 2026. Ryan copies these two files in by hand, like the rest of `public/map`.
+- **Fine map.** `public/map/fine/terrain.bin.gz` (7200 by 2880, 0.05 degrees, about 634 KB) and `meta.json`, built 24 September 2026. Committed, like the normal map's `terrain.bin.gz` and the art kit.
 - **Map.** The Earth map is already in `public/map/`: `terrain.bin` (3600 by 1440 bytes), `elevation.bin` (Int16) and `meta.json`. The terrain indexes match `src/shared/terrain.js`.
 
 ## Milestone one progress
@@ -106,7 +106,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 
 Open items as of 24 September 2026, in order:
 
-1. Ryan deploys the fine map: copy `terrain.bin.gz` and `meta.json` into `public/map/fine`, `git pull`, `npm test`, `npx wrangler deploy`, then try a new Europe world.
+1. Ryan deploys the fine map: `git pull`, `npm test`, `npx wrangler deploy`, then tries a new Europe world. The maps and assets now come with the repository.
 2. Open a pull request from `claude/keen-ride-u8zdz9` into `main` for step 5 plus the playtest fixes (controls, stack placement, capital moves, fine maps, route preview fix). Ask Ryan first.
 3. Write `plans/milestone-2.md` for his approval: civilians, resources, logistics, construction, tech tree (the handover's next pieces). Stack forming may then be limited to near towns.
 4. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset.

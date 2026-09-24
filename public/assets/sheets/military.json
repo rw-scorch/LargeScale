@@ -1,0 +1,1875 @@
+{
+ "image": "military.png",
+ "size": [
+  512,
+  453
+ ],
+ "frames": {
+  "war_camp": {
+   "x": 297,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "war_camp_construction": {
+   "x": 330,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "war_camp_damaged": {
+   "x": 363,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "war_camp_rubble": {
+   "x": 429,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "war_camp_lights": {
+   "x": 396,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "watchtower_wood": {
+   "x": 17,
+   "y": 283,
+   "w": 16,
+   "h": 26
+  },
+  "watchtower_wood_construction": {
+   "x": 34,
+   "y": 283,
+   "w": 16,
+   "h": 26
+  },
+  "watchtower_wood_damaged": {
+   "x": 51,
+   "y": 283,
+   "w": 16,
+   "h": 26
+  },
+  "watchtower_wood_rubble": {
+   "x": 68,
+   "y": 283,
+   "w": 16,
+   "h": 26
+  },
+  "barracks": {
+   "x": 363,
+   "y": 314,
+   "w": 32,
+   "h": 16
+  },
+  "barracks_construction": {
+   "x": 396,
+   "y": 314,
+   "w": 32,
+   "h": 16
+  },
+  "barracks_damaged": {
+   "x": 429,
+   "y": 314,
+   "w": 32,
+   "h": 16
+  },
+  "barracks_rubble": {
+   "x": 0,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "barracks_lights": {
+   "x": 462,
+   "y": 314,
+   "w": 32,
+   "h": 16
+  },
+  "stable": {
+   "x": 396,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "stable_construction": {
+   "x": 429,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "stable_damaged": {
+   "x": 462,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "stable_rubble": {
+   "x": 0,
+   "y": 369,
+   "w": 32,
+   "h": 16
+  },
+  "archery_range": {
+   "x": 330,
+   "y": 314,
+   "w": 32,
+   "h": 16
+  },
+  "siege_workshop": {
+   "x": 132,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "siege_workshop_construction": {
+   "x": 165,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "siege_workshop_damaged": {
+   "x": 198,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "siege_workshop_rubble": {
+   "x": 264,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "siege_workshop_lights": {
+   "x": 231,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "keep": {
+   "x": 66,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "keep_construction": {
+   "x": 99,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "keep_damaged": {
+   "x": 132,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "keep_rubble": {
+   "x": 198,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "keep_lights": {
+   "x": 165,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "castle": {
+   "x": 0,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "castle_construction": {
+   "x": 49,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "castle_damaged": {
+   "x": 98,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "castle_rubble": {
+   "x": 196,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "castle_lights": {
+   "x": 147,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "star_fort": {
+   "x": 0,
+   "y": 49,
+   "w": 48,
+   "h": 48
+  },
+  "star_fort_construction": {
+   "x": 49,
+   "y": 49,
+   "w": 48,
+   "h": 48
+  },
+  "star_fort_damaged": {
+   "x": 98,
+   "y": 49,
+   "w": 48,
+   "h": 48
+  },
+  "star_fort_rubble": {
+   "x": 196,
+   "y": 49,
+   "w": 48,
+   "h": 48
+  },
+  "star_fort_lights": {
+   "x": 147,
+   "y": 49,
+   "w": 48,
+   "h": 48
+  },
+  "cannon_foundry": {
+   "x": 33,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "cannon_foundry_construction": {
+   "x": 66,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "cannon_foundry_damaged": {
+   "x": 99,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "cannon_foundry_rubble": {
+   "x": 165,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "cannon_foundry_lights": {
+   "x": 132,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "musket_range": {
+   "x": 330,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "coastal_battery": {
+   "x": 390,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "coastal_battery_construction": {
+   "x": 407,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "coastal_battery_damaged": {
+   "x": 424,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "coastal_battery_rubble": {
+   "x": 441,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "bunker": {
+   "x": 254,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "bunker_construction": {
+   "x": 271,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "bunker_damaged": {
+   "x": 288,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "bunker_rubble": {
+   "x": 305,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "artillery_emplacement": {
+   "x": 186,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "artillery_emplacement_construction": {
+   "x": 203,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "artillery_emplacement_damaged": {
+   "x": 220,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "artillery_emplacement_rubble": {
+   "x": 237,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "tank_depot": {
+   "x": 196,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "tank_depot_construction": {
+   "x": 245,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "tank_depot_damaged": {
+   "x": 294,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "tank_depot_rubble": {
+   "x": 392,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "tank_depot_lights": {
+   "x": 343,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "naval_yard": {
+   "x": 462,
+   "y": 145,
+   "w": 48,
+   "h": 32
+  },
+  "naval_yard_construction": {
+   "x": 0,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "naval_yard_damaged": {
+   "x": 49,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "naval_yard_rubble": {
+   "x": 147,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "naval_yard_lights": {
+   "x": 98,
+   "y": 184,
+   "w": 48,
+   "h": 32
+  },
+  "military_base": {
+   "x": 245,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "military_base_construction": {
+   "x": 294,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "military_base_damaged": {
+   "x": 343,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "military_base_rubble": {
+   "x": 441,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "military_base_lights": {
+   "x": 392,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "radar_station": {
+   "x": 442,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "radar_station_construction": {
+   "x": 459,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "radar_station_damaged": {
+   "x": 476,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "radar_station_rubble": {
+   "x": 493,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "sam_site": {
+   "x": 340,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "sam_site_construction": {
+   "x": 357,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "sam_site_damaged": {
+   "x": 374,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "sam_site_rubble": {
+   "x": 391,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "missile_silo": {
+   "x": 272,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "missile_silo_construction": {
+   "x": 289,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "missile_silo_damaged": {
+   "x": 306,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "missile_silo_rubble": {
+   "x": 323,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "command_hq": {
+   "x": 297,
+   "y": 145,
+   "w": 32,
+   "h": 34
+  },
+  "command_hq_construction": {
+   "x": 330,
+   "y": 145,
+   "w": 32,
+   "h": 34
+  },
+  "command_hq_damaged": {
+   "x": 363,
+   "y": 145,
+   "w": 32,
+   "h": 34
+  },
+  "command_hq_rubble": {
+   "x": 429,
+   "y": 145,
+   "w": 32,
+   "h": 34
+  },
+  "command_hq_lights": {
+   "x": 396,
+   "y": 145,
+   "w": 32,
+   "h": 34
+  },
+  "drone_hangar": {
+   "x": 198,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "drone_hangar_construction": {
+   "x": 231,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "drone_hangar_damaged": {
+   "x": 264,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "drone_hangar_rubble": {
+   "x": 297,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "shield_generator": {
+   "x": 462,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "shield_generator_construction": {
+   "x": 0,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "shield_generator_damaged": {
+   "x": 33,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "shield_generator_rubble": {
+   "x": 99,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "shield_generator_lights": {
+   "x": 66,
+   "y": 250,
+   "w": 32,
+   "h": 32
+  },
+  "railgun_battery": {
+   "x": 363,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "railgun_battery_construction": {
+   "x": 396,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "railgun_battery_damaged": {
+   "x": 429,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "railgun_battery_rubble": {
+   "x": 0,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "railgun_battery_lights": {
+   "x": 462,
+   "y": 335,
+   "w": 32,
+   "h": 16
+  },
+  "orbital_uplink": {
+   "x": 297,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "orbital_uplink_construction": {
+   "x": 330,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "orbital_uplink_damaged": {
+   "x": 363,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "orbital_uplink_rubble": {
+   "x": 429,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "orbital_uplink_lights": {
+   "x": 396,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "tower_stone": {
+   "x": 272,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_stone_construction": {
+   "x": 289,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_stone_damaged": {
+   "x": 306,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_stone_rubble": {
+   "x": 340,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_stone_lights": {
+   "x": 323,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_concrete": {
+   "x": 187,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_concrete_construction": {
+   "x": 204,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_concrete_damaged": {
+   "x": 221,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_concrete_rubble": {
+   "x": 255,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "tower_concrete_lights": {
+   "x": 238,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "sandbags": {
+   "x": 408,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "tank_traps": {
+   "x": 0,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "minefield_marker": {
+   "x": 255,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "aa_gun": {
+   "x": 118,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "aa_gun_construction": {
+   "x": 135,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "aa_gun_damaged": {
+   "x": 152,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "aa_gun_rubble": {
+   "x": 169,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "flak_tower": {
+   "x": 410,
+   "y": 49,
+   "w": 32,
+   "h": 46
+  },
+  "flak_tower_construction": {
+   "x": 443,
+   "y": 49,
+   "w": 32,
+   "h": 46
+  },
+  "flak_tower_damaged": {
+   "x": 476,
+   "y": 49,
+   "w": 32,
+   "h": 46
+  },
+  "flak_tower_rubble": {
+   "x": 33,
+   "y": 98,
+   "w": 32,
+   "h": 46
+  },
+  "flak_tower_lights": {
+   "x": 0,
+   "y": 98,
+   "w": 32,
+   "h": 46
+  },
+  "searchlight": {
+   "x": 425,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "searchlight_construction": {
+   "x": 442,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "searchlight_damaged": {
+   "x": 459,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "searchlight_rubble": {
+   "x": 493,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "searchlight_lights": {
+   "x": 476,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "listening_post": {
+   "x": 187,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "listening_post_construction": {
+   "x": 204,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "listening_post_damaged": {
+   "x": 221,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "listening_post_rubble": {
+   "x": 238,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "radar_early_warning": {
+   "x": 245,
+   "y": 49,
+   "w": 32,
+   "h": 48
+  },
+  "radar_early_warning_construction": {
+   "x": 278,
+   "y": 49,
+   "w": 32,
+   "h": 48
+  },
+  "radar_early_warning_damaged": {
+   "x": 311,
+   "y": 49,
+   "w": 32,
+   "h": 48
+  },
+  "radar_early_warning_rubble": {
+   "x": 377,
+   "y": 49,
+   "w": 32,
+   "h": 48
+  },
+  "radar_early_warning_lights": {
+   "x": 344,
+   "y": 49,
+   "w": 32,
+   "h": 48
+  },
+  "radar_phased_array": {
+   "x": 231,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "radar_phased_array_construction": {
+   "x": 264,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "radar_phased_array_damaged": {
+   "x": 297,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "radar_phased_array_rubble": {
+   "x": 363,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "radar_phased_array_lights": {
+   "x": 330,
+   "y": 98,
+   "w": 32,
+   "h": 40
+  },
+  "sam_battery": {
+   "x": 165,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "sam_battery_construction": {
+   "x": 198,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "sam_battery_damaged": {
+   "x": 231,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "sam_battery_rubble": {
+   "x": 363,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "sam_battery_lights": {
+   "x": 330,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "sam_heavy": {
+   "x": 66,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "sam_heavy_construction": {
+   "x": 99,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "sam_heavy_damaged": {
+   "x": 132,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "sam_heavy_rubble": {
+   "x": 264,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "sam_heavy_lights": {
+   "x": 231,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "abm_silo": {
+   "x": 441,
+   "y": 184,
+   "w": 32,
+   "h": 32
+  },
+  "abm_silo_construction": {
+   "x": 474,
+   "y": 184,
+   "w": 32,
+   "h": 32
+  },
+  "abm_silo_damaged": {
+   "x": 0,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "abm_silo_rubble": {
+   "x": 99,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "abm_silo_open": {
+   "x": 66,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "ciws_turret": {
+   "x": 322,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "ciws_turret_construction": {
+   "x": 339,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "ciws_turret_damaged": {
+   "x": 356,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "ciws_turret_rubble": {
+   "x": 373,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "aa_bunker": {
+   "x": 33,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "aa_bunker_construction": {
+   "x": 50,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "aa_bunker_damaged": {
+   "x": 67,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "aa_bunker_rubble": {
+   "x": 101,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "aa_bunker_lights": {
+   "x": 84,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "laser_turret": {
+   "x": 102,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "laser_turret_construction": {
+   "x": 119,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "laser_turret_damaged": {
+   "x": 136,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "laser_turret_rubble": {
+   "x": 170,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "laser_turret_lights": {
+   "x": 153,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "laser_battery": {
+   "x": 0,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "laser_battery_construction": {
+   "x": 33,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "laser_battery_damaged": {
+   "x": 66,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "laser_battery_rubble": {
+   "x": 132,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "laser_battery_lights": {
+   "x": 99,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "shield_node": {
+   "x": 85,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "shield_node_construction": {
+   "x": 102,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "shield_node_damaged": {
+   "x": 119,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "shield_node_rubble": {
+   "x": 170,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "shield_node_lights": {
+   "x": 136,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "air_defence_command": {
+   "x": 132,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "air_defence_command_construction": {
+   "x": 165,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "air_defence_command_damaged": {
+   "x": 198,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "air_defence_command_rubble": {
+   "x": 264,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "air_defence_command_lights": {
+   "x": 231,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "decoy_site": {
+   "x": 458,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "decoy_site_construction": {
+   "x": 475,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "decoy_site_damaged": {
+   "x": 492,
+   "y": 369,
+   "w": 16,
+   "h": 16
+  },
+  "decoy_site_rubble": {
+   "x": 0,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "reload_depot": {
+   "x": 33,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "reload_depot_construction": {
+   "x": 66,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "reload_depot_damaged": {
+   "x": 99,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "reload_depot_rubble": {
+   "x": 132,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "interceptor_pad": {
+   "x": 17,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "interceptor_pad_construction": {
+   "x": 34,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "interceptor_pad_damaged": {
+   "x": 51,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "interceptor_pad_rubble": {
+   "x": 85,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "interceptor_pad_lights": {
+   "x": 68,
+   "y": 386,
+   "w": 16,
+   "h": 16
+  },
+  "balloon_winch": {
+   "x": 462,
+   "y": 250,
+   "w": 16,
+   "h": 30
+  },
+  "balloon_winch_construction": {
+   "x": 479,
+   "y": 250,
+   "w": 16,
+   "h": 30
+  },
+  "balloon_winch_damaged": {
+   "x": 496,
+   "y": 250,
+   "w": 16,
+   "h": 30
+  },
+  "balloon_winch_rubble": {
+   "x": 0,
+   "y": 283,
+   "w": 16,
+   "h": 30
+  },
+  "mountain_gate": {
+   "x": 165,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "mountain_gate_construction": {
+   "x": 198,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "mountain_gate_damaged": {
+   "x": 231,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "mountain_gate_rubble": {
+   "x": 297,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "mountain_gate_lights": {
+   "x": 264,
+   "y": 314,
+   "w": 32,
+   "h": 20
+  },
+  "pass_fort": {
+   "x": 396,
+   "y": 98,
+   "w": 32,
+   "h": 38
+  },
+  "pass_fort_construction": {
+   "x": 429,
+   "y": 98,
+   "w": 32,
+   "h": 38
+  },
+  "pass_fort_damaged": {
+   "x": 462,
+   "y": 98,
+   "w": 32,
+   "h": 38
+  },
+  "pass_fort_rubble": {
+   "x": 33,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "pass_fort_lights": {
+   "x": 0,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "mountain_watchpost": {
+   "x": 357,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "mountain_watchpost_construction": {
+   "x": 374,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "mountain_watchpost_damaged": {
+   "x": 391,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "mountain_watchpost_rubble": {
+   "x": 425,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "mountain_watchpost_lights": {
+   "x": 408,
+   "y": 283,
+   "w": 16,
+   "h": 22
+  },
+  "sam_battery_empty": {
+   "x": 264,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "sam_battery_empty_lights": {
+   "x": 297,
+   "y": 352,
+   "w": 32,
+   "h": 16
+  },
+  "sam_heavy_empty": {
+   "x": 165,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "sam_heavy_empty_lights": {
+   "x": 198,
+   "y": 145,
+   "w": 32,
+   "h": 38
+  },
+  "shield_node_offline": {
+   "x": 153,
+   "y": 283,
+   "w": 16,
+   "h": 24
+  },
+  "abm_silo_empty": {
+   "x": 33,
+   "y": 217,
+   "w": 32,
+   "h": 32
+  },
+  "wall_palisade_dot": {
+   "x": 306,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_N": {
+   "x": 119,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_E": {
+   "x": 51,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_NE": {
+   "x": 136,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_S": {
+   "x": 255,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_NS": {
+   "x": 204,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_ES": {
+   "x": 68,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_NES": {
+   "x": 153,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_W": {
+   "x": 289,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_NW": {
+   "x": 238,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_EW": {
+   "x": 102,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_NEW": {
+   "x": 187,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_SW": {
+   "x": 272,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_NSW": {
+   "x": 221,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_ESW": {
+   "x": 85,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_palisade_NESW": {
+   "x": 170,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_dot": {
+   "x": 68,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_N": {
+   "x": 391,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_E": {
+   "x": 323,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_NE": {
+   "x": 408,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_S": {
+   "x": 17,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_NS": {
+   "x": 476,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_ES": {
+   "x": 340,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_NES": {
+   "x": 425,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_W": {
+   "x": 51,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_NW": {
+   "x": 0,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_EW": {
+   "x": 374,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_NEW": {
+   "x": 459,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_SW": {
+   "x": 34,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_NSW": {
+   "x": 493,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_ESW": {
+   "x": 357,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_stone_NESW": {
+   "x": 442,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_dot": {
+   "x": 34,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_N": {
+   "x": 357,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_E": {
+   "x": 289,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_NE": {
+   "x": 374,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_S": {
+   "x": 493,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_NS": {
+   "x": 442,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_ES": {
+   "x": 306,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_NES": {
+   "x": 391,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_W": {
+   "x": 17,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_NW": {
+   "x": 476,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_EW": {
+   "x": 340,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_NEW": {
+   "x": 425,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_SW": {
+   "x": 0,
+   "y": 420,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_NSW": {
+   "x": 459,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_ESW": {
+   "x": 323,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_concrete_NESW": {
+   "x": 408,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_dot": {
+   "x": 272,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_N": {
+   "x": 85,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_E": {
+   "x": 17,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_NE": {
+   "x": 102,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_S": {
+   "x": 221,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_NS": {
+   "x": 170,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_ES": {
+   "x": 34,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_NES": {
+   "x": 119,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_W": {
+   "x": 255,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_NW": {
+   "x": 204,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_EW": {
+   "x": 68,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_NEW": {
+   "x": 153,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_SW": {
+   "x": 238,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_NSW": {
+   "x": 187,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_ESW": {
+   "x": 51,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_barbed_NESW": {
+   "x": 136,
+   "y": 403,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_dot": {
+   "x": 340,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_N": {
+   "x": 153,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_E": {
+   "x": 85,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_NE": {
+   "x": 170,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_S": {
+   "x": 289,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_NS": {
+   "x": 238,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_ES": {
+   "x": 102,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_NES": {
+   "x": 187,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_W": {
+   "x": 323,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_NW": {
+   "x": 272,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_EW": {
+   "x": 136,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_NEW": {
+   "x": 221,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_SW": {
+   "x": 306,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_NSW": {
+   "x": 255,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_ESW": {
+   "x": 119,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  },
+  "wall_trench_NESW": {
+   "x": 204,
+   "y": 437,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

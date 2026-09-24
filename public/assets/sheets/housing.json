@@ -1,0 +1,1611 @@
+{
+ "image": "housing.png",
+ "size": [
+  512,
+  424
+ ],
+ "frames": {
+  "hut_grass": {
+   "x": 187,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_construction": {
+   "x": 357,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_damaged": {
+   "x": 374,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_rubble": {
+   "x": 408,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_lights": {
+   "x": 391,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud": {
+   "x": 425,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_construction": {
+   "x": 68,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_damaged": {
+   "x": 85,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_rubble": {
+   "x": 119,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_lights": {
+   "x": 102,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt": {
+   "x": 136,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_construction": {
+   "x": 306,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_damaged": {
+   "x": 323,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_rubble": {
+   "x": 340,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "longhouse": {
+   "x": 231,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_construction": {
+   "x": 99,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_damaged": {
+   "x": 132,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_rubble": {
+   "x": 198,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_lights": {
+   "x": 165,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "cottage_timber": {
+   "x": 486,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_construction": {
+   "x": 170,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_damaged": {
+   "x": 187,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_rubble": {
+   "x": 221,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_lights": {
+   "x": 204,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone": {
+   "x": 231,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_construction": {
+   "x": 418,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_damaged": {
+   "x": 435,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_rubble": {
+   "x": 469,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_lights": {
+   "x": 452,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "farmhouse": {
+   "x": 238,
+   "y": 286,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_construction": {
+   "x": 99,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_damaged": {
+   "x": 132,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_rubble": {
+   "x": 198,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_lights": {
+   "x": 165,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "townhouse": {
+   "x": 486,
+   "y": 253,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_construction": {
+   "x": 170,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_damaged": {
+   "x": 187,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_rubble": {
+   "x": 221,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_lights": {
+   "x": 204,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "house_brick": {
+   "x": 238,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_construction": {
+   "x": 425,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_damaged": {
+   "x": 442,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_rubble": {
+   "x": 476,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_lights": {
+   "x": 459,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "row_houses": {
+   "x": 231,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_construction": {
+   "x": 99,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_damaged": {
+   "x": 132,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_rubble": {
+   "x": 198,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_lights": {
+   "x": 165,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "manor": {
+   "x": 231,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "manor_construction": {
+   "x": 99,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "manor_damaged": {
+   "x": 132,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "manor_rubble": {
+   "x": 198,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "manor_lights": {
+   "x": 165,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "tenement": {
+   "x": 231,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_construction": {
+   "x": 418,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_damaged": {
+   "x": 435,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_rubble": {
+   "x": 469,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_lights": {
+   "x": 452,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "terrace": {
+   "x": 231,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_construction": {
+   "x": 99,
+   "y": 357,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_damaged": {
+   "x": 132,
+   "y": 357,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_rubble": {
+   "x": 198,
+   "y": 357,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_lights": {
+   "x": 165,
+   "y": 357,
+   "w": 32,
+   "h": 16
+  },
+  "worker_housing": {
+   "x": 66,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_construction": {
+   "x": 429,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_damaged": {
+   "x": 462,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_rubble": {
+   "x": 33,
+   "y": 179,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_lights": {
+   "x": 0,
+   "y": 179,
+   "w": 32,
+   "h": 40
+  },
+  "house_suburban": {
+   "x": 493,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_construction": {
+   "x": 136,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_damaged": {
+   "x": 153,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_rubble": {
+   "x": 170,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "apartment_block": {
+   "x": 66,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_construction": {
+   "x": 429,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_damaged": {
+   "x": 462,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_rubble": {
+   "x": 33,
+   "y": 134,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_lights": {
+   "x": 0,
+   "y": 134,
+   "w": 32,
+   "h": 44
+  },
+  "high_rise": {
+   "x": 245,
+   "y": 0,
+   "w": 32,
+   "h": 58
+  },
+  "high_rise_construction": {
+   "x": 278,
+   "y": 0,
+   "w": 32,
+   "h": 58
+  },
+  "high_rise_damaged": {
+   "x": 311,
+   "y": 0,
+   "w": 32,
+   "h": 58
+  },
+  "high_rise_rubble": {
+   "x": 377,
+   "y": 0,
+   "w": 32,
+   "h": 58
+  },
+  "high_rise_lights": {
+   "x": 344,
+   "y": 0,
+   "w": 32,
+   "h": 58
+  },
+  "villa": {
+   "x": 231,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "villa_construction": {
+   "x": 99,
+   "y": 253,
+   "w": 32,
+   "h": 32
+  },
+  "villa_damaged": {
+   "x": 132,
+   "y": 253,
+   "w": 32,
+   "h": 32
+  },
+  "villa_rubble": {
+   "x": 198,
+   "y": 253,
+   "w": 32,
+   "h": 32
+  },
+  "villa_lights": {
+   "x": 165,
+   "y": 253,
+   "w": 32,
+   "h": 32
+  },
+  "eco_tower": {
+   "x": 410,
+   "y": 0,
+   "w": 32,
+   "h": 56
+  },
+  "eco_tower_construction": {
+   "x": 443,
+   "y": 0,
+   "w": 32,
+   "h": 56
+  },
+  "eco_tower_damaged": {
+   "x": 476,
+   "y": 0,
+   "w": 32,
+   "h": 56
+  },
+  "eco_tower_rubble": {
+   "x": 33,
+   "y": 77,
+   "w": 32,
+   "h": 56
+  },
+  "eco_tower_lights": {
+   "x": 0,
+   "y": 77,
+   "w": 32,
+   "h": 56
+  },
+  "arcology": {
+   "x": 0,
+   "y": 0,
+   "w": 48,
+   "h": 76
+  },
+  "arcology_construction": {
+   "x": 49,
+   "y": 0,
+   "w": 48,
+   "h": 76
+  },
+  "arcology_damaged": {
+   "x": 98,
+   "y": 0,
+   "w": 48,
+   "h": 76
+  },
+  "arcology_rubble": {
+   "x": 196,
+   "y": 0,
+   "w": 48,
+   "h": 76
+  },
+  "arcology_lights": {
+   "x": 147,
+   "y": 0,
+   "w": 48,
+   "h": 76
+  },
+  "dome_habitat": {
+   "x": 66,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "dome_habitat_construction": {
+   "x": 99,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "dome_habitat_damaged": {
+   "x": 132,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "dome_habitat_rubble": {
+   "x": 198,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "dome_habitat_lights": {
+   "x": 165,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "hut_grass_b": {
+   "x": 204,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_b_construction": {
+   "x": 221,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_b_damaged": {
+   "x": 238,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_b_rubble": {
+   "x": 255,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_c": {
+   "x": 272,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_c_construction": {
+   "x": 289,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_c_damaged": {
+   "x": 306,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_c_rubble": {
+   "x": 340,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_grass_c_lights": {
+   "x": 323,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_b": {
+   "x": 442,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_b_construction": {
+   "x": 459,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_b_damaged": {
+   "x": 476,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_b_rubble": {
+   "x": 493,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_c": {
+   "x": 0,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_c_construction": {
+   "x": 17,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_c_damaged": {
+   "x": 34,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "hut_mud_c_rubble": {
+   "x": 51,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_b": {
+   "x": 153,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_b_construction": {
+   "x": 170,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_b_damaged": {
+   "x": 187,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_b_rubble": {
+   "x": 204,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_c": {
+   "x": 221,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_c_construction": {
+   "x": 238,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_c_damaged": {
+   "x": 255,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_c_rubble": {
+   "x": 289,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "yurt_c_lights": {
+   "x": 272,
+   "y": 408,
+   "w": 16,
+   "h": 16
+  },
+  "longhouse_b": {
+   "x": 264,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_b_construction": {
+   "x": 297,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_b_damaged": {
+   "x": 330,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_b_rubble": {
+   "x": 396,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_b_lights": {
+   "x": 363,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_c": {
+   "x": 429,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_c_construction": {
+   "x": 462,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_c_damaged": {
+   "x": 0,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_c_rubble": {
+   "x": 66,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "longhouse_c_lights": {
+   "x": 33,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "cottage_timber_b": {
+   "x": 0,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_b_construction": {
+   "x": 17,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_b_damaged": {
+   "x": 34,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_b_rubble": {
+   "x": 68,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_b_lights": {
+   "x": 51,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_c": {
+   "x": 85,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_c_construction": {
+   "x": 102,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_c_damaged": {
+   "x": 119,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_c_rubble": {
+   "x": 153,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_timber_c_lights": {
+   "x": 136,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_b": {
+   "x": 248,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_b_construction": {
+   "x": 265,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_b_damaged": {
+   "x": 282,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_b_rubble": {
+   "x": 316,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_b_lights": {
+   "x": 299,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_c": {
+   "x": 333,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_c_construction": {
+   "x": 350,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_c_damaged": {
+   "x": 367,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_c_rubble": {
+   "x": 401,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "cottage_stone_c_lights": {
+   "x": 384,
+   "y": 357,
+   "w": 16,
+   "h": 16
+  },
+  "farmhouse_b": {
+   "x": 271,
+   "y": 286,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_b_construction": {
+   "x": 304,
+   "y": 286,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_b_damaged": {
+   "x": 337,
+   "y": 286,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_b_rubble": {
+   "x": 403,
+   "y": 286,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_b_lights": {
+   "x": 370,
+   "y": 286,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_c": {
+   "x": 436,
+   "y": 286,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_c_construction": {
+   "x": 469,
+   "y": 286,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_c_damaged": {
+   "x": 0,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_c_rubble": {
+   "x": 66,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "farmhouse_c_lights": {
+   "x": 33,
+   "y": 306,
+   "w": 32,
+   "h": 16
+  },
+  "townhouse_b": {
+   "x": 0,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_b_construction": {
+   "x": 17,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_b_damaged": {
+   "x": 34,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_b_rubble": {
+   "x": 68,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_b_lights": {
+   "x": 51,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_c": {
+   "x": 85,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_c_construction": {
+   "x": 102,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_c_damaged": {
+   "x": 119,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_c_rubble": {
+   "x": 153,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "townhouse_c_lights": {
+   "x": 136,
+   "y": 286,
+   "w": 16,
+   "h": 19
+  },
+  "house_brick_b": {
+   "x": 255,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_b_construction": {
+   "x": 272,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_b_damaged": {
+   "x": 289,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_b_rubble": {
+   "x": 323,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_b_lights": {
+   "x": 306,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_c": {
+   "x": 340,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_c_construction": {
+   "x": 357,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_c_damaged": {
+   "x": 374,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_c_rubble": {
+   "x": 408,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "house_brick_c_lights": {
+   "x": 391,
+   "y": 374,
+   "w": 16,
+   "h": 16
+  },
+  "row_houses_b": {
+   "x": 264,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_b_construction": {
+   "x": 297,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_b_damaged": {
+   "x": 330,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_b_rubble": {
+   "x": 396,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_b_lights": {
+   "x": 363,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_c": {
+   "x": 429,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_c_construction": {
+   "x": 462,
+   "y": 323,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_c_damaged": {
+   "x": 0,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_c_rubble": {
+   "x": 66,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "row_houses_c_lights": {
+   "x": 33,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "manor_b": {
+   "x": 264,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "manor_b_construction": {
+   "x": 297,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "manor_b_damaged": {
+   "x": 330,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "manor_b_rubble": {
+   "x": 396,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "manor_b_lights": {
+   "x": 363,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "manor_c": {
+   "x": 429,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "manor_c_construction": {
+   "x": 462,
+   "y": 179,
+   "w": 32,
+   "h": 32
+  },
+  "manor_c_damaged": {
+   "x": 0,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "manor_c_rubble": {
+   "x": 66,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "manor_c_lights": {
+   "x": 33,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "tenement_b": {
+   "x": 248,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_b_construction": {
+   "x": 265,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_b_damaged": {
+   "x": 282,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_b_rubble": {
+   "x": 316,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_b_lights": {
+   "x": 299,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_c": {
+   "x": 333,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_c_construction": {
+   "x": 350,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_c_damaged": {
+   "x": 367,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_c_rubble": {
+   "x": 401,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "tenement_c_lights": {
+   "x": 384,
+   "y": 253,
+   "w": 16,
+   "h": 22
+  },
+  "terrace_b": {
+   "x": 264,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_b_construction": {
+   "x": 297,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_b_damaged": {
+   "x": 330,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_b_rubble": {
+   "x": 396,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_b_lights": {
+   "x": 363,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_c": {
+   "x": 429,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_c_construction": {
+   "x": 462,
+   "y": 340,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_c_damaged": {
+   "x": 0,
+   "y": 357,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_c_rubble": {
+   "x": 66,
+   "y": 357,
+   "w": 32,
+   "h": 16
+  },
+  "terrace_c_lights": {
+   "x": 33,
+   "y": 357,
+   "w": 32,
+   "h": 16
+  },
+  "worker_housing_b": {
+   "x": 99,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_b_construction": {
+   "x": 132,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_b_damaged": {
+   "x": 165,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_b_rubble": {
+   "x": 231,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_b_lights": {
+   "x": 198,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_c": {
+   "x": 264,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_c_construction": {
+   "x": 297,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_c_damaged": {
+   "x": 330,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_c_rubble": {
+   "x": 396,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "worker_housing_c_lights": {
+   "x": 363,
+   "y": 134,
+   "w": 32,
+   "h": 40
+  },
+  "house_suburban_b": {
+   "x": 0,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_b_construction": {
+   "x": 17,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_b_damaged": {
+   "x": 34,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_b_rubble": {
+   "x": 51,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_c": {
+   "x": 68,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_c_construction": {
+   "x": 85,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_c_damaged": {
+   "x": 102,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "house_suburban_c_rubble": {
+   "x": 119,
+   "y": 391,
+   "w": 16,
+   "h": 16
+  },
+  "apartment_block_b": {
+   "x": 99,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_b_construction": {
+   "x": 132,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_b_damaged": {
+   "x": 165,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_b_rubble": {
+   "x": 231,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_b_lights": {
+   "x": 198,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_c": {
+   "x": 264,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_c_construction": {
+   "x": 297,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_c_damaged": {
+   "x": 330,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_c_rubble": {
+   "x": 396,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "apartment_block_c_lights": {
+   "x": 363,
+   "y": 77,
+   "w": 32,
+   "h": 44
+  },
+  "villa_b": {
+   "x": 264,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "villa_b_construction": {
+   "x": 297,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "villa_b_damaged": {
+   "x": 330,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "villa_b_rubble": {
+   "x": 396,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "villa_b_lights": {
+   "x": 363,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "villa_c": {
+   "x": 429,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "villa_c_construction": {
+   "x": 462,
+   "y": 220,
+   "w": 32,
+   "h": 32
+  },
+  "villa_c_damaged": {
+   "x": 0,
+   "y": 253,
+   "w": 32,
+   "h": 32
+  },
+  "villa_c_rubble": {
+   "x": 66,
+   "y": 253,
+   "w": 32,
+   "h": 32
+  },
+  "villa_c_lights": {
+   "x": 33,
+   "y": 253,
+   "w": 32,
+   "h": 32
+  }
+ }
+}

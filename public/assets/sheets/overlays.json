@@ -1,0 +1,795 @@
+{
+ "image": "overlays.png",
+ "size": [
+  512,
+  116
+ ],
+ "frames": {
+  "ov_slow_ground": {
+   "x": 357,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_rough_ground": {
+   "x": 0,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_impassable": {
+   "x": 272,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_fast_route": {
+   "x": 221,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_bonus": {
+   "x": 456,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_chokepoint": {
+   "x": 405,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_no_fly": {
+   "x": 357,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_supply_reach": {
+   "x": 391,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_radar_coverage": {
+   "x": 459,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_sam_coverage": {
+   "x": 17,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_coverage": {
+   "x": 323,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_missile_track": {
+   "x": 323,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_intercept_point": {
+   "x": 306,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_incoming_target": {
+   "x": 289,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_dome": {
+   "x": 340,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_residential": {
+   "x": 221,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_commercial": {
+   "x": 17,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_industrial": {
+   "x": 153,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_farmland": {
+   "x": 85,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_ghost_valid": {
+   "x": 255,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_ghost_invalid": {
+   "x": 238,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_select_corners": {
+   "x": 51,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_tile_highlight": {
+   "x": 425,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_path_dot": {
+   "x": 442,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_supply_dot": {
+   "x": 374,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_attack_arrowhead": {
+   "x": 82,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_move_arrowhead": {
+   "x": 340,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_rally_flag": {
+   "x": 476,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_waypoint": {
+   "x": 459,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_range_dot": {
+   "x": 493,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_border_dash": {
+   "x": 371,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_under_attack_ring": {
+   "x": 442,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_offline_shield": {
+   "x": 374,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_N": {
+   "x": 34,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_E": {
+   "x": 473,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_NE": {
+   "x": 51,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_S": {
+   "x": 170,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_NS": {
+   "x": 119,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_ES": {
+   "x": 490,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_NES": {
+   "x": 68,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_W": {
+   "x": 204,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_NW": {
+   "x": 153,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_EW": {
+   "x": 17,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_NEW": {
+   "x": 102,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_SW": {
+   "x": 187,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_NSW": {
+   "x": 136,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_ESW": {
+   "x": 0,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_defence_border_NESW": {
+   "x": 85,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_N": {
+   "x": 184,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_E": {
+   "x": 116,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_NE": {
+   "x": 201,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_S": {
+   "x": 320,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_NS": {
+   "x": 269,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_ES": {
+   "x": 133,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_NES": {
+   "x": 218,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_W": {
+   "x": 354,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_NW": {
+   "x": 303,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_EW": {
+   "x": 167,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_NEW": {
+   "x": 252,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_SW": {
+   "x": 337,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_NSW": {
+   "x": 286,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_ESW": {
+   "x": 150,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_ring_NESW": {
+   "x": 235,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_N": {
+   "x": 136,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_E": {
+   "x": 68,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_NE": {
+   "x": 153,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_S": {
+   "x": 272,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_NS": {
+   "x": 221,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_ES": {
+   "x": 85,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_NES": {
+   "x": 170,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_W": {
+   "x": 306,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_NW": {
+   "x": 255,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_EW": {
+   "x": 119,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_NEW": {
+   "x": 204,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_SW": {
+   "x": 289,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_NSW": {
+   "x": 238,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_ESW": {
+   "x": 102,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_shield_border_NESW": {
+   "x": 187,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_blast_fill": {
+   "x": 99,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_coverage_2": {
+   "x": 422,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_coverage_3": {
+   "x": 439,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_parked_vehicle": {
+   "x": 425,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_charge_placed": {
+   "x": 388,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "ov_terrain_target": {
+   "x": 408,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_res_early": {
+   "x": 170,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_res_middle": {
+   "x": 187,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_res_modern": {
+   "x": 204,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_com_early": {
+   "x": 476,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_com_middle": {
+   "x": 493,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_com_modern": {
+   "x": 0,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_ind_early": {
+   "x": 102,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_ind_middle": {
+   "x": 119,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_ind_modern": {
+   "x": 136,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_farm_early": {
+   "x": 34,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_farm_middle": {
+   "x": 51,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_zone_farm_modern": {
+   "x": 68,
+   "y": 100,
+   "w": 16,
+   "h": 16
+  },
+  "ov_select_1x1": {
+   "x": 34,
+   "y": 83,
+   "w": 16,
+   "h": 16
+  },
+  "ov_select_2x2": {
+   "x": 49,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "ov_select_3x3": {
+   "x": 0,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "ov_order_move_0": {
+   "x": 17,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_move_1": {
+   "x": 34,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_move_2": {
+   "x": 51,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_move_3": {
+   "x": 68,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_move_4": {
+   "x": 85,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_move_5": {
+   "x": 102,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_move_6": {
+   "x": 119,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_move_7": {
+   "x": 136,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_attack_0": {
+   "x": 391,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_attack_1": {
+   "x": 408,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_attack_2": {
+   "x": 425,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_attack_3": {
+   "x": 442,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_attack_4": {
+   "x": 459,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_attack_5": {
+   "x": 476,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_attack_6": {
+   "x": 493,
+   "y": 49,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_attack_7": {
+   "x": 0,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_patrol_0": {
+   "x": 153,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_patrol_1": {
+   "x": 170,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_patrol_2": {
+   "x": 187,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_patrol_3": {
+   "x": 204,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_patrol_4": {
+   "x": 221,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_patrol_5": {
+   "x": 238,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_patrol_6": {
+   "x": 255,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_patrol_7": {
+   "x": 272,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_retreat_0": {
+   "x": 289,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_retreat_1": {
+   "x": 306,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_retreat_2": {
+   "x": 323,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_retreat_3": {
+   "x": 340,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_retreat_4": {
+   "x": 357,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_retreat_5": {
+   "x": 374,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_retreat_6": {
+   "x": 391,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  },
+  "ov_order_retreat_7": {
+   "x": 408,
+   "y": 66,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

@@ -1,0 +1,147 @@
+{
+ "image": "mapicons.png",
+ "size": [
+  256,
+  8
+ ],
+ "frames": {
+  "mapicon_pass": {
+   "x": 135,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_ford": {
+   "x": 90,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_bridge_point": {
+   "x": 27,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_tunnel": {
+   "x": 189,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_strait": {
+   "x": 162,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_cliff": {
+   "x": 63,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_ridge_icon": {
+   "x": 144,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_air_defence": {
+   "x": 9,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_housing": {
+   "x": 99,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_commercial": {
+   "x": 72,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_industry": {
+   "x": 108,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_agriculture": {
+   "x": 0,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_energy": {
+   "x": 81,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_civic": {
+   "x": 54,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_transport": {
+   "x": 180,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_tourism": {
+   "x": 171,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_military": {
+   "x": 126,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_infantry": {
+   "x": 117,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_vehicle": {
+   "x": 198,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_aircraft": {
+   "x": 18,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_ship": {
+   "x": 153,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_city": {
+   "x": 45,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  },
+  "mapicon_capital": {
+   "x": 36,
+   "y": 0,
+   "w": 8,
+   "h": 8
+  }
+ }
+}

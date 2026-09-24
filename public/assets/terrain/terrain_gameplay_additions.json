@@ -1,0 +1,113 @@
+{
+ "note": "gameplay values for the terrain types added with the feature pack. Append them to the end of your terrain table so saved maps keep their indexes.",
+ "types": [
+  {
+   "name": "badlands",
+   "move": 2.2,
+   "defence": 1.4,
+   "capture": 1.3,
+   "fertility": 0.05,
+   "build": true,
+   "note": "dry eroded gullies, slow and broken"
+  },
+  {
+   "name": "canyon",
+   "move": 4.0,
+   "defence": 2.0,
+   "capture": 2.0,
+   "fertility": 0.05,
+   "build": false,
+   "note": "only crossable at fords and bridges"
+  },
+  {
+   "name": "escarpment",
+   "move": 3.2,
+   "defence": 2.0,
+   "capture": 1.8,
+   "fertility": 0.1,
+   "build": false,
+   "note": "steep rock step, a wall across the map"
+  },
+  {
+   "name": "bog",
+   "move": 3.2,
+   "defence": 1.1,
+   "capture": 1.4,
+   "fertility": 0.3,
+   "build": false,
+   "note": "wet peat, impassable to vehicles"
+  },
+  {
+   "name": "thicket",
+   "move": 2.4,
+   "defence": 1.5,
+   "capture": 1.5,
+   "fertility": 0.3,
+   "build": true,
+   "note": "dense scrub, good cover"
+  },
+  {
+   "name": "bamboo",
+   "move": 2.2,
+   "defence": 1.5,
+   "capture": 1.4,
+   "fertility": 0.5,
+   "build": true,
+   "note": "fast growing, cuts to timber"
+  },
+  {
+   "name": "rocky_desert",
+   "move": 1.8,
+   "defence": 1.2,
+   "capture": 0.9,
+   "fertility": 0.05,
+   "build": true,
+   "note": "stony hamada, hard going for wheels"
+  },
+  {
+   "name": "boulders",
+   "move": 2.6,
+   "defence": 1.7,
+   "capture": 1.6,
+   "fertility": 0.05,
+   "build": false,
+   "note": "boulder field, infantry only"
+  },
+  {
+   "name": "scree",
+   "move": 2.8,
+   "defence": 1.3,
+   "capture": 1.6,
+   "fertility": 0.0,
+   "build": false,
+   "note": "loose slope below cliffs"
+  },
+  {
+   "name": "ice_field",
+   "move": 3.0,
+   "defence": 1.1,
+   "capture": 1.4,
+   "fertility": 0.0,
+   "build": false,
+   "note": "crevassed ice, risky for heavy units"
+  },
+  {
+   "name": "mudflat",
+   "move": 2.2,
+   "defence": 1.0,
+   "capture": 1.1,
+   "fertility": 0.2,
+   "build": false,
+   "note": "tidal flat, floods at high tide"
+  },
+  {
+   "name": "highland_pass",
+   "move": 1.6,
+   "defence": 1.8,
+   "capture": 1.6,
+   "fertility": 0.2,
+   "build": true,
+   "note": "the way through a range, the classic chokepoint"
+  }
+ ]
+}

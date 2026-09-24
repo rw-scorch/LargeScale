@@ -1,0 +1,225 @@
+{
+ "image": "aircraft.png",
+ "size": [
+  512,
+  49
+ ],
+ "frames": {
+  "observation_balloon": {
+   "x": 136,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "observation_balloon_shadow": {
+   "x": 153,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "biplane": {
+   "x": 34,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "biplane_shadow": {
+   "x": 51,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "early_fighter": {
+   "x": 68,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "early_fighter_shadow": {
+   "x": 85,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "early_bomber": {
+   "x": 314,
+   "y": 0,
+   "w": 24,
+   "h": 24
+  },
+  "early_bomber_shadow": {
+   "x": 339,
+   "y": 0,
+   "w": 24,
+   "h": 24
+  },
+  "transport_plane": {
+   "x": 364,
+   "y": 0,
+   "w": 24,
+   "h": 24
+  },
+  "transport_plane_shadow": {
+   "x": 389,
+   "y": 0,
+   "w": 24,
+   "h": 24
+  },
+  "transport_heli": {
+   "x": 238,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "transport_heli_shadow": {
+   "x": 289,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "attack_heli": {
+   "x": 464,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "attack_heli_shadow": {
+   "x": 17,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "jet_fighter": {
+   "x": 102,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "jet_fighter_shadow": {
+   "x": 119,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "strategic_bomber": {
+   "x": 198,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "strategic_bomber_shadow": {
+   "x": 231,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "awacs": {
+   "x": 66,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "awacs_shadow": {
+   "x": 99,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "cargo_jet": {
+   "x": 132,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "cargo_jet_shadow": {
+   "x": 165,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "airliner_small": {
+   "x": 264,
+   "y": 0,
+   "w": 24,
+   "h": 24
+  },
+  "airliner_small_shadow": {
+   "x": 289,
+   "y": 0,
+   "w": 24,
+   "h": 24
+  },
+  "airliner_large": {
+   "x": 0,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "airliner_large_shadow": {
+   "x": 33,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "recon_drone": {
+   "x": 170,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "recon_drone_shadow": {
+   "x": 187,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "strike_drone": {
+   "x": 204,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "strike_drone_shadow": {
+   "x": 221,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "vtol_gunship": {
+   "x": 414,
+   "y": 0,
+   "w": 24,
+   "h": 24
+  },
+  "vtol_gunship_shadow": {
+   "x": 439,
+   "y": 0,
+   "w": 24,
+   "h": 24
+  },
+  "transport_heli_rotor1": {
+   "x": 255,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "transport_heli_rotor2": {
+   "x": 272,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  },
+  "attack_heli_rotor1": {
+   "x": 481,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "attack_heli_rotor2": {
+   "x": 0,
+   "y": 33,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

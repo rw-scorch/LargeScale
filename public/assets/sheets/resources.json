@@ -1,0 +1,261 @@
+{
+ "image": "resources.png",
+ "size": [
+  512,
+  33
+ ],
+ "frames": {
+  "deposit_stone": {
+   "x": 34,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_stone_depleted": {
+   "x": 51,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_clay": {
+   "x": 34,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_clay_depleted": {
+   "x": 51,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_iron": {
+   "x": 340,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_iron_depleted": {
+   "x": 357,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_copper": {
+   "x": 102,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_copper_depleted": {
+   "x": 119,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_tin": {
+   "x": 136,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_tin_depleted": {
+   "x": 153,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_coal": {
+   "x": 68,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_coal_depleted": {
+   "x": 85,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_gold": {
+   "x": 306,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_gold_depleted": {
+   "x": 323,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_silver": {
+   "x": 0,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_silver_depleted": {
+   "x": 17,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_gems": {
+   "x": 272,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_gems_depleted": {
+   "x": 289,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_uranium": {
+   "x": 170,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_uranium_depleted": {
+   "x": 187,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_bauxite": {
+   "x": 0,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_bauxite_depleted": {
+   "x": 17,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_lithium": {
+   "x": 374,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_lithium_depleted": {
+   "x": 391,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_sulfur": {
+   "x": 68,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_sulfur_depleted": {
+   "x": 85,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_salt": {
+   "x": 476,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_salt_depleted": {
+   "x": 493,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_oil": {
+   "x": 442,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_oil_depleted": {
+   "x": 459,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_gas": {
+   "x": 238,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_gas_depleted": {
+   "x": 255,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_offshore_oil": {
+   "x": 408,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_offshore_oil_depleted": {
+   "x": 425,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_fish": {
+   "x": 170,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_fish_depleted": {
+   "x": 187,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_fertile_soil": {
+   "x": 136,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_fertile_soil_depleted": {
+   "x": 153,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_fresh_spring": {
+   "x": 204,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_fresh_spring_depleted": {
+   "x": 221,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_timber": {
+   "x": 102,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "deposit_timber_depleted": {
+   "x": 119,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

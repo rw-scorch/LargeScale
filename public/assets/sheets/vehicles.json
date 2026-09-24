@@ -1,0 +1,687 @@
+{
+ "image": "vehicles.png",
+ "size": [
+  512,
+  67
+ ],
+ "frames": {
+  "aa_halftrack": {
+   "x": 0,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "spaag": {
+   "x": 119,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "radar_truck": {
+   "x": 476,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "abm_launcher_truck": {
+   "x": 51,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "laser_vehicle": {
+   "x": 187,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "hand_cart": {
+   "x": 493,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "horse_wagon": {
+   "x": 102,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "chariot": {
+   "x": 153,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "supply_wagon": {
+   "x": 221,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "catapult": {
+   "x": 119,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "trebuchet": {
+   "x": 357,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "cannon": {
+   "x": 255,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "horse_artillery": {
+   "x": 68,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "armoured_car": {
+   "x": 153,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "early_tank": {
+   "x": 238,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_tank": {
+   "x": 17,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "halftrack": {
+   "x": 442,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "field_artillery": {
+   "x": 340,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "main_battle_tank": {
+   "x": 374,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "apc": {
+   "x": 102,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "rocket_artillery": {
+   "x": 17,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "sam_truck": {
+   "x": 68,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "supply_truck": {
+   "x": 170,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "fuel_truck": {
+   "x": 391,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "engineering_vehicle": {
+   "x": 289,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "hover_tank": {
+   "x": 136,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "mech": {
+   "x": 425,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "car_red": {
+   "x": 391,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_blue": {
+   "x": 289,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_white": {
+   "x": 442,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_green": {
+   "x": 340,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "taxi": {
+   "x": 255,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "bus": {
+   "x": 204,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "delivery_truck": {
+   "x": 187,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "tractor": {
+   "x": 306,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "loco_steam": {
+   "x": 340,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "loco_diesel": {
+   "x": 238,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "loco_electric": {
+   "x": 272,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "loco_maglev": {
+   "x": 306,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "carriage_passenger": {
+   "x": 51,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "carriage_cargo": {
+   "x": 493,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "carriage_tank": {
+   "x": 85,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "carriage_coal": {
+   "x": 17,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "aa_halftrack_abandoned": {
+   "x": 17,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "spaag_abandoned": {
+   "x": 136,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "radar_truck_abandoned": {
+   "x": 493,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "abm_launcher_truck_abandoned": {
+   "x": 68,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "laser_vehicle_abandoned": {
+   "x": 204,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "armoured_car_abandoned": {
+   "x": 170,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "early_tank_abandoned": {
+   "x": 255,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_tank_abandoned": {
+   "x": 34,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "halftrack_abandoned": {
+   "x": 459,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "field_artillery_abandoned": {
+   "x": 357,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "main_battle_tank_abandoned": {
+   "x": 391,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "apc_abandoned": {
+   "x": 119,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "rocket_artillery_abandoned": {
+   "x": 34,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "sam_truck_abandoned": {
+   "x": 85,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "supply_truck_abandoned": {
+   "x": 187,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "fuel_truck_abandoned": {
+   "x": 408,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "engineering_vehicle_abandoned": {
+   "x": 306,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "hover_tank_abandoned": {
+   "x": 153,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "mech_abandoned": {
+   "x": 442,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "car_red_abandoned": {
+   "x": 408,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_blue_abandoned": {
+   "x": 306,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_white_abandoned": {
+   "x": 459,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_green_abandoned": {
+   "x": 357,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "taxi_abandoned": {
+   "x": 272,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "bus_abandoned": {
+   "x": 221,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "delivery_truck_abandoned": {
+   "x": 204,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "tractor_abandoned": {
+   "x": 323,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "aa_halftrack_wreck": {
+   "x": 34,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "spaag_wreck": {
+   "x": 153,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "radar_truck_wreck": {
+   "x": 0,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "abm_launcher_truck_wreck": {
+   "x": 85,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "laser_vehicle_wreck": {
+   "x": 221,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "hand_cart_wreck": {
+   "x": 0,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "horse_wagon_wreck": {
+   "x": 119,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "chariot_wreck": {
+   "x": 170,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "supply_wagon_wreck": {
+   "x": 238,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "catapult_wreck": {
+   "x": 136,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "trebuchet_wreck": {
+   "x": 374,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "cannon_wreck": {
+   "x": 272,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "horse_artillery_wreck": {
+   "x": 85,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "armoured_car_wreck": {
+   "x": 187,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "early_tank_wreck": {
+   "x": 272,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "heavy_tank_wreck": {
+   "x": 51,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "halftrack_wreck": {
+   "x": 476,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "field_artillery_wreck": {
+   "x": 374,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "main_battle_tank_wreck": {
+   "x": 408,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "apc_wreck": {
+   "x": 136,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "rocket_artillery_wreck": {
+   "x": 51,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "sam_truck_wreck": {
+   "x": 102,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "supply_truck_wreck": {
+   "x": 204,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "fuel_truck_wreck": {
+   "x": 425,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "engineering_vehicle_wreck": {
+   "x": 323,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "hover_tank_wreck": {
+   "x": 170,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "mech_wreck": {
+   "x": 459,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "car_red_wreck": {
+   "x": 425,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_blue_wreck": {
+   "x": 323,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_white_wreck": {
+   "x": 476,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "car_green_wreck": {
+   "x": 374,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "taxi_wreck": {
+   "x": 289,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "bus_wreck": {
+   "x": 238,
+   "y": 0,
+   "w": 16,
+   "h": 16
+  },
+  "delivery_truck_wreck": {
+   "x": 221,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "tractor_wreck": {
+   "x": 340,
+   "y": 51,
+   "w": 16,
+   "h": 16
+  },
+  "loco_steam_wreck": {
+   "x": 357,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "loco_diesel_wreck": {
+   "x": 255,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "loco_electric_wreck": {
+   "x": 289,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "loco_maglev_wreck": {
+   "x": 323,
+   "y": 34,
+   "w": 16,
+   "h": 16
+  },
+  "carriage_passenger_wreck": {
+   "x": 68,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "carriage_cargo_wreck": {
+   "x": 0,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "carriage_tank_wreck": {
+   "x": 102,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  },
+  "carriage_coal_wreck": {
+   "x": 34,
+   "y": 17,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

@@ -1,0 +1,507 @@
+{
+ "image": "agriculture.png",
+ "size": [
+  512,
+  105
+ ],
+ "frames": {
+  "orchard": {
+   "x": 51,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "vineyard": {
+   "x": 136,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "pasture_sheep": {
+   "x": 119,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "pasture_cattle": {
+   "x": 68,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "pasture_pigs": {
+   "x": 102,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "pasture_chickens": {
+   "x": 85,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "barn": {
+   "x": 99,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_construction": {
+   "x": 269,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_damaged": {
+   "x": 286,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_rubble": {
+   "x": 303,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "ranch": {
+   "x": 198,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "ranch_construction": {
+   "x": 231,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "ranch_damaged": {
+   "x": 264,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "ranch_rubble": {
+   "x": 297,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "granary": {
+   "x": 306,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_construction": {
+   "x": 493,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_damaged": {
+   "x": 0,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "granary_rubble": {
+   "x": 34,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "granary_lights": {
+   "x": 17,
+   "y": 89,
+   "w": 16,
+   "h": 16
+  },
+  "grain_windmill": {
+   "x": 330,
+   "y": 0,
+   "w": 16,
+   "h": 21
+  },
+  "grain_windmill_construction": {
+   "x": 347,
+   "y": 0,
+   "w": 16,
+   "h": 21
+  },
+  "grain_windmill_damaged": {
+   "x": 364,
+   "y": 0,
+   "w": 16,
+   "h": 21
+  },
+  "grain_windmill_rubble": {
+   "x": 398,
+   "y": 0,
+   "w": 16,
+   "h": 21
+  },
+  "grain_windmill_lights": {
+   "x": 381,
+   "y": 0,
+   "w": 16,
+   "h": 21
+  },
+  "fishing_hut": {
+   "x": 238,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "fishing_hut_construction": {
+   "x": 255,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "fishing_hut_damaged": {
+   "x": 272,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "fishing_hut_rubble": {
+   "x": 289,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "fishing_dock": {
+   "x": 221,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "fish_farm": {
+   "x": 165,
+   "y": 0,
+   "w": 32,
+   "h": 32
+  },
+  "greenhouse": {
+   "x": 415,
+   "y": 0,
+   "w": 32,
+   "h": 16
+  },
+  "greenhouse_construction": {
+   "x": 448,
+   "y": 0,
+   "w": 32,
+   "h": 16
+  },
+  "greenhouse_damaged": {
+   "x": 0,
+   "y": 55,
+   "w": 32,
+   "h": 16
+  },
+  "greenhouse_rubble": {
+   "x": 66,
+   "y": 55,
+   "w": 32,
+   "h": 16
+  },
+  "greenhouse_lights": {
+   "x": 33,
+   "y": 55,
+   "w": 32,
+   "h": 16
+  },
+  "vertical_farm": {
+   "x": 0,
+   "y": 0,
+   "w": 32,
+   "h": 54
+  },
+  "vertical_farm_construction": {
+   "x": 33,
+   "y": 0,
+   "w": 32,
+   "h": 54
+  },
+  "vertical_farm_damaged": {
+   "x": 66,
+   "y": 0,
+   "w": 32,
+   "h": 54
+  },
+  "vertical_farm_rubble": {
+   "x": 132,
+   "y": 0,
+   "w": 32,
+   "h": 54
+  },
+  "vertical_farm_lights": {
+   "x": 99,
+   "y": 0,
+   "w": 32,
+   "h": 54
+  },
+  "barn_b": {
+   "x": 116,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_b_construction": {
+   "x": 133,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_b_damaged": {
+   "x": 150,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_b_rubble": {
+   "x": 167,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_c": {
+   "x": 184,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_c_construction": {
+   "x": 201,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_c_damaged": {
+   "x": 218,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_c_rubble": {
+   "x": 252,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "barn_c_lights": {
+   "x": 235,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "granary_b": {
+   "x": 323,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_b_construction": {
+   "x": 340,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_b_damaged": {
+   "x": 357,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_b_rubble": {
+   "x": 391,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_b_lights": {
+   "x": 374,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_c": {
+   "x": 408,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_c_construction": {
+   "x": 425,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_c_damaged": {
+   "x": 442,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_c_rubble": {
+   "x": 476,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "granary_c_lights": {
+   "x": 459,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_wheat_0": {
+   "x": 153,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_wheat_1": {
+   "x": 170,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_wheat_2": {
+   "x": 187,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_wheat_3": {
+   "x": 204,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_rice_0": {
+   "x": 17,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_rice_1": {
+   "x": 34,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_rice_2": {
+   "x": 51,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_rice_3": {
+   "x": 68,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_corn_0": {
+   "x": 320,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_corn_1": {
+   "x": 337,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_corn_2": {
+   "x": 354,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_corn_3": {
+   "x": 371,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_vegetables_0": {
+   "x": 85,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_vegetables_1": {
+   "x": 102,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_vegetables_2": {
+   "x": 119,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_vegetables_3": {
+   "x": 136,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  },
+  "crop_cotton_0": {
+   "x": 388,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_cotton_1": {
+   "x": 405,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_cotton_2": {
+   "x": 422,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_cotton_3": {
+   "x": 439,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_potatoes_0": {
+   "x": 456,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_potatoes_1": {
+   "x": 473,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_potatoes_2": {
+   "x": 490,
+   "y": 55,
+   "w": 16,
+   "h": 16
+  },
+  "crop_potatoes_3": {
+   "x": 0,
+   "y": 72,
+   "w": 16,
+   "h": 16
+  }
+ }
+}

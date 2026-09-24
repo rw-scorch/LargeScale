@@ -1,0 +1,927 @@
+{
+ "image": "civic.png",
+ "size": [
+  512,
+  304
+ ],
+ "frames": {
+  "chieftain_hut": {
+   "x": 99,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "chieftain_hut_construction": {
+   "x": 132,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "chieftain_hut_damaged": {
+   "x": 165,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "chieftain_hut_rubble": {
+   "x": 231,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "chieftain_hut_lights": {
+   "x": 198,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "great_hall": {
+   "x": 264,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "great_hall_construction": {
+   "x": 297,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "great_hall_damaged": {
+   "x": 330,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "great_hall_rubble": {
+   "x": 396,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "great_hall_lights": {
+   "x": 363,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "town_hall": {
+   "x": 98,
+   "y": 114,
+   "w": 32,
+   "h": 42
+  },
+  "town_hall_construction": {
+   "x": 131,
+   "y": 114,
+   "w": 32,
+   "h": 42
+  },
+  "town_hall_damaged": {
+   "x": 164,
+   "y": 114,
+   "w": 32,
+   "h": 42
+  },
+  "town_hall_rubble": {
+   "x": 230,
+   "y": 114,
+   "w": 32,
+   "h": 42
+  },
+  "town_hall_lights": {
+   "x": 197,
+   "y": 114,
+   "w": 32,
+   "h": 42
+  },
+  "palace": {
+   "x": 410,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "palace_construction": {
+   "x": 459,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "palace_damaged": {
+   "x": 0,
+   "y": 65,
+   "w": 48,
+   "h": 48
+  },
+  "palace_rubble": {
+   "x": 98,
+   "y": 65,
+   "w": 48,
+   "h": 48
+  },
+  "palace_lights": {
+   "x": 49,
+   "y": 65,
+   "w": 48,
+   "h": 48
+  },
+  "parliament": {
+   "x": 147,
+   "y": 65,
+   "w": 48,
+   "h": 48
+  },
+  "parliament_construction": {
+   "x": 196,
+   "y": 65,
+   "w": 48,
+   "h": 48
+  },
+  "parliament_damaged": {
+   "x": 245,
+   "y": 65,
+   "w": 48,
+   "h": 48
+  },
+  "parliament_rubble": {
+   "x": 294,
+   "y": 65,
+   "w": 48,
+   "h": 48
+  },
+  "capitol_future": {
+   "x": 165,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "capitol_future_construction": {
+   "x": 214,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "capitol_future_damaged": {
+   "x": 263,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "capitol_future_rubble": {
+   "x": 361,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "capitol_future_lights": {
+   "x": 312,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  "courthouse": {
+   "x": 66,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "courthouse_construction": {
+   "x": 99,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "courthouse_damaged": {
+   "x": 132,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "courthouse_rubble": {
+   "x": 165,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "tax_office": {
+   "x": 297,
+   "y": 229,
+   "w": 16,
+   "h": 20
+  },
+  "tax_office_construction": {
+   "x": 314,
+   "y": 229,
+   "w": 16,
+   "h": 20
+  },
+  "tax_office_damaged": {
+   "x": 331,
+   "y": 229,
+   "w": 16,
+   "h": 20
+  },
+  "tax_office_rubble": {
+   "x": 365,
+   "y": 229,
+   "w": 16,
+   "h": 20
+  },
+  "tax_office_lights": {
+   "x": 348,
+   "y": 229,
+   "w": 16,
+   "h": 20
+  },
+  "embassy": {
+   "x": 198,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "embassy_construction": {
+   "x": 231,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "embassy_damaged": {
+   "x": 264,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "embassy_rubble": {
+   "x": 330,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "embassy_lights": {
+   "x": 297,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "prison": {
+   "x": 429,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "prison_construction": {
+   "x": 462,
+   "y": 157,
+   "w": 32,
+   "h": 32
+  },
+  "prison_damaged": {
+   "x": 0,
+   "y": 196,
+   "w": 32,
+   "h": 32
+  },
+  "prison_rubble": {
+   "x": 66,
+   "y": 196,
+   "w": 32,
+   "h": 32
+  },
+  "prison_lights": {
+   "x": 33,
+   "y": 196,
+   "w": 32,
+   "h": 32
+  },
+  "guardhouse": {
+   "x": 437,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "guardhouse_construction": {
+   "x": 454,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "guardhouse_damaged": {
+   "x": 471,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "guardhouse_rubble": {
+   "x": 0,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "guardhouse_lights": {
+   "x": 488,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "police_station": {
+   "x": 85,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_construction": {
+   "x": 272,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_damaged": {
+   "x": 289,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_rubble": {
+   "x": 323,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_lights": {
+   "x": 306,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_hq": {
+   "x": 382,
+   "y": 229,
+   "w": 32,
+   "h": 18
+  },
+  "police_hq_construction": {
+   "x": 415,
+   "y": 229,
+   "w": 32,
+   "h": 18
+  },
+  "police_hq_damaged": {
+   "x": 448,
+   "y": 229,
+   "w": 32,
+   "h": 18
+  },
+  "police_hq_rubble": {
+   "x": 33,
+   "y": 252,
+   "w": 32,
+   "h": 18
+  },
+  "police_hq_lights": {
+   "x": 0,
+   "y": 252,
+   "w": 32,
+   "h": 18
+  },
+  "fire_station": {
+   "x": 363,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "fire_station_construction": {
+   "x": 396,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "fire_station_damaged": {
+   "x": 429,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "fire_station_rubble": {
+   "x": 0,
+   "y": 271,
+   "w": 32,
+   "h": 16
+  },
+  "fire_station_lights": {
+   "x": 462,
+   "y": 252,
+   "w": 32,
+   "h": 16
+  },
+  "healer_hut": {
+   "x": 17,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "healer_hut_construction": {
+   "x": 34,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "healer_hut_damaged": {
+   "x": 51,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "healer_hut_rubble": {
+   "x": 68,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "clinic": {
+   "x": 182,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_construction": {
+   "x": 369,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_damaged": {
+   "x": 386,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_rubble": {
+   "x": 420,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_lights": {
+   "x": 403,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "hospital": {
+   "x": 263,
+   "y": 114,
+   "w": 32,
+   "h": 40
+  },
+  "hospital_construction": {
+   "x": 296,
+   "y": 114,
+   "w": 32,
+   "h": 40
+  },
+  "hospital_damaged": {
+   "x": 329,
+   "y": 114,
+   "w": 32,
+   "h": 40
+  },
+  "hospital_rubble": {
+   "x": 395,
+   "y": 114,
+   "w": 32,
+   "h": 40
+  },
+  "hospital_lights": {
+   "x": 362,
+   "y": 114,
+   "w": 32,
+   "h": 40
+  },
+  "school": {
+   "x": 299,
+   "y": 196,
+   "w": 32,
+   "h": 22
+  },
+  "school_construction": {
+   "x": 165,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "school_damaged": {
+   "x": 198,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "school_rubble": {
+   "x": 264,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "school_lights": {
+   "x": 231,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "university": {
+   "x": 343,
+   "y": 65,
+   "w": 48,
+   "h": 42
+  },
+  "university_construction": {
+   "x": 392,
+   "y": 65,
+   "w": 48,
+   "h": 42
+  },
+  "university_damaged": {
+   "x": 441,
+   "y": 65,
+   "w": 48,
+   "h": 42
+  },
+  "university_rubble": {
+   "x": 49,
+   "y": 114,
+   "w": 48,
+   "h": 42
+  },
+  "university_lights": {
+   "x": 0,
+   "y": 114,
+   "w": 48,
+   "h": 42
+  },
+  "library": {
+   "x": 33,
+   "y": 271,
+   "w": 32,
+   "h": 16
+  },
+  "library_construction": {
+   "x": 66,
+   "y": 271,
+   "w": 32,
+   "h": 16
+  },
+  "library_damaged": {
+   "x": 99,
+   "y": 271,
+   "w": 32,
+   "h": 16
+  },
+  "library_rubble": {
+   "x": 132,
+   "y": 271,
+   "w": 32,
+   "h": 16
+  },
+  "research_lab": {
+   "x": 428,
+   "y": 114,
+   "w": 32,
+   "h": 38
+  },
+  "research_lab_construction": {
+   "x": 461,
+   "y": 114,
+   "w": 32,
+   "h": 38
+  },
+  "research_lab_damaged": {
+   "x": 0,
+   "y": 157,
+   "w": 32,
+   "h": 38
+  },
+  "research_lab_rubble": {
+   "x": 66,
+   "y": 157,
+   "w": 32,
+   "h": 38
+  },
+  "research_lab_lights": {
+   "x": 33,
+   "y": 157,
+   "w": 32,
+   "h": 38
+  },
+  "shrine": {
+   "x": 340,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "shrine_construction": {
+   "x": 357,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "shrine_damaged": {
+   "x": 374,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "shrine_rubble": {
+   "x": 391,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "temple": {
+   "x": 99,
+   "y": 196,
+   "w": 32,
+   "h": 32
+  },
+  "temple_construction": {
+   "x": 132,
+   "y": 196,
+   "w": 32,
+   "h": 32
+  },
+  "temple_damaged": {
+   "x": 165,
+   "y": 196,
+   "w": 32,
+   "h": 32
+  },
+  "temple_rubble": {
+   "x": 198,
+   "y": 196,
+   "w": 32,
+   "h": 32
+  },
+  "cathedral": {
+   "x": 0,
+   "y": 0,
+   "w": 32,
+   "h": 64
+  },
+  "cathedral_construction": {
+   "x": 33,
+   "y": 0,
+   "w": 32,
+   "h": 64
+  },
+  "cathedral_damaged": {
+   "x": 66,
+   "y": 0,
+   "w": 32,
+   "h": 64
+  },
+  "cathedral_rubble": {
+   "x": 132,
+   "y": 0,
+   "w": 32,
+   "h": 64
+  },
+  "cathedral_lights": {
+   "x": 99,
+   "y": 0,
+   "w": 32,
+   "h": 64
+  },
+  "cemetery": {
+   "x": 165,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "obelisk": {
+   "x": 231,
+   "y": 196,
+   "w": 16,
+   "h": 24
+  },
+  "obelisk_construction": {
+   "x": 248,
+   "y": 196,
+   "w": 16,
+   "h": 24
+  },
+  "obelisk_damaged": {
+   "x": 265,
+   "y": 196,
+   "w": 16,
+   "h": 24
+  },
+  "obelisk_rubble": {
+   "x": 282,
+   "y": 196,
+   "w": 16,
+   "h": 24
+  },
+  "statue": {
+   "x": 408,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "statue_construction": {
+   "x": 425,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "statue_damaged": {
+   "x": 442,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "statue_rubble": {
+   "x": 459,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "school_b": {
+   "x": 332,
+   "y": 196,
+   "w": 32,
+   "h": 22
+  },
+  "school_b_construction": {
+   "x": 365,
+   "y": 196,
+   "w": 32,
+   "h": 22
+  },
+  "school_b_damaged": {
+   "x": 398,
+   "y": 196,
+   "w": 32,
+   "h": 22
+  },
+  "school_b_rubble": {
+   "x": 464,
+   "y": 196,
+   "w": 32,
+   "h": 22
+  },
+  "school_b_lights": {
+   "x": 431,
+   "y": 196,
+   "w": 32,
+   "h": 22
+  },
+  "school_c": {
+   "x": 0,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "school_c_construction": {
+   "x": 33,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "school_c_damaged": {
+   "x": 66,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "school_c_rubble": {
+   "x": 132,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "school_c_lights": {
+   "x": 99,
+   "y": 229,
+   "w": 32,
+   "h": 22
+  },
+  "clinic_b": {
+   "x": 199,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_b_construction": {
+   "x": 216,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_b_damaged": {
+   "x": 233,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_b_rubble": {
+   "x": 267,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_b_lights": {
+   "x": 250,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_c": {
+   "x": 284,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_c_construction": {
+   "x": 301,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_c_damaged": {
+   "x": 318,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_c_rubble": {
+   "x": 352,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "clinic_c_lights": {
+   "x": 335,
+   "y": 271,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_b": {
+   "x": 102,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_b_construction": {
+   "x": 119,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_b_damaged": {
+   "x": 136,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_b_rubble": {
+   "x": 170,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_b_lights": {
+   "x": 153,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_c": {
+   "x": 187,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_c_construction": {
+   "x": 204,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_c_damaged": {
+   "x": 221,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_c_rubble": {
+   "x": 255,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  },
+  "police_station_c_lights": {
+   "x": 238,
+   "y": 288,
+   "w": 16,
+   "h": 16
+  }
+ }
+}
