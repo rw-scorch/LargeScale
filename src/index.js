@@ -1,5 +1,6 @@
 import { Directory } from "./directory.js";
 import { World } from "./world.js";
+import { parseWorldConfig } from "./worldconfig.js";
 import { verifyRequest, handleInteraction, message, optionValue, userIdOf, COMMANDS } from "./discord.js";
 
 export { Directory, World };
@@ -92,9 +93,15 @@ export default {
     if (path === "/api/worlds" && request.method === "GET") return json(await dir.listWorlds(me));
     if (path === "/api/worlds" && request.method === "POST") {
       const b = (await body(request)) ?? {};
+      const bad = parseWorldConfig(b.config ?? {}).error;
+      if (bad) return json({ error: bad }, 400);
       const { id } = await dir.createWorld(me, b.name ?? "New world", b.config ?? {});
-      await env.WORLD.getByName(id).init({ name: b.name, ...(b.config ?? {}) });
-      return json({ id });
+      const r = await env.WORLD.getByName(id).init({ name: b.name, ...(b.config ?? {}) });
+      if (r.error) {
+        await dir.removeWorld(id);
+        return json({ error: r.error }, 500);
+      }
+      return json({ id, ...r });
     }
     const joinMatch = path.match(/^\/api\/worlds\/([A-Za-z0-9_-]+)\/join$/);
     if (joinMatch && request.method === "POST") {

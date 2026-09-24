@@ -78,6 +78,12 @@ export class Directory extends DurableObject {
     return { id };
   }
 
+  removeWorld(id) {
+    this.ctx.storage.sql.exec("DELETE FROM members WHERE world = ?", id);
+    this.ctx.storage.sql.exec("DELETE FROM worlds WHERE id = ?", id);
+    return { ok: true };
+  }
+
   listWorlds(account) {
     return this.ctx.storage.sql.exec(
       "SELECT w.id, w.name, w.host = ? AS host, (SELECT COUNT(*) FROM members m WHERE m.world = w.id) AS players, EXISTS(SELECT 1 FROM members m WHERE m.world = w.id AND m.account = ?) AS member FROM worlds w ORDER BY w.created DESC",

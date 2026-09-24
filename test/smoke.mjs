@@ -1,6 +1,15 @@
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const INVITE = process.env.INVITE ?? "test-invite";
 const ADMIN = process.env.ADMIN ?? "rw_scorch";
+const MAP = process.env.MAP ?? "test";
+const MAPS = {
+  test: { config: { w: 160, h: 100, seed: 7 }, w: 160, h: 100 },
+  europe: { config: { map: "europe" }, w: 700, h: 380 },
+  earth: { config: { map: "earth" }, w: 3600, h: 1440 },
+};
+const M = MAPS[MAP];
+if (!M) throw new Error(`MAP must be one of ${Object.keys(MAPS).join(", ")}`);
+console.log(`map: ${MAP}`);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
 const check = (ok, what) => { console.log(`${ok ? "pass" : "FAIL"}  ${what}`); if (!ok) failures++; };
@@ -30,6 +39,10 @@ const waitFor = async (got, pred, ms = 5000) => {
 if (process.env.RECHECK) {
   const { readFileSync } = await import("node:fs");
   const last = JSON.parse(readFileSync(new URL("./.last.json", import.meta.url)));
+  const st = (await api(`/api/worlds/${last.wid}/status`, null, last.token)).body;
+  const lc = st.loadCheck;
+  check(lc?.loaded.terrain === last.hashes.terrain && lc?.loaded.owner === last.hashes.owner, `after a restart the ${st.map?.kind} world loads terrain ${lc?.loaded.terrain} and owner ${lc?.loaded.owner}, the same as before (${last.hashes.terrain}, ${last.hashes.owner})`);
+  check(lc?.saved?.owner === lc?.loaded.owner, "the owner hash stored with the save matches the decoded layer");
   const again = await connect(last.wid, last.token);
   const h = await waitFor(again, m => m.t === "hello");
   const n = h?.nations.find(x => x.id === last.you);
@@ -49,8 +62,11 @@ check(b.status === 200 && b.body.account.admin === false, "friends are not admin
 const wrong = await api("/api/login", { name: "friend" + suffix, password: "wrong pass" });
 check(wrong.status === 401, "wrong password is refused");
 const ta = alogin.body.token, tb = b.body.token;
-const world = await api("/api/worlds", { name: "Smoke test", config: { w: 160, h: 100, seed: 7 } }, ta);
-check(world.status === 200 && world.body.id, "host creates a world");
+const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
+check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
+const created = Date.now();
+const world = await api("/api/worlds", { name: "Smoke test", config: M.config }, ta);
+check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
   const ws = new WebSocket(BASE.replace("http", "ws") + `/ws/${wid}?token=${tb}`);
@@ -61,15 +77,15 @@ check(!outsiderOpened, "non-members cannot connect");
 check((await api(`/api/worlds/${wid}/join`, {}, tb)).status === 200, "friend joins the world");
 const A = await connect(wid, ta), B = await connect(wid, tb);
 const hello = await waitFor(A, m => m.t === "hello");
-check(hello && hello.w === 160 && hello.h === 100, "hello message has the map size");
-await sleep(300);
-check(A.binary.length >= 2 && A.binary[0][0] === 1 && A.binary[0].length === 4 + 160 * 100, "terrain arrives as a binary frame");
+check(hello && hello.w === M.w && hello.h === M.h, "hello message has the map size");
+for (let k = 0; k < 100 && A.binary.length < 2; k++) await sleep(100);
+check(A.binary.length >= 2 && A.binary[0][0] === 1 && A.binary[0].length === 4 + M.w * M.h, "terrain arrives as a binary frame");
 const terrain = A.binary[0].subarray(4);
 const land = [];
 for (let i = 0; i < terrain.length; i++) if (terrain[i] >= 11 && terrain[i] <= 15) land.push(i);
 let spawned = false;
 for (const i of land.filter((_, k) => k % 97 === 0)) {
-  A.ws.send(JSON.stringify({ t: "spawn", x: i % 160, y: Math.floor(i / 160) }));
+  A.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
   const r = await waitFor(A, m => m.t === "result" && m.of === "spawn" && !m.seen && (m.seen = true));
   if (r?.ok) { spawned = true; break; }
 }
@@ -98,7 +114,11 @@ const hello2 = await waitFor(A2, m => m.t === "hello");
 const again = hello2?.nations.find(n => n.id === hello.you);
 check(again && again.plots >= mine.plots && hello2.you === hello.you, "same nation and territory after reconnecting");
 A2.ws.close();
+await sleep(800);
+const saved = (await api(`/api/worlds/${wid}/status`, null, ta)).body;
+const ls = saved.lastSave;
+check(ls && ls.rows <= 10, `a save wrote ${ls?.rows} rows (owner layer ${ls?.ownerBytes} bytes, ${ls?.ms} ms); ${ls?.totalRows} rows over ${ls?.saves} saves`);
 const { writeFileSync } = await import("node:fs");
-writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ wid, token: ta, you: hello.you, plots: again.plots }));
+writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ wid, token: ta, you: hello.you, plots: again.plots, hashes: saved.hashes }));
 console.log(failures ? `${failures} checks failed` : "all checks passed");
 process.exit(failures ? 1 : 0);
