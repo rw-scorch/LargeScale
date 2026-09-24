@@ -405,7 +405,8 @@ export class World {
       if (best !== null) return best;
     }
     let best = null, bd = Infinity;
-    for (let i = 0; i < ow.length; i++) {
+    const border = this.borderOf(nid);
+    for (const i of border.size ? border : ow.keys()) {
       if (ow[i] !== nid) continue;
       const d = (g.x(i) - fx) ** 2 + (g.y(i) - fy) ** 2;
       if (d < bd) { bd = d; best = i; }
