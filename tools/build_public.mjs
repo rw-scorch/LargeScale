@@ -1,13 +1,12 @@
 import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync, readdirSync, copyFileSync } from "node:fs";
-import { gzipSync } from "node:zlib";
+import { gzipSync, gunzipSync } from "node:zlib";
 
 const src = "public/map/terrain.bin", out = "public/map/terrain.bin.gz";
-if (!existsSync(src)) {
-  console.warn(`build: ${src} is missing, so only test maps will work`);
-} else if (!existsSync(out) || statSync(out).mtimeMs < statSync(src).mtimeMs) {
+if (existsSync(src) && !(existsSync(out) && gunzipSync(readFileSync(out)).equals(readFileSync(src)))) {
   writeFileSync(out, gzipSync(readFileSync(src), { level: 9 }));
-  console.log(`build: wrote ${out}, ${statSync(out).size} bytes`);
+  console.log(`build: wrote ${out} from ${src}, ${statSync(out).size} bytes`);
 }
+for (const f of [out, "public/map/fine/terrain.bin.gz"]) if (!existsSync(f)) console.warn(`build: ${f} is missing, so maps that use it will not load`);
 
 mkdirSync("public/js/shared", { recursive: true });
 const files = readdirSync("src/shared").filter(f => f.endsWith(".js") && !f.endsWith(".test.js"));
