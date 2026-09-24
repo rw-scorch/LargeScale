@@ -5,3 +5,5 @@ public/assets/
 public/map/
 data/map/
 **/__pycache__/
+
+test/.last.json
