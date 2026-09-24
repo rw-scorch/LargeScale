@@ -10,9 +10,9 @@ const MAPS = {
 const M = MAPS[MAP];
 if (!M) throw new Error(`MAP must be one of ${Object.keys(MAPS).join(", ")}`);
 console.log(`map: ${MAP}`);
-import { PROTOCOL, MSG, CLOSE, ORDER_CODES, readFrame, applyPairs, PartCollector } from "../src/shared/protocol.js";
-import { decodeRuns, gunzip, hashBytes, hashRuns } from "../src/shared/codec.js";
-import { baseLayer } from "../src/shared/maps.js";
+import { PROTOCOL, MSG, CLOSE } from "../src/shared/protocol.js";
+import { hashBytes, hashRuns } from "../src/shared/codec.js";
+import { ClientWorld } from "../src/shared/client.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
@@ -45,39 +45,42 @@ class Mirror {
   constructor(got, hello) {
     this.got = got;
     this.hello = hello;
-    this.next = hello._bin;
-    this.parts = new PartCollector();
-    this.owner = new Uint16Array(hello.w * hello.h);
+    this.world = new ClientWorld(hello);
+    this.bin = hello._bin;
+    this.js = got.json.indexOf(hello) + 1;
     this.frameBytes = 0;
-    this.versionOk = true;
   }
+  get terrain() { return this.world.terrain; }
+  get owner() { return this.world.owner; }
+  get nations() { return this.world.nations; }
+  get stacks() { return this.world.stacks; }
+  get events() { return this.world.events; }
+  get versionOk() { return !this.world.stale; }
   async load() {
-    const h = this.hello;
-    const base = await baseLayer(h.map, h.w, h.h, async () => {
-      const gz = new Uint8Array(await (await fetch(BASE + "/map/terrain.bin.gz")).arrayBuffer());
-      this.staticBytes = gz.length;
-      return gunzip(gz);
-    });
-    this.baseHashOk = h.map.kind === "test" || base.hash === h.map.baseHash;
-    this.terrain = base.terrain.slice();
-    const need = h.frames.terrain + h.frames.owner;
-    for (let k = 0; k < 200 && this.got.binary.length < this.next + need; k++) await sleep(50);
-    this.pump(this.next + need);
+    try {
+      await this.world.loadBase(async () => {
+        const gz = new Uint8Array(await (await fetch(BASE + "/map/terrain.bin.gz")).arrayBuffer());
+        this.staticBytes = gz.length;
+        return gz;
+      });
+      this.baseHashOk = true;
+    } catch { this.baseHashOk = false; return this; }
+    const need = this.hello.frames.terrain + this.hello.frames.owner;
+    for (let k = 0; k < 200 && this.got.binary.length < this.bin + need; k++) await sleep(50);
+    this.pump(this.bin + need);
     this.joinFrameBytes = this.frameBytes;
     return this;
   }
   pump(upTo = this.got.binary.length) {
-    for (; this.next < upTo; this.next++) {
-      const raw = this.got.binary[this.next];
+    for (; this.bin < upTo; this.bin++) {
+      const raw = this.got.binary[this.bin];
       this.frameBytes += raw.length;
-      const f = readFrame(raw);
-      if (f.version !== PROTOCOL) this.versionOk = false;
-      if (f.type === MSG.DIFF) { applyPairs(this.owner, f.body); continue; }
-      const whole = this.parts.add(f);
-      if (!whole) continue;
-      if (f.type === MSG.TERRAIN_DIFF) { applyPairs(this.terrain, whole); this.terrainDone = true; }
-      if (f.type === MSG.OWNER) { decodeRuns(whole, this.owner); this.ownerDone = true; }
+      const r = this.world.frame(raw);
+      if (r?.layer === "terrain") this.terrainDone = true;
+      if (r?.layer === "owner" && r.all) this.ownerDone = true;
     }
+    for (; this.js < this.got.json.length; this.js++) this.world.message(this.got.json[this.js]);
+    return this;
   }
 }
 
@@ -92,32 +95,6 @@ const until = async (fn, ms = 8000) => {
   while (Date.now() < end) { const v = fn(); if (v) return v; await sleep(50); }
   return null;
 };
-
-class View {
-  constructor(got, hello) {
-    this.got = got;
-    this.next = got.json.indexOf(hello) + 1;
-    this.nations = new Map(hello.nations.map(n => [n.id, { ...n }]));
-    this.stacks = new Map(hello.stacks.map(r => [r[0], this.stack(r)]));
-    this.events = [];
-  }
-  stack([id, owner, pos, troops, order]) { return { id, owner, pos, troops, order: ORDER_CODES[order] }; }
-  pump() {
-    for (; this.next < this.got.json.length; this.next++) {
-      const m = this.got.json[this.next];
-      if (m.t === "joined" && !this.nations.has(m.nation)) this.nations.set(m.nation, { id: m.nation, name: m.name, colour: m.colour });
-      if (m.t === "events") this.events.push(...m.events);
-      if (m.t !== "state") continue;
-      for (const [id, plots, troops, alive, spawned] of m.n) {
-        if (!this.nations.has(id)) this.nations.set(id, { id });
-        Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned });
-      }
-      for (const r of m.s) this.stacks.set(r[0], this.stack(r));
-      for (const id of m.gone) this.stacks.delete(id);
-    }
-    return this;
-  }
-}
 
 if (process.env.RECHECK) {
   const { readFileSync } = await import("node:fs");
@@ -171,7 +148,7 @@ check(joinBytes < 1_000_000, `join transferred ${joinBytes} bytes over the socke
 const terrain = mirror.terrain;
 const land = [];
 for (let i = 0; i < terrain.length; i++) if (terrain[i] >= 11 && terrain[i] <= 15) land.push(i);
-const view = new View(A, hello), you = hello.you;
+const view = mirror, you = hello.you;
 const cx = M.w / 2, cy = M.h / 2;
 const nearMiddle = land.filter((_, k) => k % 97 === 0).sort((p, q) => Math.hypot((p % M.w) - cx, Math.floor(p / M.w) - cy) - Math.hypot((q % M.w) - cx, Math.floor(q / M.w) - cy));
 let aSpawn = -1;
