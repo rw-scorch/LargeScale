@@ -16,6 +16,7 @@ async function openPage(options) {
   const page = await ctx.newPage();
   page.on("pageerror", e => errors.push(e.message));
   page.on("console", m => m.type() === "error" && errors.push(m.text()));
+  page.on("response", r => r.status() >= 400 && errors.push(`${r.status()} ${r.url()}`));
   return page;
 }
 
@@ -26,6 +27,7 @@ async function login(page, name, password) {
   await page.click("#login-go");
   try { await page.waitForSelector("#world-create", { timeout: 3000 }); }
   catch {
+    for (let i = errors.length - 1; i >= 0; i--) if (/401/.test(errors[i])) errors.splice(i, 1);
     await page.fill("#login-invite", INVITE);
     await page.click("#register-go");
     await page.waitForSelector("#world-create", { timeout: 5000 });
@@ -72,10 +74,29 @@ await page.waitForTimeout(1500);
 check(spawned && !(await page.isVisible("#spawn-hint")), `spawned at ${spawned?.x}, ${spawned?.y}; the hint goes away`);
 await page.screenshot({ path: `${OUT}/2-spawned-${MAP}.png` });
 
-await page.click("#form-stack");
+const toScreen = (page, plot) => page.evaluate(p => {
+  const g = window.__ls.game, w = g.world, v = g.view;
+  const [px, py] = v.plotToScreen((p % w.w) + 0.5, ((p / w.w) | 0) + 0.5);
+  return { x: px / v.ratio, y: py / v.ratio };
+}, plot);
+const edgePlot = () => page.evaluate(() => {
+  const g = window.__ls.game, w = g.world, me = w.nations.get(w.you), cap = me.capital;
+  let best = cap, bd = 0;
+  for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+    const i = cap + dy * w.w + dx;
+    if (w.owner[i] === w.you && dx * dx + dy * dy > bd) { bd = dx * dx + dy * dy; best = i; }
+  }
+  return best;
+});
+const capital = await page.evaluate(() => window.__ls.game.world.nations.get(window.__ls.game.world.you).capital);
+const edge = await edgePlot();
+const edgeAt = await toScreen(page, edge);
+await page.mouse.move(edgeAt.x, edgeAt.y);
+await page.keyboard.press("f");
 await page.waitForSelector("#stack-advance", { timeout: 5000 });
-check(true, "forming a stack selects it and shows its orders");
-await page.click("#stack-advance");
+const formedAt = await page.evaluate(() => { const g = window.__ls.game; return g.world.stacks.get(g.selected)?.pos; });
+check(formedAt === edge && edge !== capital, `pointing at your land and pressing F forms a stack right there (plot ${formedAt}, capital ${capital})`);
+await page.keyboard.press("a");
 await page.waitForTimeout(3500);
 const grew = await page.evaluate(() => { const w = window.__ls.game.world; return w.nations.get(w.you).plots; });
 check(grew > 40, `advancing takes land: ${grew} plots`);
@@ -83,8 +104,19 @@ await page.screenshot({ path: `${OUT}/3-advance-${MAP}.png` });
 
 await page.fill("#stack-share", "40");
 await page.click("#form-stack");
-await page.waitForTimeout(700);
-await page.click("#stack-move");
+check(await page.isVisible("#place-hint"), "the Form stack button asks where to place the stack");
+const capAt = await toScreen(page, capital);
+await page.mouse.click(capAt.x, capAt.y);
+await page.waitForFunction(() => { const g = window.__ls.game; return g.world.stacks.has(g.selected) && g.world.myStacks().length === 2; }, null, { timeout: 5000 }).catch(() => {});
+const second = await page.evaluate(() => { const g = window.__ls.game; return { id: g.selected, pos: g.world.stacks.get(g.selected)?.pos, count: g.world.myStacks().length }; });
+check(second.pos === capital && second.count === 2 && !(await page.isVisible("#place-hint")), `clicking your land places the stack there (${second.count} stacks now)`);
+await page.keyboard.press("Tab");
+const tabbed = await page.evaluate(() => window.__ls.game.selected);
+check(tabbed !== second.id && tabbed !== null, `Tab selects your other stack (${second.id} to ${tabbed})`);
+await page.keyboard.press("Tab");
+check(await page.evaluate(() => window.__ls.game.selected) === second.id, "Tab again comes back round");
+await page.screenshot({ path: `${OUT}/3b-keys-${MAP}.png` });
+await page.keyboard.press("m");
 const target = await page.evaluate(() => {
   const g = window.__ls.game, w = g.world, v = g.view, s = w.stacks.get(g.selected);
   const sx = s.pos % w.w, sy = (s.pos / w.w) | 0;
@@ -107,6 +139,27 @@ await page.waitForTimeout(2500);
 const moving = await page.evaluate(() => { const g = window.__ls.game; return g.world.stacks.get(g.selected)?.order; });
 check(moving === "move" || moving === "hold", `the stack takes the order (now ${moving})`);
 await page.screenshot({ path: `${OUT}/5-moving-${MAP}.png` });
+
+await page.keyboard.press("Tab");
+const rc = await page.evaluate(() => {
+  const g = window.__ls.game, w = g.world, v = g.view, s = w.stacks.get(g.selected);
+  const sx = s.pos % w.w, sy = (s.pos / w.w) | 0;
+  for (const [dx, dy] of [[-15, 0], [15, 0], [0, 12], [0, -12], [10, 10], [-10, -10]]) {
+    const x = sx + dx, y = sy + dy, i = y * w.w + x;
+    if (x < 0 || y < 0 || x >= w.w || y >= w.h || !(w.terrain[i] >= 7 && w.terrain[i] <= 26)) continue;
+    const [px, py] = v.plotToScreen(x + 0.5, y + 0.5);
+    if (px < 40 || py < 80 || px > v.canvas.width - 40 || py > v.canvas.height - 120) continue;
+    return { id: s.id, x: px / v.ratio, y: py / v.ratio };
+  }
+  return null;
+});
+if (rc) await page.mouse.click(rc.x, rc.y, { button: "right" });
+await page.waitForTimeout(1200);
+const rcOrder = rc && await page.evaluate(id => window.__ls.game.world.stacks.get(id)?.order, rc.id);
+check(rcOrder === "move" || rcOrder === "hold", `right-click sends the selected stack with no Go step (now ${rcOrder})`);
+check(!(await page.isVisible("#move-go")), "no route preview is left open after a right-click");
+await page.keyboard.press("Escape");
+check(await page.evaluate(() => window.__ls.game.selected) === null, "Esc clears the selection");
 
 await page.click("#chat .title");
 await page.fill("#chat-input", "hello from the real client");
