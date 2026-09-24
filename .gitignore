@@ -7,3 +7,5 @@ data/map/
 **/__pycache__/
 
 test/.last.json
+public/js/shared/
+.screens/
