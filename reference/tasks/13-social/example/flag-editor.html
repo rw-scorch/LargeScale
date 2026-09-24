@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flag editor demo</title>
+<style>
+:root{--ink:#0f2233;--line:#24506f;--parch:#e9dcb8;--mute:#9fb3c2;--signal:#e8c84a}
+body{margin:0;min-height:100vh;background:#16324a;color:var(--parch);font:14px/1.4 "Atkinson Hyperlegible",system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
+.card{background:var(--ink);border:2px solid var(--line);border-radius:2px;padding:16px;display:grid;grid-template-columns:auto 1fr;gap:14px;max-width:960px}
+h1{grid-column:1/-1;margin:0;font:600 18px "Pixelify Sans",ui-monospace,monospace}
+.tools{display:flex;flex-direction:column;gap:6px}
+.tools button{width:44px;height:44px;display:grid;place-items:center;background:#183a54;border:2px solid var(--line);border-radius:2px;cursor:pointer;padding:0}
+.tools button[aria-pressed=true]{border-color:var(--signal)}
+.tools canvas{image-rendering:pixelated;width:32px;height:32px}
+.stage{display:flex;flex-direction:column;gap:10px}
+#flag{image-rendering:pixelated;width:min(640px,70vw);aspect-ratio:32/20;border:2px solid var(--line);cursor:crosshair;touch-action:none;background:#000}
+.pal{display:flex;flex-wrap:wrap;gap:4px}
+.pal button{width:28px;height:28px;border:2px solid var(--ink);box-shadow:0 0 0 2px var(--line);cursor:pointer;padding:0}
+.pal button[aria-pressed=true]{box-shadow:0 0 0 2px var(--signal)}
+code{display:block;background:#0b1a27;border:2px solid var(--line);padding:6px 8px;font-size:12px;word-break:break-all;color:var(--mute)}
+button:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Flag editor</h1>
+  <div class="tools" id="tools" role="toolbar" aria-label="Tools"></div>
+  <div class="stage">
+    <canvas id="flag" width="32" height="20" aria-label="Flag canvas, 32 by 20 pixels"></canvas>
+    <div class="pal" id="pal" role="group" aria-label="Colours"></div>
+    <div>Saved string, sent to the server:</div>
+    <code id="out"></code>
+  </div>
+</div>
+<script src="../../../assets/data.js"></script>
+<script type="module">
+import { FLAG_W, FLAG_H, FLAG_PALETTE, blankFlag, encodeFlag, decodeFlag, floodFill, flagToRGBA } from "./flag.js";
+const P = window.PACK, byId = new Map(P.sprites.map(s => [s.id, s]));
+const sheets = {};
+await Promise.all(Object.entries(P.sheets).map(([k, src]) => new Promise(r => { const i = new Image(); i.onload = () => { sheets[k] = i; r(); }; i.src = src; })));
+const icon = id => { const s = byId.get(id), c = document.createElement("canvas"); c.width = s.w; c.height = s.h; c.getContext("2d").drawImage(sheets[s.category], s.x, s.y, s.w, s.h, 0, 0, s.w, s.h); return c; };
+let px = decodeFlag(localStorage.getItem("flag")) ?? blankFlag(9);
+let tool = "pencil", colour = 2, grid = true, mirror = false;
+const undo = [], redo = [];
+const canvas = document.getElementById("flag"), ctx = canvas.getContext("2d");
+canvas.width = FLAG_W * 20; canvas.height = FLAG_H * 20;
+function draw() {
+  const img = flagToRGBA(px, 20);
+  ctx.putImageData(new ImageData(img.data, img.w, img.h), 0, 0);
+  if (grid) { ctx.strokeStyle = "rgba(0,0,0,.18)"; for (let x = 0; x <= FLAG_W; x++) { ctx.beginPath(); ctx.moveTo(x * 20 + .5, 0); ctx.lineTo(x * 20 + .5, canvas.height); ctx.stroke(); } for (let y = 0; y <= FLAG_H; y++) { ctx.beginPath(); ctx.moveTo(0, y * 20 + .5); ctx.lineTo(canvas.width, y * 20 + .5); ctx.stroke(); } }
+  const s = encodeFlag(px);
+  document.getElementById("out").textContent = s;
+  localStorage.setItem("flag", s);
+}
+const snapshot = () => { undo.push(px.slice()); if (undo.length > 100) undo.shift(); redo.length = 0; };
+function paint(x, y, c) {
+  px[y * FLAG_W + x] = c;
+  if (mirror) px[y * FLAG_W + (FLAG_W - 1 - x)] = c;
+}
+function at(e) { const r = canvas.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / r.width * FLAG_W), Math.floor((e.clientY - r.top) / r.height * FLAG_H)]; }
+let down = false;
+canvas.addEventListener("pointerdown", e => {
+  const [x, y] = at(e);
+  if (x < 0 || y < 0 || x >= FLAG_W || y >= FLAG_H) return;
+  canvas.setPointerCapture(e.pointerId);
+  if (tool === "eyedrop") { colour = px[y * FLAG_W + x]; buildPalette(); return; }
+  snapshot();
+  if (tool === "fill") { floodFill(px, x, y, colour); if (mirror) floodFill(px, FLAG_W - 1 - x, y, colour); draw(); return; }
+  down = true; paint(x, y, tool === "eraser" ? 0 : colour); draw();
+});
+canvas.addEventListener("pointermove", e => { if (!down) return; const [x, y] = at(e); if (x >= 0 && y >= 0 && x < FLAG_W && y < FLAG_H) { paint(x, y, tool === "eraser" ? 0 : colour); draw(); } });
+canvas.addEventListener("pointerup", () => (down = false));
+const tools = [["pencil", "tool_pencil", "Pencil"], ["fill", "tool_fill", "Fill"], ["eraser", "tool_eraser", "Eraser"], ["eyedrop", "tool_eyedrop", "Pick colour"]];
+const actions = [["undo", "tool_undo", "Undo"], ["redo", "tool_redo", "Redo"], ["grid", "tool_grid", "Toggle grid"], ["mirror", "tool_mirror", "Mirror drawing"], ["clear", "tool_clear", "Clear"]];
+const bar = document.getElementById("tools");
+for (const [k, ic, label] of [...tools, ...actions]) {
+  const b = document.createElement("button");
+  b.appendChild(icon(ic)); b.title = label; b.setAttribute("aria-label", label); b.dataset.k = k;
+  b.onclick = () => {
+    if (tools.some(t => t[0] === k)) { tool = k; }
+    else if (k === "undo" && undo.length) { redo.push(px); px = undo.pop(); }
+    else if (k === "redo" && redo.length) { undo.push(px); px = redo.pop(); }
+    else if (k === "grid") grid = !grid;
+    else if (k === "mirror") mirror = !mirror;
+    else if (k === "clear") { snapshot(); px = blankFlag(colour); }
+    refresh(); draw();
+  };
+  bar.appendChild(b);
+}
+function refresh() { for (const b of bar.children) b.setAttribute("aria-pressed", b.dataset.k === tool || (b.dataset.k === "grid" && grid) || (b.dataset.k === "mirror" && mirror)); }
+function buildPalette() {
+  const pal = document.getElementById("pal"); pal.innerHTML = "";
+  FLAG_PALETTE.forEach((c, i) => { const b = document.createElement("button"); b.style.background = c; b.setAttribute("aria-label", `Colour ${c}`); b.setAttribute("aria-pressed", i === colour); b.onclick = () => { colour = i; if (tool === "eraser" || tool === "eyedrop") tool = "pencil"; buildPalette(); refresh(); }; pal.appendChild(b); });
+}
+buildPalette(); refresh(); draw();
+</script>
+</body>
+</html>

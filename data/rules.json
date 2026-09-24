@@ -1,0 +1,11 @@
+{
+  "territory": { "spawnRadius": 4, "troopBase": 1000, "growthRate": 0.03, "stackSpeed": 1.5, "advanceRate": 6, "advanceRadius": 5 },
+  "combat": { "lethality": 0.08, "holdBonus": 1.25, "ownLandBonus": 1.1 },
+  "civilians": { "econEvery": 5, "growth": 0.02, "foodPerPerson": 0.002, "conscriptCost": 0.25 },
+  "supply": { "range": 18, "attritionPerSec": 0.004, "minMult": 0.5 },
+  "market": { "fee": 0.03, "deliverySeconds": 60, "listingLifeSeconds": 86400 },
+  "engineering": { "baseHp": { "rock": 300, "hard": 180, "soft": 90, "made": 40 }, "digRate": 6, "blastPower": 150, "chargeCost": { "money": 200 } },
+  "cbd": { "radius": 14, "maxBonus": 0.5, "attackShare": 0.6 },
+  "offline": { "defenceMult": 0.95, "offlineOutputShare": 0.9, "maxCatchupSeconds": 259200 },
+  "landing": { "penalty": 0.15, "beachPenalty": 0.05, "dropPenalty": 0.1 }
+}

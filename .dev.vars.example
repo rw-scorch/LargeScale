@@ -1,0 +1,5 @@
+INVITE_CODE=change-me-to-something-long
+PEPPER=paste-a-long-random-string-here
+DISCORD_PUBLIC_KEY=your-discord-application-public-key
+DISCORD_TOKEN=your-bot-token
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
