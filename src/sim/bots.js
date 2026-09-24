@@ -37,7 +37,13 @@ function bestLaunchPlot(world, nid) {
 export function botThink(world, nid, rng, rules = BOT) {
   const n = world.nations.get(nid);
   if (!n?.alive) return null;
-  for (const s of world.stacks.values()) if (s.owner === nid && (s.order === "advance" || s.path.length)) return null;
+  const idle = [];
+  for (const s of world.stacks.values()) {
+    if (s.owner !== nid) continue;
+    if (s.order === "advance" || s.path.length) return null;
+    if (!s.engaged && world.owner[s.pos] === nid) idle.push(s.id);
+  }
+  for (const id of idle) world.disbandStack(id);
   const max = world.maxTroops(n);
   if (n.troops < max * rules.minGarrisonShare) return null;
   const at = bestLaunchPlot(world, nid);
@@ -50,7 +56,6 @@ export function botThink(world, nid, rng, rules = BOT) {
 }
 
 export function installBots(world, rng, rules = BOT) {
-  let clock = 0;
   const baseHostile = world.hostile;
   if (!rules.attackPlayers) {
     world.hostile = (a, b) => {
@@ -59,11 +64,16 @@ export function installBots(world, rng, rules = BOT) {
       return baseHostile(a, b);
     };
   }
+  let order = [], cursor = 0, carry = 0;
   world.hooks.postTick.push((w, dt) => {
-    clock += dt;
-    if (clock < rules.thinkEvery) return;
-    clock = 0;
-    for (const n of w.nations.values()) if (n.bot && n.alive) botThink(w, n.id, rng, rules);
+    if (cursor >= order.length) {
+      order = [...w.nations.values()].filter(n => n.bot && n.alive).map(n => n.id);
+      cursor = 0;
+    }
+    carry += (order.length * dt) / rules.thinkEvery;
+    let k = Math.floor(carry);
+    carry -= k;
+    while (k-- > 0 && cursor < order.length) botThink(w, order[cursor++], rng, rules);
   });
 }
 
