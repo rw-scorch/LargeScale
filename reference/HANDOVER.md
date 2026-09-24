@@ -30,6 +30,19 @@ Built on Cloudflare: one Worker serving the client, one Durable Object per world
 
 **Principles.** No hyper-management: bulk actions everywhere, standing orders, automatic resupply and recruitment, one list of everything idle. Build it to expand: content in data files, one registry per kind of thing, append-only ids, versioned formats. Mods later as data packs chosen by the host.
 
+## Decided during milestone one and the milestone two plan (24 September 2026)
+
+- **Map detail.** Region maps (Europe, lat/long boxes) use a 0.05-degree base map, 7200 by 2880. The whole Earth stays at 0.1 degrees, because a world gets 128 MB of memory. Speeds and sizes in the rules scale with the map.
+- **Controls.** Keyboard shortcuts, right-click to move, and stacks form on any plot you own. A settings panel to rebind keys comes later.
+- **Capital.** A lost capital moves to the nearest plot still owned.
+- **Money.** Automatic: 1 gold a second plus income tax on the population. The tax is fixed for now; later the player sets it, and a high tax makes people leave.
+- **Troop cap.** A share of the population for now; later a slider, where a high share hurts the economy.
+- **Captured buildings.** Pass to the capturer. Residents may move away, but do not have to.
+- **Bots.** No economies.
+- **Start.** A free chieftain hut at the capital, plus 50 food and 40 wood.
+- **Roads, convoys and army supply** come in milestone three.
+- **Repository.** The gzipped maps and the art kit are committed. The dev pack for each session goes in `devpack/`.
+
 ## What exists (all tested)
 
 Delivered as `large-scale-dev-kit-v6.zip`:

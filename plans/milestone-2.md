@@ -4,19 +4,19 @@ Goal: a nation is more than land and troops. Players zone towns that civilians f
 
 Roads, convoys and army supply (piece 7) come in milestone three unless Ryan wants them here (question 2). Until then goods sit in one stock per nation, as the kit's guides allow.
 
-## Decisions Ryan has to make
+## Decisions (answered by Ryan, 24 September 2026)
 
-Ask these before the step they affect. Do not guess.
-
-| # | Question | Affects | Suggested default |
+| # | Question | Answer | What it means for the build |
 | --- | --- | --- | --- |
-| 1 | Is this plan agreed, or does he want changes? | everything | none |
-| 2 | Roads, convoys and army supply in this milestone, or the next? | scope | next milestone; one stock per nation until then |
-| 3 | Where does money come from before gold mines (Medieval)? The first civic building costs 50 gold and nothing in the kit pays any earlier. | steps 2 and 3 | a small tax per resident, 0.01 gold per person per second, in `data/rules.json` |
-| 4 | Troop cap: the kit replaces the land-based cap with `200 + 0.35 x population`. That makes early armies tiny until towns grow and changes the feel of milestone one. | step 3 | keep half the land part and add the population part, so land and towns both count |
-| 5 | What happens to buildings on captured land? | step 1 | everything on the plot passes to the capturer; residents stay; player buildings arrive damaged and need repair |
-| 6 | Do bots get economies? | step 3 | no; bots keep simple troop growth, which keeps the server fast |
-| 7 | Starting kit | step 2 | a free chieftain hut at the capital, plus the kit's starting stock (50 food, 40 wood) |
+| 1 | Is this plan agreed? | Yes | |
+| 2 | Roads, convoys and army supply now or next? | Next milestone | One stock per nation until then |
+| 3 | Where does money come from early? | Automatic: 1 gold a second, plus income tax on the population | A fixed tax rate for now, in `data/rules.json`. Later the player sets it, and a higher tax makes people leave |
+| 4 | Troop cap | A percentage of the population for now | Cap = a small base + a set share of the population, in `data/rules.json`. Later a slider, where a high share hurts the economy |
+| 5 | Buildings on captured land | Pass over | Buildings and residents pass to the capturer. Residents may move away, but do not have to |
+| 6 | Bots with economies? | No | Bots keep simple troop growth |
+| 7 | Starting kit | Yes | A free chieftain hut at the capital, plus 50 food and 40 wood |
+
+Later, from the answers: a tax slider (people leave above some rate) and a conscription slider (a high share lowers the economy). Both are out of scope here, but the rules should read a per-nation rate so the sliders only need a message and a panel.
 
 ## Budgets to hold
 
@@ -58,7 +58,7 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - A `zone` message and paint and erase tools with the `ov_zone_*` overlays.
 - The economy tick every 5 game seconds, with per-nation sets of free zoned plots instead of a map scan.
 - Needs, growth, starvation, demand, building and self-upgrade as in the kit.
-- Troop cap and growth follow question 4. Money income follows question 3.
+- Troop cap: a small base plus a set share of the population (question 4). Money: 1 gold a second plus a fixed tax per resident (question 3). Both rates are per nation, read from `data/rules.json` defaults.
 - Stats panel: population, housing, jobs, food, goods, needs, and the three demand bars.
 - **Done when:** a zoned area fills with huts and grows as food comes in; starving it visibly empties it; the benchmark passes with 8 player economies of a few thousand buildings each.
 
