@@ -1,4 +1,6 @@
 import { TERRAIN, TID } from "../shared/terrain.js";
+import { installBuildings, WOOD_FULL } from "./buildings.js";
+import rules from "../../data/rules.json" with { type: "json" };
 
 export const DEPOSITS = {
   stone: { terrains: ["hills", "highlands", "mountain"], chance: 0.012, amount: [3000, 8000], vein: [3, 8] },
@@ -39,8 +41,9 @@ export const PRODUCERS = {
   pasture_cattle: { pasture: true, out: "food", rate: 0.03, workers: 1 },
 };
 
-export const SEASON_YIELD = { spring: 0.8, summer: 1.2, autumn: 1.0, winter: 0.2, dry: 0.6 };
-export const FOREST_WOOD = 250;
+export const RES_RULES = rules.resources;
+export const SEASON_YIELD = RES_RULES.seasonYield;
+export const FOREST_WOOD = RES_RULES.forestWood;
 
 export function generateDeposits(map, rng, table = DEPOSITS) {
   const size = map.w * map.h;
@@ -75,12 +78,11 @@ export function generateDeposits(map, rng, table = DEPOSITS) {
 export function installResources(world, deposits, getSeason = () => "summer") {
   const res = {
     dep: deposits,
-    wood: new Float32Array(world.grid.size),
+    wood: installBuildings(world).wood,
     producers: new Map(),
     nextP: 1,
     getSeason,
   };
-  for (let i = 0; i < world.grid.size; i++) if (TERRAIN[world.terrain[i]].forest) res.wood[i] = FOREST_WOOD;
   world.res = res;
   return res;
 }
@@ -136,17 +138,23 @@ export function produce(world, dt) {
       }
       if (!kind) kind = [].concat(d.deposit)[0];
     } else if (d.forest) {
+      const unit = FOREST_WOOD / WOOD_FULL;
+      p.cut ??= 0;
       for (const i of inRadius(world, p.at, d.radius)) {
-        if (want <= 0) break;
-        if (res.wood[i] <= 0) continue;
-        const take = Math.min(want, res.wood[i]);
-        res.wood[i] -= take; want -= take; got += take;
-        if (res.wood[i] <= 0) { world.terrain[i] = TID.cleared; world.dirty.add(i); world.emit("forest_cleared", { at: i }); }
+        if (p.cut >= want) break;
+        if (!res.wood[i]) continue;
+        const steps = Math.min(res.wood[i], Math.ceil((want - p.cut) / unit));
+        res.wood[i] -= steps;
+        p.cut += steps * unit;
+        world.bld.changed.add("wood");
+        if (!res.wood[i]) { world.terrain[i] = TID.cleared; world.dirty.add(i); world.emit("forest_cleared", { at: i }); }
       }
+      got = Math.min(want, p.cut);
+      p.cut -= got;
     } else if (d.farm) {
       got = want * TERRAIN[world.terrain[p.at]].fertility * (SEASON_YIELD[season] ?? 1) * (p.weatherMult ?? 1);
     } else if (d.pasture) {
-      got = want * (season === "winter" ? 0.5 : 1);
+      got = want * (season === "winter" ? RES_RULES.winterPasture : 1);
     }
     p.idle = got <= 1e-9;
     p.made += got;
@@ -159,12 +167,12 @@ export function produce(world, dt) {
   return out;
 }
 
-export function regrowForests(world, dt, rng, chancePerMinute = 0.002) {
+export function regrowForests(world, dt, rng, chancePerMinute = RES_RULES.regrowPerMinute) {
   const res = world.res, g = world.grid;
   const p = chancePerMinute * dt / 60;
   for (let i = 0; i < g.size; i++) {
     if (world.terrain[i] !== TID.cleared || world.owner[i]) continue;
-    if (!g.neighbours4(i).some(n => res.wood[n] > FOREST_WOOD * 0.5)) continue;
-    if (rng.chance(p)) { world.terrain[i] = TID.forest; res.wood[i] = FOREST_WOOD * 0.3; world.dirty.add(i); }
+    if (!g.neighbours4(i).some(n => res.wood[n] > WOOD_FULL * 0.5)) continue;
+    if (rng.chance(p)) { world.terrain[i] = TID.forest; res.wood[i] = Math.round(WOOD_FULL * RES_RULES.regrowStart); world.bld.changed.add("wood"); world.dirty.add(i); }
   }
 }
