@@ -132,6 +132,20 @@ Evidence before the admin tools: 104 unit tests; smoke 65 of 65 on the test map 
   - Totals: 110 unit tests, smoke 82 of 82 on the test map and 83 of 83 on fine Europe, browser script 67 of 67 on both maps.
   - Also on this branch, at Ryan's request: a zoom range from half the whole-map view to 64 px per plot, and ore names in the hover tip.
 
+### Orders and descriptions (26 September 2026, branch `m2-orders-descriptions`)
+
+Ryan's asks after step 6:
+
+- **"Troops attacking only one type of land ... they move to find that land."** An advance that has taken everything within reach now walks to the nearest land it wants: through its own land, and for one nation's land across unclaimed land too, but never through a third nation. When nothing is reachable it stops and says why. This applies to every advance a player gives. Bots keep the old stop-when-done behaviour, so their balance and the bench are unchanged.
+- **Descriptions for all buildings.** A sentence or two each, in the build menu, the building panel and the upgrade menu. Towers, barracks, storage, ports, the offshore rig, the town hall and the parliament do nothing yet, and say so.
+- **Drawing the path troops take.** Right-drag with a mouse, or Draw path (D) then drag on touch. Up to 32 points, each leg checked for a land route.
+- **Found on the way.** The town hall and the parliament gather nothing, so upgrading a great hall to a town hall loses its food and wood. The descriptions say so; whether they should gather is Ryan's call.
+- **Evidence.**
+  - 119 unit tests (4 new for the seek, 4 for drawn paths, 1 for descriptions) and 95 kit tests.
+  - Smoke 85 of 85 on the test map and 86 of 86 on fine Europe: an unclaimed-only advance walks off to find more land, a drawn path through two points is taken and listed in the purse, and one over water is refused.
+  - Browser script 72 of 72 on both maps: descriptions in all three places, D then a drag, and a right-drag.
+  - Bench: Earth worst tick 36.5 ms, fine Europe 32.1 ms. On a fine-Europe-sized map a seek takes about 2 ms, and one with nothing to aim at stops at once (1.8 ms; it searched for 26.9 ms before that was fixed).
+
 ### 7. The economy while away (piece 12)
 
 - Catch-up on wake runs the economy, construction and research, not only troop growth, still capped at 72 hours.
