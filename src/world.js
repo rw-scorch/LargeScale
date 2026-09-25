@@ -10,12 +10,14 @@ import rules from "../data/rules.json" with { type: "json" };
 import { planCatchUp, runCatchUp } from "./sim/offline.js";
 import { installCombat } from "./sim/combat.js";
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
+import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
 import { makeRng } from "./shared/rng.js";
 import { runOrder, RateLimit, applyPresence, victory, StateFeed, publicEvents } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
+const LOADS = [2, 3];
 const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
 const COLOURS = ["#e0413a", "#f08a24", "#d63fbf", "#f2d02b", "#8e4fe0", "#f4f4f4", "#ff7ab8", "#1f1f1f"];
@@ -88,7 +90,7 @@ export class World extends DurableObject {
   async load() {
     const info = this.meta("info");
     if (!info) return;
-    if (info.save !== SAVE_VERSION) { this.stale = true; return; }
+    if (!LOADS.includes(info.save)) { this.stale = true; return; }
     const t0 = Date.now();
     const terrain = await gunzip(this.readRows("terrain"));
     if (terrain.length !== info.w * info.h) throw new Error(`saved terrain has ${terrain.length} plots, expected ${info.w * info.h}`);
@@ -96,6 +98,9 @@ export class World extends DurableObject {
     this.sim = new Sim({ w: info.w, h: info.h, terrain }, { ...scaled.territory, ...info.rules });
     const owner = this.readRows("owner");
     if (owner.length) decodeRuns(owner, this.sim.owner);
+    installBuildings(this.sim);
+    const buildings = restoreLayers(this.sim, { zone: this.readRows("zone"), wood: this.readRows("wood"), buildings: this.readRows("buildings") });
+    if (info.save !== SAVE_VERSION) { this.upgradedFrom = info.save; info.save = SAVE_VERSION; this.meta("info", info); }
     this.sim.rebuildBorders();
     this.sim.pathGraph();
     const saved = this.meta("state");
@@ -111,7 +116,7 @@ export class World extends DurableObject {
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.updatePresence();
-    this.hashes = { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner) };
+    this.hashes = this.layerHashes(terrain);
     this.loadCheck = { saved: saved?.hashes ?? null, loaded: { ...this.hashes } };
     const elapsed = (Date.now() - (saved?.savedAt ?? Date.now())) / 1000;
     if (elapsed > 5) {
@@ -121,6 +126,12 @@ export class World extends DurableObject {
     }
     this.sim.dirty.clear();
     this.loadMs = Date.now() - t0;
+    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null };
+  }
+
+  layerHashes(terrain = this.sim.terrain) {
+    const bld = this.sim.bld;
+    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)) };
   }
 
   async init(config) {
@@ -158,6 +169,13 @@ export class World extends DurableObject {
       this.hashes.owner = hashBytes(runs);
       this.ownerChanged = false;
     }
+    const layers = saveLayers(this.sim, all);
+    const layerBytes = {};
+    for (const [name, bytes] of Object.entries(layers)) {
+      rows += this.writeRows(name, bytes);
+      layerBytes[name] = bytes.length;
+      this.hashes[name] = hashBytes(bytes);
+    }
     rows += this.meta("state", {
       time: this.sim.time, nextNation: this.sim.nextNation, nextStack: this.sim.nextStack,
       nations: [...this.sim.nations.values()], stacks: [...this.sim.stacks.values()], accounts: [...this.accounts],
@@ -165,7 +183,7 @@ export class World extends DurableObject {
     });
     this.lastSave = Date.now();
     const prev = this.saveStats ?? { saves: 0, totalRows: 0, maxRows: 0 };
-    this.saveStats = { rows, ownerBytes, ms: Date.now() - t0, saves: prev.saves + 1, totalRows: prev.totalRows + rows, maxRows: Math.max(prev.maxRows, rows) };
+    this.saveStats = { rows, ownerBytes, layerBytes, ms: Date.now() - t0, saves: prev.saves + 1, totalRows: prev.totalRows + rows, maxRows: Math.max(prev.maxRows, rows) };
   }
 
   sockets() { return this.ctx.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN); }
@@ -402,7 +420,7 @@ export class World extends DurableObject {
         if (m.op === "save") { this.save(true); return reply({ t: "result", of: "admin", ok: true }); }
         if (m.op === "hashes") {
           this.flushDiffs();
-          return reply({ t: "result", of: "admin", op: "hashes", ok: true, terrain: this.hashes.terrain, owner: hashRuns(this.sim.owner) });
+          return reply({ t: "result", of: "admin", op: "hashes", ok: true, ...this.layerHashes() });
         }
         return reply({ t: "result", of: "admin", ok: false, error: "unknown op" });
       }
@@ -430,7 +448,7 @@ export class World extends DurableObject {
     return {
       initialised: !!this.sim, players: this.accounts.size, online: this.sockets().length, looping: !!this.loop, time: this.sim?.time ?? 0,
       map: info?.map ?? null, w: info?.w, h: info?.h, landPlots: info?.landPlots, bots: info?.bots,
-      hashes: this.hashes ?? null, loadCheck: this.loadCheck ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
+      hashes: this.hashes ?? null, loadCheck: this.loadCheck ?? null, loaded: this.loaded ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
       frozen: !!this.frozen, victory: this.meta("victory"),
     };
   }
