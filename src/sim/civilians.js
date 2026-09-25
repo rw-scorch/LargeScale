@@ -5,6 +5,7 @@ import rules from "../../data/rules.json" with { type: "json" };
 export { ERA_ORDER, ZONES, footprint };
 
 export const CIVIL = Object.fromEntries(Object.entries(BUILDINGS.table).filter(([, d]) => d.civilian));
+export const ZONE_NAMES = Object.keys(ZONES);
 
 export const CIV_RULES = rules.civilians;
 
@@ -13,11 +14,20 @@ const eraIdx = e => ERA_ORDER.indexOf(e);
 export function installCivilians(world, rng, cfg = CIV_RULES) {
   const bld = installBuildings(world);
   const r = { ...CIV_RULES, ...cfg };
-  const civ = { zone: bld.zone, rules: r, table: bld.table, clock: 0 };
+  const civ = { zone: bld.zone, rules: r, table: bld.table, clock: 0, zoned: new Map(), zoneNews: new Set() };
   world.civ = civ;
-  for (const n of world.nations.values()) initNation(n, r);
+  for (let i = 0; i < bld.zone.length; i++) if (bld.zone[i] && world.owner[i]) zonedOf(civ, world.owner[i])[bld.zone[i]].add(i);
+  for (const n of world.nations.values()) if (n.human) initNation(n, r);
+  const claim = world.claim;
+  world.claim = function (i, nid) {
+    const old = this.owner[i], z = bld.zone[i];
+    claim.call(this, i, nid);
+    if (!z || old === nid) return;
+    if (old) civ.zoned.get(old)?.[z].delete(i);
+    if (nid) zonedOf(civ, nid)[z].add(i);
+  };
   const baseMax = world.maxTroops.bind(world);
-  world.maxTroops = n => (n.pop === undefined ? baseMax(n) : world.rules.troopBase * r.troopBaseShare + n.pop * r.conscriptShare);
+  world.maxTroops = n => baseMax(n) + (n.pop ?? 0) * (n.conscription ?? r.conscriptShare);
   world.hooks.postTick.push((w, dt) => {
     civ.clock += dt;
     while (civ.clock >= r.econEvery) {
@@ -28,6 +38,12 @@ export function installCivilians(world, rng, cfg = CIV_RULES) {
   return civ;
 }
 
+function zonedOf(civ, nid) {
+  let sets = civ.zoned.get(nid);
+  if (!sets) civ.zoned.set(nid, (sets = ZONE_NAMES.map(() => new Set())));
+  return sets;
+}
+
 export function initNation(n, r = CIV_RULES) {
   n.era ??= "T";
   n.pop ??= 0;
@@ -36,14 +52,30 @@ export function initNation(n, r = CIV_RULES) {
 }
 
 export function zonePlots(world, nid, plots, zone) {
+  const code = ZONES[zone], bld = world.bld, civ = world.civ;
+  if (code === undefined) return 0;
   let n = 0;
   for (const i of plots) {
-    if (world.owner[i] !== nid || !TERRAIN[world.terrain[i]].build) continue;
-    world.bld.zone[i] = ZONES[zone];
+    if (world.owner[i] !== nid || bld.zone[i] === code) continue;
+    if (code && !TERRAIN[world.terrain[i]].build) continue;
+    if (civ && bld.zone[i]) civ.zoned.get(nid)?.[bld.zone[i]].delete(i);
+    bld.zone[i] = code;
+    if (civ && code) zonedOf(civ, nid)[code].add(i);
+    civ?.zoneNews.add(i);
     n++;
   }
-  if (n) world.bld.changed.add("zone");
+  if (n) bld.changed.add("zone");
   return n;
+}
+
+export function takeZoneNews(world) {
+  const civ = world.civ;
+  if (!civ?.zoneNews.size) return null;
+  const out = new Uint32Array(civ.zoneNews.size * 2);
+  let k = 0;
+  for (const i of civ.zoneNews) { out[k++] = i; out[k++] = world.bld.zone[i]; }
+  civ.zoneNews.clear();
+  return out;
 }
 
 function fits(world, nid, plots, zone, self = 0) {
@@ -93,7 +125,7 @@ export function tryUpgrade(world, b, force = false) {
   b.state = "construction";
   b.progress = 0;
   b.upgrading = true;
-  world.emit("civ_upgrade", { building: b.id, to: b.type });
+  world.emit("civ_upgrade", { nation: b.owner, building: b.id, to: b.type });
   return true;
 }
 
@@ -114,30 +146,31 @@ export function nationTotals(world) {
   return t;
 }
 
+function freePlots(world, nid, zone) {
+  const set = world.civ?.zoned.get(nid)?.[ZONES[zone]];
+  if (!set) return [];
+  const bld = world.bld, out = [];
+  for (const i of set) if (!bld.at.has(i) && world.owner[i] === nid && TERRAIN[world.terrain[i]].build) out.push(i);
+  return out;
+}
+
 export function econTick(world, dt, rng) {
-  const bld = world.bld, table = bld.table, r = world.civ?.rules ?? CIV_RULES;
+  const bld = world.bld, table = bld.table, r = world.civ?.rules ?? CIV_RULES, speed = world.cons?.rules.speed ?? 1;
   for (const b of bld.list.values()) {
     if (!b.civilian || b.state !== "construction") continue;
-    b.progress += dt / table[b.type].time;
+    b.progress += (dt * speed) / table[b.type].time;
     touched(world, b);
     if (b.progress >= 1) {
       b.state = "active";
+      b.progress = 1;
       b.upgrading = false;
       if (table[b.type].housing && b.residents === 0) b.residents = r.startResidents;
     }
   }
   if (bld.list.size) bld.changed.add("buildings");
   const totals = nationTotals(world);
-  const free = new Map();
-  for (let i = 0; i < world.grid.size; i++) {
-    const z = bld.zone[i];
-    if (!z || bld.at.has(i) || !world.owner[i]) continue;
-    const o = world.owner[i];
-    if (!free.has(o)) free.set(o, [[], [], [], [], []]);
-    free.get(o)[z].push(i);
-  }
   for (const n of world.nations.values()) {
-    if (!n.alive) continue;
+    if (!n.alive || !n.human) continue;
     initNation(n, r);
     const s = totals.get(n.id);
     const workers = s.pop * r.workerShare;
@@ -151,7 +184,7 @@ export function econTick(world, dt, rng) {
     const goodsSat = goodsNeed > 0 ? Math.min(1, n.stock.goods / goodsNeed) : 1;
     n.stock.goods = Math.max(0, n.stock.goods - goodsNeed);
     const needs = foodSat * (0.6 + 0.4 * jobSat) * (0.8 + 0.2 * goodsSat);
-    n.stats = { ...s, workers, foodSat, jobSat, goodsSat, needs };
+    n.stats = { ...s, workers, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson };
     let pop = 0;
     for (const b of nationBuildings(world, n.id)) {
       if (!b.civilian) continue;
@@ -165,7 +198,7 @@ export function econTick(world, dt, rng) {
     }
     n.pop = pop;
     const demand = {
-      res: s.housing === 0 || s.pop / Math.max(1, s.housing) > 0.75 ? 1 : 0,
+      res: s.housing === 0 || (needs > 0 && s.pop / s.housing > r.resDemandAt * needs) ? 1 : 0,
       com: s.pop * r.comPerPerson - s.comJobs,
       ind: n.era === "T" ? 0 : s.pop * r.indPerPerson - s.indJobs,
     };
@@ -174,7 +207,7 @@ export function econTick(world, dt, rng) {
       if (demand[zone] <= 0) continue;
       const type = bestTypeFor(zone, n.era, table);
       if (!type) continue;
-      const candidates = free.get(n.id)?.[ZONES[zone]] ?? [];
+      const candidates = freePlots(world, n.id, zone);
       for (let k = 0; k < r.buildTriesPerTick && candidates.length; k++) {
         const at = candidates.splice(Math.floor(rng.next() * candidates.length), 1)[0];
         if (startBuilding(world, n.id, at, type)) break;

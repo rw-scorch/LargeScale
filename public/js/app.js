@@ -15,6 +15,8 @@ import { createStackPanel } from "./ui/stack.js";
 import { createNotices } from "./ui/notice.js";
 import { createBuildMenu } from "./ui/build.js";
 import { createBuildingPanel } from "./ui/building.js";
+import { createTownPanel } from "./ui/town.js";
+import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 
 const screen = document.getElementById("screen");
 const gameRoot = document.getElementById("game");
@@ -46,6 +48,7 @@ class Game {
     this.selected = null;
     this.placing = false;
     this.building = null;
+    this.zoning = null;
     this.ghostAt = null;
     this.selectedBuilding = null;
     this.hover = null;
@@ -62,6 +65,7 @@ class Game {
     this.notices = createNotices(overlay, this);
     this.buildMenu = createBuildMenu(overlay, this);
     this.buildingPanel = createBuildingPanel(overlay, this);
+    this.town = createTownPanel(overlay, this);
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -71,6 +75,9 @@ class Game {
       onTap: (x, y) => this.tap(x, y),
       onSecondary: (x, y) => this.secondary(x, y),
       onHover: (x, y) => (this.hover = x === null ? null : [x, y]),
+      dragging: () => !!this.zoning,
+      onDrag: (a, b) => this.dragZone(a, b),
+      onDragEnd: (a, b) => this.paintZone(a, b),
     });
     this.onResize = () => this.resize();
     addEventListener("resize", this.onResize);
@@ -151,6 +158,7 @@ class Game {
     if (!this.world) return;
     const r = this.world.frame(data);
     if (!r || !this.view) return;
+    if (r.layer === "zone") return;
     if (r.layer === "buildings") { this.world.takeChanged(); this.view.indexBuildings(); }
     else if (r.layer === "terrain") this.view.rebuildTerrain();
     else if (r.all) this.view.rebuildTerritory();
@@ -191,13 +199,14 @@ class Game {
     }
     if (action === "disband" && this.selectedBuilding !== null) return this.buildingPanel.demolish();
     if (action === "build") return this.toggleBuildMenu();
+    if (action === "town") return this.toggleTown();
     if (action === "advance" || action === "move" || action === "split" || action === "merge" || action === "disband") act[action]();
     if (action === "next") this.nextStack();
     if (action === "home") this.home();
     if (action === "zoomIn") this.zoom(1.6);
     if (action === "zoomOut") this.zoom(1 / 1.6);
     if (action === "cancel") {
-      if (this.building) this.stopBuild();
+      if (this.building || this.zoning) this.stopBuild();
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
       else if (this.stack.choosing) this.stack.cancel();
@@ -206,16 +215,59 @@ class Game {
   }
 
   toggleBuildMenu(on = !this.buildMenu.open) {
+    if (on && this.town.open) this.town.show(false);
     const me = this.world?.nations.get(this.world.you);
     this.buildMenu.show(on && !!me?.spawned && me.alive && !this.world.frozen);
     if (!this.buildMenu.open) this.stopBuild();
     this.updatePanels();
   }
 
+  toggleTown(on = !this.town.open) {
+    if (on && this.buildMenu.open) this.toggleBuildMenu(false);
+    this.town.show(on && !!this.world?.purse);
+    this.updatePanels();
+  }
+
+  startZone(zone) {
+    this.startBuild(null);
+    this.zoning = zone;
+    if (this.view) this.view.showZones = true;
+    this.updatePanels();
+  }
+
+  zoneRectOf(a, b) {
+    const w = this.world, p = this.view.screenToPlot(...a), q = this.view.screenToPlot(...b);
+    const clamp = (v, hi) => Math.max(0, Math.min(hi - 1, Math.floor(v)));
+    const x0 = clamp(Math.min(p[0], q[0]), w.w), x1 = clamp(Math.max(p[0], q[0]), w.w);
+    const y0 = clamp(Math.min(p[1], q[1]), w.h), y1 = clamp(Math.max(p[1], q[1]), w.h);
+    return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+
+  dragZone(a, b) {
+    if (!this.view || !this.zoning) return;
+    const r = this.zoneRectOf(a, b);
+    this.view.zoneRect = { ...r, code: ["none", "res", "com", "ind", "farm"].indexOf(this.zoning) };
+  }
+
+  async paintZone(a, b) {
+    if (!this.view || !this.zoning) return;
+    const r = this.zoneRectOf(a, b), zone = this.zoning;
+    this.view.zoneRect = null;
+    let painted = 0;
+    for (let y = r.y; y < r.y + r.h; y += MAX_ZONE_SIDE) for (let x = r.x; x < r.x + r.w; x += MAX_ZONE_SIDE) {
+      const res = await this.conn.request({ t: "zone", zone, x, y, w: Math.min(MAX_ZONE_SIDE, r.x + r.w - x), h: Math.min(MAX_ZONE_SIDE, r.y + r.h - y) });
+      if (!res.ok) return this.toast(res.error ?? "could not zone there");
+      painted += res.plots;
+    }
+    if (!painted) this.toast(zone === "none" ? "Nothing to erase there." : "Zones go on your own open land.");
+  }
+
   startBuild(type) {
     this.togglePlacing(false);
     this.stack.cancel();
     this.select(null);
+    this.zoning = null;
+    if (this.view) { this.view.showZones = false; this.view.zoneRect = null; }
     this.building = type;
     this.ghostAt = null;
     this.updatePanels();
@@ -223,6 +275,8 @@ class Game {
 
   stopBuild() {
     this.building = null;
+    this.zoning = null;
+    if (this.view) { this.view.showZones = false; this.view.zoneRect = null; }
     this.ghostAt = null;
     if (this.view) this.view.ghost = null;
     this.updatePanels();
@@ -287,7 +341,7 @@ class Game {
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
     if (this.placing) return this.togglePlacing(false);
-    if (this.building) return this.stopBuild();
+    if (this.building || this.zoning) return this.stopBuild();
     const s = this.world.stacks.get(this.selected);
     if (!s || s.owner !== this.world.you) return this.toast("Select one of your stacks first, then right-click where it should go.");
     await this.stack.act.moveNow(plot);
@@ -298,6 +352,7 @@ class Game {
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
     const x = plot % w.w, y = (plot / w.w) | 0;
+    if (this.zoning) return this.paintZone([sx, sy], [sx, sy]);
     if (this.building) return this.buildAt(plot);
     if (this.placing) {
       if (w.owner[plot] !== w.you) return this.toast("Pick a plot of your own land.");
@@ -347,7 +402,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town]) p?.update();
   }
 
   leave() {

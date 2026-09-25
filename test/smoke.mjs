@@ -68,7 +68,7 @@ class Mirror {
       });
       this.baseHashOk = true;
     } catch { this.baseHashOk = false; return this; }
-    const need = this.hello.frames.terrain + this.hello.frames.owner + (this.hello.frames.buildings ?? 0);
+    const need = this.hello.frames.terrain + this.hello.frames.owner + (this.hello.frames.buildings ?? 0) + (this.hello.frames.zone ?? 0);
     for (let k = 0; k < 200 && this.got.binary.length < this.bin + need; k++) await sleep(50);
     this.pump(this.bin + need);
     this.joinFrameBytes = this.frameBytes;
@@ -215,6 +215,24 @@ check(aSpawn >= 0, "player spawns on land");
   await until(() => { view.pump(); return cw.buildings.get(bid)?.state === "rubble" && cw.purse.money >= before + 10; }, 3000);
   check(cw.buildings.get(bid)?.state === "rubble" && await until(() => seenByB(3), 3000), "the tower turns to rubble for both players");
   check(await until(() => B.json.some(m => m.t === "state" && m.bg?.includes(bid)), 20000), "the rubble clears on its own, and the friend's client drops it");
+  const cx = aSpawn % M.w, cy = Math.floor(aSpawn / M.w);
+  const zr = async (zone, x, y, w, h) => { A.ws.send(JSON.stringify({ t: "zone", zone, x, y, w, h })); return nextResult(A, "zone"); };
+  const res = await zr("res", cx - 4, cy - 4, 9, 5), com = await zr("com", cx - 4, cy + 1, 9, 3);
+  check(res?.ok && res.plots > 0 && com?.ok && com.plots > 0 && res.plots + com.plots >= 20, `zoning paints ${res?.plots} home plots and ${com?.plots} shop plots next to the capital`);
+  check((await zr("mall", cx, cy, 2, 2))?.error === "unknown zone" && (await zr("res", 0, 0, 65, 1))?.error === "zone at most 64 by 64 plots at a time", "bad zone orders are refused with a reason");
+  const zoneFrames = () => B.binary.filter(f => f[0] === MSG.ZONE_DIFF).length;
+  check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
+  const town = await until(() => {
+    view.pump();
+    const huts = [...cw.buildings.values()].filter(b => b.owner === you && b.type === "hut_grass" && b.state === "active");
+    return huts.length >= 2 && cw.purse?.town?.pop > 0 ? huts.length : 0;
+  }, 25000);
+  check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes`);
+  view.pump();
+  const zonedBefore = cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0);
+  const erased = await zr("none", cx - 4, cy + 1, 9, 3);
+  await until(() => { view.pump(); return cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0) < zonedBefore; }, 3000);
+  check(erased?.ok && erased.plots > 0 && cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0) === zonedBefore - erased.plots, `erasing clears ${erased?.plots} zoned plots on the client too`);
 }
 B.ws.send(JSON.stringify({ t: "chat", text: "hello from friend" }));
 check(!!(await waitFor(A, m => m.t === "chat" && m.text === "hello from friend")), "chat reaches the other player");
@@ -323,7 +341,7 @@ A3.ws.close();
 await sleep(800);
 const saved = (await api(`/api/worlds/${wid}/status`, null, ta)).body;
 const ls = saved.lastSave;
-check(ls && ls.maxRows <= 10, `saves wrote at most ${ls?.maxRows} rows each, ${ls?.totalRows} rows over ${ls?.saves} saves (last: ${ls?.rows} rows, owner layer ${ls?.ownerBytes} bytes, ${ls?.ms} ms)`);
+check(ls && ls.maxRows <= 6, `saves wrote at most ${ls?.maxRows} rows each, ${ls?.totalRows} rows over ${ls?.saves} saves (last: ${ls?.rows} rows, owner layer ${ls?.ownerBytes} bytes, ${ls?.ms} ms)`);
 const { writeFileSync } = await import("node:fs");
 writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ wid, token: ta, you: hello.you, plots: again.plots, hashes: saved.hashes }));
 console.log(failures ? `${failures} checks failed` : "all checks passed");

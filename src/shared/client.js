@@ -19,6 +19,7 @@ export class ClientWorld {
     this.stacks = new Map((hello.stacks ?? []).map(r => [r[0], stackFromRow(r)]));
     this.chat = [...(hello.chat ?? [])];
     this.owner = new Uint16Array(this.w * this.h);
+    this.zone = new Uint8Array(this.w * this.h);
     this.terrain = null;
     this.parts = new PartCollector();
     this.queue = [];
@@ -94,6 +95,12 @@ export class ClientWorld {
     const f = data instanceof Uint8Array || data instanceof ArrayBuffer ? readFrame(data) : data;
     if (f.version !== PROTOCOL) { this.stale = true; return null; }
     if (!this.ready) { this.queue.push(f); return null; }
+    if (f.type === MSG.ZONE_DIFF) {
+      applyPairs(this.zone, f.body);
+      const d = pairs(f.body), plots = [];
+      for (let k = 0; k < d.length; k += 2) plots.push(d[k]);
+      return { layer: "zone", plots };
+    }
     if (f.type === MSG.DIFF) {
       if (!this.ownerReady) return null;
       applyPairs(this.owner, f.body);
@@ -105,6 +112,7 @@ export class ClientWorld {
     if (!whole) return null;
     if (f.type === MSG.TERRAIN_DIFF) { applyPairs(this.terrain, whole); return { layer: "terrain", all: true }; }
     if (f.type === MSG.OWNER) { decodeRuns(whole, this.owner); this.ownerReady = true; return { layer: "owner", all: true }; }
+    if (f.type === MSG.ZONE) { decodeRuns(whole, this.zone); return { layer: "zone", all: true }; }
     if (f.type === MSG.BUILDINGS) {
       for (const r of decodeRows(whole)) if (!this.early.has(r[0])) this.setBuilding(r);
       this.buildingsReady = true;
@@ -127,7 +135,7 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era };
+    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town };
     if (m.t === "joined") {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));

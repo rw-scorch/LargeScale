@@ -63,6 +63,7 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - Troop cap: a small base plus a set share of the population (question 4). Money: 1 gold a second plus a fixed tax per resident (question 3). Both rates are per nation, read from `data/rules.json` defaults.
 - Stats panel: population, housing, jobs, food, goods, needs, and the three demand bars.
 - **Done when:** a zoned area fills with huts and grows as food comes in; starving it visibly empties it; the benchmark passes with 8 player economies of a few thousand buildings each.
+- **Done (25 September 2026).** Ryan chose land plus people for the cap. Unit test: a fed town fills its zone (62 huts, 255 people in the check run) and empties within about 150 s of starving. The smoke test zones homes and shops, sees huts and residents arrive, and the second player receives the zone changes; saves write at most 6 rows. The browser test paints zones by dragging and opens the town panel. Earth bench, 8 player economies with about 15,600 civilian buildings and 55,000 people: worst tick 31.6 ms, and ticks where the economy runs have a 9.1 ms median. Fine Europe at 100 bots: worst 25.5 ms.
 
 ### 4. Resources (piece 6)
 
