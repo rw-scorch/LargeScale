@@ -42,6 +42,7 @@ export class ClientWorld {
     this.consRules = { demolishRefund: 0.5, refundOnCancel: 0.5, instantPremium: 1.5, moneyForMissing: 4, ...hello.consRules };
     this.changed = [];
     this.depositIds = hello.depositIds ?? [];
+    this.depositNames = hello.depositNames ?? [];
     this.deposits = emptyDeposits();
     this.depleted = new Set(hello.depleted ?? []);
     this.tech = hello.tech ?? { eras: [], branches: [], nodes: [] };
@@ -68,7 +69,9 @@ export class ClientWorld {
 
   depositKind(i) {
     const k = depositIndex(this.deposits, i);
-    return k < 0 ? null : { id: this.depositIds[this.deposits.type[k] - 1], depleted: this.depleted.has(i) };
+    if (k < 0) return null;
+    const t = this.deposits.type[k] - 1;
+    return { id: this.depositIds[t], name: this.depositNames[t] ?? this.depositIds[t], depleted: this.depleted.has(i) };
   }
 
   depositAt(i) {

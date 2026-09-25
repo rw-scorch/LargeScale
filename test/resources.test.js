@@ -73,10 +73,12 @@ test("a quarry runs its deposit dry, the sprite state reaches the client, and th
   assert.equal(canPlace(w, a, "clay_pit", g.idx(23, 17)), "must sit on a clay deposit");
   assert.equal(canPlace(w, a, "clay_pit", at), "something is already there");
 
-  const client = new ClientWorld({ w: g.w, h: g.h, you: a, map: { kind: "test" }, hashes: {}, nations: [...w.nations.values()], defs: data.buildings, depositIds: DEPOSIT_IDS, depleted: [at] });
+  const client = new ClientWorld({ w: g.w, h: g.h, you: a, map: { kind: "test" }, hashes: {}, nations: [...w.nations.values()], defs: data.buildings, depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_IDS.map(id => DEPOSITS[id].name), depleted: [at] });
   client.setDeposits(w.res.dep);
   client.message({ t: "events", events: [{ type: "deposit_depleted", at: next }] });
-  assert.deepEqual(client.depositKind(next), { id: "stone", depleted: true });
+  assert.deepEqual(client.depositKind(next), { id: "stone", name: "Stone", depleted: true });
+  assert.equal(client.depositKind(g.idx(5, 5)).name, "Stone", "deposits carry a name for the hover tip");
+  assert.ok(DEPOSIT_IDS.every(id => DEPOSITS[id].name), "every deposit type has a name");
   assert.equal(client.depositAt(next), null);
   assert.equal(client.depositAt(g.idx(5, 5)), "stone");
 
