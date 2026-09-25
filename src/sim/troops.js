@@ -177,7 +177,8 @@ export function trainTick(world, dt) {
       if (!d.builtAt.some(k => kinds.has(k))) { why ??= rate ? `${d.name} train only at a ${d.builtAt.map(k => world.bld.table[k]?.name.toLowerCase() ?? k).join(" or ")}` : "build a war camp to train soldiers"; continue; }
       wants.push([d, want]);
     }
-    let budget = rate * dt * t.speed, trained = 0;
+    const budget = rate * dt * t.speed;
+    let trained = 0;
     const total = wants.reduce((s, [, v]) => s + v, 0);
     for (const [d, want] of wants) {
       const levies = n.troops - mixTotal(n.mix);
@@ -192,7 +193,6 @@ export function trainTick(world, dt) {
       n.mix[d.id] = (n.mix[d.id] ?? 0) + k;
       trained += k;
     }
-    budget -= trained;
     n.drill.why = why;
     n.drill.trained = trained;
   }

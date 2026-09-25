@@ -40,12 +40,16 @@ Troops stay a count, so "troops are a count" still holds. What changes is that e
 - A new Army panel lists the types you have unlocked, with power, cost and how many you have. For each type you set how many to keep. Training buildings turn levies from your garrison into those types over time and charge a little gold, plus wood or iron ore for some. More buildings train faster. No queues per building.
 - Forming a stack takes the same share of every type in your reserve, so a 30% stack takes 30% of your archers too. The Army panel can set a different mix for new stacks.
 - **Done when:** a nation with a barracks keeps its target of spearmen topped up from the garrison while the gold lasts, and forming a stack takes its share of them.
+- **Done (26 September 2026).**
+  - Unit tests: a war camp keeps 40 club warriors topped up at 1 a second for 0.4 gold each, turning levies into them so the total stays the same, and refills the reserve after a stack takes half; a barracks trains swordsmen as far as iron and levies allow and says why when it stops; the army order refuses locked, unknown and negative targets.
+  - Smoke: after Clubs research and a war camp, the host's 20 club warriors are trained. Browser script: the Army panel (K) keeps 12 club warriors, shows "Training 8 a second", and knights say "Needs Stirrups research".
 
 ### A3. Showing them
 
 - At close zoom each stack draws a few soldier figures of its main type, walking when it moves and attacking when it fights, with a chevron for experience. At other zooms the marker shows the main type.
 - The stack panel lists the mix and the experience, for your stacks and everyone else's.
 - **Done when:** the browser script sees soldier figures of the right type and the mix in the panel.
+- **Done (26 September 2026).** The browser script sees a stack of mostly knights drawn as five knight figures, with the mix "306 levies, 10 club warriors, 566 knights" in the panel and Veteran chevrons over the flag (`.screens/27-soldiers.png`).
 
 ### A4. Ryan's check
 
