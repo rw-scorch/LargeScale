@@ -19,7 +19,7 @@ export function createHud(root, game) {
   const placeHint = el("div", { id: "place-hint", class: "banner", hidden: true }, "Click your own land to place the stack. ", el("span", { class: "fine-only", text: "Or point and press F. " }), "Esc cancels.");
   const buildHint = el("div", { id: "build-hint", class: "banner", hidden: true });
   const bar = el("header", { class: "hud" },
-    el("button", { class: "ghost", text: "Worlds", onclick: () => game.leave() }),
+    el("button", { id: "leave-world", title: "leave this world and go back to the world list", text: "Exit", onclick: () => game.leave() }),
     el("b", { class: "world-name", text: game.name }),
     el("span", { class: "status" }, dot, status),
     mine,

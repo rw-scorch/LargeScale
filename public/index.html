@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0f2233">
 <title>Large Scale</title>
 <style>
 :root{--ink:#0f2233;--deep:#10233a;--line:#24506f;--parch:#e9dcb8;--mute:#9fb3c2;--signal:#e8c84a;--bad:#e06a5a;--good:#6fcf7a;--panel:rgba(15,34,51,.92)}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--deep);color:var(--parch);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+html,body{margin:0;height:100%;background:var(--deep);color:var(--parch);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;touch-action:manipulation;overscroll-behavior:none}
 button,input,select{font:inherit;color:inherit;background:#16324a;border:2px solid var(--line);border-radius:3px;padding:6px 10px;min-height:36px}
 button{cursor:pointer;background:#183a54}
 button:hover:not(:disabled){border-color:var(--mute)}
@@ -24,16 +24,18 @@ h2{font-size:16px;margin:18px 0 8px}
 .row{display:flex;gap:8px;align-items:center}
 .row.wrap{flex-wrap:wrap}
 .row.spread{justify-content:space-between}
-#screen{height:100%;overflow:auto;display:grid;place-items:center;padding:16px}
+#screen{height:100%;overflow:auto;display:flex;flex-direction:column;padding:16px}
+#screen>*{margin:auto;flex-shrink:0}
 .card{background:var(--ink);border:2px solid var(--line);border-radius:4px;padding:20px;width:min(360px,100%)}
 .card.wide{width:min(560px,100%)}
 .card form,.form{display:flex;flex-direction:column;gap:10px}
 .worlds{display:flex;flex-direction:column;gap:6px}
 .world{display:flex;justify-content:space-between;align-items:center;gap:8px;border:2px solid var(--line);border-radius:3px;padding:6px 8px}
-#game{position:fixed;inset:0}
+#game{position:fixed;inset:0;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#game input,#game .lines{user-select:text;-webkit-user-select:text}
 #map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;cursor:crosshair}
 #overlay{position:absolute;inset:0;pointer-events:none}
-#overlay>*{pointer-events:auto}
+#overlay>*{pointer-events:auto;touch-action:pan-x pan-y}
 .hud{position:absolute;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;padding:6px 10px;padding-top:max(6px,env(safe-area-inset-top));background:var(--panel);border-bottom:2px solid var(--line);flex-wrap:wrap}
 .hud .grow{flex:1}
 .hud .zoom button{min-width:40px}

@@ -99,6 +99,10 @@ class Game {
       this.key(action);
     };
     addEventListener("keydown", this.onKey);
+    this.onWheel = e => { if (e.ctrlKey) e.preventDefault(); };
+    this.onGesture = e => e.preventDefault();
+    addEventListener("wheel", this.onWheel, { passive: false });
+    addEventListener("gesturestart", this.onGesture);
     this.ui = setInterval(() => this.updatePanels(), 250);
     let last = performance.now();
     const loop = now => {
@@ -461,6 +465,8 @@ class Game {
     clearInterval(this.ui);
     removeEventListener("resize", this.onResize);
     removeEventListener("keydown", this.onKey);
+    removeEventListener("wheel", this.onWheel);
+    removeEventListener("gesturestart", this.onGesture);
     this.onLeave();
   }
 }
