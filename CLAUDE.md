@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (100)
+npm test                  # unit tests (104)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -101,7 +101,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
 - **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
-- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, M move, S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, R deposits at mid zoom, Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, R deposits at mid zoom, Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
@@ -117,10 +117,22 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 
 - **Step 5 (25 September 2026, branch `m2-step5-research`, stacked on step 4).** Protocol 5. `data/techtree.json` is checked when `src/sim/research.js` loads, and `test/research.test.js` checks it against the sprite manifest and the building registry. A building or zone that a node unlocks needs that node (`lockMap` in `src/shared/research.js`); buildings the tree never mentions are gated by era only. The free kit hut skips the research check. The `research` order takes `mode` `queue` (with missing prerequisites), `first`, `remove` (and its dependents) or `clear`. Points go to the first queued node that can be taken now; otherwise they bank up to 500. Progress is kept per node in `n.research.partial`. Era nodes emit a public `era_up` event, and nation rows carry the era for stack markers. Effects in use: `research`, `troop_cap`, `wood_rate`, `food_rate`, `pop_growth`, `defence`. Civilians build and upgrade only to unlocked types. An upgrade needs houses at least `upgradeOccupancy` times needs full and needs of at least `upgradeNeeds` (0.5), because Medieval needs include goods nobody makes yet. The world config's `rules.researchSpeed` speeds research for tests. The world status reports `tickErrors` and `lastError` if the tick loop ever throws.
 
-Open items as of 25 September 2026, in order:
+- **Playtest fixes (26 September 2026, branch `m2-playtest-fixes`).** Ryan's list from his first milestone-two game, fixed. Details are in `plans/milestone-2.md` under Playtest fixes.
+  - Jetties place on the shore.
+  - A guided start: a starter research queue in `rules.json` `research.starterQueue`, gathering from buildings with a `gathers` block, and growth held to what food feeds (`civilians.foodReserveSeconds`).
+  - The Town panel's next step, and people drawn at close zoom (`public/js/render/people.js`).
+  - Own stack destinations in the purse (`orders`), and the advance order's `only` filter.
+  - The land-owner tip (`public/js/ui/tip.js`) and an Exit button.
+  - World creation for admins only.
+  - No page zoom in the game view, and the world list scrolls fully.
 
-1. Milestone two, step 6 (bulk upgrade menu) is next, once Ryan has reviewed steps 1 to 5.
-3. Ryan redeploys when he wants the fine map live: `git pull`, `npm test`, `npx wrangler deploy`.
+  Protocol stays 5: every change is additive.
+
+Open items as of 26 September 2026, in order:
+
+1. Ryan reviews and merges the playtest fixes, then redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+2. Ryan asked for real units (individual soldiers with power levels). That conflicts with "troops are a count" and needs a plan he agrees to first.
+3. Milestone two, step 6 (bulk upgrade menu), then step 7 (economy while away).
 4. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset; tax and conscription sliders.
 5. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
