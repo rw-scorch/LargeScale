@@ -262,6 +262,59 @@ await phone.waitForTimeout(400);
 check(await phone.isVisible("#rotate"), "portrait phones are asked to turn sideways");
 await phone.screenshot({ path: `${OUT}/9-phone-portrait-${MAP}.png` });
 
+const quarry = await openPage({ viewport: { width: 1280, height: 720 } });
+await login(quarry, "rw_scorch", "correct horse");
+const qid = await quarry.evaluate(async () => {
+  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name: "UI quarry", config: { map: "test", w: 240, h: 160, seed: 11, bots: 0, rules: { buildSpeed: 60, produceSpeed: 2000 } } }) });
+  return (await r.json()).id;
+});
+await quarry.goto(`${BASE}/#w=${qid}`);
+await quarry.reload();
+await ready(quarry);
+await quarry.waitForFunction(() => window.__ls.game.world.deposits.plots.length > 0, null, { timeout: 10000 });
+const spot = await quarry.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, d = w.deposits;
+  for (let k = 0; k < d.plots.length; k++) {
+    if (w.depositIds[d.type[k] - 1] !== "stone") continue;
+    const i = d.plots[k], x = i % w.w, y = (i / w.w) | 0;
+    for (const [dx, dy] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
+      const r = await g.conn.request({ t: "spawn", x: x + dx, y: y + dy });
+      if (r.ok) return i;
+    }
+  }
+  return null;
+});
+await quarry.waitForFunction(() => window.__ls.game.world.purse?.money >= 40, null, { timeout: 10000 }).catch(() => {});
+const qat = await quarry.evaluate(p => {
+  const g = window.__ls.game, w = g.world;
+  for (const a of [p, p - 1, p - w.w, p - w.w - 1]) if (!w.placeError("quarry", a)) return a;
+  return null;
+}, spot);
+const why = spot === null ? "no stone deposit to spawn on" : await quarry.evaluate(p => window.__ls.game.world.placeError("quarry", p), spot);
+check(qat !== null, `a quarry fits over the stone deposit at the new capital${qat === null ? `: ${why}` : ""}`);
+await quarry.evaluate(p => { const g = window.__ls.game; g.focus(p, 16); g.view.cam.scale = 16 * g.view.ratio; g.view.clampCamera(); }, spot);
+await quarry.waitForTimeout(600);
+await quarry.screenshot({ path: `${OUT}/10-deposit-${MAP}.png` });
+await quarry.keyboard.press("b");
+await quarry.click("#build-menu .tabs button:has-text('Resources')");
+const quarryText = await quarry.textContent("#build-menu [data-type=quarry]");
+check(/Makes 0.25 stone a second/.test(quarryText), `the Resources tab lists the quarry with its output: "${quarryText.match(/Makes[^,]*/)?.[0]}"`);
+await quarry.keyboard.press("Escape");
+const qr = await quarry.evaluate(a => window.__ls.game.conn.request({ t: "build", type: "quarry", at: a }), qat);
+const dry = await quarry.waitForFunction(a => { const w = window.__ls.game.world, b = w.buildingAt(a); return b ? b.plots.find(i => w.depleted.has(i)) ?? null : null; }, qat, { timeout: 120000 }).then(h => h.jsonValue(), () => null);
+const allDry = await quarry.waitForFunction(a => { const g = window.__ls.game, b = g.world.buildingAt(a); return b && g.view.dryDeposit(b); }, qat, { timeout: 180000 }).then(h => h.jsonValue(), () => null);
+const ran = dry !== null && allDry === "stone";
+const stone = await quarry.evaluate(() => window.__ls.game.world.purse?.stock.stone ?? 0);
+check(qr?.ok && ran, `the quarry runs the deposit dry (${stone} stone in stock), and the client marks it depleted`);
+await quarry.evaluate(p => { const g = window.__ls.game; g.focus(p, 16); g.view.cam.scale = 16 * g.view.ratio; g.view.clampCamera(); }, dry ?? spot);
+await quarry.waitForTimeout(600);
+await quarry.screenshot({ path: `${OUT}/11-quarry-dry-${MAP}.png` });
+await quarry.evaluate(p => { const g = window.__ls.game; g.focus(p, 5); }, spot);
+await quarry.keyboard.press("r");
+await quarry.waitForTimeout(600);
+check(await quarry.evaluate(() => window.__ls.game.view.showDeposits), "R shows deposits at mid zoom");
+await quarry.screenshot({ path: `${OUT}/12-deposits-overlay-${MAP}.png` });
+
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
 console.log(failures ? `${failures} checks failed` : "all checks passed");

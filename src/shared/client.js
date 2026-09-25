@@ -2,6 +2,7 @@ import { PROTOCOL, MSG, ORDER_CODES, readFrame, applyPairs, pairs, PartCollector
 import { decodeRuns, gunzip } from "./codec.js";
 import { baseLayer } from "./maps.js";
 import { tableFrom, decodeRows, footprintAt, placeError, costError, STATES } from "./buildings.js";
+import { emptyDeposits, decodeDeposits, cropDeposits, depositIndex } from "./deposits.js";
 
 const stackFromRow = ([id, owner, pos, troops, order]) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold" });
 
@@ -35,6 +36,26 @@ export class ClientWorld {
     this.purse = hello.purse ?? null;
     this.consRules = hello.consRules ?? { demolishRefund: 0.5, refundOnCancel: 0.5 };
     this.changed = [];
+    this.depositIds = hello.depositIds ?? [];
+    this.deposits = emptyDeposits();
+    this.depleted = new Set(hello.depleted ?? []);
+  }
+
+  setDeposits(dep) { this.deposits = dep; }
+
+  loadDeposits(bytes) {
+    const dep = decodeDeposits(bytes);
+    this.setDeposits(this.map.rect ? cropDeposits(dep, this.map.srcW, this.map.rect) : dep);
+  }
+
+  depositKind(i) {
+    const k = depositIndex(this.deposits, i);
+    return k < 0 ? null : { id: this.depositIds[this.deposits.type[k] - 1], depleted: this.depleted.has(i) };
+  }
+
+  depositAt(i) {
+    const d = this.depositKind(i);
+    return d && !d.depleted ? d.id : null;
   }
 
   setBuilding([id, num, owner, anchor, state, pct]) {
@@ -69,7 +90,7 @@ export class ClientWorld {
   placeError(type, anchor) {
     const def = this.defs.table[type], me = this.nations.get(this.you);
     if (!def || !me) return "unknown building";
-    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; } };
+    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i) };
     const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} };
     return placeError(view, nation, def, anchor) ?? costError(def, nation);
   }
@@ -95,6 +116,12 @@ export class ClientWorld {
     const f = data instanceof Uint8Array || data instanceof ArrayBuffer ? readFrame(data) : data;
     if (f.version !== PROTOCOL) { this.stale = true; return null; }
     if (!this.ready) { this.queue.push(f); return null; }
+    if (f.type === MSG.TERRAIN_EDIT) {
+      applyPairs(this.terrain, f.body);
+      const d = pairs(f.body), plots = [];
+      for (let k = 0; k < d.length; k += 2) plots.push(d[k]);
+      return { layer: "terrain", plots };
+    }
     if (f.type === MSG.ZONE_DIFF) {
       applyPairs(this.zone, f.body);
       const d = pairs(f.body), plots = [];
@@ -113,6 +140,7 @@ export class ClientWorld {
     if (f.type === MSG.TERRAIN_DIFF) { applyPairs(this.terrain, whole); return { layer: "terrain", all: true }; }
     if (f.type === MSG.OWNER) { decodeRuns(whole, this.owner); this.ownerReady = true; return { layer: "owner", all: true }; }
     if (f.type === MSG.ZONE) { decodeRuns(whole, this.zone); return { layer: "zone", all: true }; }
+    if (f.type === MSG.DEPOSITS) { this.setDeposits(decodeDeposits(whole)); return { layer: "deposits", all: true }; }
     if (f.type === MSG.BUILDINGS) {
       for (const r of decodeRows(whole)) if (!this.early.has(r[0])) this.setBuilding(r);
       this.buildingsReady = true;
@@ -135,7 +163,7 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town };
+    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null };
     if (m.t === "joined") {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));
@@ -144,6 +172,7 @@ export class ClientWorld {
       for (const e of m.events) {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
         if (e.type === "capital_moved" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.to;
+        if (e.type === "deposit_depleted") this.depleted.add(e.at);
         this.events.push(e);
       }
       if (this.events.length > 500) this.events.splice(0, this.events.length - 500);

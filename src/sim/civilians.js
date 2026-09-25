@@ -134,8 +134,12 @@ export function nationTotals(world) {
   for (const n of world.nations.values()) t.set(n.id, { pop: 0, housing: 0, jobs: 0, comJobs: 0, indJobs: 0, goodsMade: 0, shops: 0 });
   for (const b of world.bld.list.values()) {
     const s = t.get(b.owner);
-    if (!s || !b.civilian) continue;
+    if (!s) continue;
     const d = table[b.type];
+    if (!b.civilian) {
+      if (d.producer && b.state === "active") s.jobs += d.jobs ?? 0;
+      continue;
+    }
     s.pop += b.residents;
     if (b.state !== "active") continue;
     s.housing += d.housing ?? 0;
@@ -184,7 +188,7 @@ export function econTick(world, dt, rng) {
     const goodsSat = goodsNeed > 0 ? Math.min(1, n.stock.goods / goodsNeed) : 1;
     n.stock.goods = Math.max(0, n.stock.goods - goodsNeed);
     const needs = foodSat * (0.6 + 0.4 * jobSat) * (0.8 + 0.2 * goodsSat);
-    n.stats = { ...s, workers, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson };
+    n.stats = { ...s, workers, worked, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson };
     let pop = 0;
     for (const b of nationBuildings(world, n.id)) {
       if (!b.civilian) continue;

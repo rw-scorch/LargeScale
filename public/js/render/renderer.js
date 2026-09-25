@@ -1,5 +1,6 @@
 import { TERRAIN } from "../shared/terrain.js";
 import { hash2 } from "../shared/rng.js";
+import { areaAround } from "../shared/buildings.js";
 
 export const ZOOM = { max: 16, sprites: 10, icons: 3, maxRatio: 2 };
 export const CHUNK = 256;
@@ -7,9 +8,10 @@ export const NIGHT = "rgba(12,18,52,0.62)";
 const ROAD_NAMES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
 const ZONE_SPRITE = [null, "ov_zone_residential", "ov_zone_commercial", "ov_zone_industrial", "ov_zone_farmland"];
+const DEPOSIT_COLOUR = { stone: "#b8b0a0", clay: "#c07850", iron: "#a05a4a", copper: "#d08a40", tin: "#c8c8d0", coal: "#303030", gold: "#f0c840", silver: "#e0e0f0", gems: "#c060e0", oil: "#101010", gas: "#80c0c0", uranium: "#80f060", bauxite: "#d06040", lithium: "#f0f0f0", sulfur: "#f0f040", salt: "#ffffff", fish: "#50a0f0" };
 export const ZONE_COLOUR = [null, "rgba(111,207,122,.35)", "rgba(90,160,230,.35)", "rgba(232,200,74,.35)", "rgba(190,150,90,.35)"];
 const maskName = m => DIRS.filter(([b]) => m & b).map(d => d[1]).join("") || "dot";
-const ICON_FOR = { housing: "mapicon_housing", res: "mapicon_housing", commercial: "mapicon_commercial", com: "mapicon_commercial", industry: "mapicon_industry", ind: "mapicon_industry", infrastructure: "mapicon_industry", agriculture: "mapicon_agriculture", farm: "mapicon_agriculture", energy: "mapicon_energy", civic: "mapicon_civic", transport: "mapicon_transport", tourism: "mapicon_tourism", military: "mapicon_military" };
+const ICON_FOR = { resources: "mapicon_industry", farming: "mapicon_agriculture", housing: "mapicon_housing", res: "mapicon_housing", commercial: "mapicon_commercial", com: "mapicon_commercial", industry: "mapicon_industry", ind: "mapicon_industry", infrastructure: "mapicon_industry", agriculture: "mapicon_agriculture", farm: "mapicon_agriculture", energy: "mapicon_energy", civic: "mapicon_civic", transport: "mapicon_transport", tourism: "mapicon_tourism", military: "mapicon_military" };
 
 function hexRGB(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -37,6 +39,7 @@ export class MapRenderer {
     this.ghost = null;
     this.zoneRect = null;
     this.showZones = false;
+    this.showDeposits = false;
     this.selectedBuilding = null;
     this.terrainCanvas = document.createElement("canvas");
     this.terrainCanvas.width = state.w;
@@ -84,7 +87,7 @@ export class MapRenderer {
 
   placeBuilding(b) {
     b.fp = b.def?.fp ?? [1, 1];
-    b.sprite = this.atlas.get(b.type) ?? null;
+    b.sprite = this.atlas.get(b.def?.sprite ?? b.type) ?? null;
     for (const i of b.plots ?? []) this.occupied[i] = 1;
   }
 
@@ -96,7 +99,8 @@ export class MapRenderer {
   }
 
   spriteFor(b) {
-    const a = this.atlas;
+    const a = this.atlas, d = b.def;
+    if (d?.sprite) return b.state === "active" ? d.seasonSprites?.[this.season] ?? d.sprite : a.has(`${b.type}_${b.state}`) ? `${b.type}_${b.state}` : d.seasonSprites?.winter ?? d.sprite;
     if (b.state && b.state !== "active" && a.has(`${b.type}_${b.state}`)) return `${b.type}_${b.state}`;
     return this.frameFor(b.type);
   }
@@ -111,18 +115,62 @@ export class MapRenderer {
   setSeason(season) { this.season = season; this.rebuildTerrain(); }
 
   rebuildTerrain() {
-    const s = this.state, pal = this.palettes[this.season];
+    const s = this.state, pal = this.palettes[this.season] ?? this.palettes.summer;
     const ctx = this.terrainCanvas.getContext("2d");
     const img = ctx.createImageData(s.w, s.h);
-    const lut = TERRAIN.map(t => pal[t.name].map(hexRGB));
+    this.lut = TERRAIN.map(t => pal[t.name].map(hexRGB));
     for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) {
-      const i = y * s.w + x;
-      const n = hash2(x, y, 11) * 0.7 + hash2(x >> 2, y >> 2, 12) * 0.3;
-      const k = Math.min(4, Math.max(0, Math.floor(n * 3.4 + 0.3)));
-      const c = lut[s.terrain[i]][k];
+      const i = y * s.w + x, c = this.terrainRGB(i, x, y);
       img.data.set([c[0], c[1], c[2], 255], i * 4);
     }
     ctx.putImageData(img, 0, 0);
+  }
+
+  terrainRGB(i, x, y) {
+    const n = hash2(x, y, 11) * 0.7 + hash2(x >> 2, y >> 2, 12) * 0.3;
+    return this.lut[this.state.terrain[i]][Math.min(4, Math.max(0, Math.floor(n * 3.4 + 0.3)))];
+  }
+
+  updateTerrain(plots) {
+    const ctx = this.terrainCanvas.getContext("2d"), w = this.state.w;
+    for (const i of plots) {
+      const x = i % w, y = (i / w) | 0, c = this.terrainRGB(i, x, y);
+      ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  depositsIn(r, each) {
+    const d = this.state.deposits, w = this.state.w;
+    if (!d?.plots.length) return;
+    for (let y = r.y0; y <= r.y1; y++) {
+      const lo = y * w + r.x0, hi = y * w + r.x1;
+      let a = 0, b = d.plots.length;
+      while (a < b) { const m = (a + b) >> 1; if (d.plots[m] < lo) a = m + 1; else b = m; }
+      for (let k = a; k < d.plots.length && d.plots[k] <= hi; k++) each(d.plots[k], k);
+    }
+  }
+
+  drawDeposits(r) {
+    const s = this.state, px = this.cam.scale / 16;
+    this.depositsIn(r, (i, k) => {
+      if (this.occupied[i]) return;
+      const id = s.depositIds[s.deposits.type[k] - 1];
+      const [sx, sy] = this.plotToScreen(i % s.w, (i / s.w) | 0);
+      this.atlas.draw(this.ctx, `deposit_${id}${s.depleted.has(i) ? "_depleted" : ""}`, sx, sy, px);
+    });
+  }
+
+  drawDepositDots(r) {
+    const ctx = this.ctx, s = this.state, sc = this.cam.scale, k0 = this.ratio ?? 1, d = Math.max(4 * k0, sc * 0.9);
+    ctx.lineWidth = k0;
+    ctx.strokeStyle = "rgba(15,34,51,.9)";
+    this.depositsIn(r, (i, k) => {
+      const [sx, sy] = this.plotToScreen((i % s.w) + 0.5, ((i / s.w) | 0) + 0.5);
+      ctx.fillStyle = s.depleted.has(i) ? "rgba(90,90,90,.8)" : DEPOSIT_COLOUR[s.depositIds[s.deposits.type[k] - 1]] ?? "#fff";
+      ctx.fillRect(sx - d / 2, sy - d / 2, d, d);
+      ctx.strokeRect(sx - d / 2, sy - d / 2, d, d);
+    });
   }
 
   colourOf(o) {
@@ -292,6 +340,7 @@ export class MapRenderer {
     else if (c.scale >= ZOOM.icons * R) this.drawIcons();
     else this.drawDots();
     if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
+    if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
     this.drawZoneRect();
     this.drawGhost();
     this.drawRoute();
@@ -353,7 +402,8 @@ export class MapRenderer {
     if (sprites && ok) {
       ctx.globalAlpha = 0.7;
       const [sx, sy] = this.plotToScreen(ax, ay);
-      this.atlas.draw(ctx, g.def.id, sx, sy - this.riseOf(g.def.id, fp) * px, px, s.nations.get(s.you)?.colour);
+      const id = g.def.sprite ?? g.def.id;
+      this.atlas.draw(ctx, id, sx, sy - this.riseOf(id, fp) * px, px, s.nations.get(s.you)?.colour);
       ctx.globalAlpha = 1;
     }
     for (let dy = 0; dy < fp[1]; dy++) for (let dx = 0; dx < fp[0]; dx++) {
@@ -417,6 +467,7 @@ export class MapRenderer {
       if (s.roads[i]) a.draw(ctx, this.roadSprite(i), sx, sy, px);
     }
     this.drawFill(r);
+    this.drawDeposits(r);
     this.drawZones(r);
     this.drawBorders(r);
     const items = [];
@@ -432,8 +483,11 @@ export class MapRenderer {
       if (ax + b.fp[0] < r.x0 || ax > r.x1 || ay > r.y1 || ay + b.fp[1] < r.y0) continue;
       items.push({ key: ay + b.fp[1], x: ax, draw: () => {
         const [sx, sy] = this.plotToScreen(ax, ay);
-        const id = this.spriteFor(b);
+        const id = this.spriteFor(b), dry = this.dryDeposit(b);
+        if (dry) ctx.globalAlpha = 0.55;
         a.draw(ctx, id, sx, sy - this.riseOf(id, b.fp) * px, px, s.nations.get(b.owner)?.colour);
+        ctx.globalAlpha = 1;
+        if (dry) for (const i of b.plots) { const [dx, dy] = this.plotToScreen(i % s.w, (i / s.w) | 0); a.draw(ctx, `deposit_${dry}_depleted`, dx, dy, px); }
         if (b.state === "construction") this.progressBar(sx, sy + (this.ratio ?? 1), b.fp[0] * this.cam.scale, b.progress);
         if (b.id === this.selectedBuilding) this.outline(sx, sy, b.fp);
       } });
@@ -445,6 +499,19 @@ export class MapRenderer {
     items.sort((p, q) => p.key - q.key || p.x - q.x);
     for (const it of items) it.draw();
     for (const m of this.markers()) this.drawMarker(m, px);
+  }
+
+  dryDeposit(b) {
+    const p = b.def?.producer, s = this.state;
+    if (p?.kind !== "deposit" || b.state !== "active" || !s.depositKind) return null;
+    let dry = null;
+    for (const i of areaAround(s, b.plots, p.radius ?? 0)) {
+      const d = s.depositKind(i);
+      if (!d || !p.deposits.includes(d.id)) continue;
+      if (!d.depleted) return null;
+      dry = d.id;
+    }
+    return dry;
   }
 
   progressBar(x, y, w, p) {

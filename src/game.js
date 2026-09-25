@@ -187,13 +187,15 @@ export class BuildingFeed {
 
 const r2 = v => Math.round((v ?? 0) * 100) / 100;
 
-export function purseOf(n) {
+export function purseOf(n, extra = {}) {
   if (!n || n.money === undefined) return null;
   const stock = {};
   for (const [k, v] of Object.entries(n.stock ?? {})) stock[k] = Math.floor(v);
   const s = n.stats ?? {};
   const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
-  return { money: Math.floor(n.money), stock, era: n.era ?? "T", town };
+  const making = {};
+  for (const [k, v] of Object.entries(n.made ?? {})) making[k] = r2(v / (n.madeEvery ?? 5));
+  return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, ...extra };
 }
 
 const ALWAYS = new Set(["eliminated", "victory"]);
