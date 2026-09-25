@@ -53,6 +53,7 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - Demolish refunds half and leaves rubble for a while.
 - The renderer draws building sprites from the pack at close zoom and simple dots at mid zoom.
 - **Done when:** the smoke test places, finishes and demolishes a building and a second client sees it; the browser test shows the ghost and a finished building; every placement rule shows a readable reason.
+- **Done (25 September 2026).** 78 unit tests pass, and one of them checks every placement reason. The smoke test passes on the test map and fine Europe: kit, four refusals where the server and client give the same reason, build, finish, demolish for a refund of half, and rubble clearing, all seen by the second player. The browser test passes 30 checks with screenshots of the menu, the red and green ghosts, the site, the finished tower and the rubble. Earth bench with construction and economy running: worst tick 10.5 to 11.4 ms, join 284 KB with 16,000 buildings. Mid zoom draws the kit's map icons rather than plain dots.
 
 ### 3. Civilians (piece 5)
 
@@ -62,6 +63,7 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - Troop cap: a small base plus a set share of the population (question 4). Money: 1 gold a second plus a fixed tax per resident (question 3). Both rates are per nation, read from `data/rules.json` defaults.
 - Stats panel: population, housing, jobs, food, goods, needs, and the three demand bars.
 - **Done when:** a zoned area fills with huts and grows as food comes in; starving it visibly empties it; the benchmark passes with 8 player economies of a few thousand buildings each.
+- **Done (25 September 2026).** Ryan chose land plus people for the cap. Unit test: a fed town fills its zone (62 huts, 255 people in the check run) and empties within about 150 s of starving. The smoke test zones homes and shops, sees huts and residents arrive, and the second player receives the zone changes; saves write at most 6 rows. The browser test paints zones by dragging and opens the town panel. Earth bench, 8 player economies with about 15,600 civilian buildings and 55,000 people: worst tick 31.6 ms, and ticks where the economy runs have a 9.1 ms median. Fine Europe at 100 bots: worst 25.5 ms.
 
 ### 4. Resources (piece 6)
 
@@ -71,6 +73,7 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - A deposits overlay toggle at mid zoom.
 - Output multiplies by available workers from step 3.
 - **Done when:** a quarry runs a deposit to zero and the sprite changes; a woodcutter clears the forest around it; winter farms make much less.
+- **Done (25 September 2026).** Unit tests: a quarry drains its vein nearest first to exactly its 50 stone and goes idle; a woodcutter clears the nearest plots, which regrow and fill up again; winter wheat makes 0.2 / 1.2 of summer, and the southern hemisphere is reversed. The browser test runs a quarry dry on a stone deposit; the screenshots show the quarry dimmed with the depleted sprite. The smoke test on fine Europe sees a woodcutter clear a plot live for the second player; the restart check reloads the terrain edits identically. Earth bench with about 1,900 producers and 55,000 people: worst tick 22.4 ms; fine Europe 24.2 ms. Deposits are committed next to the maps. Region worlds cut them, but the fine client still downloads the whole 791 KB fine file once, as it does the fine terrain.
 
 ### 5. Research and eras (piece 9)
 
@@ -80,6 +83,12 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - An era change is announced to everyone, plays `era_up` on the capital, and switches the stack markers to the new era.
 - The build menu and civilian self-upgrades follow what is unlocked, checked on the server.
 - **Done when:** a new nation researches through Tribal into Medieval, sees new buildings in its menu, and its huts start turning into timber cottages without help.
+- **Done (25 September 2026).** Unit tests:
+  - a new nation queues its way through Tribal, waits at the Age of Kingdoms with the reason, and enters the Medieval era, announced to everyone;
+  - Medieval buildings the tree does not gate appear in its menu;
+  - a town of 44 huts starts upgrading to timber cottages once Carpentry is known.
+
+  The smoke test on the test map and fine Europe researches eight nodes, reaches the Medieval era, and the friend hears it. The browser test covers the research panel, Research next queueing the prerequisites, the era-up animation and Medieval stack markers. Bench with research running: worst tick 21.9 ms on Earth, 24.1 ms on fine Europe. The Tribal buildings now need research first: huts need Fire keeping, shops need Barter, and the tower needs Palisades.
 
 ### 6. Bulk upgrade menu (piece 8, second half)
 

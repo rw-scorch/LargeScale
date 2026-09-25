@@ -57,6 +57,15 @@ await ready(page);
 check(await page.isVisible("#spawn-hint"), `a ${MAP} world opens and asks where to start`);
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${OUT}/1-world-${MAP}.png` });
+const newWorld = (p, name, config) => p.evaluate(async ([name, config]) => {
+  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name, config }) });
+  return (await r.json()).id;
+}, [name, config]);
+const playId = await newWorld(page, `UI ${MAP} play`, { map: MAP, rules: { buildSpeed: 10, researchSpeed: 40 } });
+await page.goto(`${BASE}/#w=${playId}`);
+await page.reload();
+await ready(page);
+await page.waitForTimeout(800);
 
 const spawned = await page.evaluate(async () => {
   const g = window.__ls.game, w = g.world, v = g.view;
@@ -73,6 +82,98 @@ const spawned = await page.evaluate(async () => {
 await page.waitForTimeout(1500);
 check(spawned && !(await page.isVisible("#spawn-hint")), `spawned at ${spawned?.x}, ${spawned?.y}; the hint goes away`);
 await page.screenshot({ path: `${OUT}/2-spawned-${MAP}.png` });
+
+await page.keyboard.press("u");
+check(await page.isVisible("#research-panel"), "U opens the research panel");
+await page.click("#research-panel [data-node=palisades]");
+const whyNot = await page.textContent("#research-why").catch(() => "");
+check(/needs Clubs and spears and Stone tools first/.test(whyNot), `a node says why it cannot start: "${whyNot}"`);
+await page.click("#research-first");
+await page.click("#research-panel [data-node=fire_keeping]");
+await page.click("#research-queue-add");
+await page.click("#research-panel [data-node=barter]");
+await page.click("#research-queue-add");
+const queued = await page.waitForFunction(() => window.__ls.game.world.purse?.research?.queue.length >= 4 ? window.__ls.game.world.purse.research.queue : null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => []);
+check(queued.slice(0, 3).join() === "clubs,stone_tools,palisades", `Research next queues what the node needs first: ${queued.join(", ")}`);
+await page.screenshot({ path: `${OUT}/2r-research-${MAP}.png` });
+const learned = await page.waitForFunction(() => { const k = window.__ls.game.world.purse?.research?.known ?? []; return ["palisades", "fire_keeping", "barter"].every(id => k.includes(id)); }, null, { timeout: 60000 }).then(() => true, () => false);
+check(learned, "the queue researches through to Palisades, Fire keeping and Barter");
+await page.screenshot({ path: `${OUT}/2s-researched-${MAP}.png` });
+await page.keyboard.press("u");
+const kit = await page.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].some(b => b.owner === w.you && b.type === "chieftain_hut" && b.state === "active"); }, null, { timeout: 5000 }).then(() => true, () => false);
+const purseText = await page.textContent("#purse");
+check(kit && /gold/.test(purseText), `the starting chieftain hut stands at the capital; the bar shows "${purseText}"`);
+await page.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 22 * g.view.ratio; g.view.clampCamera(); });
+await page.keyboard.press("b");
+check(await page.isVisible("#build-menu"), "B opens the build menu");
+const cell = await page.evaluate(() => { const g = window.__ls.game, w = g.world, v = g.view, cap = w.nations.get(w.you).capital; const [x, y] = v.plotToScreen(cap % w.w, (cap / w.w) | 0); return { x: x / v.ratio, y: y / v.ratio, px: v.cam.scale / v.ratio }; });
+const drag = async (dx0, dy0, dx1, dy1) => {
+  await page.mouse.move(cell.x + dx0 * cell.px, cell.y + dy0 * cell.px);
+  await page.mouse.down();
+  await page.mouse.move(cell.x + dx1 * cell.px, cell.y + dy1 * cell.px, { steps: 8 });
+  await page.mouse.up();
+};
+await page.click("#build-menu [data-zone=res]");
+await drag(-5.5, -5.5, 3.5, -1.5);
+await page.click("#build-menu [data-zone=com]");
+await drag(-5.5, 2.5, 3.5, 4.5);
+const zoned = await page.waitForFunction(() => { const w = window.__ls.game.world; let n = 0; for (const z of w.zone) if (z) n++; return n >= 20 ? n : 0; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => 0);
+check(zoned >= 20, `dragging in the Zones tab paints homes and shops: ${zoned} plots`);
+await page.screenshot({ path: `${OUT}/2a-zones-${MAP}.png` });
+await page.keyboard.press("Escape");
+await page.click("#build-menu .tabs button:has-text('Military')");
+const locked = await page.textContent("#build-menu [data-type=barracks]");
+check(await page.isDisabled("#build-menu [data-type=barracks]") && /Needs the Medieval era/.test(locked), `a locked building is greyed out with its reason: "${locked.match(/Needs.*/)?.[0]}"`);
+await page.screenshot({ path: `${OUT}/2b-build-menu-${MAP}.png` });
+await page.click("#build-menu [data-type=watchtower_wood]");
+const spots = await page.evaluate(() => {
+  const g = window.__ls.game, w = g.world, v = g.view, cap = w.nations.get(w.you).capital, out = { ok: null, bad: null };
+  for (let r = 1; r < 10; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = cap + dy * w.w + dx, [px, py] = v.plotToScreen((i % w.w) + 0.5, ((i / w.w) | 0) + 0.5);
+    if (px < 60 || py < 120 || px > v.canvas.width - 420 * v.ratio || py > v.canvas.height - 140) continue;
+    const why = w.placeError("watchtower_wood", i), at = { plot: i, x: px / v.ratio, y: py / v.ratio, why };
+    if (!why && !out.ok) out.ok = at;
+    if (why && why !== "something is already there" && !out.bad) out.bad = at;
+  }
+  return out;
+});
+if (spots.bad) {
+  await page.mouse.move(spots.bad.x, spots.bad.y);
+  await page.waitForTimeout(300);
+  const g = await page.evaluate(() => ({ ...window.__ls.game.view.ghost, def: undefined }));
+  check(g.reason === spots.bad.why, `the ghost turns red with the reason next to it: "${g.reason}"`);
+  await page.screenshot({ path: `${OUT}/2c-ghost-invalid-${MAP}.png` });
+}
+await page.mouse.move(spots.ok.x, spots.ok.y);
+await page.waitForTimeout(300);
+check(await page.evaluate(() => window.__ls.game.view.ghost?.reason === null), "over your own open land the ghost is green");
+await page.screenshot({ path: `${OUT}/2d-ghost-valid-${MAP}.png` });
+await page.mouse.click(spots.ok.x, spots.ok.y);
+const site = await page.waitForFunction(p => { const b = window.__ls.game.world.buildingAt(p); return b && b.type === "watchtower_wood" ? b.id : null; }, spots.ok.plot, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+check(site !== null, `clicking builds a construction site (building ${site})`);
+await page.keyboard.press("Escape");
+await page.keyboard.press("Escape");
+check(!(await page.isVisible("#build-menu")) && await page.evaluate(() => window.__ls.game.building === null), "Esc leaves building mode, then closes the menu");
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${OUT}/2e-site-${MAP}.png` });
+const finished = await page.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", site, { timeout: 40000 }).then(() => true, () => false);
+check(finished, "the wooden watchtower finishes after its 30 seconds");
+const grown = await page.waitForFunction(() => { const w = window.__ls.game.world; return w.purse?.town?.pop > 0 && [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "hut_grass").length >= 2; }, null, { timeout: 30000 }).then(() => true, () => false);
+await page.keyboard.press("t");
+const people = await page.textContent("#town-population").catch(() => "");
+check(grown && await page.isVisible("#town-panel") && /of/.test(people), `huts rise in the zone, and T opens the town panel: "${people}"`);
+await page.screenshot({ path: `${OUT}/2h-town-${MAP}.png` });
+await page.keyboard.press("t");
+await page.mouse.click(spots.ok.x, spots.ok.y);
+check(await page.waitForSelector("#building-demolish", { timeout: 3000 }).then(() => true, () => false), `clicking it opens its panel: "${await page.textContent("#building-title").catch(() => "")}"`);
+await page.screenshot({ path: `${OUT}/2f-built-${MAP}.png` });
+await page.click("#building-demolish");
+const rubble = await page.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "rubble", site, { timeout: 5000 }).then(() => true, () => false);
+check(rubble, "Demolish turns it to rubble");
+await page.waitForTimeout(500);
+await page.screenshot({ path: `${OUT}/2g-rubble-${MAP}.png` });
+await page.keyboard.press("Escape");
+await page.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 6));
 
 const toScreen = (page, plot) => page.evaluate(p => {
   const g = window.__ls.game, w = g.world, v = g.view;
@@ -186,6 +287,70 @@ await phone.setViewportSize({ width: 390, height: 844 });
 await phone.waitForTimeout(400);
 check(await phone.isVisible("#rotate"), "portrait phones are asked to turn sideways");
 await phone.screenshot({ path: `${OUT}/9-phone-portrait-${MAP}.png` });
+
+const quarry = await openPage({ viewport: { width: 1280, height: 720 } });
+await login(quarry, "rw_scorch", "correct horse");
+const qid = await quarry.evaluate(async () => {
+  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name: "UI quarry", config: { map: "test", w: 240, h: 160, seed: 11, bots: 0, rules: { buildSpeed: 60, produceSpeed: 2000, researchSpeed: 400 } } }) });
+  return (await r.json()).id;
+});
+await quarry.goto(`${BASE}/#w=${qid}`);
+await quarry.reload();
+await ready(quarry);
+await quarry.waitForFunction(() => window.__ls.game.world.deposits.plots.length > 0, null, { timeout: 10000 });
+const spot = await quarry.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, d = w.deposits;
+  for (let k = 0; k < d.plots.length; k++) {
+    if (w.depositIds[d.type[k] - 1] !== "stone") continue;
+    const i = d.plots[k], x = i % w.w, y = (i / w.w) | 0;
+    for (const [dx, dy] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
+      const r = await g.conn.request({ t: "spawn", x: x + dx, y: y + dy });
+      if (r.ok) return i;
+    }
+  }
+  return null;
+});
+for (const id of ["stone_tools", "fire_keeping", "barter", "farming", "chieftains", "palisades"]) await quarry.evaluate(id => window.__ls.game.conn.request({ t: "research", id }), id);
+await quarry.waitForFunction(() => (window.__ls.game.world.purse?.research?.known.length ?? 0) >= 8, null, { timeout: 30000 }).catch(() => {});
+await quarry.waitForFunction(() => window.__ls.game.world.purse?.money >= 40, null, { timeout: 10000 }).catch(() => {});
+const qat = await quarry.evaluate(p => {
+  const g = window.__ls.game, w = g.world;
+  for (const a of [p, p - 1, p - w.w, p - w.w - 1]) if (!w.placeError("quarry", a)) return a;
+  return null;
+}, spot);
+const why = spot === null ? "no stone deposit to spawn on" : await quarry.evaluate(p => window.__ls.game.world.placeError("quarry", p), spot);
+check(qat !== null, `a quarry fits over the stone deposit at the new capital${qat === null ? `: ${why}` : ""}`);
+await quarry.evaluate(p => { const g = window.__ls.game; g.focus(p, 16); g.view.cam.scale = 16 * g.view.ratio; g.view.clampCamera(); }, spot);
+await quarry.waitForTimeout(600);
+await quarry.screenshot({ path: `${OUT}/10-deposit-${MAP}.png` });
+await quarry.keyboard.press("b");
+await quarry.click("#build-menu .tabs button:has-text('Resources')");
+const quarryText = await quarry.textContent("#build-menu [data-type=quarry]");
+check(/Makes 0.25 stone a second/.test(quarryText), `the Resources tab lists the quarry with its output: "${quarryText.match(/Makes[^,]*/)?.[0]}"`);
+await quarry.keyboard.press("Escape");
+const qr = await quarry.evaluate(a => window.__ls.game.conn.request({ t: "build", type: "quarry", at: a }), qat);
+const dry = await quarry.waitForFunction(a => { const w = window.__ls.game.world, b = w.buildingAt(a); return b ? b.plots.find(i => w.depleted.has(i)) ?? null : null; }, qat, { timeout: 120000 }).then(h => h.jsonValue(), () => null);
+const allDry = await quarry.waitForFunction(a => { const g = window.__ls.game, b = g.world.buildingAt(a); return b && g.view.dryDeposit(b); }, qat, { timeout: 180000 }).then(h => h.jsonValue(), () => null);
+const ran = dry !== null && allDry === "stone";
+const stone = await quarry.evaluate(() => window.__ls.game.world.purse?.stock.stone ?? 0);
+check(qr?.ok && ran, `the quarry runs the deposit dry (${stone} stone in stock), and the client marks it depleted`);
+await quarry.evaluate(p => { const g = window.__ls.game; g.focus(p, 16); g.view.cam.scale = 16 * g.view.ratio; g.view.clampCamera(); }, dry ?? spot);
+await quarry.waitForTimeout(600);
+await quarry.screenshot({ path: `${OUT}/11-quarry-dry-${MAP}.png` });
+await quarry.evaluate(p => { const g = window.__ls.game; g.focus(p, 5); }, spot);
+await quarry.keyboard.press("r");
+await quarry.waitForTimeout(600);
+check(await quarry.evaluate(() => window.__ls.game.view.showDeposits), "R shows deposits at mid zoom");
+await quarry.screenshot({ path: `${OUT}/12-deposits-overlay-${MAP}.png` });
+await quarry.keyboard.press("r");
+await quarry.evaluate(() => window.__ls.game.conn.request({ t: "stack", share: 0.3 }));
+await quarry.evaluate(p => window.__ls.game.focus(p, 12), spot);
+await quarry.evaluate(() => window.__ls.game.conn.request({ t: "research", id: "age_medieval", mode: "first" }));
+const age = await quarry.waitForFunction(() => window.__ls.game.world.purse?.era === "M" && window.__ls.game.world.effects.length > 0, null, { timeout: 20000 }).then(() => true, () => false);
+await quarry.waitForTimeout(300);
+await quarry.screenshot({ path: `${OUT}/13-era-up-${MAP}.png` });
+const marker = await quarry.evaluate(() => { const v = window.__ls.game.view; return v.markers().find(m => m.owner === window.__ls.game.world.you)?.era; });
+check(age && marker === "M", `reaching the Medieval era plays era_up on the capital and the stack marker turns Medieval (${marker})`);
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();

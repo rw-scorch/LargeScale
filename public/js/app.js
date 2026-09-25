@@ -13,6 +13,12 @@ import { createNations } from "./ui/nations.js";
 import { createChat } from "./ui/chat.js";
 import { createStackPanel } from "./ui/stack.js";
 import { createNotices } from "./ui/notice.js";
+import { createBuildMenu } from "./ui/build.js";
+import { createBuildingPanel } from "./ui/building.js";
+import { createTownPanel } from "./ui/town.js";
+import { createResearchPanel } from "./ui/research.js";
+import { MAX_ZONE_SIDE } from "./shared/protocol.js";
+import { gunzip } from "./shared/codec.js";
 
 const screen = document.getElementById("screen");
 const gameRoot = document.getElementById("game");
@@ -21,10 +27,17 @@ const canvas = document.getElementById("map");
 
 let assets = null;
 const loadAssets = async () => (assets ??= await Promise.all([
-  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain"]),
+  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects"]),
   fetch("/assets/terrain/palettes.json").then(r => r.json()),
 ]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
-const gzCache = new Map();
+const gzCache = new Map(), depCache = new Map();
+const depositsGz = async (dir, hash) => {
+  if (!depCache.has(hash)) {
+    const r = await fetch(`/${dir}/deposits.bin.gz?v=${hash}`);
+    depCache.set(hash, r.ok ? new Uint8Array(await r.arrayBuffer()) : null);
+  }
+  return depCache.get(hash);
+};
 const terrainGz = async (dir, hash) => {
   if (!gzCache.has(hash)) {
     const r = await fetch(`/${dir}/terrain.bin.gz?v=${hash}`);
@@ -43,6 +56,10 @@ class Game {
     this.view = null;
     this.selected = null;
     this.placing = false;
+    this.building = null;
+    this.zoning = null;
+    this.ghostAt = null;
+    this.selectedBuilding = null;
     this.hover = null;
     this.keys = keyMap();
     this.frameTimes = [];
@@ -55,6 +72,10 @@ class Game {
     this.chat = createChat(overlay, this);
     this.stack = createStackPanel(overlay, this);
     this.notices = createNotices(overlay, this);
+    this.buildMenu = createBuildMenu(overlay, this);
+    this.buildingPanel = createBuildingPanel(overlay, this);
+    this.town = createTownPanel(overlay, this);
+    this.research = createResearchPanel(overlay, this);
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -64,6 +85,9 @@ class Game {
       onTap: (x, y) => this.tap(x, y),
       onSecondary: (x, y) => this.secondary(x, y),
       onHover: (x, y) => (this.hover = x === null ? null : [x, y]),
+      dragging: () => !!this.zoning,
+      onDrag: (a, b) => this.dragZone(a, b),
+      onDragEnd: (a, b) => this.paintZone(a, b),
     });
     this.onResize = () => this.resize();
     addEventListener("resize", this.onResize);
@@ -82,6 +106,7 @@ class Game {
       const dt = now - last;
       last = now;
       if (this.view) {
+        this.updateGhost();
         const t = performance.now();
         this.view.render(dt / 1000);
         this.frameTimes.push({ gap: dt, draw: performance.now() - t, scale: this.view.cam.scale });
@@ -112,6 +137,10 @@ class Game {
     try {
       await loadAssets();
       await world.loadBase(() => terrainGz(m.map.dir ?? "map", m.map.baseHash ?? "test"));
+      if (m.map.kind !== "test") {
+        const gz = await depositsGz(m.map.dir ?? "map", m.map.baseHash);
+        if (gz) world.loadDeposits(await gunzip(gz));
+      }
     } catch (e) {
       this.toast(e.message);
       return;
@@ -119,7 +148,9 @@ class Game {
     if (this.world !== world) return;
     const cam = this.view?.cam;
     this.view = new MapRenderer(canvas, assets.atlas, world, assets.palettes);
+    world.takeChanged();
     this.view.selected = this.selected;
+    this.view.selectedBuilding = this.selectedBuilding;
     this.resize();
     if (cam) Object.assign(this.view.cam, cam);
     else if (world.nations.get(world.you)?.capital != null) this.home();
@@ -132,15 +163,20 @@ class Game {
     if (m.t === "hello") return this.onHello(m);
     if (!this.world) return;
     this.world.message(m);
+    if (this.view && this.world.changed.length) this.view.updateBuildings(this.world.takeChanged());
     if (m.t === "events") for (const e of m.events) this.announce(e);
     if (m.t === "state" && this.view) this.view.colours.clear();
+    if (m.t === "purse" && this.view && m.season && m.season !== this.view.season) this.view.setSeason(m.season);
   }
 
   onFrame(data) {
     if (!this.world) return;
     const r = this.world.frame(data);
     if (!r || !this.view) return;
-    if (r.layer === "terrain") this.view.rebuildTerrain();
+    if (r.layer === "zone" || r.layer === "deposits") return;
+    if (r.layer === "terrain" && r.plots) return this.view.updateTerrain(r.plots);
+    if (r.layer === "buildings") { this.world.takeChanged(); this.view.indexBuildings(); }
+    else if (r.layer === "terrain") this.view.rebuildTerrain();
     else if (r.all) this.view.rebuildTerritory();
     else this.view.updatePlots(r.plots);
   }
@@ -159,6 +195,14 @@ class Game {
     if (e.type === "eliminated") say(`elim${e.nation}`, e.nation === you ? "Your nation has been eliminated." : `${name(e.nation)} has been eliminated.`, 0);
     if (e.type === "stalled" && w.stacks.get(e.stack)?.owner === you) say(`stall${e.stack}`, "A stack stopped: not enough troops to go on.");
     if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0);
+    if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0);
+    if (e.type === "deposit_depleted" && e.nation === you) say(`dep${e.at}`, `A ${e.kind} deposit has run dry.`);
+    if (e.type === "era_up") say(`era${e.nation}${e.era}`, e.nation === you ? `Your nation enters the ${e.name} era.` : `${name(e.nation)} has reached the ${e.name} era.`, 0);
+    if (e.type === "researched" && e.nation === you) {
+      const node = w.locks.nodes.get(e.node), builds = (node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name).filter(Boolean);
+      say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build: ${builds.join(", ")}.` : ""}`, 0);
+    }
+    if (e.type === "kit" && e.nation === you) say("kit", "Your chieftain hut stands at the capital. Press B to build more.", 0);
   }
 
   plotAt(sx, sy) {
@@ -175,16 +219,137 @@ class Game {
       if (plot !== null && w.owner[plot] === w.you) this.formAt(plot);
       else this.togglePlacing();
     }
+    if (action === "disband" && this.selectedBuilding !== null) return this.buildingPanel.demolish();
+    if (action === "build") return this.toggleBuildMenu();
+    if (action === "town") return this.toggleTown();
+    if (action === "research") return this.toggleResearch();
+    if (action === "deposits") return this.toggleDeposits();
     if (action === "advance" || action === "move" || action === "split" || action === "merge" || action === "disband") act[action]();
     if (action === "next") this.nextStack();
     if (action === "home") this.home();
     if (action === "zoomIn") this.zoom(1.6);
     if (action === "zoomOut") this.zoom(1 / 1.6);
     if (action === "cancel") {
-      if (this.placing) this.togglePlacing(false);
+      if (this.building || this.zoning) this.stopBuild();
+      else if (this.research.open) this.toggleResearch(false);
+      else if (this.buildMenu.open) this.toggleBuildMenu(false);
+      else if (this.placing) this.togglePlacing(false);
       else if (this.stack.choosing) this.stack.cancel();
       else this.select(null);
     }
+  }
+
+  toggleBuildMenu(on = !this.buildMenu.open) {
+    if (on && this.town.open) this.town.show(false);
+    const me = this.world?.nations.get(this.world.you);
+    this.buildMenu.show(on && !!me?.spawned && me.alive && !this.world.frozen);
+    if (!this.buildMenu.open) this.stopBuild();
+    this.updatePanels();
+  }
+
+  toggleResearch(on = !this.research.open) {
+    this.research.show(on && !!this.world?.purse?.research);
+    this.updatePanels();
+  }
+
+  toggleDeposits() {
+    if (!this.view) return;
+    this.view.showDeposits = !this.view.showDeposits;
+    this.toast(this.view.showDeposits ? "Deposits shown at mid zoom. Grey ones are used up." : "Deposits hidden at mid zoom.");
+    this.updatePanels();
+  }
+
+  toggleTown(on = !this.town.open) {
+    if (on && this.buildMenu.open) this.toggleBuildMenu(false);
+    this.town.show(on && !!this.world?.purse);
+    this.updatePanels();
+  }
+
+  startZone(zone) {
+    this.startBuild(null);
+    this.zoning = zone;
+    if (this.view) this.view.showZones = true;
+    this.updatePanels();
+  }
+
+  zoneRectOf(a, b) {
+    const w = this.world, p = this.view.screenToPlot(...a), q = this.view.screenToPlot(...b);
+    const clamp = (v, hi) => Math.max(0, Math.min(hi - 1, Math.floor(v)));
+    const x0 = clamp(Math.min(p[0], q[0]), w.w), x1 = clamp(Math.max(p[0], q[0]), w.w);
+    const y0 = clamp(Math.min(p[1], q[1]), w.h), y1 = clamp(Math.max(p[1], q[1]), w.h);
+    return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+
+  dragZone(a, b) {
+    if (!this.view || !this.zoning) return;
+    const r = this.zoneRectOf(a, b);
+    this.view.zoneRect = { ...r, code: ["none", "res", "com", "ind", "farm"].indexOf(this.zoning) };
+  }
+
+  async paintZone(a, b) {
+    if (!this.view || !this.zoning) return;
+    const r = this.zoneRectOf(a, b), zone = this.zoning;
+    this.view.zoneRect = null;
+    let painted = 0;
+    for (let y = r.y; y < r.y + r.h; y += MAX_ZONE_SIDE) for (let x = r.x; x < r.x + r.w; x += MAX_ZONE_SIDE) {
+      const res = await this.conn.request({ t: "zone", zone, x, y, w: Math.min(MAX_ZONE_SIDE, r.x + r.w - x), h: Math.min(MAX_ZONE_SIDE, r.y + r.h - y) });
+      if (!res.ok) return this.toast(res.error ?? "could not zone there");
+      painted += res.plots;
+    }
+    if (!painted) this.toast(zone === "none" ? "Nothing to erase there." : "Zones go on your own open land.");
+  }
+
+  startBuild(type) {
+    this.togglePlacing(false);
+    this.stack.cancel();
+    this.select(null);
+    this.zoning = null;
+    if (this.view) { this.view.showZones = false; this.view.zoneRect = null; }
+    this.building = type;
+    this.ghostAt = null;
+    this.updatePanels();
+  }
+
+  stopBuild() {
+    this.building = null;
+    this.zoning = null;
+    if (this.view) { this.view.showZones = false; this.view.zoneRect = null; }
+    this.ghostAt = null;
+    if (this.view) this.view.ghost = null;
+    this.updatePanels();
+  }
+
+  anchorFor(plot, def) {
+    const w = this.world, x = plot % w.w, y = (plot / w.w) | 0;
+    const ax = Math.max(0, Math.min(w.w - def.fp[0], x - ((def.fp[0] - 1) >> 1)));
+    const ay = Math.max(0, Math.min(w.h - def.fp[1], y - ((def.fp[1] - 1) >> 1)));
+    return ay * w.w + ax;
+  }
+
+  updateGhost() {
+    const def = this.building && this.world?.defs.table[this.building];
+    if (!def) { this.view.ghost = null; return; }
+    const plot = this.hover ? this.plotAt(...this.hover) : null;
+    const anchor = plot !== null ? this.anchorFor(plot, def) : this.ghostAt;
+    this.view.ghost = anchor === null ? null : { def, anchor, reason: this.world.placeError(def.id, anchor) };
+  }
+
+  async buildAt(plot) {
+    const def = this.world.defs.table[this.building];
+    const anchor = this.anchorFor(plot, def);
+    if (!this.hover && this.ghostAt !== anchor) { this.ghostAt = anchor; return; }
+    const why = this.world.placeError(def.id, anchor);
+    if (why) return this.toast(why);
+    const r = await this.conn.request({ t: "build", type: def.id, at: anchor });
+    if (!r.ok) return this.toast(r.error ?? "could not build there");
+    this.ghostAt = null;
+  }
+
+  selectBuilding(id) {
+    this.selectedBuilding = id;
+    if (this.view) this.view.selectedBuilding = id;
+    if (id !== null && this.selected !== null) this.select(null);
+    this.updatePanels();
   }
 
   togglePlacing(on = !this.placing) {
@@ -213,6 +378,7 @@ class Game {
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
     if (this.placing) return this.togglePlacing(false);
+    if (this.building || this.zoning) return this.stopBuild();
     const s = this.world.stacks.get(this.selected);
     if (!s || s.owner !== this.world.you) return this.toast("Select one of your stacks first, then right-click where it should go.");
     await this.stack.act.moveNow(plot);
@@ -223,6 +389,8 @@ class Game {
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
     const x = plot % w.w, y = (plot / w.w) | 0;
+    if (this.zoning) return this.paintZone([sx, sy], [sx, sy]);
+    if (this.building) return this.buildAt(plot);
     if (this.placing) {
       if (w.owner[plot] !== w.you) return this.toast("Pick a plot of your own land.");
       return this.formAt(plot);
@@ -232,10 +400,14 @@ class Game {
     if (hit !== null) return this.select(hit);
     const me = w.nations.get(w.you);
     if (me && !me.spawned && !w.frozen) return this.spawn.tryAt(x, y);
+    const b = w.buildingAt(plot);
+    if (b) return this.selectBuilding(b.id);
     this.select(null);
+    this.selectBuilding(null);
   }
 
   select(id) {
+    if (id !== null && this.selectedBuilding !== null) { this.selectedBuilding = null; if (this.view) this.view.selectedBuilding = null; }
     this.selected = id;
     this.selectedAt = performance.now();
     if (this.view) this.view.selected = id;
@@ -267,7 +439,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research]) p?.update();
   }
 
   leave() {

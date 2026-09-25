@@ -1,26 +1,16 @@
 import { TERRAIN } from "../shared/terrain.js";
 import { encodeRuns, decodeRuns } from "../shared/codec.js";
+import { ERA_ORDER, STATES, tableFrom, footprintAt } from "../shared/buildings.js";
 import data from "../../data/buildings.json" with { type: "json" };
 import rules from "../../data/rules.json" with { type: "json" };
 
-export const ERA_ORDER = ["T", "M", "G", "I", "Mo", "F"];
+export { ERA_ORDER, STATES };
 export const ZONES = { none: 0, res: 1, com: 2, ind: 3, farm: 4 };
-export const STATES = ["construction", "active", "damaged", "rubble"];
 export const WOOD_FULL = 255;
 export const LAYERS = ["zone", "wood", "buildings"];
 const FORMAT = 1, HEAD = 9, REC = 22;
 
-export function loadTable(src = data) {
-  const table = {}, byNum = [];
-  for (const d of src.buildings) {
-    if (table[d.id] || byNum[d.num]) throw new Error(`building ${d.id} (number ${d.num}) is listed twice`);
-    const def = { ...d, fp: d.footprint, cat: d.category };
-    table[d.id] = def;
-    byNum[d.num] = def;
-  }
-  for (const d of Object.values(table)) if (d.next && !table[d.next]) throw new Error(`${d.id} upgrades to unknown ${d.next}`);
-  return { table, byNum };
-}
+export const loadTable = (src = data) => tableFrom(src.buildings);
 
 export const BUILDINGS = loadTable();
 
@@ -29,7 +19,7 @@ export function installBuildings(world, { defs = BUILDINGS, keep = rules.buildin
   const size = world.grid.size;
   const bld = {
     table: defs.table, byNum: defs.byNum, list: new Map(), at: new Map(), mine: new Map(), next: 1,
-    zone: new Uint8Array(size), wood: new Uint8Array(size), changed: new Set(), keep,
+    zone: new Uint8Array(size), wood: new Uint8Array(size), changed: new Set(), news: new Set(), keep,
   };
   fillWood(world.terrain, bld.wood);
   world.bld = bld;
@@ -53,13 +43,11 @@ function captured(world, i, nid) {
   if (b.residents) b.residents *= bld.keep;
 }
 
-export function footprint(world, anchor, fp) {
-  const g = world.grid, x0 = g.x(anchor), y0 = g.y(anchor), out = [];
-  for (let dy = 0; dy < fp[1]; dy++) for (let dx = 0; dx < fp[0]; dx++) {
-    if (!g.inside(x0 + dx, y0 + dy)) return null;
-    out.push(g.idx(x0 + dx, y0 + dy));
-  }
-  return out;
+export const footprint = (world, anchor, fp) => footprintAt(world.grid.w, world.grid.h, anchor, fp);
+
+export function touched(world, b) {
+  world.bld.changed.add("buildings");
+  world.bld.news.add(b.id);
 }
 
 function mineOf(bld, nid) {
@@ -80,7 +68,7 @@ export function addBuilding(world, { id, type, owner, anchor, plots, state = "co
   bld.list.set(id, b);
   for (const i of plots) bld.at.set(i, id);
   mineOf(bld, owner).add(id);
-  bld.changed.add("buildings");
+  touched(world, b);
   return b;
 }
 
@@ -90,7 +78,7 @@ export function removeBuilding(world, id) {
   for (const i of b.plots) if (bld.at.get(i) === id) bld.at.delete(i);
   bld.mine.get(b.owner)?.delete(id);
   bld.list.delete(id);
-  bld.changed.add("buildings");
+  touched(world, b);
   return b;
 }
 
@@ -99,7 +87,7 @@ export function setPlots(world, b, plots) {
   for (const i of b.plots) if (at.get(i) === b.id) at.delete(i);
   for (const i of plots) at.set(i, b.id);
   b.plots = plots;
-  world.bld.changed.add("buildings");
+  touched(world, b);
 }
 
 export function setOwner(world, b, nid) {
@@ -107,7 +95,7 @@ export function setOwner(world, b, nid) {
   bld.mine.get(b.owner)?.delete(b.id);
   b.owner = nid;
   mineOf(bld, nid).add(b.id);
-  bld.changed.add("buildings");
+  touched(world, b);
 }
 
 export function buildingAt(world, i) {
@@ -168,6 +156,7 @@ export function saveLayers(world, all = false) {
   if (all || bld.changed.has("zone")) out.zone = encodeRuns(bld.zone);
   if (all || bld.changed.has("wood")) out.wood = encodeRuns(bld.wood);
   if (all || bld.changed.has("buildings")) out.buildings = encodeBuildings(bld);
+  for (const [name, encode] of Object.entries(bld.extra ?? {})) if (all || bld.changed.has(name)) out[name] = encode();
   bld.changed.clear();
   return out;
 }
@@ -178,5 +167,6 @@ export function restoreLayers(world, { zone, wood, buildings } = {}) {
   if (wood?.length) decodeRuns(wood, bld.wood);
   const count = buildings ? decodeBuildings(world, buildings) : 0;
   bld.changed.clear();
+  bld.news.clear();
   return count;
 }

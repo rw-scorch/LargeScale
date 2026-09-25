@@ -11,8 +11,16 @@ import { planCatchUp, runCatchUp } from "./sim/offline.js";
 import { installCombat } from "./sim/combat.js";
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
+import { installConstruction } from "./sim/construction.js";
+import { installEconomy } from "./sim/economy.js";
+import { installCivilians, takeZoneNews } from "./sim/civilians.js";
+import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS } from "./sim/resources.js";
+import { installResearch, researchView, TREE } from "./sim/research.js";
+import { decodeDeposits, cropDeposits, encodeDeposits, emptyDeposits, latitudeOf, seasonAt } from "./shared/deposits.js";
+import { encodeRows } from "./shared/buildings.js";
+import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
-import { runOrder, RateLimit, applyPresence, victory, StateFeed, publicEvents } from "./game.js";
+import { runOrder, RateLimit, applyPresence, victory, StateFeed, BuildingFeed, purseOf, publicEvents } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
@@ -20,6 +28,7 @@ const SAVE_VERSION = 3;
 const LOADS = [2, 3];
 const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
+const SEASON_SECONDS = rules.seasons.dayLengthMinutes * 60 * rules.seasons.daysPerSeason;
 const COLOURS = ["#e0413a", "#f08a24", "#d63fbf", "#f2d02b", "#8e4fe0", "#f4f4f4", "#ff7ab8", "#1f1f1f"];
 
 export class World extends DurableObject {
@@ -32,6 +41,8 @@ export class World extends DurableObject {
     this.queue = new NotifyQueue();
     this.limiter = new RateLimit(rules.world.messagesPerSecond, rules.world.messageBurst);
     this.feed = new StateFeed(rules.world.botTroopShare, rules.world.botStateEvery);
+    this.bfeed = new BuildingFeed();
+    this.purses = new Map();
     this.tickCount = 0;
     ctx.blockConcurrencyWhile(async () => {
       ctx.storage.sql.exec(`
@@ -45,7 +56,7 @@ export class World extends DurableObject {
 
   meta(k, v) {
     if (v === undefined) return JSON.parse(this.ctx.storage.sql.exec("SELECT v FROM meta WHERE k = ?", k).toArray()[0]?.v ?? "null");
-    return this.ctx.storage.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)", k, JSON.stringify(v)).rowsWritten;
+    return this.ctx.storage.sql.exec("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", k, JSON.stringify(v)).rowsWritten;
   }
 
   readRows(layer) {
@@ -57,7 +68,7 @@ export class World extends DurableObject {
   writeRows(layer, bytes) {
     const sql = this.ctx.storage.sql, parts = splitParts(bytes, ROW_BYTES);
     let written = 0;
-    parts.forEach((part, idx) => { written += sql.exec("INSERT OR REPLACE INTO chunks (layer, idx, data) VALUES (?, ?, ?)", layer, idx, part).rowsWritten; });
+    parts.forEach((part, idx) => { written += sql.exec("INSERT INTO chunks (layer, idx, data) VALUES (?, ?, ?) ON CONFLICT (layer, idx) DO UPDATE SET data = excluded.data", layer, idx, part).rowsWritten; });
     if ((this.parts?.[layer] ?? Infinity) > parts.length) written += sql.exec("DELETE FROM chunks WHERE layer = ? AND idx >= ?", layer, parts.length).rowsWritten;
     (this.parts ??= {})[layer] = parts.length;
     return written;
@@ -79,12 +90,28 @@ export class World extends DurableObject {
     const meta = await (await this.asset(`${dir}/meta.json`)).json();
     const terrain = await this.baseTerrain(dir);
     if (terrain.length !== meta.w * meta.h) return { error: `${dir}/terrain.bin.gz does not match ${dir}/meta.json` };
-    const base = { ...map, baseHash: hashBytes(terrain), srcW: meta.w, srcH: meta.h, scale: meta.w / BASE_WIDTH };
+    const base = { ...map, baseHash: hashBytes(terrain), srcW: meta.w, srcH: meta.h, scale: meta.w / BASE_WIDTH, north: meta.north, south: meta.south };
     if (map.kind === "earth") return { map: base, w: meta.w, h: meta.h, terrain };
     const rect = cropRect(meta, map.box);
     if (!rect || rect.w < MIN_MAP_SIDE || rect.h < MIN_MAP_SIDE) return { error: "the crop is outside the map or too small" };
     if (rect.w * rect.h > MAX_PLOTS) return { error: `that region is ${rect.w} by ${rect.h} plots, over the ${MAX_PLOTS} limit; pick a smaller box or normal detail` };
     return { map: { ...base, rect }, w: rect.w, h: rect.h, terrain: cropLayer(terrain, meta.w, rect) };
+  }
+
+  async loadDeposits(info, terrain) {
+    const map = info.map;
+    if (map.kind === "test") return generateDeposits({ w: info.w, h: info.h, terrain }, makeRng(map.seed ?? 1));
+    try {
+      const dep = decodeDeposits(await gunzip(new Uint8Array(await (await this.asset(`${map.dir ?? "map"}/deposits.bin.gz`)).arrayBuffer())));
+      return map.rect ? cropDeposits(dep, map.srcW, map.rect) : dep;
+    } catch (e) {
+      console.warn(`no deposits for this world: ${e.message}`);
+      return emptyDeposits();
+    }
+  }
+
+  seasonOf(i) {
+    return seasonAt(this.sim.time, latitudeOf(this.info.map, this.info.h, i, this.info.w), SEASON_SECONDS);
   }
 
   async load() {
@@ -113,6 +140,16 @@ export class World extends DurableObject {
       for (const [nid, acc] of saved.accounts ?? []) this.accounts.set(nid, acc);
     }
     installCombat(this.sim, scaled.combat);
+    installConstruction(this.sim, { speed: info.rules?.buildSpeed ?? 1 });
+    installEconomy(this.sim);
+    installCivilians(this.sim, makeRng(((info.seed ?? 1) + 7919 + Math.floor(this.sim.time)) >>> 0));
+    this.info = info;
+    installResources(this.sim, await this.loadDeposits(info, terrain), {
+      seasonOf: i => this.seasonOf(i), rules: { speed: info.rules?.produceSpeed ?? 1 },
+      rng: makeRng(((info.seed ?? 1) + 104729 + Math.floor(this.sim.time)) >>> 0),
+    });
+    this.landLoaded = restoreLand(this.sim, this.readRows("land"));
+    installResearch(this.sim, { speed: info.rules?.researchSpeed ?? 1 });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.updatePresence();
@@ -126,12 +163,17 @@ export class World extends DurableObject {
     }
     this.sim.dirty.clear();
     this.loadMs = Date.now() - t0;
-    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null };
+    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, ...this.landLoaded };
+  }
+
+  currentHashes() {
+    this.hashes.terrain ??= hashBytes(this.sim.terrain);
+    return this.hashes;
   }
 
   layerHashes(terrain = this.sim.terrain) {
     const bld = this.sim.bld;
-    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)) };
+    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)), land: hashBytes(encodeLand(this.sim)) };
   }
 
   async init(config) {
@@ -162,9 +204,10 @@ export class World extends DurableObject {
     if (!this.sim) return;
     const t0 = Date.now();
     let rows = 0, ownerBytes = 0;
+    const detail = {}, known = new Set(Object.entries(this.parts ?? {}).filter(([, n]) => n > 0).map(([k]) => k));
     if (all || this.ownerChanged || this.sim.dirty.size) {
       const runs = encodeRuns(this.sim.owner);
-      rows += this.writeRows("owner", runs);
+      rows += detail.owner = this.writeRows("owner", runs);
       ownerBytes = runs.length;
       this.hashes.owner = hashBytes(runs);
       this.ownerChanged = false;
@@ -172,18 +215,19 @@ export class World extends DurableObject {
     const layers = saveLayers(this.sim);
     const layerBytes = {};
     for (const [name, bytes] of Object.entries(layers)) {
-      rows += this.writeRows(name, bytes);
+      rows += detail[name] = this.writeRows(name, bytes);
       layerBytes[name] = bytes.length;
       this.hashes[name] = hashBytes(bytes);
     }
-    rows += this.meta("state", {
+    rows += detail.state = this.meta("state", {
       time: this.sim.time, nextNation: this.sim.nextNation, nextStack: this.sim.nextStack,
       nations: [...this.sim.nations.values()], stacks: [...this.sim.stacks.values()], accounts: [...this.accounts],
-      savedAt: Date.now(), hashes: this.hashes,
+      savedAt: Date.now(), hashes: this.currentHashes(),
     });
     this.lastSave = Date.now();
     const prev = this.saveStats ?? { saves: 0, totalRows: 0, maxRows: 0 };
-    this.saveStats = { rows, ownerBytes, layerBytes, ms: Date.now() - t0, saves: prev.saves + 1, totalRows: prev.totalRows + rows, maxRows: Math.max(prev.maxRows, rows) };
+    const fresh = Object.keys(detail).some(k => k !== "state" && !known.has(k)) || !prev.saves;
+    this.saveStats = { rows, ownerBytes, layerBytes, detail, ms: Date.now() - t0, saves: prev.saves + 1, totalRows: prev.totalRows + rows, maxRows: Math.max(prev.maxRows, rows), worst: rows >= prev.maxRows ? detail : prev.worst, maxSteady: fresh ? prev.maxSteady ?? 0 : Math.max(prev.maxSteady ?? 0, rows) };
   }
 
   sockets() { return this.ctx.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN); }
@@ -298,14 +342,22 @@ export class World extends DurableObject {
     this.updatePresence();
     const g = this.sim.grid, runs = encodeRuns(this.sim.owner);
     const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
+    const buildingFrames = partFrames(MSG.BUILDINGS, encodeRows(this.bfeed.rows(this.sim)));
+    const zoneFrames = partFrames(MSG.ZONE, encodeRuns(this.sim.bld.zone));
+    const depositFrames = this.info.map.kind === "test" ? partFrames(MSG.DEPOSITS, encodeDeposits(this.sim.res.dep)) : [];
     server.send(JSON.stringify({
       t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
-      hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length },
+      hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, deposits: depositFrames.length },
+      depositIds: DEPOSIT_IDS, depleted: depletedPlots(this.sim), tech: TREE,
+      defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel },
       caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(),
       victory: this.meta("victory"), frozen: this.frozen,
     }));
     for (const f of terrainFrames) server.send(f);
     for (const f of ownerFrames) server.send(f);
+    for (const f of buildingFrames) server.send(f);
+    for (const f of zoneFrames) server.send(f);
+    for (const f of depositFrames) server.send(f);
     const n = this.sim.nations.get(nation);
     this.broadcast({ t: "joined", nation, name: n.name, colour: n.colour });
     if (!this.frozen) this.startLoop();
@@ -313,7 +365,7 @@ export class World extends DurableObject {
   }
 
   nationList() {
-    return [...this.sim.nations.values()].map(n => ({ id: n.id, name: n.name, colour: n.colour, plots: n.plots, troops: Math.floor(n.troops), alive: n.alive, spawned: n.spawned, bot: n.bot, capital: n.capital ?? null }));
+    return [...this.sim.nations.values()].map(n => ({ id: n.id, name: n.name, colour: n.colour, plots: n.plots, troops: Math.floor(n.troops), alive: n.alive, spawned: n.spawned, bot: n.bot, capital: n.capital ?? null, era: n.era ?? "T" }));
   }
 
   recentChat() {
@@ -333,8 +385,14 @@ export class World extends DurableObject {
       const now = Date.now();
       const dt = Math.min(1, (now - last) / 1000);
       last = now;
-      this.step(dt);
-      if (now - this.lastSave > SAVE_EVERY_MS) this.save();
+      try {
+        this.step(dt);
+        if (now - this.lastSave > SAVE_EVERY_MS) this.save();
+      } catch (e) {
+        this.errors = (this.errors ?? 0) + 1;
+        if (this.lastError?.message !== e.message) console.error(`world tick failed: ${e.stack}`);
+        this.lastError = { message: e.message, stack: String(e.stack).split(/\r?\n/).slice(0, 6).join(" | "), at: Date.now() };
+      }
     }, ms);
   }
 
@@ -346,6 +404,10 @@ export class World extends DurableObject {
   }
 
   flushDiffs() {
+    const zones = takeZoneNews(this.sim);
+    if (zones) this.broadcast(frame(MSG.ZONE_DIFF, zones));
+    const land = takeTerrainNews(this.sim);
+    if (land) { this.terrainJoin = null; this.hashes.terrain = null; this.broadcast(frame(MSG.TERRAIN_EDIT, land)); }
     const changes = this.sim.takeDirty();
     if (!changes.length) return;
     this.ownerChanged = true;
@@ -354,9 +416,22 @@ export class World extends DurableObject {
     this.broadcast(frame(MSG.DIFF, flat));
   }
 
+  purse(n) {
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n) });
+  }
+
   sendState() {
-    const d = this.feed.delta(this.sim);
-    if (d) this.broadcast({ t: "state", time: Math.floor(this.sim.time), ...d });
+    const d = this.feed.delta(this.sim), bd = this.bfeed.delta(this.sim);
+    if (d || bd) this.broadcast({ t: "state", time: Math.floor(this.sim.time), n: [], s: [], gone: [], ...d, ...(bd ? { b: bd.up, bg: bd.gone } : {}) });
+    for (const ws of this.sockets()) {
+      const me = ws.deserializeAttachment();
+      const p = this.purse(this.sim.nations.get(me?.nation));
+      if (!p) continue;
+      const key = JSON.stringify(p);
+      if (this.purses.get(me.account) === key) continue;
+      this.purses.set(me.account, key);
+      try { ws.send(JSON.stringify({ v: PROTOCOL, t: "purse", ...p })); } catch {}
+    }
   }
 
   step(dt) {
@@ -448,8 +523,8 @@ export class World extends DurableObject {
     return {
       initialised: !!this.sim, players: this.accounts.size, online: this.sockets().length, looping: !!this.loop, time: this.sim?.time ?? 0,
       map: info?.map ?? null, w: info?.w, h: info?.h, landPlots: info?.landPlots, bots: info?.bots,
-      hashes: this.hashes ?? null, loadCheck: this.loadCheck ?? null, loaded: this.loaded ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
-      frozen: !!this.frozen, victory: this.meta("victory"),
+      hashes: this.sim ? this.currentHashes() : null, loadCheck: this.loadCheck ?? null, loaded: this.loaded ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
+      frozen: !!this.frozen, victory: this.meta("victory"), tickErrors: this.errors ?? 0, lastError: this.lastError ?? null,
     };
   }
 }

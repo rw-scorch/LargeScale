@@ -1,4 +1,4 @@
-export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChange }) {
+export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChange, dragging, onDrag, onDragEnd }) {
   const pts = new Map();
   let gesture = null;
   const ratio = () => view.ratio ?? 1;
@@ -12,7 +12,7 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     }
     canvas.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, at(e));
-    if (pts.size === 1) gesture = { start: at(e), t: performance.now(), moved: 0, multi: false };
+    if (pts.size === 1) gesture = { start: at(e), t: performance.now(), moved: 0, multi: false, paint: !!dragging?.() };
     else if (gesture) gesture.multi = true;
   });
 
@@ -20,7 +20,10 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     if (e.pointerType === "mouse") onHover?.(...at(e));
     if (!pts.has(e.pointerId)) return;
     const prev = pts.get(e.pointerId), now = at(e);
-    if (pts.size === 1) {
+    if (pts.size === 1 && gesture?.paint) {
+      gesture.moved += Math.hypot(now[0] - prev[0], now[1] - prev[1]);
+      onDrag?.(gesture.start, now);
+    } else if (pts.size === 1) {
       view.pan(now[0] - prev[0], now[1] - prev[1]);
       if (gesture) gesture.moved += Math.hypot(now[0] - prev[0], now[1] - prev[1]);
     } else if (pts.size === 2) {
@@ -40,6 +43,7 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     if (pts.size || !gesture) return;
     const g = gesture;
     gesture = null;
+    if (g.paint && !g.multi) return onDragEnd?.(g.start, at(e));
     if (!g.multi && g.moved < 8 * ratio() && performance.now() - g.t < 500) onTap?.(...at(e));
   };
   canvas.addEventListener("pointerup", end);

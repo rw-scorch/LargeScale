@@ -7,11 +7,18 @@ import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
 import { installBots, spawnBots } from "../src/sim/bots.js";
 import { installBuildings, addBuilding, footprint, saveLayers, ZONES, WOOD_FULL } from "../src/sim/buildings.js";
+import { installConstruction } from "../src/sim/construction.js";
+import { installEconomy } from "../src/sim/economy.js";
+import { installCivilians } from "../src/sim/civilians.js";
+import { installResources } from "../src/sim/resources.js";
+import { installResearch, orderResearch } from "../src/sim/research.js";
+import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
 import { encodeRuns, countRuns } from "../src/shared/codec.js";
 import { MSG, partFrames } from "../src/shared/protocol.js";
-import { StateFeed, publicEvents } from "../src/game.js";
+import { StateFeed, BuildingFeed, publicEvents } from "../src/game.js";
+import { encodeRows } from "../src/shared/buildings.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -51,8 +58,12 @@ for (let k = 0; k < Number(a.players); k++) {
   if (w.nations.get(id).spawned) players.push(id);
 }
 const bld = installBuildings(w);
+installConstruction(w);
+installEconomy(w);
 const perPlayer = Number(a.buildings);
-const pick = t => (t % 10 < 7 ? "hut_grass" : t % 10 < 9 ? "market_stall" : "chieftain_hut");
+const pick = t => (t % 20 === 3 ? "crop_wheat" : t % 20 === 13 ? "woodcutter_camp" : t % 10 < 7 ? "hut_grass" : t % 10 < 9 ? "market_stall" : "chieftain_hut");
+const allDeposits = decodeDeposits(gunzipSync(readFileSync(`${a.map}/deposits.bin.gz`)));
+const deposits = rect ? cropDeposits(allDeposits, src.w, rect) : allDeposits;
 let placed = 0, woodCut = 0;
 for (const id of players) {
   const n = w.nations.get(id);
@@ -81,6 +92,23 @@ for (const id of players) {
   placed += made;
 }
 bld.changed.add("zone");
+if (!process.env.NOCIV) installCivilians(w, makeRng(Number(a.seed) + 7));
+installResources(w, deposits, { rng: makeRng(Number(a.seed) + 9) });
+installResearch(w, { speed: 20 });
+for (const id of players) for (const node of ["palisades", "farming", "chieftains", "age_medieval", "carpentry", "masonry"]) orderResearch(w, id, node);
+let mines = 0;
+for (const id of players) {
+  let here = 0;
+  for (let k = 0; k < deposits.plots.length && here < 50; k++) {
+    const i = deposits.plots[k];
+    if (w.owner[i] !== id || bld.at.has(i)) continue;
+    addBuilding(w, { type: "mine_pit", owner: id, anchor: i, plots: [i], state: "active", progress: 1 });
+    here++;
+  }
+  mines += here;
+}
+const feed0 = () => { for (const id of players) { const n = w.nations.get(id); if (!n.stock) continue; n.stock.food = 1e6; n.stock.wood = 1e6; } };
+feed0();
 if (woodCut) bld.changed.add("wood");
 const ls0 = performance.now();
 const layers = saveLayers(w, true);
@@ -123,12 +151,13 @@ function playerOrders() {
   }
 }
 
-const times = [], saveTimes = [], stateSizes = [], eventSizes = [];
+const econTimes = [], plainTimes = [], times = [], saveTimes = [], stateSizes = [], eventSizes = [];
 const feed = new StateFeed(0.01, 5);
 feed.delta(w);
 let maxEvents = 0, maxDiffBytes = 0, blocked = 0;
 for (let i = 0; i < Number(a.ticks); i++) {
-  if (i % 20 === 0) playerOrders();
+  if (i % 20 === 0) { playerOrders(); feed0(); }
+  const econDue = !!w.civ && w.civ.clock + DT >= w.civ.rules.econEvery;
   const s = performance.now();
   w.tick(DT);
   const changes = w.takeDirty();
@@ -152,6 +181,7 @@ for (let i = 0; i < Number(a.ticks); i++) {
     saveTimes.push(performance.now() - s2);
   }
   times.push(performance.now() - s);
+  (econDue ? econTimes : plainTimes).push(times.at(-1));
   if (i % 40 === 0) peakIsolate = Math.max(peakIsolate, isolateMB());
 }
 
@@ -171,6 +201,8 @@ const runs = encodeRuns(w.owner);
 const nations = [...w.nations.values()].map(n => ({ id: n.id, name: n.name, colour: n.colour, plots: n.plots, troops: Math.floor(n.troops), alive: n.alive, spawned: n.spawned, bot: n.bot }));
 const helloBytes = Buffer.byteLength(JSON.stringify({ t: "hello", v: 1, you: 1, w: meta.w, h: meta.h, map: { kind: "earth", baseHash: "00000000", srcW: meta.w, srcH: meta.h }, hashes: { terrain: "00000000", owner: "00000000" }, frames: { terrain: 1, owner: 1 }, caughtUp: 0, nations, chat: [] }));
 const ownerFrameBytes = partFrames(MSG.OWNER, runs).reduce((s, f) => s + f.length, 0);
+const buildingFrameBytes = partFrames(MSG.BUILDINGS, encodeRows(new BuildingFeed().rows(w))).reduce((s, f) => s + f.length, 0);
+const defsBytes = Buffer.byteLength(JSON.stringify(Object.values(bld.table).map(({ fp, cat, ...d }) => d)));
 const okMoves = moves.filter(m => m.ok);
 let owned = 0;
 for (const v of w.owner) if (v) owned++;
@@ -181,7 +213,7 @@ const report = {
   players: players.length,
   gameSeconds: Math.round(w.time),
   setupMs: Math.round(setup),
-  tickMs: { p50: +p50.toFixed(1), p99: +p99.toFixed(1), worst: +worst.toFixed(1) },
+  tickMs: { p50: +p50.toFixed(1), p99: +p99.toFixed(1), worst: +worst.toFixed(1), worstWithEconomy: +Math.max(0, ...econTimes).toFixed(1), worstWithout: +Math.max(0, ...plainTimes).toFixed(1), medianWithEconomy: +([...econTimes].sort((x, y) => x - y)[econTimes.length >> 1] ?? 0).toFixed(1) },
   saveEncodeMs: { worst: +Math.max(...saveTimes).toFixed(1), count: saveTimes.length },
   moveOrders: { issued: moves.length, ok: okMoves.length, noLandRoute: moves.filter(m => m.noRoute).length, plannerFailed: moves.filter(m => !m.ok && !m.noRoute).length, worstMs: +Math.max(0, ...moves.map(m => m.ms)).toFixed(1), longestPlots: Math.round(Math.max(0, ...okMoves.map(m => m.dist))), blockedOnTheWay: blocked },
   stacks: w.stacks.size,
@@ -190,13 +222,13 @@ const report = {
   borderPlots,
   borderSetsMatchFullScan: borderOk,
   bytes: {
-    join: helloBytes + ownerFrameBytes, joinHello: helloBytes, joinOwner: ownerFrameBytes, largestDiff: maxDiffBytes,
+    join: helloBytes + defsBytes + ownerFrameBytes + buildingFrameBytes, joinHello: helloBytes + defsBytes, joinOwner: ownerFrameBytes, joinBuildings: buildingFrameBytes, largestDiff: maxDiffBytes,
     stateMessage: { median: [...stateSizes].sort((x, y) => x - y)[stateSizes.length >> 1], worst: Math.max(...stateSizes) },
     perPlayerPerSecond: { state: Math.round(stateSizes.reduce((x, y) => x + y, 0) / w.time), events: Math.round(eventSizes.reduce((x, y) => x + y, 0) / w.time) },
   },
   maxEventsPerTick: maxEvents,
   buildings: {
-    placed, perPlayer, plotIndex: bld.at.size, woodPlotsCut: woodCut, 
+    placed, perPlayer, mines, researched: players.map(id => w.nations.get(id).research.known.length), eras: players.map(id => w.nations.get(id).era).join(""), producers: [...bld.list.values()].filter(b => bld.table[b.type].producer).length, deposits: deposits.plots.length, terrainEdits: w.res.edits.size, civilianBuildings: [...bld.list.values()].filter(b => b.civilian).length, population: Math.round(players.reduce((t, id) => t + (w.nations.get(id).pop ?? 0), 0)), econTicks: Math.floor(w.time / 5), plotIndex: bld.at.size, woodPlotsCut: woodCut, 
     saveBytes: Object.fromEntries(Object.entries(layers).map(([k, v]) => [k, v.length])),
     saveRows: { owner: rowsOf(runs), ...Object.fromEntries(Object.entries(layers).map(([k, v]) => [k, rowsOf(v)])), state: 1 },
     encodeMs: +layerSaveMs.toFixed(1),

@@ -68,7 +68,7 @@ class Mirror {
       });
       this.baseHashOk = true;
     } catch { this.baseHashOk = false; return this; }
-    const need = this.hello.frames.terrain + this.hello.frames.owner;
+    const need = this.hello.frames.terrain + this.hello.frames.owner + (this.hello.frames.buildings ?? 0) + (this.hello.frames.zone ?? 0) + (this.hello.frames.deposits ?? 0);
     for (let k = 0; k < 200 && this.got.binary.length < this.bin + need; k++) await sleep(50);
     this.pump(this.bin + need);
     this.joinFrameBytes = this.frameBytes;
@@ -107,8 +107,8 @@ if (process.env.RECHECK) {
   check(lc?.loaded.terrain === last.hashes.terrain && lc?.loaded.owner === last.hashes.owner, `after a restart the ${st.map?.kind} world loads terrain ${lc?.loaded.terrain} and owner ${lc?.loaded.owner}, the same as before (${last.hashes.terrain}, ${last.hashes.owner})`);
   check(lc?.saved?.owner === lc?.loaded.owner, `the owner hash stored with the save matches the decoded layer (load took ${st.loadMs} ms)`);
   check(st.loaded && (st.loaded.upgradedFrom === null || st.loaded.upgradedFrom === 2), st.loaded?.upgradedFrom ? `a format ${st.loaded.upgradedFrom} save loaded as format 3, with ${st.loaded.buildings} buildings` : `the format 3 save loaded with ${st.loaded?.buildings} buildings`);
-  const layers = ["zone", "wood", "buildings"].filter(k => last.hashes[k]);
-  check(layers.every(k => lc?.loaded[k] === last.hashes[k]), layers.length ? `zone, wood and building layers load identically (${layers.map(k => `${k} ${lc?.loaded[k]}`).join(", ")})` : "the save had no zone, wood or building layers yet");
+  const layers = ["zone", "wood", "buildings", "land"].filter(k => last.hashes[k]);
+  check(layers.every(k => lc?.loaded[k] === last.hashes[k]), layers.length ? `zone, wood, building and land layers load identically (${layers.map(k => `${k} ${lc?.loaded[k]}`).join(", ")})` : "the save had no zone, wood or building layers yet");
   const again = await connect(last.wid, last.token);
   const h = await waitFor(again, m => m.t === "hello");
   const n = h?.nations.find(x => x.id === last.you);
@@ -131,7 +131,7 @@ const ta = alogin.body.token, tb = b.body.token;
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
-const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K } } }, ta);
+const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200, researchSpeed: 100 } } }, ta);
 check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
@@ -178,6 +178,98 @@ for (const i of nearMiddle) {
   if ((await nextResult(A, "spawn"))?.ok) { aSpawn = i; break; }
 }
 check(aSpawn >= 0, "player spawns on land");
+{
+  const cw = view.world;
+  const kit = await until(() => { view.pump(); return [...cw.buildings.values()].find(b => b.owner === you && b.type === "chieftain_hut"); });
+  check(kit && kit.state === "active" && cw.purse?.money >= 100 && cw.purse.stock.food === 50 && cw.purse.stock.wood === 40, `starting kit: a finished chieftain hut at the capital, ${cw.purse?.money} gold, ${cw.purse?.stock.food} food and ${cw.purse?.stock.wood} wood`);
+  const near = [];
+  for (let r = 1; r < 12 * K && near.length < 400; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    const x = (aSpawn % M.w) + dx, y = Math.floor(aSpawn / M.w) + dy;
+    if (x >= 0 && y >= 0 && x < M.w && y < M.h) near.push(y * M.w + x);
+  }
+  const open = near.find(i => cw.owner[i] === you && !cw.buildingAt(i) && isLand(terrain[i]));
+  A.ws.send(JSON.stringify({ t: "build", type: "watchtower_wood", at: open }));
+  const gated = await nextResult(A, "build");
+  check(gated?.error === "needs Palisades research" && gated.error === cw.placeError("watchtower_wood", open), `before research the tower is refused: "${gated?.error}"`);
+  const wanted = ["palisades", "fire_keeping", "barter", "farming", "chieftains"];
+  const replies = [];
+  for (const id of wanted) { A.ws.send(JSON.stringify({ t: "research", id })); replies.push(await nextResult(A, "research")); }
+  const first = replies[0]?.queue ?? [];
+  check(replies.every(r => r?.ok) && first.join() === "clubs,stone_tools,palisades", `queueing Palisades queues what it needs first: ${first.join(", ")}`);
+  const learned = await until(() => { view.pump(); const k = cw.purse?.research?.known ?? []; return wanted.every(id => k.includes(id)) ? k.length : 0; }, 30000);
+  check(learned, `research carries through the queue: ${learned} nodes known, ${cw.purse?.research?.rate} points a second`);
+  const water = near.find(i => !isLand(terrain[i])) ?? terrain.findIndex(t => !isLand(t));
+  const neutral = near.find(i => isLand(terrain[i]) && cw.owner[i] === 0) ?? land.find(i => cw.owner[i] === 0);
+  const refusals = [["barracks", near.find(i => cw.owner[i] === you)], ["watchtower_wood", kit?.anchor], ["watchtower_wood", water], ["watchtower_wood", neutral]];
+  const said = [];
+  for (const [type, at] of refusals) {
+    A.ws.send(JSON.stringify({ t: "build", type, at }));
+    const r = await nextResult(A, "build");
+    said.push(`${type}: "${r?.error}"`);
+    check(r && !r.ok && r.error === cw.placeError(type, at), `the server refuses ${type} with the same reason the client shows: "${r?.error}"`);
+  }
+  const spot = near.find(i => cw.owner[i] === you && !cw.placeError("watchtower_wood", i));
+  A.ws.send(JSON.stringify({ t: "build", type: "watchtower_wood", at: spot }));
+  const built = await nextResult(A, "build");
+  check(built?.ok && built.building, `a wooden watchtower is placed next to the capital (building ${built?.building})`);
+  const bid = built?.building;
+  const seenByB = row => B.json.some(m => m.t === "state" && m.b?.some(r => r[0] === bid && r[4] === row));
+  const siteSeen = await until(() => seenByB(0), 3000);
+  const done = await until(() => { view.pump(); return cw.buildings.get(bid)?.state === "active"; }, 8000);
+  check(siteSeen && done && seenByB(1), `the site finishes, and the friend's client sees the site and the finished tower`);
+  check(A.json.some(m => m.t === "events" && m.events.some(e => e.type === "built" && e.building === bid)), "a built event reaches the owner");
+  const before = cw.purse.money;
+  A.ws.send(JSON.stringify({ t: "demolish", building: bid }));
+  const gone = await nextResult(A, "demolish");
+  check(gone?.ok && gone.refund?.money === 10 && gone.refund?.wood === 7, `demolish refunds half: ${JSON.stringify(gone?.refund)}`);
+  await until(() => { view.pump(); return cw.buildings.get(bid)?.state === "rubble" && cw.purse.money >= before + 10; }, 3000);
+  check(cw.buildings.get(bid)?.state === "rubble" && await until(() => seenByB(3), 3000), "the tower turns to rubble for both players");
+  check(await until(() => B.json.some(m => m.t === "state" && m.bg?.includes(bid)), 20000), "the rubble clears on its own, and the friend's client drops it");
+  const cx = aSpawn % M.w, cy = Math.floor(aSpawn / M.w);
+  const zr = async (zone, x, y, w, h) => { A.ws.send(JSON.stringify({ t: "zone", zone, x, y, w, h })); return nextResult(A, "zone"); };
+  const res = await zr("res", cx - 4, cy - 4, 9, 5), com = await zr("com", cx - 4, cy + 1, 9, 3);
+  check(res?.ok && res.plots > 0 && com?.ok && com.plots > 0 && res.plots + com.plots >= 20, `zoning paints ${res?.plots} home plots and ${com?.plots} shop plots next to the capital`);
+  check((await zr("mall", cx, cy, 2, 2))?.error === "unknown zone" && (await zr("res", 0, 0, 65, 1))?.error === "zone at most 64 by 64 plots at a time", "bad zone orders are refused with a reason");
+  const zoneFrames = () => B.binary.filter(f => f[0] === MSG.ZONE_DIFF).length;
+  check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
+  const town = await until(() => {
+    view.pump();
+    const huts = [...cw.buildings.values()].filter(b => b.owner === you && b.type === "hut_grass" && b.state === "active");
+    return huts.length >= 2 && cw.purse?.town?.pop > 0 ? huts.length : 0;
+  }, 25000);
+  check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [wood ${cw.purse?.stock?.wood}, food ${cw.purse?.stock?.food}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}]`}`);
+  view.pump();
+  const zonedBefore = cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0);
+  const erased = await zr("none", cx - 4, cy + 1, 9, 3);
+  await until(() => { view.pump(); return cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0) < zonedBefore; }, 3000);
+  const deps = cw.deposits.plots.length;
+  check(MAP !== "test" || (deps > 0 && hello.frames.deposits === 1), `the world's deposits reach the client: ${deps} plots (${MAP === "test" ? "in the join" : "from the static file, not loaded by this test"})`);
+  let prod = null;
+  for (const type of ["woodcutter_camp", "crop_wheat", "pasture_sheep"]) {
+    const at = near.find(i => cw.owner[i] === you && !cw.placeError(type, i));
+    if (at !== undefined) { prod = { type, at }; break; }
+  }
+  A.ws.send(JSON.stringify({ t: "build", type: prod?.type, at: prod?.at }));
+  const pb = await nextResult(A, "build");
+  const out = prod?.type === "woodcutter_camp" ? "wood" : "food";
+  const stockBefore = cw.purse.stock[out] ?? 0;
+  const making = await until(() => { view.pump(); return cw.purse?.making?.[out] > 0 ? cw.purse.making[out] : 0; }, 20000);
+  check(pb?.ok && making, `a ${prod?.type} on your land starts making ${out}: ${making} a second (stock ${stockBefore} before)`);
+  if (prod?.type === "woodcutter_camp") {
+    const edited = await until(() => B.binary.some(f => f[0] === MSG.TERRAIN_EDIT), 60000);
+    check(edited, "the woodcutter clears a forest plot, and the friend receives the terrain edit");
+  }
+  const pursesBefore = A.json.filter(m => m.t === "purse").length;
+  const clock0 = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
+  A.ws.send(JSON.stringify({ t: "research", id: "age_medieval", mode: "first" }));
+  const ageOrder = await nextResult(A, "research");
+  const heard = await until(() => B.json.find(m => m.t === "events" && m.events.some(e => e.type === "era_up" && e.nation === you)), 30000);
+  await until(() => { view.pump(); return cw.purse?.era === "M"; }, 5000);
+  const bRow = await until(() => B.json.some(m => m.t === "state" && m.n.some(r => r[0] === you && r[5] === 1)), 5000);
+  check(ageOrder?.ok && heard && bRow && cw.purse?.era === "M", `the host reaches the Medieval era; the friend hears it and sees the era in the nation list (${cw.purse?.era}${cw.purse?.era === "M" ? "" : `; world clock ${clock0.world.toFixed(1)} at the order, wall ${Math.round((Date.now() - clock0.wall) / 1000)} s since; purses after the order ${A.json.filter(m => m.t === "purse").length - pursesBefore}; status ${JSON.stringify((({ time, looping, frozen, tickErrors, lastError }) => ({ time, looping, frozen, tickErrors, lastError }))((await api(`/api/worlds/${wid}/status`, null, ta)).body))}; order ${JSON.stringify(ageOrder)}; research ${JSON.stringify({ ...cw.purse?.research, known: cw.purse?.research?.known.length })}`})`);
+  check(erased?.ok && erased.plots > 0 && cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0) === zonedBefore - erased.plots, `erasing clears ${erased?.plots} zoned plots on the client too`);
+}
 B.ws.send(JSON.stringify({ t: "chat", text: "hello from friend" }));
 check(!!(await waitFor(A, m => m.t === "chat" && m.text === "hello from friend")), "chat reaches the other player");
 A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
@@ -192,6 +284,7 @@ A.ws.send(JSON.stringify({ t: "admin", op: "hashes" }));
 const hr = await waitFor(A, m => m.t === "result" && m.op === "hashes");
 mirror.pump(hr._bin);
 check(hr && hashRuns(mirror.owner) === hr.owner, `after live diffs the client's owner layer still matches the server (${hr?.owner})`);
+check(hr && hashBytes(mirror.terrain) === hr.terrain, `after live terrain edits the client's terrain still matches the server (${hr?.terrain})`);
 const mine = view.pump().nations.get(you);
 check(mine && mine.plots > before + 5, `nation grew from ${before} to ${mine?.plots} plots, seen through compact state updates`);
 A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
@@ -213,7 +306,8 @@ const dist = i => Math.hypot((i % M.w) - (aSpawn % M.w), Math.floor(i / M.w) - M
 let bSpawn = -1;
 for (const i of land.filter(i => dist(i) >= 22 * K && dist(i) <= 45 * K).sort((p, q) => dist(p) - dist(q)).filter((_, k) => k % 5 === 0)) {
   A.ws.send(JSON.stringify({ t: "route", stack: st.stack, to: i }));
-  if (!(await nextResult(A, "route"))?.ok) continue;
+  const way = await nextResult(A, "route");
+  if (!way?.ok || way.plots > 3 * dist(i)) continue;
   B.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
   if ((await nextResult(B, "spawn"))?.ok) { bSpawn = i; break; }
 }
@@ -232,9 +326,15 @@ const bPlots = (await until(() => view.pump().nations.get(bNation)?.plots > 0 &&
 const bTroops = (await until(() => view.pump().stacks.get(bs?.stack)))?.troops;
 A.ws.send(JSON.stringify({ t: "move", stack: as.stack, to: bSpawn }));
 check((await nextResult(A, "move"))?.ok, "the host's stack of " + aStack?.troops + " marches on the friend's capital");
-const lost = await until(() => view.pump().events.find(e => e.type === "plot_lost" && e.nation === bNation && e.by === you), 30000);
-check(lost, `territory changes hands: plot_lost for the friend (${lost?.count} plots in one tick)`);
-const fought = await until(() => view.pump().events.find(e => e.type === "stack_destroyed" && e.stack === bs?.stack), 30000);
+const trail = [], trailT0 = Date.now();
+const lost = await until(() => {
+  const st = view.pump().stacks.get(as.stack);
+  if (st && (!trail.length || Date.now() - trail.at(-1).t > 5000)) trail.push({ t: Date.now(), p: `${Math.round((Date.now() - trailT0) / 1000)}s:${st.pos % M.w},${Math.floor(st.pos / M.w)}` });
+  return view.events.find(e => e.type === "plot_lost" && e.nation === bNation && e.by === you);
+}, 120000);
+const why = lost ? "" : (() => { const st = view.stacks.get(as.stack); const ev = view.events.filter(e => e.stack === as.stack).map(e => e.type).slice(-6); return ` [host stack ${st ? `${st.order} at ${st.pos % M.w},${Math.floor(st.pos / M.w)} with ${st.troops}` : "gone"}; friend capital ${bSpawn % M.w},${Math.floor(bSpawn / M.w)}; stack events ${ev.join(", ") || "none"}; host capital ${aSpawn % M.w},${Math.floor(aSpawn / M.w)}; route preview ${rt?.plots} plots; trail ${trail.map(x => x.p).join(" ")}]`; })();
+check(lost, `territory changes hands: plot_lost for the friend (${lost?.count} plots in one tick)${why}`);
+const fought = await until(() => view.pump().events.find(e => e.type === "stack_destroyed" && e.stack === bs?.stack), 60000);
 const cleared = await until(() => !view.pump().stacks.has(bs?.stack));
 check(fought && cleared, `battle resolved: the friend's stack of ${bTroops} was destroyed; the host's stack has ${view.stacks.get(as.stack)?.troops} left`);
 const shrunk = await until(() => view.pump().nations.get(bNation)?.plots < bPlots && view.nations.get(bNation));
@@ -285,7 +385,7 @@ A3.ws.close();
 await sleep(800);
 const saved = (await api(`/api/worlds/${wid}/status`, null, ta)).body;
 const ls = saved.lastSave;
-check(ls && ls.maxRows <= 10, `saves wrote at most ${ls?.maxRows} rows each, ${ls?.totalRows} rows over ${ls?.saves} saves (last: ${ls?.rows} rows, owner layer ${ls?.ownerBytes} bytes, ${ls?.ms} ms)`);
+check(ls && ls.maxSteady <= 6, `saves wrote at most ${ls?.maxSteady} rows each once every layer has its row (${ls?.maxRows} including first writes, which also write the key index), ${ls?.totalRows} rows over ${ls?.saves} saves (last: ${ls?.rows} rows, owner layer ${ls?.ownerBytes} bytes, ${ls?.ms} ms; biggest save ${JSON.stringify(ls?.worst)})`);
 const { writeFileSync } = await import("node:fs");
 writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ wid, token: ta, you: hello.you, plots: again.plots, hashes: saved.hashes }));
 console.log(failures ? `${failures} checks failed` : "all checks passed");

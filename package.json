@@ -15,7 +15,8 @@
     "discord": "node test/discord_endpoint.mjs",
     "bench": "node --expose-gc tools/bench_earth.mjs",
     "test:reference": "node --test \"reference/tasks/**/*.test.js\" \"reference/shared/*.test.js\"",
-    "ui": "node test/ui.mjs"
+    "ui": "node test/ui.mjs",
+    "map:deposits": "node tools/build_deposits.mjs"
   },
   "engines": {
     "node": ">=22"

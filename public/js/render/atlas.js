@@ -11,6 +11,24 @@ export class Atlas {
     this.byId = new Map(pack.sprites.map(s => [s.id, s]));
     this.sheets = {};
     this.tinted = new Map();
+    this.pads = new Map();
+  }
+
+  bottomPad(id) {
+    if (this.pads.has(id)) return this.pads.get(id);
+    const s = this.byId.get(id);
+    let pad = 0;
+    if (s) {
+      const a = this.sheets[s.category].getContext("2d", { willReadFrequently: true }).getImageData(s.x, s.y, s.w, s.h).data;
+      for (let y = s.h - 1; y >= 0; y--, pad++) {
+        let row = false;
+        for (let x = 0; x < s.w && !row; x++) row = a[(y * s.w + x) * 4 + 3] > 0;
+        if (row) break;
+      }
+      if (pad === s.h) pad = 0;
+    }
+    this.pads.set(id, pad);
+    return pad;
   }
 
   async load() {

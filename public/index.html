@@ -46,8 +46,38 @@ h2{font-size:16px;margin:18px 0 8px}
 .panel{position:absolute;background:var(--panel);border:2px solid var(--line);border-radius:4px;padding:4px 8px 8px}
 .panel .title{padding:4px 0;font-weight:600;min-height:0}
 .panel.shut>*:not(.title){display:none!important}
-.panel.left{left:8px;top:64px;max-height:calc(100% - 140px);overflow:auto;min-width:220px}
+.panel.left{left:8px;top:calc(var(--hud,48px) + 16px);max-height:calc(100% - var(--hud,48px) - 92px);overflow:auto;min-width:220px}
 .panel.right{right:8px;bottom:8px;width:min(340px,40vw)}
+.panel.topright{right:8px;top:calc(var(--hud,48px) + 16px);width:min(320px,44vw);max-height:calc(100% - 300px);min-height:160px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.tabs button{min-height:30px;padding:2px 8px}
+.build-list{display:flex;flex-direction:column;gap:4px}
+.build-item{display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:2px}
+.build-item .why{color:var(--bad);font-size:12px}
+#purse{color:var(--signal)}
+.town-lines{display:flex;flex-direction:column;gap:2px}
+.why{color:var(--bad);font-size:12px;margin:4px 0}
+.demand{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;font-size:13px}
+.demand .bar{position:relative;height:10px;background:#16324a;border:1px solid var(--line);border-radius:2px}
+.demand .bar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--mute)}
+.demand .fill{position:absolute;top:0;bottom:0}
+.demand .fill.up{background:var(--good)}
+.demand .fill.down{background:var(--bad)}
+.panel.center{left:50%;transform:translateX(-50%);top:calc(var(--hud,48px) + 16px);width:min(980px,calc(100% - 16px));max-height:calc(100% - var(--hud,48px) - 32px);overflow:auto;display:flex;flex-direction:column;gap:8px;z-index:2}
+.tech-era{display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--line);padding-top:6px}
+.tech-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:6px}
+.tech-col{display:flex;flex-direction:column;gap:4px}
+button.tech{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:1px;font-size:13px;padding:4px 8px}
+button.tech span{font-size:12px;color:var(--mute)}
+button.tech.known{background:#24452c;border-color:#3f7f4c}
+button.tech.current{border-color:var(--signal);background:#3a3a1c}
+button.tech.queued{border-color:#8fa8c0;border-style:dashed}
+button.tech.ready{border-color:var(--good)}
+button.tech.locked{opacity:.6}
+button.tech.picked{outline:2px solid var(--parch)}
+button.tech.era{align-items:center;text-align:center}
+.tech-detail{border-top:2px solid var(--line);padding:6px 0 2px;position:sticky;bottom:-8px;background:#0f2233}
+.tech-detail p{margin:2px 0}
+button.chip{min-height:28px;padding:2px 8px;font-size:12px}
 .panel.bottom{left:50%;transform:translateX(-50%);bottom:8px;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:6px}
 #chat .lines{height:160px;overflow:auto;font-size:13px}
 #chat .lines p{margin:2px 0}
@@ -60,7 +90,7 @@ td:nth-child(n+3),th:nth-child(n+3){text-align:right}
 tr.me td{color:var(--signal)}
 tr.dead td{opacity:.45;text-decoration:line-through}
 .swatch{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:middle}
-.banner{position:absolute;top:64px;left:50%;transform:translateX(-50%);background:var(--panel);border:2px solid var(--signal);border-radius:4px;padding:8px 14px;max-width:calc(100% - 16px);text-align:center}
+.banner{position:absolute;top:calc(var(--hud,48px) + 16px);left:50%;transform:translateX(-50%);background:var(--panel);border:2px solid var(--signal);border-radius:4px;padding:8px 14px;max-width:calc(100% - 16px);text-align:center}
 .banner.big{top:40%;font-size:17px;display:flex;flex-direction:column;gap:10px;align-items:center}
 #toasts{position:absolute;left:8px;bottom:8px;display:flex;flex-direction:column;gap:4px;pointer-events:none}
 .toast{margin:0;background:var(--panel);border-left:4px solid var(--signal);padding:6px 10px;border-radius:3px;max-width:320px}
@@ -74,10 +104,10 @@ button.on{border-color:var(--signal)}
   button,input,select{padding:4px 8px;min-height:32px}
   .hud{gap:6px;padding:4px 6px}
   .world-name{display:none}
-  .panel.left{top:48px;max-height:calc(100% - 100px);min-width:0}
-  .banner{top:48px}
+  .panel.left{top:calc(var(--hud,40px) + 8px);max-height:calc(100% - var(--hud,40px) - 60px);min-width:0}
+  .banner{top:calc(var(--hud,40px) + 8px)}
   #chat .lines{height:90px}
-  .panel.right{width:min(300px,38vw);bottom:auto;top:48px}
+  .panel.right{width:min(300px,38vw);bottom:auto;top:calc(var(--hud,40px) + 8px)}
   .panel.bottom{width:min(460px,60vw)}
   #toasts{bottom:auto;top:96px}
 }
