@@ -19,9 +19,10 @@ export function installConstruction(world, cfg = {}) {
 
 const timed = b => (!b.civilian && b.state === "construction") || b.state === "rubble";
 
-export function placeView(world) {
+export function placeView(world, nid = 0) {
   const bld = world.bld;
   return {
+    lockOf: id => world.lockReason?.(nid, id) ?? null,
     w: world.grid.w, h: world.grid.h, terrain: world.terrain, owner: world.owner,
     occupant: i => { const id = bld.at.get(i); return id === undefined || bld.list.get(id).state === "rubble" ? 0 : id; },
     deposit: i => world.res?.depositAt(i) ?? null,
@@ -29,7 +30,7 @@ export function placeView(world) {
 }
 
 export function canPlace(world, nid, type, anchor, self = 0) {
-  return placeError(placeView(world), world.nations.get(nid), world.bld.table[type], anchor, self);
+  return placeError(placeView(world, nid), world.nations.get(nid), world.bld.table[type], anchor, self);
 }
 
 export function priceOf(cost, n, premium = 1, r = CONS_RULES) {
@@ -153,7 +154,7 @@ export function selectRange(rows, fromIndex, toIndex) {
 }
 
 export function bulkUpgrade(world, nid, picks) {
-  const n = world.nations.get(nid), bld = world.bld, table = bld.table, view = placeView(world);
+  const n = world.nations.get(nid), bld = world.bld, table = bld.table, view = placeView(world, nid);
   const premium = world.cons?.rules.instantPremium ?? CONS_RULES.instantPremium;
   const done = [], skipped = [];
   let spent = 0;
@@ -164,6 +165,8 @@ export function bulkUpgrade(world, nid, picks) {
     if (!next) { skipped.push([p.id, "already top level"]); continue; }
     const nd = table[next];
     if (eraIdx(nd.era) > eraIdx(n.era ?? "T")) { skipped.push([p.id, "era locked"]); continue; }
+    const locked = world.lockReason?.(nid, next);
+    if (locked) { skipped.push([p.id, locked]); continue; }
     const plots = footprint(world, b.anchor, nd.fp);
     let bad = !plots;
     if (!bad && b.civilian) bad = plots.some(i => { const o = view.occupant(i); return world.owner[i] !== nid || (o && o !== b.id) || bld.zone[i] !== bld.zone[b.anchor]; });

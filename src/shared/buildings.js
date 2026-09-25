@@ -36,6 +36,8 @@ function nearOwned(v, i, nid, r) {
 export function placeError(v, nation, def, anchor, self = 0) {
   if (!def || def.civilian) return "unknown building";
   if (eraIdx(def.era) > eraIdx(nation.era ?? "T")) return `needs the ${ERA_NAMES[def.era]} era`;
+  const locked = v.lockOf?.(def.id);
+  if (locked) return locked;
   const plots = footprintAt(v.w, v.h, anchor, def.fp);
   if (!plots) return "off the edge of the map";
   if (plots.some(i => { const id = v.occupant(i); return id && id !== self; })) return "something is already there";

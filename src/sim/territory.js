@@ -142,7 +142,7 @@ export class World {
     if (!o) return this.rules.unownedCost * t.capture;
     const d = this.nations.get(o);
     const density = d.troops / Math.max(1, d.plots);
-    return Math.max(1, density * this.rules.enemyCostFactor * t.defence * (d.defenceMult ?? 1));
+    return Math.max(1, density * this.rules.enemyCostFactor * t.defence * (d.defenceMult ?? 1) * (1 + (d.effects?.defence ?? 0)));
   }
 
   createStack(nid, i, amount) {
