@@ -24,7 +24,7 @@ export async function showWorlds(root, account, { onOpen, onLogout }) {
     if (worlds.error) return (msg.textContent = worlds.error);
     list.replaceChildren(...(worlds.length ? worlds.map(w => el("div", { class: "world" },
       el("div", {}, el("b", { text: w.name }), el("span", { class: "muted", text: ` ${w.players} player${w.players === 1 ? "" : "s"}${w.host ? ", yours" : ""}` })),
-      el("button", { class: "primary", "data-world": w.id, onclick: () => open(w), text: w.member ? "Open" : "Join" }))) : [el("p", { class: "muted", text: "No worlds yet. Create one below." })]));
+      el("button", { class: "primary", "data-world": w.id, onclick: () => open(w), text: w.member ? "Open" : "Join" }))) : [el("p", { class: "muted", text: account.admin ? "No worlds yet. Create one below." : "No worlds yet. The host creates them." })]));
   };
   const open = async w => {
     if (!w.member) {
@@ -45,13 +45,15 @@ export async function showWorlds(root, account, { onOpen, onLogout }) {
   root.replaceChildren(el("div", { class: "card wide" },
     el("div", { class: "row spread" }, el("h1", { text: "Worlds" }), el("span", { class: "muted" }, `${account.name} `, el("button", { onclick: onLogout, text: "Log out" }))),
     list,
-    el("h2", { text: "New world" }),
-    el("div", { class: "form" },
-      name,
-      el("label", {}, "Map ", map),
-      el("label", {}, auto, " Bots scaled to land"),
-      el("label", {}, "Bots ", bots, " ", botsLabel),
-      el("button", { id: "world-create", class: "primary", onclick: create, text: "Create and open" })),
+    ...(account.admin ? [
+      el("h2", { text: "New world" }),
+      el("div", { class: "form" },
+        name,
+        el("label", {}, "Map ", map),
+        el("label", {}, auto, " Bots scaled to land"),
+        el("label", {}, "Bots ", bots, " ", botsLabel),
+        el("button", { id: "world-create", class: "primary", onclick: create, text: "Create and open" })),
+    ] : [el("p", { id: "host-only", class: "muted", text: "Only the host can create worlds. Join one above." })]),
     msg));
   await refresh();
 }

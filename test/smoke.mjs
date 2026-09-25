@@ -128,6 +128,8 @@ check(b.status === 200 && b.body.account.admin === false, "friends are not admin
 const wrong = await api("/api/login", { name: "friend" + suffix, password: "wrong pass" });
 check(wrong.status === 401, "wrong password is refused");
 const ta = alogin.body.token, tb = b.body.token;
+const denied = await api("/api/worlds", { name: "Mine", config: M.config }, tb);
+check(denied.status === 403 && denied.body.error === "only the host can create worlds", `a friend cannot create worlds: ${denied.status} "${denied.body.error}"`);
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();

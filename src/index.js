@@ -92,6 +92,7 @@ export default {
     if (path === "/api/notify" && request.method === "POST") return json(await dir.setPrefs(me.id, (await body(request)) ?? {}));
     if (path === "/api/worlds" && request.method === "GET") return json(await dir.listWorlds(me));
     if (path === "/api/worlds" && request.method === "POST") {
+      if (!me.admin) return json({ error: "only the host can create worlds" }, 403);
       const b = (await body(request)) ?? {};
       const bad = parseWorldConfig(b.config ?? {}).error;
       if (bad) return json({ error: bad }, 400);
