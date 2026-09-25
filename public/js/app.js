@@ -326,17 +326,30 @@ class Game {
     return ay * w.w + ax;
   }
 
+  placeAnchor(plot, def) {
+    const w = this.world, base = this.anchorFor(plot, def);
+    if (def.rule !== "coast" || !w.placeError(def.id, base)) return base;
+    const x = plot % w.w, y = (plot / w.w) | 0;
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= w.w || ny >= w.h) continue;
+      const at = this.anchorFor(ny * w.w + nx, def);
+      if (!w.placeError(def.id, at)) return at;
+    }
+    return base;
+  }
+
   updateGhost() {
     const def = this.building && this.world?.defs.table[this.building];
     if (!def) { this.view.ghost = null; return; }
     const plot = this.hover ? this.plotAt(...this.hover) : null;
-    const anchor = plot !== null ? this.anchorFor(plot, def) : this.ghostAt;
+    const anchor = plot !== null ? this.placeAnchor(plot, def) : this.ghostAt;
     this.view.ghost = anchor === null ? null : { def, anchor, reason: this.world.placeError(def.id, anchor) };
   }
 
   async buildAt(plot) {
     const def = this.world.defs.table[this.building];
-    const anchor = this.anchorFor(plot, def);
+    const anchor = this.placeAnchor(plot, def);
     if (!this.hover && this.ghostAt !== anchor) { this.ghostAt = anchor; return; }
     const why = this.world.placeError(def.id, anchor);
     if (why) return this.toast(why);

@@ -70,6 +70,29 @@ test("every placement rule gives a readable reason", () => {
   assert.equal(place(w, a, "watchtower_wood", g.idx(25, 10)).error, "needs 20 gold, you have 10");
 });
 
+test("coast buildings: a jetty sits on your shore, and a harbour half in the sea changes hands with its land", () => {
+  const W = 30, H = 20, terrain = new Uint8Array(W * H).fill(TID.grassland);
+  for (let y = 0; y < 6; y++) for (let x = 0; x < W; x++) terrain[y * W + x] = TID.shallows;
+  const w = new World({ w: W, h: H, terrain }, { spawnRadius: 3 });
+  const a = w.addNation({ name: "A" }), b = w.addNation({ name: "B" }), g = w.grid;
+  w.spawn(a, 10, 12);
+  for (let x = 4; x < 20; x++) for (let y = 6; y < 16; y++) w.claim(g.idx(x, y), a);
+  installConstruction(w);
+  const n = w.nations.get(a);
+  Object.assign(n, { era: "M", money: 1e6, stock: { wood: 1e6, stone: 1e6 } });
+  assert.equal(canPlace(w, a, "jetty", g.idx(10, 6)), null, "own land touching the sea");
+  assert.equal(canPlace(w, a, "jetty", g.idx(10, 8)), "must sit on the coast");
+  assert.equal(canPlace(w, a, "jetty", g.idx(10, 5)), "must sit on the coast", "not out on the water");
+  assert.equal(canPlace(w, a, "jetty", g.idx(24, 6)), "not your land");
+  const harbour = place(w, a, "harbour", g.idx(12, 5));
+  assert.ok(harbour.id, harbour.error);
+  assert.equal(harbour.anchor, g.idx(12, 5), "the anchor is out in the sea");
+  w.claim(g.idx(13, 6), b);
+  assert.equal(harbour.owner, a, "only its first land plot decides");
+  w.claim(g.idx(12, 6), b);
+  assert.equal(harbour.owner, b, "the harbour passes to whoever takes its land");
+});
+
 test("the build order pays up front, and the site finishes over its build time", () => {
   const { w, a, g, n } = setup();
   w.tick(1);

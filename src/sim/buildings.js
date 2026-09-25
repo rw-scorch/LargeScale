@@ -1,6 +1,6 @@
 import { TERRAIN } from "../shared/terrain.js";
 import { encodeRuns, decodeRuns } from "../shared/codec.js";
-import { ERA_ORDER, STATES, tableFrom, footprintAt } from "../shared/buildings.js";
+import { ERA_ORDER, STATES, tableFrom, footprintAt, keyPlot } from "../shared/buildings.js";
 import data from "../../data/buildings.json" with { type: "json" };
 import rules from "../../data/rules.json" with { type: "json" };
 
@@ -38,7 +38,7 @@ export function fillWood(terrain, wood) {
 
 function captured(world, i, nid) {
   const bld = world.bld, b = bld.list.get(bld.at.get(i));
-  if (!b || b.anchor !== i || b.owner === nid) return;
+  if (!b || b.owner === nid || keyPlot(world.terrain, b.plots) !== i) return;
   setOwner(world, b, nid);
   if (b.residents) b.residents *= bld.keep;
 }
