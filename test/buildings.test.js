@@ -179,3 +179,15 @@ test("bulk upgrade moves the plot index to the new footprint", () => {
   assert.equal(hut.type, "great_hall");
   for (const i of hut.plots) assert.equal(buildingAt(wo, i), hut);
 });
+
+test("every building type says in a sentence or two what it does, and the idle ones say so", () => {
+  const defs = Object.values(BUILDINGS.table);
+  for (const d of defs) {
+    assert.equal(typeof d.description, "string", `${d.id} has a description`);
+    assert.ok(d.description.length >= 20 && d.description.length <= 160, `${d.id}: ${d.description.length} characters`);
+    assert.match(d.description, /^[A-Z].*\.$/, `${d.id} reads as a sentence`);
+  }
+  const idle = defs.filter(d => !d.gathers && !d.producer && !d.housing && !d.jobs && !d.makes);
+  assert.ok(idle.length > 0);
+  for (const d of idle) assert.match(d.description, /no effect/, `${d.id} does nothing yet and says so`);
+});

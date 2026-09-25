@@ -132,6 +132,8 @@ await page.keyboard.press("Escape");
 await page.click("#build-menu .tabs button:has-text('Military')");
 const locked = await page.textContent("#build-menu [data-type=barracks]");
 check(await page.isDisabled("#build-menu [data-type=barracks]") && /Needs the Medieval era/.test(locked), `a locked building is greyed out with its reason: "${locked.match(/Needs.*/)?.[0]}"`);
+const towerDesc = await page.textContent("#build-menu [data-type=watchtower_wood] .desc").catch(() => "");
+check(/lookout/.test(towerDesc) && /no effect on combat yet/.test(towerDesc), `each building in the menu says what it does: "${towerDesc}"`);
 await page.screenshot({ path: `${OUT}/2b-build-menu-${MAP}.png` });
 await page.click("#build-menu [data-type=watchtower_wood]");
 const spots = await page.evaluate(() => {
@@ -174,6 +176,8 @@ await page.screenshot({ path: `${OUT}/2h-town-${MAP}.png` });
 await page.keyboard.press("t");
 await page.mouse.click(spots.ok.x, spots.ok.y);
 check(await page.waitForSelector("#building-demolish", { timeout: 3000 }).then(() => true, () => false), `clicking it opens its panel: "${await page.textContent("#building-title").catch(() => "")}"`);
+const siteDesc = await page.textContent("#building-desc").catch(() => "");
+check(/lookout/.test(siteDesc) && await page.isVisible("#building-desc"), `its panel describes it too: "${siteDesc}"`);
 await page.screenshot({ path: `${OUT}/2f-built-${MAP}.png` });
 await page.click("#building-demolish");
 const rubble = await page.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "rubble", site, { timeout: 5000 }).then(() => true, () => false);
@@ -567,6 +571,8 @@ const medieval = await fix.evaluate(async () => {
 });
 const towersUp = await fix.waitForFunction(ps => ps.every(i => window.__ls.game.world.buildingAt(i)?.state === "active") && window.__ls.game.world.purse?.era === "M", medieval, { timeout: 15000 }).then(() => true, () => false);
 await fix.waitForSelector("#upgrade-panel .upgrade-row[data-type=watchtower_wood]:not(.locked)", { timeout: 5000 }).catch(() => {});
+const nextDesc = await fix.textContent("#upgrade-panel .upgrade-row[data-type=watchtower_wood] .desc").catch(() => "");
+check(/stone tower/.test(nextDesc), `each upgrade row describes what it becomes: "${nextDesc}"`);
 await fix.click("#upgrade-all");
 const totalText = await fix.textContent("#upgrade-total");
 const goText = await fix.textContent("#upgrade-go");

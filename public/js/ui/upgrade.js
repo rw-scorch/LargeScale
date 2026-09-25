@@ -68,7 +68,7 @@ export function createUpgradePanel(root, game) {
       return el("div", { class: `upgrade-row${on ? " on" : ""}${g.why ? " locked" : ""}`, "data-row": i, "data-type": g.type, onclick: () => toggle(g) },
         el("span", { class: "tick", "data-tick": i }),
         thumb(g.next),
-        el("span", { class: "upgrade-name" }, el("b", { text: `${g.def.name} to ${g.next.name}` }), el("span", { class: "muted", text: ` ${g.count} of them, each ${each(g.next)}` }), g.why ? el("span", { class: "why", text: ` ${g.why[0].toUpperCase()}${g.why.slice(1)}` }) : null),
+        el("span", { class: "upgrade-name" }, el("b", { text: `${g.def.name} to ${g.next.name}` }), el("span", { class: "muted", text: ` ${g.count} of them, each ${each(g.next)}` }), g.why ? el("span", { class: "why", text: ` ${g.why[0].toUpperCase()}${g.why.slice(1)}` }) : null, g.next.description ? el("span", { class: "desc", text: g.next.description }) : null),
         count);
     }) : [el("p", { class: "muted", text: filter === "civilian" ? "No finished homes, shops or workshops to upgrade yet." : "Nothing finished to upgrade yet. Buildings appear here once they are built." })]));
     refreshTotal();

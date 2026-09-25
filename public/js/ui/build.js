@@ -57,8 +57,9 @@ export function createBuildMenu(root, game) {
       }
       list.replaceChildren(...rows.map(d => {
         const reason = why(w, d);
-        return el("button", { class: `build-item${game.building === d.id ? " on" : ""}`, "data-type": d.id, disabled: !!reason, onclick: () => game.startBuild(d.id) },
+        return el("button", { class: `build-item${game.building === d.id ? " on" : ""}`, "data-type": d.id, title: d.description ?? "", disabled: !!reason, onclick: () => game.startBuild(d.id) },
           el("span", { class: "row spread" }, el("b", { text: d.name }), el("span", { class: "muted", text: `${d.time} s` })),
+          d.description ? el("span", { class: "desc", text: d.description }) : null,
           el("span", { class: "muted", text: `${costText(d.cost)}, ${d.footprint[0]} by ${d.footprint[1]}` }),
           d.producer ? el("span", { class: "muted", text: `Makes ${d.producer.rate} ${d.producer.out ?? "ore"} a second${d.producer.kind === "farm" ? " times fertility and season" : ""}, ${d.jobs} workers` }) : null,
           reason ? el("span", { class: "why", text: reason }) : null);
