@@ -30,7 +30,7 @@ export function createTip(root, game) {
       swatch.hidden = !d.colour;
       if (d.colour) swatch.style.background = d.colour;
       name.textContent = d.title;
-      more.textContent = d.extra ? `: ${d.extra}` : "";
+      more.textContent = d.extra ?? "";
       box.hidden = false;
       const r = v.ratio ?? 1, x = at[0] / r + 14, y = at[1] / r + 16;
       box.style.left = `${Math.min(x, innerWidth - box.offsetWidth - 4)}px`;

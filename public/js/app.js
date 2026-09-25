@@ -28,7 +28,7 @@ const canvas = document.getElementById("map");
 
 let assets = null;
 const loadAssets = async () => (assets ??= await Promise.all([
-  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects"]),
+  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects", "people"]),
   fetch("/assets/terrain/palettes.json").then(r => r.json()),
 ]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
 const gzCache = new Map(), depCache = new Map();
@@ -173,6 +173,7 @@ class Game {
     if (m.t === "events") for (const e of m.events) this.announce(e);
     if (m.t === "state" && this.view) this.view.colours.clear();
     if (m.t === "purse" && this.view && m.season && m.season !== this.view.season) this.view.setSeason(m.season);
+    if (m.t === "purse" && this.townOnPurse) { this.townOnPurse = false; this.toggleTown(true); }
   }
 
   onFrame(data) {
@@ -211,7 +212,8 @@ class Game {
     }
     if (e.type === "kit" && e.nation === you) {
       say("kit", "Your chieftain hut stands at the capital. The Town panel says what to do next.", 0);
-      this.toggleTown(true);
+      if (w.purse) this.toggleTown(true);
+      else this.townOnPurse = true;
     }
   }
 
@@ -239,6 +241,7 @@ class Game {
     if (action === "home") this.home();
     if (action === "zoomIn") this.zoom(1.6);
     if (action === "zoomOut") this.zoom(1 / 1.6);
+    this.updatePanels();
     if (action === "cancel") {
       if (this.building || this.zoning) this.stopBuild();
       else if (this.research.open) this.toggleResearch(false);
