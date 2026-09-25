@@ -1,6 +1,6 @@
 import { Grid, disc } from "../shared/grid.js";
 import { TERRAIN, isLand } from "../shared/terrain.js";
-import { buildRegions, coarseRoute, planSegment } from "../shared/pathfind.js";
+import { buildRegions, coarseRoute, planSegment, search } from "../shared/pathfind.js";
 
 export const RULES = {
   spawnRadius: 4,
@@ -20,7 +20,10 @@ export const RULES = {
   pathCell: 16,
   pathAhead: 8,
   pathLookahead: 24,
+  legAhead: 2,
   pathMaxNodes: 60000,
+  seekMaxNodes: 60000,
+  disbandLoss: 0.25,
 };
 
 export class World {
@@ -165,12 +168,26 @@ export class World {
     return true;
   }
 
+  dischargeStack(sid, loss = this.rules.disbandLoss) {
+    const s = this.stacks.get(sid);
+    if (!s || this.owner[s.pos] !== s.owner) return null;
+    const n = this.nations.get(s.owner), keep = 1 - loss, cap = this.maxTroops(n), before = n.troops;
+    const room = Math.max(0, cap - n.troops);
+    let used = Math.min(s.troops, keep > 0 ? room / keep : s.troops);
+    if (s.troops - used < 1) used = s.troops;
+    if (used <= 0) return { back: 0, lost: 0, left: s.troops };
+    n.troops = Math.min(Math.max(before, cap), before + used * keep);
+    s.troops -= used;
+    if (s.troops < 1) this.stacks.delete(sid);
+    return { back: n.troops - before, lost: used * loss, left: this.stacks.has(sid) ? s.troops : 0 };
+  }
+
   splitStack(sid, amount) {
     const s = this.stacks.get(sid);
     amount = Math.floor(amount);
     if (!s || amount < this.rules.minStack || s.troops - amount < this.rules.minStack) return null;
     s.troops -= amount;
-    const c = { ...s, id: this.nextStack++, troops: amount, path: [], route: null, progress: 0, order: "hold" };
+    const c = { ...s, id: this.nextStack++, troops: amount, path: [], route: null, via: null, progress: 0, order: "hold" };
     this.stacks.set(c.id, c);
     return c;
   }
@@ -213,29 +230,88 @@ export class World {
     return true;
   }
 
-  orderMove(sid, target, order = "move") {
+  orderMove(sid, target, order = "move", via = []) {
     const s = this.stacks.get(sid);
     if (!s || !isLand(this.terrain[target])) return false;
-    const r = this.route(s.pos, target);
+    const first = via.length ? via[0] : target;
+    const r = this.route(s.pos, first);
     if (!r) return false;
-    const keep = { path: s.path, route: s.route, progress: s.progress, order: s.order };
+    const keep = { path: s.path, route: s.route, via: s.via, progress: s.progress, order: s.order };
     s.path = [];
-    s.route = { regions: r.regions, goal: target };
+    s.route = { regions: r.regions, goal: first };
+    s.via = via.length ? [...via.slice(1), target] : null;
     s.progress = 0;
-    if (target !== s.pos && !this.extendPath(s)) { Object.assign(s, keep); return false; }
-    if (target === s.pos) s.route = null;
+    if (first !== s.pos && !this.extendPath(s)) { Object.assign(s, keep); return false; }
+    if (first === s.pos) s.route = null;
     s.order = order;
     return true;
   }
 
-  orderAdvance(sid, only = null) {
+  nextLeg(s) {
+    while (s.via?.length && !s.route) {
+      const from = s.path.length ? s.path[s.path.length - 1] : s.pos, goal = s.via.shift();
+      if (!s.via.length) s.via = null;
+      if (goal === from) continue;
+      const r = this.route(from, goal);
+      if (!r) { s.via = null; this.emit("path_blocked", { stack: s.id, at: s.pos }); return; }
+      s.route = { regions: r.regions, goal };
+    }
+  }
+
+  orderAdvance(sid, only = null, seek = false) {
     const s = this.stacks.get(sid);
     if (!s) return false;
     s.path = [];
     s.route = null;
+    s.via = null;
     s.order = "advance";
     s.only = only;
+    s.seek = seek;
     s.carry = 0;
+    return true;
+  }
+
+  wants(s, o) {
+    const me = s.owner, only = s.only ?? null;
+    if (o === me) return false;
+    if (only === 0) return o === 0;
+    if (only !== null) return o === only && this.hostile(me, o);
+    return !o || (this.hostile(me, o) && !this.passable(me, o));
+  }
+
+  crosses(s, o) {
+    return o === s.owner || (!!o && this.passable(s.owner, o)) || (!o && !!s.only);
+  }
+
+  seekTarget(s) {
+    const g = this.grid, ow = this.owner, t = this.terrain, sx = g.x(s.pos), sy = g.y(s.pos);
+    let best = -1, bd = Infinity;
+    const near = (i, ok) => {
+      const d = Math.abs(g.x(i) - sx) + Math.abs(g.y(i) - sy);
+      if (d >= bd) return;
+      for (const n of g.neighbours4(i)) if (isLand(t[n]) && ok(ow[n])) { bd = d; best = i; return; }
+    };
+    if (s.only) for (const i of this.borderOf(s.only)) near(i, o => this.crosses(s, o));
+    else for (const i of this.borderOf(s.owner)) near(i, o => this.wants(s, o));
+    return best;
+  }
+
+  alliedNear(s) {
+    const g = this.grid, ow = this.owner, me = s.owner;
+    for (const i of this.borderOf(me)) for (const n of g.neighbours4(i)) if (ow[n] && ow[n] !== me && this.passable(me, ow[n])) return true;
+    return false;
+  }
+
+  seek(s) {
+    const g = this.grid, ow = this.owner, t = this.terrain, aim = this.seekTarget(s);
+    if (aim < 0 && (s.only || !this.alliedNear(s))) return false;
+    const ax = aim < 0 ? 0 : g.x(aim), ay = aim < 0 ? 0 : g.y(aim);
+    const h = aim < 0 ? () => 0 : i => Math.abs(g.x(i) - ax) + Math.abs(g.y(i) - ay);
+    const cost = (a, b) => (this.wants(s, ow[b]) || this.crosses(s, ow[b]) ? this.moveCost(a, b) : Infinity);
+    const path = search(g, s.pos, i => isLand(t[i]) && this.wants(s, ow[i]), h, cost, this.rules.seekMaxNodes);
+    if (!path) return false;
+    s.path = path.slice(1);
+    s.progress = 0;
     return true;
   }
 
@@ -243,9 +319,11 @@ export class World {
     const o = this.owner[next];
     if (o === s.owner || (o && this.passable(s.owner, o))) { s.pos = next; return true; }
     if (o && !this.hostile(s.owner, o)) return false;
+    if (s.order === "advance" && !this.wants(s, o) && !this.crosses(s, o)) return false;
     const cost = this.captureCost(next, s.owner);
     if (s.troops <= cost) {
       this.emit("stalled", { stack: s.id, at: next });
+      if (s.order === "advance") s.order = "hold";
       return false;
     }
     s.troops -= cost;
@@ -262,8 +340,10 @@ export class World {
 
   stepStack(s, dt) {
     if (s.engaged) return;
+    if (!s.route && s.via?.length && s.path.length < this.rules.legAhead) this.nextLeg(s);
     if (s.route && s.path.length < this.rules.pathLookahead && !this.extendPath(s)) {
       s.route = null;
+      s.via = null;
       this.emit("path_blocked", { stack: s.id, at: s.pos });
       if (!s.path.length && s.order === "move") s.order = "hold";
     }
@@ -271,12 +351,14 @@ export class World {
       s.progress += (this.rules.stackSpeed * (s.speedMult ?? 1) * dt) / this.moveCost(s.pos, s.path[0]);
       while (s.progress >= 1 && s.path.length) {
         s.progress -= 1;
-        if (!this.enter(s, s.path[0])) { s.path = []; s.route = null; s.progress = 0; if (s.order === "move") s.order = "hold"; break; }
+        if (!this.enter(s, s.path[0])) { s.path = []; s.route = null; s.via = null; s.progress = 0; if (s.order === "move") s.order = "hold"; break; }
         s.path.shift();
       }
-      if (!s.path.length && s.order === "move") s.order = "hold";
+      if (!s.path.length && !s.route && !s.via?.length && s.order === "move") s.order = "hold";
     } else if (s.order === "advance") {
       this.advance(s, dt);
+    } else if (s.order === "move" && !s.route && !s.via?.length) {
+      s.order = "hold";
     }
   }
 
@@ -317,7 +399,12 @@ export class World {
     s.carry -= budget;
     if (!budget) return;
     const f = this.frontier(s, budget);
-    if (!f.length) { s.order = "hold"; this.emit("advance_done", { stack: s.id }); return; }
+    if (!f.length) {
+      if (s.seek && this.seek(s)) return;
+      s.order = "hold";
+      this.emit("advance_done", s.seek ? { stack: s.id, only: s.only ?? null, sought: true } : { stack: s.id });
+      return;
+    }
     for (const i of f) {
       if (budget-- <= 0) break;
       const o = this.owner[i];

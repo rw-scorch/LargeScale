@@ -224,7 +224,8 @@ check(aSpawn >= 0, "player spawns on land");
   const seenByB = row => B.json.some(m => m.t === "state" && m.b?.some(r => r[0] === bid && r[4] === row));
   const siteSeen = await until(() => seenByB(0), 3000);
   const done = await until(() => { view.pump(); return cw.buildings.get(bid)?.state === "active"; }, 8000);
-  check(siteSeen && done && seenByB(1), `the site finishes, and the friend's client sees the site and the finished tower`);
+  const friendDone = done && await until(() => seenByB(1), 3000);
+  check(siteSeen && done && friendDone, `the site finishes, and the friend's client sees the site and the finished tower${siteSeen && done && friendDone ? "" : ` (site seen ${!!siteSeen}, finished ${!!done}, friend saw it finish ${!!friendDone})`}`);
   check(A.json.some(m => m.t === "events" && m.events.some(e => e.type === "built" && e.building === bid)), "a built event reaches the owner");
   const before = cw.purse.money;
   A.ws.send(JSON.stringify({ t: "demolish", building: bid }));
@@ -308,6 +309,7 @@ A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
 const st = await nextResult(A, "stack");
 check(st?.ok, "stack created from the garrison");
 const before = (await until(() => view.pump().nations.get(you)?.plots > 0 && view.nations.get(you)))?.plots;
+const formed = (await until(() => view.pump().stacks.get(st.stack)))?.pos;
 A.ws.send(JSON.stringify({ t: "advance", stack: st.stack, only: "free" }));
 const adv = await nextResult(A, "advance");
 const stopped = () => A.json.some(m => m.t === "events" && m.events.some(e => e.stack === st.stack && (e.type === "advance_done" || e.type === "stalled")));
@@ -322,6 +324,12 @@ check(hr && hashRuns(mirror.owner) === hr.owner, `after live diffs the client's 
 check(hr && hashBytes(mirror.terrain) === hr.terrain, `after live terrain edits the client's terrain still matches the server (${hr?.terrain})`);
 const mine = view.pump().nations.get(you);
 check(mine && mine.plots > before + 5, `nation grew from ${before} to ${mine?.plots} plots, seen through compact state updates`);
+const sought = await until(() => {
+  view.pump();
+  const o = view.world.purse?.orders?.find(o => o.id === st.stack), s = view.stacks.get(st.stack);
+  return o?.only === 0 && o.to !== null ? `the purse shows it heading for plot ${o.to}` : s && s.pos !== formed ? `it walked from plot ${formed} to ${s.pos}` : null;
+}, 30000);
+check(sought, `with the unclaimed land around it taken, the stack goes looking for more: ${sought ?? "it never left"}`);
 A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
 const st2 = await nextResult(A, "stack");
 const from = (await until(() => view.pump().stacks.get(st2?.stack)))?.pos;
@@ -337,6 +345,23 @@ check(moved, `a stack takes a move order at least ${far} plots away (reply seen 
 const heading = await until(() => view.pump().world.purse?.orders?.find(o => o.id === st2.stack && o.to === moved?.to), 5000);
 const leaked = B.json.some(m => m.t === "purse" && (m.orders ?? []).some(o => o.id === st2.stack));
 check(heading && !leaked, `the host's purse says where the moving stack is heading (plot ${heading?.to}); the friend's does not`);
+const snap = (x0, y0, r) => {
+  for (let d = 0; d < 80 * K; d++) for (let dy = -d; dy <= d; dy++) for (let dx = -d; dx <= d; dx++) {
+    const x = x0 + dx, y = y0 + dy;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) === d && x >= 0 && y >= 0 && x < M.w && y < M.h && region[y * M.w + x] === r) return y * M.w + x;
+  }
+  return -1;
+};
+const points = moved && from !== undefined ? [1 / 3, 2 / 3].map(f => snap(Math.round((from % M.w) * (1 - f) + (moved.to % M.w) * f), Math.round(Math.floor(from / M.w) * (1 - f) + Math.floor(moved.to / M.w) * f), region[from])) : [];
+A.ws.send(JSON.stringify({ t: "move", stack: st2.stack, to: moved?.to, via: points }));
+const drew = await nextResult(A, "move");
+const shownVia = await until(() => view.pump().world.purse?.orders?.find(o => o.id === st2.stack && o.to === moved?.to && o.via?.length === 2 && o.via[1] === points[1]), 5000);
+A.ws.send(JSON.stringify({ t: "route", stack: st2.stack, to: moved?.to, via: points }));
+const est = await nextResult(A, "route");
+check(points.every(p => p >= 0) && drew?.ok && shownVia && est?.ok && est.seconds > 0, `a drawn path through ${points.length} points is taken, the purse lists them (${shownVia?.via?.join(", ")}), and the estimate is ${est?.seconds} s`);
+A.ws.send(JSON.stringify({ t: "move", stack: st2.stack, to: moved?.to, via: [terrain.findIndex(t => !isLand(t))] }));
+const wet = await nextResult(A, "move");
+check(wet?.error === "every point of a drawn path must be on land", `a drawn path over water is refused: "${wet?.error}"`);
 
 const bHello = await waitFor(B, m => m.t === "hello");
 const bNation = bHello.you;

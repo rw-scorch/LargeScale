@@ -18,9 +18,10 @@ function workText(def, town) {
 export function createBuildingPanel(root, game) {
   const title = el("b", { id: "building-title" });
   const info = el("span", { id: "building-info", class: "muted" });
+  const desc = el("span", { id: "building-desc", class: "desc" });
   const work = el("span", { id: "building-work", class: "muted" });
   const actions = el("div", { class: "row wrap" });
-  const box = el("section", { id: "building-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), work, actions);
+  const box = el("section", { id: "building-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), desc, work, actions);
   root.append(box);
   let key = "";
 
@@ -43,6 +44,8 @@ export function createBuildingPanel(root, game) {
       box.hidden = false;
       const yours = b.owner === w.you, owner = w.nations.get(b.owner)?.name ?? "nobody";
       title.textContent = b.def.name;
+      desc.textContent = b.def.description ?? "";
+      desc.hidden = !desc.textContent;
       info.textContent = ` ${yours ? "yours" : owner}, ${b.state === "construction" ? `being built, ${Math.floor(b.progress * 100)}%` : b.state === "rubble" ? "rubble, clears soon" : b.state}`;
       work.textContent = yours ? workText(b.def, w.purse?.town) : "";
       work.hidden = !work.textContent;
