@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
 import { installBots, spawnBots } from "../src/sim/bots.js";
+import { installBuildings, addBuilding, footprint, saveLayers, ZONES, WOOD_FULL } from "../src/sim/buildings.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
 import { encodeRuns, countRuns } from "../src/shared/codec.js";
@@ -17,12 +18,14 @@ const { values: a } = parseArgs({ options: {
   players: { type: "string", default: "8" },
   ticks: { type: "string", default: "2400" },
   budget: { type: "string", default: "50" },
+  buildings: { type: "string", default: "2000" },
   map: { type: "string", default: "public/map" },
   crop: { type: "string" },
   seed: { type: "string", default: "1" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
+const settledMB = () => { globalThis.gc?.(); globalThis.gc?.(); return isolateMB(); };
 const isolateMB = () => { const m = process.memoryUsage(); return Math.round((m.heapUsed + m.arrayBuffers) / 1e6); };
 const bareRss = Math.round(process.memoryUsage().rss / 1e6);
 let peakIsolate = 0;
@@ -47,6 +50,42 @@ for (let k = 0; k < Number(a.players); k++) {
   for (let tries = 0; tries < 4000 && !w.nations.get(id).spawned; tries++) w.spawn(id, rng.int(0, meta.w - 1), rng.int(0, meta.h - 1));
   if (w.nations.get(id).spawned) players.push(id);
 }
+const bld = installBuildings(w);
+const perPlayer = Number(a.buildings);
+const pick = t => (t % 10 < 7 ? "hut_grass" : t % 10 < 9 ? "market_stall" : "chieftain_hut");
+let placed = 0, woodCut = 0;
+for (const id of players) {
+  const n = w.nations.get(id);
+  const want = Math.ceil(perPlayer * 1.8), seen = new Set(), todo = [];
+  for (let seed = n.capital, tries = 0; n.plots < want && tries < 1000; tries++, seed = rng.int(0, w.grid.size - 1)) {
+    if (seen.has(seed) || !isLand(terrain[seed]) || (w.owner[seed] !== 0 && w.owner[seed] !== id)) continue;
+    seen.add(seed);
+    for (let k = todo.push(seed) - 1; k < todo.length && n.plots < want; k++) {
+      const c = todo[k];
+      if (w.owner[c] === 0) w.claim(c, id);
+      for (const nb of w.grid.neighbours4(c)) if (!seen.has(nb) && isLand(terrain[nb]) && (w.owner[nb] === 0 || w.owner[nb] === id)) { seen.add(nb); todo.push(nb); }
+    }
+  }
+  let made = 0, turn = 0;
+  for (const c of todo) {
+    if (made >= perPlayer) break;
+    if (w.owner[c] !== id) continue;
+    bld.zone[c] = ZONES.res;
+    if (bld.wood[c] && woodCut < 2000) { bld.wood[c] = Math.floor(WOOD_FULL * 0.4); woodCut++; }
+    if (bld.at.has(c)) continue;
+    let type = pick(turn), plots = footprint(w, c, bld.table[type].fp);
+    if (!plots || plots.some(i => w.owner[i] !== id || bld.at.has(i))) { type = "hut_grass"; plots = [c]; }
+    addBuilding(w, { type, owner: id, anchor: c, plots, state: "active", progress: 1, residents: bld.table[type].housing ? 4.5 : 0 });
+    made++; turn++;
+  }
+  placed += made;
+}
+bld.changed.add("zone");
+if (woodCut) bld.changed.add("wood");
+const ls0 = performance.now();
+const layers = saveLayers(w, true);
+const layerSaveMs = performance.now() - ls0;
+const ROW = 1_000_000, rowsOf = b => Math.max(1, Math.ceil(b.length / ROW));
 w.pathGraph();
 w.takeDirty();
 w.events.length = 0;
@@ -125,6 +164,7 @@ for (let i = 0; i < w.owner.length && borderOk; i++) {
 let borderPlots = 0;
 for (const set of w.border.values()) borderPlots += set.size;
 
+const settled = settledMB();
 const sorted = [...times].sort((x, y) => x - y);
 const worst = sorted.at(-1), p50 = sorted[sorted.length >> 1], p99 = sorted[Math.floor(sorted.length * 0.99)];
 const runs = encodeRuns(w.owner);
@@ -155,8 +195,15 @@ const report = {
     perPlayerPerSecond: { state: Math.round(stateSizes.reduce((x, y) => x + y, 0) / w.time), events: Math.round(eventSizes.reduce((x, y) => x + y, 0) / w.time) },
   },
   maxEventsPerTick: maxEvents,
+  buildings: {
+    placed, perPlayer, plotIndex: bld.at.size, woodPlotsCut: woodCut, 
+    saveBytes: Object.fromEntries(Object.entries(layers).map(([k, v]) => [k, v.length])),
+    saveRows: { owner: rowsOf(runs), ...Object.fromEntries(Object.entries(layers).map(([k, v]) => [k, rowsOf(v)])), state: 1 },
+    encodeMs: +layerSaveMs.toFixed(1),
+    ownersMatch: [...bld.list.values()].every(b => b.owner === w.owner[b.anchor] || w.owner[b.anchor] === 0),
+  },
   budgetMs: Number(a.budget),
-  memoryMB: { peakHeapPlusBuffers: peakIsolate, endHeapPlusBuffers: isolateMB(), rss: Math.round(process.memoryUsage().rss / 1e6), nodeAloneRss: bareRss },
+  memoryMB: { settledHeapPlusBuffers: settled, peakHeapPlusBuffers: peakIsolate, endHeapPlusBuffers: isolateMB(), rss: Math.round(process.memoryUsage().rss / 1e6), nodeAloneRss: bareRss },
 };
 console.log(JSON.stringify(report, null, 2));
 if (!borderOk) { console.error("FAIL: border sets do not match a full scan"); process.exit(1); }

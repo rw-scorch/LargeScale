@@ -42,6 +42,7 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - Captured plots follow question 5.
 - Tuning numbers move from the kit modules into `data/rules.json`.
 - **Done when:** tests cover the registry, the save round trip and capture; `npm run bench` reports memory with 8 nations holding 2,000 buildings each; a format 2 world loads.
+- **Done (25 September 2026).** 72 unit tests and 95 kit tests pass. Earth bench with 16,000 buildings: worst tick 11.7 ms, 47 MB settled heap (40 MB without buildings), every layer one row (buildings 352 KB, wood 140 KB, zone 3 KB). Fine Europe at 100 bots: worst tick 13.4 ms, 21 MB. A format 2 world made on `main` loaded under `wrangler dev` as format 3, and a format 3 world reloads with identical layer hashes.
 
 ### 2. Player construction (piece 8, first half)
 

@@ -169,7 +169,7 @@ export class World extends DurableObject {
       this.hashes.owner = hashBytes(runs);
       this.ownerChanged = false;
     }
-    const layers = saveLayers(this.sim, all);
+    const layers = saveLayers(this.sim);
     const layerBytes = {};
     for (const [name, bytes] of Object.entries(layers)) {
       rows += this.writeRows(name, bytes);
