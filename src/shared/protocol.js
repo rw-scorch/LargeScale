@@ -1,7 +1,7 @@
 import { joinParts, splitParts, bytesOf } from "./codec.js";
 
-export const PROTOCOL = 3;
-export const MSG = { OWNER: 2, DIFF: 3, TERRAIN_DIFF: 4, BUILDINGS: 5, ZONE: 6, ZONE_DIFF: 7 };
+export const PROTOCOL = 4;
+export const MSG = { OWNER: 2, DIFF: 3, TERRAIN_DIFF: 4, BUILDINGS: 5, ZONE: 6, ZONE_DIFF: 7, TERRAIN_EDIT: 8, DEPOSITS: 9 };
 export const MAX_ZONE_SIDE = 64;
 export const FRAME_BYTES = 256 * 1024;
 export const CLOSE = { PROTOCOL: 4000, REPLACED: 4001 };

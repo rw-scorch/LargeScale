@@ -14,6 +14,8 @@ import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./
 import { installConstruction } from "./sim/construction.js";
 import { installEconomy } from "./sim/economy.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
+import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS } from "./sim/resources.js";
+import { decodeDeposits, cropDeposits, encodeDeposits, emptyDeposits, latitudeOf, seasonAt } from "./shared/deposits.js";
 import { encodeRows } from "./shared/buildings.js";
 import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
@@ -25,6 +27,7 @@ const SAVE_VERSION = 3;
 const LOADS = [2, 3];
 const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
+const SEASON_SECONDS = rules.seasons.dayLengthMinutes * 60 * rules.seasons.daysPerSeason;
 const COLOURS = ["#e0413a", "#f08a24", "#d63fbf", "#f2d02b", "#8e4fe0", "#f4f4f4", "#ff7ab8", "#1f1f1f"];
 
 export class World extends DurableObject {
@@ -86,12 +89,28 @@ export class World extends DurableObject {
     const meta = await (await this.asset(`${dir}/meta.json`)).json();
     const terrain = await this.baseTerrain(dir);
     if (terrain.length !== meta.w * meta.h) return { error: `${dir}/terrain.bin.gz does not match ${dir}/meta.json` };
-    const base = { ...map, baseHash: hashBytes(terrain), srcW: meta.w, srcH: meta.h, scale: meta.w / BASE_WIDTH };
+    const base = { ...map, baseHash: hashBytes(terrain), srcW: meta.w, srcH: meta.h, scale: meta.w / BASE_WIDTH, north: meta.north, south: meta.south };
     if (map.kind === "earth") return { map: base, w: meta.w, h: meta.h, terrain };
     const rect = cropRect(meta, map.box);
     if (!rect || rect.w < MIN_MAP_SIDE || rect.h < MIN_MAP_SIDE) return { error: "the crop is outside the map or too small" };
     if (rect.w * rect.h > MAX_PLOTS) return { error: `that region is ${rect.w} by ${rect.h} plots, over the ${MAX_PLOTS} limit; pick a smaller box or normal detail` };
     return { map: { ...base, rect }, w: rect.w, h: rect.h, terrain: cropLayer(terrain, meta.w, rect) };
+  }
+
+  async loadDeposits(info, terrain) {
+    const map = info.map;
+    if (map.kind === "test") return generateDeposits({ w: info.w, h: info.h, terrain }, makeRng(map.seed ?? 1));
+    try {
+      const dep = decodeDeposits(await gunzip(new Uint8Array(await (await this.asset(`${map.dir ?? "map"}/deposits.bin.gz`)).arrayBuffer())));
+      return map.rect ? cropDeposits(dep, map.srcW, map.rect) : dep;
+    } catch (e) {
+      console.warn(`no deposits for this world: ${e.message}`);
+      return emptyDeposits();
+    }
+  }
+
+  seasonOf(i) {
+    return seasonAt(this.sim.time, latitudeOf(this.info.map, this.info.h, i, this.info.w), SEASON_SECONDS);
   }
 
   async load() {
@@ -123,6 +142,12 @@ export class World extends DurableObject {
     installConstruction(this.sim, { speed: info.rules?.buildSpeed ?? 1 });
     installEconomy(this.sim);
     installCivilians(this.sim, makeRng(((info.seed ?? 1) + 7919 + Math.floor(this.sim.time)) >>> 0));
+    this.info = info;
+    installResources(this.sim, await this.loadDeposits(info, terrain), {
+      seasonOf: i => this.seasonOf(i), rules: { speed: info.rules?.produceSpeed ?? 1 },
+      rng: makeRng(((info.seed ?? 1) + 104729 + Math.floor(this.sim.time)) >>> 0),
+    });
+    this.landLoaded = restoreLand(this.sim, this.readRows("land"));
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.updatePresence();
@@ -136,12 +161,17 @@ export class World extends DurableObject {
     }
     this.sim.dirty.clear();
     this.loadMs = Date.now() - t0;
-    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null };
+    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, ...this.landLoaded };
+  }
+
+  currentHashes() {
+    this.hashes.terrain ??= hashBytes(this.sim.terrain);
+    return this.hashes;
   }
 
   layerHashes(terrain = this.sim.terrain) {
     const bld = this.sim.bld;
-    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)) };
+    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)), land: hashBytes(encodeLand(this.sim)) };
   }
 
   async init(config) {
@@ -189,7 +219,7 @@ export class World extends DurableObject {
     rows += this.meta("state", {
       time: this.sim.time, nextNation: this.sim.nextNation, nextStack: this.sim.nextStack,
       nations: [...this.sim.nations.values()], stacks: [...this.sim.stacks.values()], accounts: [...this.accounts],
-      savedAt: Date.now(), hashes: this.hashes,
+      savedAt: Date.now(), hashes: this.currentHashes(),
     });
     this.lastSave = Date.now();
     const prev = this.saveStats ?? { saves: 0, totalRows: 0, maxRows: 0 };
@@ -310,10 +340,12 @@ export class World extends DurableObject {
     const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
     const buildingFrames = partFrames(MSG.BUILDINGS, encodeRows(this.bfeed.rows(this.sim)));
     const zoneFrames = partFrames(MSG.ZONE, encodeRuns(this.sim.bld.zone));
+    const depositFrames = this.info.map.kind === "test" ? partFrames(MSG.DEPOSITS, encodeDeposits(this.sim.res.dep)) : [];
     server.send(JSON.stringify({
       t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
-      hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length },
-      defs: buildingData.buildings, purse: purseOf(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel },
+      hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, deposits: depositFrames.length },
+      depositIds: DEPOSIT_IDS, depleted: depletedPlots(this.sim),
+      defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel },
       caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(),
       victory: this.meta("victory"), frozen: this.frozen,
     }));
@@ -321,6 +353,7 @@ export class World extends DurableObject {
     for (const f of ownerFrames) server.send(f);
     for (const f of buildingFrames) server.send(f);
     for (const f of zoneFrames) server.send(f);
+    for (const f of depositFrames) server.send(f);
     const n = this.sim.nations.get(nation);
     this.broadcast({ t: "joined", nation, name: n.name, colour: n.colour });
     if (!this.frozen) this.startLoop();
@@ -363,6 +396,8 @@ export class World extends DurableObject {
   flushDiffs() {
     const zones = takeZoneNews(this.sim);
     if (zones) this.broadcast(frame(MSG.ZONE_DIFF, zones));
+    const land = takeTerrainNews(this.sim);
+    if (land) { this.terrainJoin = null; this.hashes.terrain = null; this.broadcast(frame(MSG.TERRAIN_EDIT, land)); }
     const changes = this.sim.takeDirty();
     if (!changes.length) return;
     this.ownerChanged = true;
@@ -371,12 +406,16 @@ export class World extends DurableObject {
     this.broadcast(frame(MSG.DIFF, flat));
   }
 
+  purse(n) {
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null });
+  }
+
   sendState() {
     const d = this.feed.delta(this.sim), bd = this.bfeed.delta(this.sim);
     if (d || bd) this.broadcast({ t: "state", time: Math.floor(this.sim.time), n: [], s: [], gone: [], ...d, ...(bd ? { b: bd.up, bg: bd.gone } : {}) });
     for (const ws of this.sockets()) {
       const me = ws.deserializeAttachment();
-      const p = purseOf(this.sim.nations.get(me?.nation));
+      const p = this.purse(this.sim.nations.get(me?.nation));
       if (!p) continue;
       const key = JSON.stringify(p);
       if (this.purses.get(me.account) === key) continue;
@@ -474,7 +513,7 @@ export class World extends DurableObject {
     return {
       initialised: !!this.sim, players: this.accounts.size, online: this.sockets().length, looping: !!this.loop, time: this.sim?.time ?? 0,
       map: info?.map ?? null, w: info?.w, h: info?.h, landPlots: info?.landPlots, bots: info?.bots,
-      hashes: this.hashes ?? null, loadCheck: this.loadCheck ?? null, loaded: this.loaded ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
+      hashes: this.sim ? this.currentHashes() : null, loadCheck: this.loadCheck ?? null, loaded: this.loaded ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
       frozen: !!this.frozen, victory: this.meta("victory"),
     };
   }

@@ -49,8 +49,35 @@ export function placeError(v, nation, def, anchor, self = 0) {
   } else {
     if (water) return "cannot build on water";
     if (plots.some(i => v.owner[i] !== nid)) return "not your land";
-    if (plots.some(i => !TERRAIN[v.terrain[i]].build)) return "the ground is too rough to build on";
+    if (def.producer?.kind !== "deposit" && plots.some(i => !TERRAIN[v.terrain[i]].build)) return "the ground is too rough to build on";
   }
+  return def.producer ? producerError(v, def.producer, plots) : null;
+}
+
+const GRAZING = new Set(["grassland", "plains", "meadow", "steppe", "savanna"]);
+
+export function areaAround(v, plots, r) {
+  if (!r) return plots;
+  const out = new Set();
+  for (const i of plots) {
+    const x0 = i % v.w, y0 = (i / v.w) | 0;
+    for (let y = y0 - r; y <= y0 + r; y++) for (let x = x0 - r; x <= x0 + r; x++) if (x >= 0 && y >= 0 && x < v.w && y < v.h) out.add(y * v.w + x);
+  }
+  return [...out];
+}
+
+export function producerError(v, p, plots) {
+  const r = p.radius ?? 0, area = areaAround(v, plots, r);
+  if (p.kind === "deposit") {
+    if (area.some(i => p.deposits.includes(v.deposit(i)))) return null;
+    const what = p.deposits.length > 1 ? "ore" : p.deposits[0];
+    if (what === "fish") return `needs fishing water within ${r} plots`;
+    const an = /^[aeiou]/.test(what) ? "an" : "a";
+    return r ? `needs ${an} ${what} deposit within ${r} plots` : `must sit on ${an} ${what} deposit`;
+  }
+  if (p.kind === "forest") return area.some(i => TERRAIN[v.terrain[i]].forest) ? null : `needs forest within ${r} plots`;
+  if (p.kind === "farm") return plots.every(i => TERRAIN[v.terrain[i]].fertility > 0.1) ? null : "the soil is too poor to farm";
+  if (p.kind === "pasture") return plots.every(i => GRAZING.has(TERRAIN[v.terrain[i]].name)) ? null : "needs grassland";
   return null;
 }
 

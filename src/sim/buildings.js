@@ -156,6 +156,7 @@ export function saveLayers(world, all = false) {
   if (all || bld.changed.has("zone")) out.zone = encodeRuns(bld.zone);
   if (all || bld.changed.has("wood")) out.wood = encodeRuns(bld.wood);
   if (all || bld.changed.has("buildings")) out.buildings = encodeBuildings(bld);
+  for (const [name, encode] of Object.entries(bld.extra ?? {})) if (all || bld.changed.has(name)) out[name] = encode();
   bld.changed.clear();
   return out;
 }
