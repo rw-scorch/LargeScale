@@ -4,6 +4,7 @@ export const ACTIONS = {
   claim: { key: "c", label: "Advance into unclaimed land only" },
   target: { key: "n", label: "Advance into one nation's land: click it next" },
   move: { key: "m", label: "Move: pick a destination" },
+  draw: { key: "d", label: "Draw a path: drag along the way the stack should go" },
   split: { key: "s", label: "Split half" },
   merge: { key: "g", label: "Merge nearby stacks" },
   disband: { key: "x", label: "Disband, or demolish the selected building" },

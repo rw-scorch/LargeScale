@@ -391,10 +391,10 @@ await fix.goto(`${BASE}/#w=${fid}`);
 await fix.reload();
 await ready(fix);
 const home = await fix.evaluate(async () => {
-  const g = window.__ls.game, w = g.world, land = t => t >= 7 && t <= 26;
+  const g = window.__ls.game, w = g.world, land = t => t >= 7 && t <= 26, wet = t => [0, 1, 2, 3, 5, 34].includes(t);
   for (let y = 12; y < w.h - 12; y += 3) for (let x = 12; x < w.w - 12; x += 3) {
     let shore = false;
-    for (let dy = -2; dy <= 2 && !shore; dy++) for (let dx = -2; dx <= 2 && !shore; dx++) shore = !land(w.terrain[(y + dy) * w.w + x + dx]);
+    for (let dy = -2; dy <= 2 && !shore; dy++) for (let dx = -2; dx <= 2 && !shore; dx++) shore = wet(w.terrain[(y + dy) * w.w + x + dx]);
     if (!shore || !land(w.terrain[y * w.w + x])) continue;
     if ((await g.conn.request({ t: "spawn", x, y })).ok) return y * w.w + x;
   }
@@ -409,7 +409,7 @@ const shore = await fix.evaluate(() => {
   for (let r = 1; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     const i = (cy + dy) * w.w + cx + dx;
     if (w.owner[i] !== w.you || w.placeError("jetty", i)) continue;
-    for (const n of [i - 1, i + 1, i - w.w, i + w.w]) if (w.terrain[n] < 7) return { land: i, water: n };
+    for (const n of [i - 1, i + 1, i - w.w, i + w.w]) if ([0, 1, 2, 3, 5, 34].includes(w.terrain[n])) return { land: i, water: n };
   }
   return null;
 });
@@ -496,8 +496,47 @@ const neighbour = await fix.evaluate(async id => {
 await fix.keyboard.press("n");
 const asked = await fix.textContent("#stack-hint");
 if (neighbour) await fix.mouse.click(neighbour.x, neighbour.y);
-const told = await fix.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).find(o => o.only === id) ? document.querySelector("#stack-info").textContent : /stopped advancing/.test(document.querySelector("#toasts")?.textContent ?? "") ? "done at once" : null, neighbour?.id, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+const told = await fix.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).find(o => o.only === id) ? document.querySelector("#stack-info").textContent : /A stack stopped/.test(document.querySelector("#toasts")?.textContent ?? "") ? "done at once" : null, neighbour?.id, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
 check(/Click the land of the nation/.test(asked) && told, `N asks which nation, and clicking ${neighbour?.name}'s land sets the advance: "${told?.trim()}"`);
+const drawSpots = id => fix.evaluate(id => {
+  const g = window.__ls.game, w = g.world, v = g.view, s = w.stacks.get(id), land = t => t >= 7 && t <= 26;
+  if (!s) return null;
+  g.select(id);
+  g.focus(s.pos, 8);
+  const sx = s.pos % w.w, sy = (s.pos / w.w) | 0;
+  const dry = (x, y) => x >= 0 && y >= 0 && x < w.w && y < w.h && land(w.terrain[y * w.w + x]);
+  const edge = ([x0, y0], [x1, y1]) => { for (let k = 0; k <= Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)); k++) if (!dry(x0 + Math.sign(x1 - x0) * k, y0 + Math.sign(y1 - y0) * k)) return false; return true; };
+  for (const n of [4, 3]) for (const d of [7, 5, 3]) for (const [ax, ay] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+    const corners = [[0, 0], [d * ax, 0], [d * ax, d * ay], [0, d * ay]].slice(0, n).map(([dx, dy]) => [sx + dx, sy + dy]);
+    if (!corners.every((c, k) => k === 0 ? dry(...c) : edge(corners[k - 1], c))) continue;
+    return corners.map(([x, y]) => { const [px, py] = v.plotToScreen(x + 0.5, y + 0.5); return { x: px / v.ratio, y: py / v.ratio, i: y * w.w + x }; });
+  }
+  return null;
+}, id);
+const drawWith = async (pts, button, shot) => {
+  await fix.mouse.move(pts[0].x, pts[0].y);
+  await fix.mouse.down({ button });
+  for (const p of pts.slice(1)) await fix.mouse.move(p.x, p.y, { steps: 10 });
+  if (shot) await fix.screenshot({ path: shot });
+  await fix.mouse.up({ button });
+};
+const followed = (id, end) => fix.waitForFunction(([id, end]) => {
+  const info = document.querySelector("#stack-info")?.textContent ?? "";
+  return (window.__ls.game.world.purse?.orders ?? []).find(o => o.id === id && o.to === end && o.via?.length) && /following your path/.test(info) ? info : null;
+}, [id, end], { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+let drawn = await drawSpots(trip?.stack);
+await fix.keyboard.press("d");
+const drawHint = await fix.textContent("#stack-hint");
+if (drawn) await drawWith(drawn, "left");
+const along = drawn ? await followed(trip?.stack, drawn.at(-1).i) : null;
+check(/Drag along/.test(drawHint) && /following your path/.test(along ?? ""), `D then a drag draws the stack's way: "${along?.trim()}"`);
+await fix.waitForTimeout(400);
+await fix.screenshot({ path: `${OUT}/19-drawn-path.png` });
+drawn = await drawSpots(trip?.stack);
+if (drawn) await drawWith([...drawn].reverse(), "right", `${OUT}/19b-right-drag.png`);
+const again = drawn ? await followed(trip?.stack, drawn[0].i) : null;
+const line = await fix.evaluate(() => window.__ls.game.view.route?.points.length ?? 0);
+check(/following your path/.test(again ?? "") && line >= 3, `with a mouse, a right-drag draws a path without the button: "${again?.trim()}", drawn through ${line} points`);
 await fix.click("#leave-world");
 const back = await fix.waitForSelector("#world-create", { timeout: 5000 }).then(() => true, () => false);
 check(back && await fix.isVisible("#leave-world") === false, "Exit goes back to the world list");
