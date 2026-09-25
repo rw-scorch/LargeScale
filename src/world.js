@@ -52,7 +52,7 @@ export class World extends DurableObject {
 
   meta(k, v) {
     if (v === undefined) return JSON.parse(this.ctx.storage.sql.exec("SELECT v FROM meta WHERE k = ?", k).toArray()[0]?.v ?? "null");
-    return this.ctx.storage.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)", k, JSON.stringify(v)).rowsWritten;
+    return this.ctx.storage.sql.exec("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", k, JSON.stringify(v)).rowsWritten;
   }
 
   readRows(layer) {
@@ -64,7 +64,7 @@ export class World extends DurableObject {
   writeRows(layer, bytes) {
     const sql = this.ctx.storage.sql, parts = splitParts(bytes, ROW_BYTES);
     let written = 0;
-    parts.forEach((part, idx) => { written += sql.exec("INSERT OR REPLACE INTO chunks (layer, idx, data) VALUES (?, ?, ?)", layer, idx, part).rowsWritten; });
+    parts.forEach((part, idx) => { written += sql.exec("INSERT INTO chunks (layer, idx, data) VALUES (?, ?, ?) ON CONFLICT (layer, idx) DO UPDATE SET data = excluded.data", layer, idx, part).rowsWritten; });
     if ((this.parts?.[layer] ?? Infinity) > parts.length) written += sql.exec("DELETE FROM chunks WHERE layer = ? AND idx >= ?", layer, parts.length).rowsWritten;
     (this.parts ??= {})[layer] = parts.length;
     return written;

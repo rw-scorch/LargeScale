@@ -6,6 +6,8 @@ export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
 const ROAD_NAMES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
+const ZONE_SPRITE = [null, "ov_zone_residential", "ov_zone_commercial", "ov_zone_industrial", "ov_zone_farmland"];
+export const ZONE_COLOUR = [null, "rgba(111,207,122,.35)", "rgba(90,160,230,.35)", "rgba(232,200,74,.35)", "rgba(190,150,90,.35)"];
 const maskName = m => DIRS.filter(([b]) => m & b).map(d => d[1]).join("") || "dot";
 const ICON_FOR = { housing: "mapicon_housing", res: "mapicon_housing", commercial: "mapicon_commercial", com: "mapicon_commercial", industry: "mapicon_industry", ind: "mapicon_industry", infrastructure: "mapicon_industry", agriculture: "mapicon_agriculture", farm: "mapicon_agriculture", energy: "mapicon_energy", civic: "mapicon_civic", transport: "mapicon_transport", tourism: "mapicon_tourism", military: "mapicon_military" };
 
@@ -33,6 +35,8 @@ export class MapRenderer {
     this.selected = null;
     this.route = null;
     this.ghost = null;
+    this.zoneRect = null;
+    this.showZones = false;
     this.selectedBuilding = null;
     this.terrainCanvas = document.createElement("canvas");
     this.terrainCanvas.width = state.w;
@@ -287,9 +291,57 @@ export class MapRenderer {
     if (c.scale >= ZOOM.sprites * R) this.drawSprites();
     else if (c.scale >= ZOOM.icons * R) this.drawIcons();
     else this.drawDots();
+    if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
+    this.drawZoneRect();
     this.drawGhost();
     this.drawRoute();
     if (this.night) this.drawNight();
+  }
+
+  drawZones(r) {
+    const s = this.state, z = s.zone, px = this.cam.scale / 16;
+    if (!z) return;
+    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
+      const i = y * s.w + x;
+      if (!z[i] || this.occupied[i]) continue;
+      const [sx, sy] = this.plotToScreen(x, y);
+      this.atlas.draw(this.ctx, ZONE_SPRITE[z[i]], sx, sy, px);
+    }
+  }
+
+  drawZoneFill(r) {
+    const ctx = this.ctx, s = this.state, z = s.zone, sc = this.cam.scale;
+    if (!z) return;
+    for (let y = r.y0; y <= r.y1; y++) {
+      let x = r.x0;
+      while (x <= r.x1) {
+        const v = z[y * s.w + x];
+        let e = x + 1;
+        while (e <= r.x1 && z[y * s.w + e] === v) e++;
+        if (v) {
+          const [sx, sy] = this.plotToScreen(x, y);
+          ctx.fillStyle = ZONE_COLOUR[v];
+          ctx.fillRect(sx, sy, (e - x) * sc, sc);
+        }
+        x = e;
+      }
+    }
+  }
+
+  drawZoneRect() {
+    const q = this.zoneRect;
+    if (!q) return;
+    const ctx = this.ctx, k = this.ratio ?? 1, sc = this.cam.scale;
+    const [sx, sy] = this.plotToScreen(q.x, q.y);
+    ctx.fillStyle = q.code ? ZONE_COLOUR[q.code] : "rgba(224,106,90,.3)";
+    ctx.fillRect(sx, sy, q.w * sc, q.h * sc);
+    ctx.save();
+    ctx.setLineDash([6 * k, 4 * k]);
+    ctx.lineWidth = 2 * k;
+    ctx.strokeStyle = "#e8c84a";
+    ctx.strokeRect(sx, sy, q.w * sc, q.h * sc);
+    ctx.restore();
+    this.label(`${q.w} by ${q.h}`, sx + (q.w * sc) / 2, sy + q.h * sc + 4 * k, 13 * k);
   }
 
   drawGhost() {
@@ -365,6 +417,7 @@ export class MapRenderer {
       if (s.roads[i]) a.draw(ctx, this.roadSprite(i), sx, sy, px);
     }
     this.drawFill(r);
+    this.drawZones(r);
     this.drawBorders(r);
     const items = [];
     for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {

@@ -6,6 +6,7 @@ export const ACTIONS = {
   merge: { key: "g", label: "Merge nearby stacks" },
   disband: { key: "x", label: "Disband, or demolish the selected building" },
   build: { key: "b", label: "Open the build menu" },
+  town: { key: "t", label: "Town: population, jobs, food and demand" },
   next: { key: "Tab", label: "Select your next stack" },
   home: { key: "h", label: "Go to your capital" },
   cancel: { key: "Escape", label: "Cancel" },
