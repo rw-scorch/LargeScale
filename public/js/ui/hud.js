@@ -15,6 +15,7 @@ export function createHud(root, game) {
   const town = el("button", { id: "open-town", onclick: () => game.toggleTown() }, "Town", " ", keyTag("town"));
   const research = el("button", { id: "open-research", onclick: () => game.toggleResearch() }, "Research", " ", keyTag("research"));
   const upgrade = el("button", { id: "open-upgrade", onclick: () => game.toggleUpgrade() }, "Upgrade", " ", keyTag("upgrade"));
+  const army = el("button", { id: "open-army", onclick: () => game.toggleArmy() }, "Army", " ", keyTag("army"));
   const deposits = el("button", { id: "show-deposits", title: "deposits at mid zoom (R)", onclick: () => game.toggleDeposits() }, "Deposits", " ", keyTag("deposits"));
   const share = el("input", { id: "stack-share", type: "range", min: 10, max: 100, step: 5, value: 30, title: "share of your garrison" });
   const shareLabel = el("span", { class: "muted", text: "30%" });
@@ -34,6 +35,7 @@ export function createHud(root, game) {
     town,
     research,
     upgrade,
+    army,
     deposits,
     admin,
     el("span", { class: "stackform" }, share, shareLabel, form),
@@ -65,6 +67,8 @@ export function createHud(root, game) {
       research.classList.toggle("on", !!game.research?.open);
       upgrade.disabled = !p || !n?.spawned;
       upgrade.classList.toggle("on", !!game.upgrade?.open);
+      army.disabled = !p?.army || !n?.spawned;
+      army.classList.toggle("on", !!game.army?.open);
       const rs = p?.research, cur = rs?.current && game.world.locks.nodes.get(rs.current);
       research.firstChild.textContent = cur ? `Research ${Math.floor((rs.progress / cur.cost) * 100)}%` : rs && !rs.queue.length ? "Research!" : "Research";
       deposits.classList.toggle("on", !!game.view?.showDeposits);

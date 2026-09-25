@@ -9,7 +9,7 @@ import { parseWorldConfig, defaultBots, scaledRules, MIN_MAP_SIDE, MAX_PLOTS, BA
 import rules from "../data/rules.json" with { type: "json" };
 import { planCatchUp, runCatchUp } from "./sim/offline.js";
 import { installCombat } from "./sim/combat.js";
-import { installTroops, TROOP_RULES } from "./sim/troops.js";
+import { installTroops, TROOP_RULES, armyView } from "./sim/troops.js";
 import unitData from "../data/units.json" with { type: "json" };
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
@@ -146,7 +146,7 @@ export class World extends DurableObject {
       for (const [nid, acc] of saved.accounts ?? []) this.accounts.set(nid, acc);
     }
     installCombat(this.sim, scaled.combat);
-    installTroops(this.sim);
+    installTroops(this.sim, { speed: info.rules?.trainSpeed ?? 1 });
     installConstruction(this.sim, { speed: info.rules?.buildSpeed ?? 1 });
     installEconomy(this.sim);
     installCivilians(this.sim, makeRng(((info.seed ?? 1) + 7919 + Math.floor(this.sim.time)) >>> 0));
@@ -433,7 +433,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [] });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n) });
   }
 
   sendState() {

@@ -20,6 +20,7 @@ import { createResearchPanel } from "./ui/research.js";
 import { createTip } from "./ui/tip.js";
 import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
+import { createArmyPanel } from "./ui/army.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -81,6 +82,7 @@ class Game {
     this.town = createTownPanel(overlay, this);
     this.research = createResearchPanel(overlay, this);
     this.upgrade = createUpgradePanel(overlay, this);
+    this.army = createArmyPanel(overlay, this);
     this.tip = createTip(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     const self = this;
@@ -252,6 +254,7 @@ class Game {
     if (action === "research") return this.toggleResearch();
     if (action === "admin") return this.toggleAdmin();
     if (action === "upgrade") return this.toggleUpgrade();
+    if (action === "army") return this.toggleArmy();
     if (action === "deposits") return this.toggleDeposits();
     if (["advance", "claim", "target", "move", "draw", "split", "merge", "disband"].includes(action)) act[action]();
     if (action === "next") this.nextStack();
@@ -263,6 +266,7 @@ class Game {
       if (this.building || this.zoning) this.stopBuild();
       else if (this.adminPanel?.open) this.toggleAdmin(false);
       else if (this.upgrade.open) this.toggleUpgrade(false);
+      else if (this.army.open) this.toggleArmy(false);
       else if (this.research.open) this.toggleResearch(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
@@ -280,22 +284,29 @@ class Game {
   }
 
   toggleResearch(on = !this.research.open) {
-    if (on) { this.upgrade.show(false); this.adminPanel?.show(false); }
+    if (on) { this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); }
     this.research.show(on && !!this.world?.purse?.research);
     this.updatePanels();
   }
 
   toggleAdmin(on = !this.adminPanel?.open) {
     if (!this.adminPanel) return;
-    if (on) { this.research.show(false); this.upgrade.show(false); }
+    if (on) { this.research.show(false); this.upgrade.show(false); this.army.show(false); }
     this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
   toggleUpgrade(on = !this.upgrade.open) {
-    if (on) { this.research.show(false); this.adminPanel?.show(false); }
+    if (on) { this.research.show(false); this.army.show(false); this.adminPanel?.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.upgrade.show(on && !!this.world?.purse && !!me?.spawned);
+    this.updatePanels();
+  }
+
+  toggleArmy(on = !this.army.open) {
+    if (on) { this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); }
+    const me = this.world?.nations.get(this.world.you);
+    this.army.show(on && !!this.world?.purse?.army && !!me?.spawned);
     this.updatePanels();
   }
 
@@ -512,7 +523,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {

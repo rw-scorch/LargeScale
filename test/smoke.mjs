@@ -134,7 +134,7 @@ check(denied.status === 403 && denied.body.error === "only the host can create w
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
-const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200, researchSpeed: 100 } } }, ta);
+const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200, researchSpeed: 100, trainSpeed: 5 } } }, ta);
 check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
@@ -302,6 +302,17 @@ check(aSpawn >= 0, "player spawns on land");
     `three wooden watchtowers upgrade at once: ${up?.done} done for ${up?.spent} gold (the client's plan said ${expected.spent}), and the friend sees stone towers`);
   const wait = await until(() => { view.pump(); return towers.every(i => cw.buildingAt(i)?.type === "tower_stone") && cw.purse.money < purse0.money ? cw.purse : null; }, 5000);
   check(wait && towers.every(i => cw.buildingAt(i).state === "active"), `the host's own client shows them finished at once, with gold down from ${purse0.money} to ${wait?.money}`);
+  A.ws.send(JSON.stringify({ t: "research", id: "clubs", mode: "first" }));
+  await nextResult(A, "research");
+  const clubs = await until(() => { view.pump(); return cw.purse?.research?.known.includes("clubs"); }, 20000);
+  const campAt = near.find(i => !cw.placeError("war_camp", i));
+  A.ws.send(JSON.stringify({ t: "build", type: "war_camp", at: campAt }));
+  const campBuilt = await nextResult(A, "build");
+  const campUp = await until(() => { view.pump(); return cw.buildingAt(campAt)?.state === "active"; }, 15000);
+  A.ws.send(JSON.stringify({ t: "army", keep: { club_warrior: 20 } }));
+  const kept = await nextResult(A, "army");
+  const drilled = await until(() => { view.pump(); return cw.purse?.army?.reserve?.club_warrior >= 20 ? cw.purse.army : null; }, 20000);
+  check(clubs && campBuilt?.ok && campUp && kept?.ok && drilled && drilled.rate > 0, `a war camp trains the 20 club warriors the host asked to keep, from levies at home (${drilled?.reserve?.club_warrior} now, ${drilled?.rate} a second)`);
 }
 B.ws.send(JSON.stringify({ t: "chat", text: "hello from friend" }));
 check(!!(await waitFor(A, m => m.t === "chat" && m.text === "hello from friend")), "chat reaches the other player");

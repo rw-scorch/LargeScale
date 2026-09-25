@@ -1,9 +1,11 @@
 import unitData from "../../data/units.json" with { type: "json" };
 import rules from "../../data/rules.json" with { type: "json" };
 import { unitTable, mixTotal, levelOf, powerOf } from "../shared/units.js";
+import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
+import { nationBuildings } from "./buildings.js";
 
 export const UNITS = unitTable(unitData.units);
-export const TROOP_RULES = { xpLevels: [0, 0.3, 1, 3], xpBonus: [0, 0.1, 0.2, 0.35], ...rules.troops };
+export const TROOP_RULES = { xpLevels: [0, 0.3, 1, 3], xpBonus: [0, 0.1, 0.2, 0.35], trainEvery: 5, keepMax: 1000000, ...rules.troops };
 
 function clean(h) {
   if (!h?.mix) return;
@@ -32,9 +34,17 @@ function takeShare(from, share) {
 export const xpBonusOf = (s, r = TROOP_RULES) => r.xpBonus[levelOf(s.xp, r.xpLevels)] ?? 0;
 export const xpLevelOf = (s, r = TROOP_RULES) => (s.xp ? levelOf(s.xp, r.xpLevels) : 0);
 
-export function installTroops(world, { units = UNITS, rules: r = TROOP_RULES } = {}) {
+export function installTroops(world, { units = UNITS, rules: r = TROOP_RULES, speed = 1 } = {}) {
   if (world.troops) return world.troops;
-  world.troops = { units, rules: r };
+  world.troops = { units, rules: r, speed, clock: 0 };
+  world.hooks.postTick.push((w, dt) => {
+    const t = w.troops;
+    t.clock += dt;
+    while (t.clock >= r.trainEvery) {
+      t.clock -= r.trainEvery;
+      trainTick(w, r.trainEvery);
+    }
+  });
   const stat = (id, k) => units.table[id]?.[k] ?? 1;
   const human = nid => !!world.nations.get(nid)?.human;
 
@@ -127,6 +137,93 @@ export function installTroops(world, { units = UNITS, rules: r = TROOP_RULES } =
   };
 
   return world.troops;
+}
+
+export function unitLock(world, nid, id) {
+  const n = world.nations.get(nid), d = Object.hasOwn(world.troops?.units.table ?? {}, id) ? world.troops.units.table[id] : null;
+  if (!d || d.kind !== "troop" || id === "levy") return "not a troop type you can train";
+  if (eraIdx(d.era) > eraIdx(n?.era ?? "T")) return `needs the ${ERA_NAMES[d.era]} era`;
+  return world.lockReason?.(nid, id, "units") ?? null;
+}
+
+export function trainers(world, nid) {
+  let rate = 0;
+  const kinds = new Set();
+  if (!world.bld) return { rate, kinds };
+  for (const b of nationBuildings(world, nid)) {
+    const d = world.bld.table[b.type];
+    if (!d?.trains || b.state !== "active" || world.owner[b.anchor] !== nid) continue;
+    rate += d.trains;
+    kinds.add(b.type);
+  }
+  return { rate, kinds };
+}
+
+const costOf = (n, res) => (res === "money" ? n.money ?? 0 : n.stock?.[res] ?? 0);
+
+export function trainTick(world, dt) {
+  const t = world.troops, units = t.units;
+  for (const n of world.nations.values()) {
+    const keep = n.drill?.keep;
+    if (!n.alive || !n.human || !keep || !Object.keys(keep).length) continue;
+    const { rate, kinds } = trainers(world, n.id);
+    const wants = [];
+    let why = null;
+    for (const d of units.troops) {
+      const want = (keep[d.id] ?? 0) - (n.mix?.[d.id] ?? 0);
+      if (!(want > 1e-9)) continue;
+      const lock = unitLock(world, n.id, d.id);
+      if (lock) { why ??= `${d.name}: ${lock}`; continue; }
+      if (!d.builtAt.some(k => kinds.has(k))) { why ??= rate ? `${d.name} train only at a ${d.builtAt.map(k => world.bld.table[k]?.name.toLowerCase() ?? k).join(" or ")}` : "build a war camp to train soldiers"; continue; }
+      wants.push([d, want]);
+    }
+    let budget = rate * dt * t.speed, trained = 0;
+    const total = wants.reduce((s, [, v]) => s + v, 0);
+    for (const [d, want] of wants) {
+      const levies = n.troops - mixTotal(n.mix);
+      let k = Math.min(want, (budget * want) / total, levies);
+      for (const [res, per] of Object.entries(d.cost)) if (per > 0) k = Math.min(k, costOf(n, res) / per);
+      if (!(k > 1e-9)) { why ??= levies < 1 ? "no levies left at home to train" : `not enough ${Object.keys(d.cost).map(res => (res === "money" ? "gold" : res)).join(" or ")} for ${d.name.toLowerCase()}`; continue; }
+      for (const [res, per] of Object.entries(d.cost)) {
+        if (res === "money") n.money -= per * k;
+        else n.stock[res] -= per * k;
+      }
+      n.mix ??= {};
+      n.mix[d.id] = (n.mix[d.id] ?? 0) + k;
+      trained += k;
+    }
+    budget -= trained;
+    n.drill.why = why;
+    n.drill.trained = trained;
+  }
+}
+
+export function setKeep(world, nid, keep) {
+  const n = world.nations.get(nid), r = world.troops.rules, units = world.troops.units;
+  if (!keep || typeof keep !== "object" || Array.isArray(keep)) return { error: "give keep: how many of each type to keep at home" };
+  const entries = Object.entries(keep);
+  if (!entries.length || entries.length > units.troops.length) return { error: "give from one type to all of them" };
+  for (const [id, v] of entries) {
+    const d = Object.hasOwn(units.table, id) ? units.table[id] : null;
+    if (!d || d.kind !== "troop" || id === "levy") return { error: `${id} is not a troop type you can train` };
+    if (!Number.isInteger(v) || v < 0 || v > r.keepMax) return { error: `keep a whole number from 0 to ${r.keepMax}` };
+    const lock = v > 0 && unitLock(world, nid, id);
+    if (lock) return { error: `${d.name}: ${lock}` };
+  }
+  n.drill ??= { keep: {} };
+  for (const [id, v] of entries) {
+    if (v) n.drill.keep[id] = v;
+    else delete n.drill.keep[id];
+  }
+  return { keep: { ...n.drill.keep } };
+}
+
+export function armyView(world, n) {
+  if (!n?.human || !world.troops) return null;
+  const reserve = {};
+  for (const id in n.mix ?? {}) reserve[id] = Math.floor(n.mix[id]);
+  const rate = n.alive ? trainers(world, n.id).rate * world.troops.speed : 0;
+  return { levies: Math.floor(n.troops - mixTotal(n.mix)), reserve, keep: { ...(n.drill?.keep ?? {}) }, rate, why: n.drill?.why ?? null };
 }
 
 export function addUnits(world, nid, id, amount) {

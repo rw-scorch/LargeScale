@@ -69,6 +69,9 @@ h2{font-size:16px;margin:18px 0 8px}
 .demand .fill.up{background:var(--good)}
 .demand .fill.down{background:var(--bad)}
 .panel.center{left:50%;transform:translateX(-50%);top:calc(var(--hud,48px) + 16px);width:min(980px,calc(100% - 16px));max-height:calc(100% - var(--hud,48px) - 32px);overflow:auto;display:flex;flex-direction:column;gap:8px;z-index:2}
+.army-list{display:flex;flex-direction:column;gap:6px}
+.army-row{display:flex;flex-direction:column;gap:3px;border:2px solid var(--line);border-radius:3px;padding:6px 8px}
+.army-row.locked{opacity:.65}
 .upgrade-list{display:flex;flex-direction:column;gap:4px;max-height:calc(100vh - var(--hud,48px) - 260px);min-height:120px;overflow:auto}
 .upgrade-row{display:grid;grid-template-columns:28px 34px 1fr auto;gap:8px;align-items:center;border:2px solid var(--line);border-radius:3px;padding:4px 6px;cursor:pointer;user-select:none}
 .upgrade-row.on{border-color:var(--signal);background:#3a3a1c}

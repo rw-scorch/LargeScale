@@ -6,7 +6,7 @@ import { orderResearch } from "./sim/research.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
-import { UNITS, xpLevelOf } from "./sim/troops.js";
+import { UNITS, xpLevelOf, setKeep } from "./sim/troops.js";
 import { mixRow } from "./shared/units.js";
 
 const isPlot = (sim, v) => Number.isInteger(v) && v >= 0 && v < sim.grid.size;
@@ -164,6 +164,12 @@ export const ORDERS = {
     if (mode !== "clear" && typeof m.id !== "string") return fail("pick a research node");
     const r = orderResearch(sim, nation, m.id, mode);
     return r.error ? { ok: false, ...r } : { ok: true, ...r };
+  },
+  army(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.troops) return fail("troop types are not running in this world");
+    const r = setKeep(sim, nation, m.keep);
+    return r.error ? fail(r.error) : { ok: true, keep: r.keep };
   },
   route(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);

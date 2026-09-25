@@ -13,6 +13,7 @@ export const ACTIONS = {
   deposits: { key: "r", label: "Show deposits on the map" },
   research: { key: "u", label: "Research: the upgrade tree" },
   upgrade: { key: "y", label: "Upgrade buildings in bulk" },
+  army: { key: "k", label: "Army: train soldiers and see your reserve" },
   admin: { key: "`", label: "Admin panel (host only)" },
   next: { key: "Tab", label: "Select your next stack" },
   home: { key: "h", label: "Go to your capital" },

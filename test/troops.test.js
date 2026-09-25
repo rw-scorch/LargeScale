@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { World } from "../src/sim/territory.js";
 import { installCombat, resolveBattles } from "../src/sim/combat.js";
 import { installBots, spawnBots } from "../src/sim/bots.js";
-import { installTroops, addUnits, UNITS } from "../src/sim/troops.js";
-import { StateFeed } from "../src/game.js";
+import { installTroops, addUnits, UNITS, trainTick, setKeep, armyView } from "../src/sim/troops.js";
+import { installBuildings, addBuilding } from "../src/sim/buildings.js";
+import { installResearch, complete, TREE } from "../src/sim/research.js";
+import { StateFeed, runOrder } from "../src/game.js";
 import { runAdmin } from "../src/admin.js";
 import { lockMap } from "../src/shared/research.js";
-import { TREE } from "../src/sim/research.js";
 import { makeTestMap } from "../src/shared/testmap.js";
 import { makeRng } from "../src/shared/rng.js";
 import { TID } from "../src/shared/terrain.js";
@@ -152,4 +153,68 @@ test("admins can give a troop type, and research unlocks the types", () => {
   const locks = lockMap(TREE);
   assert.deepEqual(["club_warrior", "horse_archer", "archer", "knight"].map(u => locks.units.get(u)), ["clubs", "bows", "archery", "stirrups"]);
   for (const d of UNITS.troops) if (d.id !== "levy") assert.ok(locks.units.has(d.id), `${d.id} is unlocked by some research`);
+});
+
+function camp() {
+  const s = flat();
+  installBuildings(s.w);
+  installResearch(s.w);
+  Object.assign(s.n, { money: 1000, stock: { wood: 100, food: 50 }, era: "T" });
+  return s;
+}
+
+test("a war camp keeps the reserve topped up to its target, charging for each soldier", () => {
+  const { w, g, a, n } = camp();
+  assert.equal(setKeep(w, a, { club_warrior: 40 }).error, "Club warriors: needs Clubs and spears research");
+  complete(w, n, "clubs");
+  assert.deepEqual(setKeep(w, a, { club_warrior: 40 }).keep, { club_warrior: 40 });
+  trainTick(w, 5);
+  assert.equal(n.drill.why, "build a war camp to train soldiers");
+  addBuilding(w, { type: "war_camp", owner: a, anchor: g.idx(8, 8), state: "active" });
+  const troops = n.troops, money = n.money;
+  trainTick(w, 5);
+  assert.ok(near(n.mix.club_warrior, 5), "one war camp trains one a second");
+  assert.equal(n.troops, troops, "training turns levies into soldiers, so the total stays the same");
+  assert.ok(near(money - n.money, 5 * 0.4), "each club warrior costs 0.4 gold");
+  for (let k = 0; k < 20; k++) trainTick(w, 5);
+  assert.ok(near(n.mix.club_warrior, 40), "it stops at the target");
+  w.createStack(a, g.idx(10, 15), Math.floor(n.troops / 2));
+  assert.ok(near(n.mix.club_warrior, 20), "a half-share stack takes half of them");
+  trainTick(w, 5);
+  assert.ok(near(n.mix.club_warrior, 25), "and the camp starts refilling the reserve");
+});
+
+test("a barracks trains Medieval types, as far as materials and levies allow", () => {
+  const { w, g, a, n } = camp();
+  n.era = "M";
+  complete(w, n, "iron_working");
+  addBuilding(w, { type: "barracks", owner: a, anchor: g.idx(8, 8), state: "active" });
+  assert.equal(setKeep(w, a, { swordsman: 100 }).error, undefined);
+  trainTick(w, 5);
+  assert.equal(n.drill.why, "not enough gold or iron for swordsmen");
+  n.stock.iron = 2;
+  trainTick(w, 5);
+  assert.ok(near(n.mix.swordsman, 10) && near(n.stock.iron, 0), "2 iron buys 10 swordsmen, which is also the barracks' 2 a second for 5 s");
+  n.stock.iron = 100;
+  n.troops = 13;
+  trainTick(w, 5);
+  assert.ok(near(n.mix.swordsman, 13), "only levies at home can be trained");
+  assert.equal(n.drill.why, null);
+  trainTick(w, 5);
+  assert.equal(n.drill.why, "no levies left at home to train");
+});
+
+test("the army order checks its targets, and the purse shows the reserve", () => {
+  const { w, a, n } = camp();
+  const order = m => runOrder(w, a, m);
+  assert.equal(order({ t: "army", keep: { knight: 5 } }).error, "Knights: needs the Medieval era");
+  assert.equal(order({ t: "army", keep: { levy: 5 } }).error, "levy is not a troop type you can train");
+  assert.equal(order({ t: "army", keep: { constructor: 5 } }).error, "constructor is not a troop type you can train");
+  assert.equal(order({ t: "army", keep: { club_warrior: -1 } }).error, "keep a whole number from 0 to 1000000");
+  assert.equal(order({ t: "army", keep: [] }).error, "give keep: how many of each type to keep at home");
+  complete(w, n, "clubs");
+  assert.deepEqual(order({ t: "army", keep: { club_warrior: 10, spear_thrower: 5 } }), { t: "result", of: "army", ok: true, keep: { club_warrior: 10, spear_thrower: 5 } });
+  assert.deepEqual(order({ t: "army", keep: { spear_thrower: 0 } }).keep, { club_warrior: 10 }, "0 clears a target");
+  addUnits(w, a, "club_warrior", 7);
+  assert.deepEqual(armyView(w, n), { levies: 5000, reserve: { club_warrior: 7 }, keep: { club_warrior: 10 }, rate: 0, why: null });
 });

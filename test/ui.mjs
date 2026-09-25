@@ -384,7 +384,7 @@ check(age && marker === "M", `reaching the Medieval era plays era_up on the capi
 const fix = await openPage({ viewport: { width: 1280, height: 720 } });
 await login(fix, "rw_scorch", "correct horse");
 const fid = await fix.evaluate(async () => {
-  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name: "UI fixes", config: { map: "test", w: 240, h: 160, seed: 5, bots: 12, rules: { buildSpeed: 20, researchSpeed: 40, produceSpeed: 5, stackSpeed: 3 } } }) });
+  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name: "UI fixes", config: { map: "test", w: 240, h: 160, seed: 5, bots: 12, rules: { buildSpeed: 20, researchSpeed: 40, produceSpeed: 5, stackSpeed: 3, trainSpeed: 4 } } }) });
   return (await r.json()).id;
 });
 await fix.goto(`${BASE}/#w=${fid}`);
@@ -647,6 +647,31 @@ check(towersUp && medieval.length === 4 && /Upgrade \d+/.test(goText) && /gold/.
 await fix.screenshot({ path: `${OUT}/25-upgrade-done.png` });
 await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#upgrade-panel")), "Esc closes the upgrade menu");
+const barracksAt = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, me = w.you, cap = w.nations.get(me).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  for (let r = 1; r <= 9; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = (cy + dy) * w.w + cx + dx;
+    if (w.owner[i] !== me || w.placeError("barracks", i)) continue;
+    if ((await g.conn.request({ t: "build", type: "barracks", at: i })).ok) return i;
+  }
+  return null;
+});
+const barracksUp = barracksAt !== null && await fix.waitForFunction(p => window.__ls.game.world.buildingAt(p)?.state === "active", barracksAt, { timeout: 15000 }).then(() => true, () => false);
+await fix.keyboard.press("k");
+const keepBox = await fix.waitForSelector("#army-panel [data-keep=club_warrior]", { timeout: 5000 }).then(() => true, () => false);
+const lockedKnights = await fix.textContent("#army-panel [data-unit=knight] .why").catch(() => "");
+if (keepBox) {
+  await fix.fill("#army-panel [data-keep=club_warrior]", "12");
+  await fix.dispatchEvent("#army-panel [data-keep=club_warrior]", "change");
+}
+const trainedUp = await fix.waitForFunction(() => (window.__ls.game.world.purse?.army?.reserve?.club_warrior ?? 0) >= 12, null, { timeout: 20000 }).then(() => true, () => false);
+await fix.waitForTimeout(400);
+const armyCount = await fix.textContent("#army-panel [data-count=club_warrior]").catch(() => "");
+const armySummary = await fix.textContent("#army-summary").catch(() => "");
+check(barracksUp && keepBox && trainedUp && /12 at home/.test(armyCount) && /Training \d/.test(armySummary) && /Needs Stirrups research/.test(lockedKnights), `K opens the Army panel; keeping 12 club warriors trains them at the barracks: "${armyCount}" "${armySummary}"; knights say "${lockedKnights}"`);
+await fix.screenshot({ path: `${OUT}/26-army.png` });
+await fix.keyboard.press("Escape");
+check(!(await fix.isVisible("#army-panel")), "Esc closes the Army panel");
 await fix.click("#leave-world");
 await fix.waitForSelector("#open-accounts", { timeout: 5000 });
 await fix.click("#open-accounts");
