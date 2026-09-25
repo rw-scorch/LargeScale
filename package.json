@@ -13,7 +13,7 @@
     "map:fine": "python tools/build_earth.py --land data/map/ne_10m_land.geojson --lakes data/map/ne_10m_lakes.geojson --rivers data/map/ne_10m_rivers_lake_centerlines.geojson --bathymetry data/map --glaciers data/map/ne_10m_glaciated_areas.geojson --reefs data/map/ne_10m_reefs.geojson --playas data/map/ne_10m_playas.geojson --regions data/map/ne_10m_geography_regions_polys.geojson --peaks data/map/ne_10m_geography_regions_elevation_points.geojson --koppen data/map/Beck_KG_V1_present_0p0083.tif --palettes public/assets/terrain/palettes.json --width 7200 --out data/map/fine && node tools/pack_fine.mjs",
     "register": "node tools/register_commands.mjs",
     "discord": "node test/discord_endpoint.mjs",
-    "bench": "node tools/bench_earth.mjs",
+    "bench": "node --expose-gc tools/bench_earth.mjs",
     "test:reference": "node --test \"reference/tasks/**/*.test.js\" \"reference/shared/*.test.js\"",
     "ui": "node test/ui.mjs"
   },

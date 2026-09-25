@@ -24,9 +24,9 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (48)
+npm test                  # unit tests (72)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
-npm run bench             # Earth benchmark: 10 game minutes, 400 bots, fails if a tick is over 50 ms
+npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
 npm run dev               # wrangler dev on http://localhost:8787
 $env:INVITE = "code-from-.dev.vars"; $env:MAP = "europe"; npm run smoke   # MAP is test, europe (fine), europe-normal or earth
@@ -38,7 +38,7 @@ $env:MAP = "europe"; npm run ui     # headless browser session with screenshots 
 
 `npm run ui` needs Playwright, which is not a project dependency: `npm install --no-save playwright` then `npx playwright install chromium`.
 
-`npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
+`npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50 --buildings 2000`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
 
 ## Layout
 
@@ -105,9 +105,13 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
-Open items as of 24 September 2026, in order:
+## Milestone two progress
 
-1. Milestone two is agreed, with Ryan's answers in `plans/milestone-2.md`. Build it one step at a time, starting with step 1.
+- **Step 1 (25 September 2026, branch `m2-step1-building-layer`).** One building registry in `src/sim/buildings.js` (`world.bld`): buildings by id, a sparse plot index, per-nation sets, a `civilian` flag, and one-byte zone and wood layers. Definitions are in `data/buildings.json`; each type has a `num` that is saved and must never be reused or changed. Construction, civilians, resources and nukes use the registry. Save format 3 adds `zone`, `wood` and `buildings` rows, written only when changed; format 2 worlds load with empty layers. Capturing a building's anchor plot passes it to the capturer. `test/kit/` runs the kit's civilian, resource and construction tests against `src/sim`.
+
+Open items as of 25 September 2026, in order:
+
+1. Milestone two, step 2 (player construction) is next, once Ryan has reviewed step 1.
 2. Ryan redeploys when he wants the fine map live: `git pull`, `npm test`, `npx wrangler deploy`.
 3. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset; tax and conscription sliders.
 4. Each session's record goes in `devpack/` (see `devpack/README.md`).

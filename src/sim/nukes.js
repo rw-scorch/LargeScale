@@ -47,15 +47,13 @@ export function detonate(world, m) {
         if (world.owner[i]) { world.claim(i, 0); hit.cleared++; }
         world.dirty.add(i);
       }
-      for (const store of [world.civ, world.cons]) {
-        if (!store) continue;
-        const id = store.bld ? store.bld[i] : store.at[i];
-        const b = id ? store.buildings.get(id) : null;
-        if (!b || b.nuked) continue;
-        b.nuked = true;
-        b.state = d <= w.inner ? "rubble" : "damaged";
-        if (b.residents) b.residents *= d <= w.inner ? 0 : 0.3;
-      }
+      const id = world.bld?.at.get(i);
+      const b = id === undefined ? null : world.bld.list.get(id);
+      if (!b || b.nuked) continue;
+      b.nuked = true;
+      b.state = d <= w.inner ? "rubble" : "damaged";
+      if (b.residents) b.residents *= d <= w.inner ? 0 : 0.3;
+      world.bld.changed.add("buildings");
     }
   for (const s of [...world.stacks.values()]) {
     const d = g.dist(s.pos, m.target);
