@@ -22,6 +22,7 @@ import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
 import { runOrder, RateLimit, applyPresence, victory, StateFeed, BuildingFeed, purseOf, publicEvents, ordersOf } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
+import { runAdmin, parseSpeed, cleanName, ADMIN_RULES } from "./admin.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
 const SAVE_VERSION = 3;
@@ -44,17 +45,20 @@ export class World extends DurableObject {
     this.bfeed = new BuildingFeed();
     this.purses = new Map();
     this.tickCount = 0;
+    this.speed = 1;
     ctx.blockConcurrencyWhile(async () => {
       ctx.storage.sql.exec(`
         CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
         CREATE TABLE IF NOT EXISTS chunks (layer TEXT, idx INTEGER, data BLOB, PRIMARY KEY (layer, idx));
         CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, who TEXT, text TEXT);
+        CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, who TEXT, op TEXT, detail TEXT);
       `);
       await this.load();
     });
   }
 
   meta(k, v) {
+    if (this.deleted) return v === undefined ? null : 0;
     if (v === undefined) return JSON.parse(this.ctx.storage.sql.exec("SELECT v FROM meta WHERE k = ?", k).toArray()[0]?.v ?? "null");
     return this.ctx.storage.sql.exec("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", k, JSON.stringify(v)).rowsWritten;
   }
@@ -152,6 +156,7 @@ export class World extends DurableObject {
     installResearch(this.sim, { speed: info.rules?.researchSpeed ?? 1 });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
+    this.speed = this.meta("speed") ?? 1;
     this.updatePresence();
     this.hashes = this.layerHashes(terrain);
     this.loadCheck = { saved: saved?.hashes ?? null, loaded: { ...this.hashes } };
@@ -177,6 +182,7 @@ export class World extends DurableObject {
   }
 
   async init(config) {
+    if (this.deleted) return { error: "this world was deleted" };
     if (this.meta("info")) return { ok: true, existed: true };
     const cfg = parseWorldConfig(config);
     if (cfg.error) return { error: cfg.error };
@@ -188,7 +194,7 @@ export class World extends DurableObject {
     const info = {
       save: SAVE_VERSION, name: config.name ?? "World", map: base.map, w: base.w, h: base.h, landPlots: land,
       bots: cfg.bots ?? defaultBots(land, base.map.scale ?? 1), rules: config.rules ?? {}, maxCatchupHours: config.maxCatchupHours ?? 72,
-      seed: crypto.getRandomValues(new Uint32Array(1))[0],
+      seed: crypto.getRandomValues(new Uint32Array(1))[0], id: config.id ?? null,
     };
     this.writeRows("terrain", await gzip(base.terrain));
     this.meta("info", info);
@@ -237,6 +243,7 @@ export class World extends DurableObject {
   }
 
   updatePresence(leaving = null) {
+    if (!this.sim) return;
     const online = new Set(this.sockets().filter(ws => ws !== leaving).map(ws => ws.deserializeAttachment()?.nation));
     applyPresence(this.sim, online, rules.offline.defenceMult);
   }
@@ -315,7 +322,12 @@ export class World extends DurableObject {
 
   async fetch(request) {
     if (request.headers.get("Upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
+    if (this.deleted) return new Response("world deleted", { status: 404 });
     if (!this.sim) return new Response(this.stale ? "world uses an old save format" : "world not initialised", { status: 409 });
+    if (!this.info.id) {
+      this.info.id = decodeURIComponent(new URL(request.url).pathname.split("/").pop());
+      this.meta("info", this.info);
+    }
     const account = { id: Number(request.headers.get("X-Account")), name: request.headers.get("X-Name"), admin: request.headers.get("X-Admin") === "1" };
     const [client, server] = Object.values(new WebSocketPair());
     if (Number(new URL(request.url).searchParams.get("v")) !== PROTOCOL) {
@@ -350,7 +362,7 @@ export class World extends DurableObject {
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depleted: depletedPlots(this.sim), tech: TREE,
       defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel },
-      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(),
+      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));
     for (const f of terrainFrames) server.send(f);
@@ -436,7 +448,7 @@ export class World extends DurableObject {
 
   step(dt) {
     if (this.frozen) return;
-    this.sim.tick(dt);
+    for (let left = dt * this.speed; left > 1e-9; left -= 1) this.sim.tick(Math.min(1, left));
     this.flushDiffs();
     if (++this.tickCount % 4 === 0) this.sendState();
     const events = this.sim.events.splice(0);
@@ -491,13 +503,11 @@ export class World extends DurableObject {
         return this.broadcast({ t: "chat", who: me.name, text, at: now });
       }
       case "admin": {
-        if (!me.admin) return reply({ t: "result", of: "admin", ok: false, error: "not allowed" });
-        if (m.op === "save") { this.save(true); return reply({ t: "result", of: "admin", ok: true }); }
-        if (m.op === "hashes") {
-          this.flushDiffs();
-          return reply({ t: "result", of: "admin", op: "hashes", ok: true, ...this.layerHashes() });
-        }
-        return reply({ t: "result", of: "admin", ok: false, error: "unknown op" });
+        const op = String(m.op ?? "").slice(0, 20);
+        if (!me.admin) return reply({ t: "result", of: "admin", op, ok: false, error: "not allowed" });
+        let r;
+        try { r = await this.adminOp(me, m); } catch (e) { r = { ok: false, error: e.message }; }
+        return reply({ t: "result", of: "admin", op, ...r });
       }
       default: {
         if (this.frozen) return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "the world has ended" });
@@ -505,6 +515,113 @@ export class World extends DurableObject {
         if (r) reply(r);
       }
     }
+  }
+
+  async adminOp(me, m) {
+    const fail = error => ({ ok: false, error }), dir = () => this.env.DIRECTORY.getByName("directory");
+    switch (m.op) {
+      case "save": this.save(true); return { ok: true };
+      case "hashes": this.flushDiffs(); return { ok: true, ...this.layerHashes() };
+      case "log": return { ok: true, log: this.adminLog() };
+      case "give":
+      case "finish": {
+        const r = runAdmin(this.sim, m);
+        if (!r.ok) return r;
+        this.logAdmin(me, m.op, r);
+        this.flushDiffs();
+        this.sendState();
+        return r;
+      }
+      case "speed": {
+        const factor = parseSpeed(m.factor);
+        if (factor === null) return fail(`speed is a whole number from 1 to ${ADMIN_RULES.maxSpeed}`);
+        this.speed = factor;
+        this.meta("speed", factor);
+        this.logAdmin(me, "speed", { factor });
+        this.broadcast({ t: "speed", factor, by: me.name });
+        return { ok: true, factor };
+      }
+      case "end": {
+        if (this.meta("victory")) return fail("the world is already won");
+        if (this.meta("ended")) return fail("the world has already ended");
+        this.meta("ended", true);
+        this.frozen = true;
+        this.logAdmin(me, "end");
+        this.broadcast({ t: "ended", by: me.name });
+        this.stopLoop();
+        return { ok: true };
+      }
+      case "reopen": {
+        if (this.meta("victory")) return fail("a won world stays frozen");
+        if (!this.meta("ended")) return fail("the world has not ended");
+        this.meta("ended", false);
+        this.meta("endsAt", null);
+        this.frozen = false;
+        this.logAdmin(me, "reopen");
+        this.broadcast({ t: "reopened", by: me.name });
+        this.startLoop();
+        return { ok: true };
+      }
+      case "rename": {
+        const name = cleanName(m.name);
+        if (!name) return fail(`a name is 1 to ${ADMIN_RULES.nameLength} characters`);
+        if (this.info.id) await dir().renameWorld(this.info.id, name, me.name);
+        this.info.name = name;
+        this.meta("info", this.info);
+        this.logAdmin(me, "rename", { name });
+        this.broadcast({ t: "renamed", name, by: me.name });
+        return { ok: true, name };
+      }
+      case "kick": {
+        const account = Number.isInteger(m.nation) ? this.accounts.get(m.nation) : undefined;
+        if (account === undefined) return fail("that nation has no player");
+        if (account === me.account) return fail("you cannot remove yourself");
+        if (!this.info.id) return fail("this world does not know its id yet");
+        const name = this.sim.nations.get(m.nation)?.name ?? "someone";
+        await dir().banMember(this.info.id, account, me.name);
+        this.dropAccount(account, `${me.name} removed you from this world.`);
+        this.logAdmin(me, "kick", { nation: m.nation, name });
+        this.broadcast({ t: "chat", who: "Host", text: `${name} was removed from this world.`, at: Date.now() });
+        return { ok: true, nation: m.nation, name };
+      }
+      default: return fail("unknown op");
+    }
+  }
+
+  logAdmin(me, op, detail = {}) {
+    this.ctx.storage.sql.exec("INSERT INTO admin_log (t, who, op, detail) VALUES (?, ?, ?, ?)", Date.now(), me.name, op, JSON.stringify(detail));
+  }
+
+  adminLog() {
+    return this.ctx.storage.sql.exec("SELECT t, who, op, detail FROM admin_log ORDER BY id DESC LIMIT ?", ADMIN_RULES.logShown).toArray().map(r => ({ ...r, detail: JSON.parse(r.detail) }));
+  }
+
+  dropAccount(account, text) {
+    for (const ws of this.ctx.getWebSockets(`acc:${account}`)) {
+      try { ws.send(JSON.stringify({ v: PROTOCOL, t: "removed", text })); ws.close(CLOSE.REMOVED, "removed by the host"); } catch {}
+    }
+    this.updatePresence();
+  }
+
+  async accountRemoved(account, by) {
+    if (this.deleted || !this.sim) return { ok: true };
+    this.dropAccount(account, `${by} removed your account.`);
+    this.logAdmin({ name: by }, "account removed", { account, nation: [...this.accounts].find(([, a]) => a === account)?.[0] ?? null });
+    return { ok: true };
+  }
+
+  async wipe(by) {
+    if (this.loop) { clearInterval(this.loop); this.loop = null; }
+    for (const ws of this.ctx.getWebSockets()) {
+      try { ws.send(JSON.stringify({ v: PROTOCOL, t: "deleted", text: `${by} deleted this world.` })); ws.close(CLOSE.DELETED, "world deleted"); } catch {}
+    }
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    this.deleted = true;
+    this.sim = null;
+    this.info = null;
+    this.accounts.clear();
+    return { ok: true };
   }
 
   async webSocketClose(ws, code, reason) {
@@ -519,6 +636,7 @@ export class World extends DurableObject {
   }
 
   async status() {
+    if (this.deleted) return { deleted: true };
     const info = this.meta("info");
     return {
       initialised: !!this.sim, players: this.accounts.size, online: this.sockets().length, looping: !!this.loop, time: this.sim?.time ?? 0,

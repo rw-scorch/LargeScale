@@ -15,6 +15,8 @@ export class Directory extends DurableObject {
         CREATE TABLE IF NOT EXISTS attempts (name TEXT PRIMARY KEY, count INTEGER, since INTEGER);
         CREATE TABLE IF NOT EXISTS notify (account INTEGER PRIMARY KEY, discord TEXT, prefs TEXT);
         CREATE TABLE IF NOT EXISTS links (code TEXT PRIMARY KEY, account INTEGER, expires INTEGER);
+        CREATE TABLE IF NOT EXISTS bans (world TEXT, account INTEGER, t INTEGER, PRIMARY KEY (world, account));
+        CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, who TEXT, op TEXT, detail TEXT);
       `);
     });
   }
@@ -78,22 +80,79 @@ export class Directory extends DurableObject {
     return { id };
   }
 
-  removeWorld(id) {
+  removeWorld(id, who = null) {
+    const w = this.ctx.storage.sql.exec("SELECT name FROM worlds WHERE id = ?", id).toArray()[0];
     this.ctx.storage.sql.exec("DELETE FROM members WHERE world = ?", id);
+    this.ctx.storage.sql.exec("DELETE FROM bans WHERE world = ?", id);
     this.ctx.storage.sql.exec("DELETE FROM worlds WHERE id = ?", id);
+    if (who) this.log(who, "delete world", { world: id, name: w?.name ?? null });
     return { ok: true };
+  }
+
+  log(who, op, detail = {}) {
+    this.ctx.storage.sql.exec("INSERT INTO admin_log (t, who, op, detail) VALUES (?, ?, ?, ?)", Date.now(), typeof who === "string" ? who : who.name, op, JSON.stringify(detail));
+  }
+
+  adminLog(limit = 30) {
+    return this.ctx.storage.sql.exec("SELECT t, who, op, detail FROM admin_log ORDER BY id DESC LIMIT ?", limit).toArray().map(r => ({ ...r, detail: JSON.parse(r.detail) }));
+  }
+
+  renameWorld(id, name, who) {
+    this.ctx.storage.sql.exec("UPDATE worlds SET name = ? WHERE id = ?", String(name).slice(0, 40), id);
+    this.log(who, "rename world", { world: id, name });
+    return { ok: true };
+  }
+
+  banMember(world, account, who) {
+    this.ctx.storage.sql.exec("INSERT OR IGNORE INTO bans (world, account, t) VALUES (?, ?, ?)", world, account, Date.now());
+    this.ctx.storage.sql.exec("DELETE FROM members WHERE world = ? AND account = ?", world, account);
+    const acc = this.ctx.storage.sql.exec("SELECT name FROM accounts WHERE id = ?", account).toArray()[0];
+    this.log(who, "remove player", { world, account, name: acc?.name ?? null });
+    return { ok: true };
+  }
+
+  listAccounts() {
+    return this.ctx.storage.sql.exec(
+      "SELECT a.id, a.name, a.admin, a.created, (SELECT COUNT(*) FROM members m WHERE m.account = a.id) AS worlds, (SELECT MAX(expires) FROM sessions s WHERE s.account = a.id) AS lastExpiry FROM accounts a ORDER BY a.created",
+    ).toArray().map(r => ({ id: r.id, name: r.name, admin: !!r.admin, created: r.created, worlds: r.worlds, lastLogin: r.lastExpiry ? r.lastExpiry - SESSION_DAYS * 86400000 : null }));
+  }
+
+  async setPassword(id, password, who) {
+    const acc = this.ctx.storage.sql.exec("SELECT id, name FROM accounts WHERE id = ?", id).toArray()[0];
+    if (!acc) return { error: "no such account" };
+    if (typeof password !== "string" || password.length < 8 || password.length > 200) return { error: "password must be at least 8 characters" };
+    const { hash, salt } = await hashPassword(password, null, this.env.PEPPER);
+    this.ctx.storage.sql.exec("UPDATE accounts SET hash = ?, salt = ? WHERE id = ?", hash, salt, id);
+    this.ctx.storage.sql.exec("DELETE FROM sessions WHERE account = ?", id);
+    this.ctx.storage.sql.exec("DELETE FROM attempts WHERE name = ?", acc.name.toLowerCase());
+    this.log(who, "set password", { account: id, name: acc.name });
+    return { ok: true, name: acc.name };
+  }
+
+  removeAccount(id, who) {
+    const acc = this.ctx.storage.sql.exec("SELECT id, name FROM accounts WHERE id = ?", id).toArray()[0];
+    if (!acc) return { error: "no such account" };
+    if (acc.id === who.id) return { error: "you cannot remove your own account" };
+    if (this.isAdminName(acc.name)) return { error: "admin accounts are set by ADMIN_NAMES in wrangler.jsonc" };
+    const worlds = this.ctx.storage.sql.exec("SELECT world FROM members WHERE account = ?", id).toArray().map(r => r.world);
+    for (const table of ["sessions", "members", "bans", "notify", "links"]) this.ctx.storage.sql.exec(`DELETE FROM ${table} WHERE account = ?`, id);
+    this.ctx.storage.sql.exec("DELETE FROM attempts WHERE name = ?", acc.name.toLowerCase());
+    this.ctx.storage.sql.exec("DELETE FROM accounts WHERE id = ?", id);
+    this.log(who, "remove account", { account: id, name: acc.name, worlds: worlds.length });
+    return { ok: true, name: acc.name, worlds };
   }
 
   listWorlds(account) {
     return this.ctx.storage.sql.exec(
-      "SELECT w.id, w.name, w.host = ? AS host, (SELECT COUNT(*) FROM members m WHERE m.world = w.id) AS players, EXISTS(SELECT 1 FROM members m WHERE m.world = w.id AND m.account = ?) AS member FROM worlds w ORDER BY w.created DESC",
-      account.id, account.id,
+      "SELECT w.id, w.name, w.host = ? AS host, (SELECT COUNT(*) FROM members m WHERE m.world = w.id) AS players, EXISTS(SELECT 1 FROM members m WHERE m.world = w.id AND m.account = ?) AS member, EXISTS(SELECT 1 FROM bans b WHERE b.world = w.id AND b.account = ?) AS removed FROM worlds w ORDER BY w.created DESC",
+      account.id, account.id, account.id,
     ).toArray();
   }
 
   joinWorld(account, id, maxPlayers = 8) {
     const w = this.ctx.storage.sql.exec("SELECT id FROM worlds WHERE id = ?", id).toArray()[0];
     if (!w) return { error: "no such world" };
+    if (this.ctx.storage.sql.exec("SELECT 1 FROM bans WHERE world = ? AND account = ?", id, account.id).toArray().length) return { error: "the host removed you from this world" };
     const n = this.ctx.storage.sql.exec("SELECT COUNT(*) AS n FROM members WHERE world = ?", id).one().n;
     const already = this.ctx.storage.sql.exec("SELECT 1 FROM members WHERE world = ? AND account = ?", id, account.id).toArray().length;
     if (!already && n >= maxPlayers) return { error: "world is full" };

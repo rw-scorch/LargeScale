@@ -17,6 +17,9 @@ export class ClientWorld {
     this.expect = hello.hashes;
     this.frozen = !!hello.frozen;
     this.victory = hello.victory ?? null;
+    this.ended = !!hello.ended;
+    this.speed = hello.speed ?? 1;
+    this.name = hello.name ?? null;
     this.time = 0;
     this.nations = new Map(hello.nations.map(n => [n.id, { ...n }]));
     this.stacks = new Map((hello.stacks ?? []).map(r => [r[0], stackFromRow(r)]));
@@ -199,6 +202,10 @@ export class ClientWorld {
     }
     if (m.t === "chat") this.chat.push({ t: m.at, who: m.who, text: m.text });
     if (m.t === "victory") { this.frozen = true; this.victory = { winner: m.winner, name: m.name }; }
+    if (m.t === "ended") { this.frozen = true; this.ended = true; }
+    if (m.t === "reopened") { this.frozen = !!this.victory; this.ended = false; }
+    if (m.t === "speed") this.speed = m.factor;
+    if (m.t === "renamed") this.name = m.name;
     return m;
   }
 

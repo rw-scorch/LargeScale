@@ -15,6 +15,7 @@
   "offline": { "defenceMult": 0.95, "offlineOutputShare": 0.9, "maxCatchupSeconds": 259200 },
   "landing": { "penalty": 0.15, "beachPenalty": 0.05, "dropPenalty": 0.1 },
   "world": { "botsPerMillionLand": 200, "maxBots": 400, "minMapSide": 64, "maxTestSide": 2000, "maxPlots": 5184000, "baseWidth": 3600, "messagesPerSecond": 20, "messageBurst": 40, "botTroopShare": 0.01, "botStateEvery": 5 },
+  "admin": { "maxGive": 1000000, "maxSpeed": 8, "logShown": 30, "nameLength": 40 },
   "detail": {
     "fineDir": "map/fine",
     "fineScale": 2,
