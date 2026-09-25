@@ -1,6 +1,8 @@
 export const ACTIONS = {
   form: { key: "f", label: "Form a stack where the pointer is" },
   advance: { key: "a", label: "Advance" },
+  claim: { key: "c", label: "Advance into unclaimed land only" },
+  target: { key: "n", label: "Advance into one nation's land: click it next" },
   move: { key: "m", label: "Move: pick a destination" },
   split: { key: "s", label: "Split half" },
   merge: { key: "g", label: "Merge nearby stacks" },

@@ -44,7 +44,15 @@ export const ORDERS = {
   advance(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
-    return sim.orderAdvance(s.id) ? { ok: true } : fail("cannot advance");
+    let only = null;
+    if (m.only === "free") only = 0;
+    else if (m.only !== undefined && m.only !== null) {
+      const t = Number.isInteger(m.only) && m.only !== nation ? sim.nations.get(m.only) : null;
+      if (!t?.alive || !t.spawned) return fail("pick another nation's land");
+      if (!sim.hostile(nation, m.only)) return fail(`you are at peace with ${t.name}`);
+      only = m.only;
+    }
+    return sim.orderAdvance(s.id, only) ? { ok: true, only } : fail("cannot advance");
   },
   split(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
@@ -196,6 +204,17 @@ export class BuildingFeed {
     bld.news.clear();
     return { up, gone };
   }
+}
+
+export function ordersOf(sim, nid) {
+  const out = [];
+  for (const s of sim.stacks.values()) {
+    if (s.owner !== nid) continue;
+    const to = s.route?.goal ?? (s.path.length ? s.path[s.path.length - 1] : null);
+    const only = s.order === "advance" ? s.only ?? null : null;
+    if (to !== null || only !== null) out.push({ id: s.id, to, only });
+  }
+  return out;
 }
 
 const r2 = v => Math.round((v ?? 0) * 100) / 100;

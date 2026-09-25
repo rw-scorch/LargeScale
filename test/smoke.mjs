@@ -278,8 +278,10 @@ A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
 const st = await nextResult(A, "stack");
 check(st?.ok, "stack created from the garrison");
 const before = (await until(() => view.pump().nations.get(you)?.plots > 0 && view.nations.get(you)))?.plots;
-A.ws.send(JSON.stringify({ t: "advance", stack: st.stack }));
-check((await nextResult(A, "advance"))?.ok, "advance order accepted");
+A.ws.send(JSON.stringify({ t: "advance", stack: st.stack, only: "free" }));
+const adv = await nextResult(A, "advance");
+const freeShown = await until(() => view.pump().world.purse?.orders?.find(o => o.id === st.stack && o.only === 0), 3000);
+check(adv?.ok && adv.only === 0 && freeShown, "an advance kept to unclaimed land is accepted, and the host's purse shows it");
 await sleep(3000);
 check(A.binary.some(f => f[0] === MSG.DIFF && f[1] === PROTOCOL), "territory changes stream as binary diffs");
 A.ws.send(JSON.stringify({ t: "admin", op: "hashes" }));
@@ -301,6 +303,9 @@ for (const i of land.filter((_, k) => k % 211 === 0)) {
   if ((await nextResult(A, "move"))?.ok) { moved = { to: i, ms: Date.now() - sent }; break; }
 }
 check(moved, `a stack takes a move order at least ${far} plots away (reply seen within ${moved?.ms} ms; the test polls every 50 ms)`);
+const heading = await until(() => view.pump().world.purse?.orders?.find(o => o.id === st2.stack && o.to === moved?.to), 5000);
+const leaked = B.json.some(m => m.t === "purse" && (m.orders ?? []).some(o => o.id === st2.stack));
+check(heading && !leaked, `the host's purse says where the moving stack is heading (plot ${heading?.to}); the friend's does not`);
 
 const bHello = await waitFor(B, m => m.t === "hello");
 const bNation = bHello.you;

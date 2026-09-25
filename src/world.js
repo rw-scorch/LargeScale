@@ -20,7 +20,7 @@ import { decodeDeposits, cropDeposits, encodeDeposits, emptyDeposits, latitudeOf
 import { encodeRows } from "./shared/buildings.js";
 import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
-import { runOrder, RateLimit, applyPresence, victory, StateFeed, BuildingFeed, purseOf, publicEvents } from "./game.js";
+import { runOrder, RateLimit, applyPresence, victory, StateFeed, BuildingFeed, purseOf, publicEvents, ordersOf } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
@@ -417,7 +417,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n) });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [] });
   }
 
   sendState() {
