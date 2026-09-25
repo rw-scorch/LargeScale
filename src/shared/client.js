@@ -1,6 +1,7 @@
 import { PROTOCOL, MSG, ORDER_CODES, readFrame, applyPairs, pairs, PartCollector } from "./protocol.js";
 import { decodeRuns, gunzip } from "./codec.js";
 import { baseLayer } from "./maps.js";
+import { tableFrom, decodeRows, footprintAt, placeError, costError, STATES } from "./buildings.js";
 
 const stackFromRow = ([id, owner, pos, troops, order]) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold" });
 
@@ -25,7 +26,59 @@ export class ClientWorld {
     this.ready = false;
     this.ownerReady = false;
     this.stale = false;
+    this.defs = tableFrom(hello.defs ?? []);
+    this.buildings = new Map();
+    this.at = new Map();
+    this.buildingsReady = !hello.frames?.buildings;
+    this.early = new Set();
+    this.purse = hello.purse ?? null;
+    this.consRules = hello.consRules ?? { demolishRefund: 0.5, refundOnCancel: 0.5 };
+    this.changed = [];
   }
+
+  setBuilding([id, num, owner, anchor, state, pct]) {
+    const def = this.defs.byNum[num];
+    if (!def) return;
+    const old = this.buildings.get(id);
+    if (old) this.dropBuilding(old);
+    const b = { id, type: def.id, def, owner, anchor, state: STATES[state] ?? "active", progress: pct / 100 };
+    b.plots = footprintAt(this.w, this.h, anchor, def.fp) ?? [anchor];
+    this.buildings.set(id, b);
+    for (const i of b.plots) this.at.set(i, id);
+    this.changed.push({ added: b, removed: old ?? null });
+  }
+
+  dropBuilding(b) {
+    for (const i of b.plots) if (this.at.get(i) === b.id) this.at.delete(i);
+    this.buildings.delete(b.id);
+  }
+
+  removeBuilding(id) {
+    const b = this.buildings.get(id);
+    if (!b) return;
+    this.dropBuilding(b);
+    this.changed.push({ added: null, removed: b });
+  }
+
+  buildingAt(i) {
+    const id = this.at.get(i);
+    return id === undefined ? null : this.buildings.get(id);
+  }
+
+  placeError(type, anchor) {
+    const def = this.defs.table[type], me = this.nations.get(this.you);
+    if (!def || !me) return "unknown building";
+    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; } };
+    const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} };
+    return placeError(view, nation, def, anchor) ?? costError(def, nation);
+  }
+
+  costError(type) {
+    const def = this.defs.table[type];
+    return def ? costError(def, { money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} }) : "unknown building";
+  }
+
+  takeChanged() { return this.changed.splice(0); }
 
   async loadBase(loadGzip) {
     const base = await baseLayer(this.map, this.w, this.h, async () => gunzip(await loadGzip()));
@@ -52,6 +105,12 @@ export class ClientWorld {
     if (!whole) return null;
     if (f.type === MSG.TERRAIN_DIFF) { applyPairs(this.terrain, whole); return { layer: "terrain", all: true }; }
     if (f.type === MSG.OWNER) { decodeRuns(whole, this.owner); this.ownerReady = true; return { layer: "owner", all: true }; }
+    if (f.type === MSG.BUILDINGS) {
+      for (const r of decodeRows(whole)) if (!this.early.has(r[0])) this.setBuilding(r);
+      this.buildingsReady = true;
+      this.early.clear();
+      return { layer: "buildings", all: true };
+    }
     return null;
   }
 
@@ -65,7 +124,10 @@ export class ClientWorld {
       }
       for (const r of m.s) this.stacks.set(r[0], stackFromRow(r));
       for (const id of m.gone) this.stacks.delete(id);
+      for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
+      for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
+    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era };
     if (m.t === "joined") {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));

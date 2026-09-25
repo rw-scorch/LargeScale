@@ -27,7 +27,7 @@ test("placement rules", () => {
   assert.equal(canPlace(w, a, "barracks", g.idx(31, 10)), "cannot build on water");
   assert.equal(canPlace(w, a, "harbour", g.idx(20, 10)), "must sit on the coast");
   assert.equal(canPlace(w, a, "harbour", g.idx(29, 10)), null);
-  assert.equal(canPlace(w, a, "warehouse", g.idx(20, 10)), "era locked");
+  assert.equal(canPlace(w, a, "warehouse", g.idx(20, 10)), "needs the Industrial era");
   place(w, a, "barracks", g.idx(20, 10));
   assert.equal(canPlace(w, a, "tower_stone", g.idx(21, 10)), "something is already there");
 });

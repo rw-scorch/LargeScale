@@ -53,6 +53,7 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - Demolish refunds half and leaves rubble for a while.
 - The renderer draws building sprites from the pack at close zoom and simple dots at mid zoom.
 - **Done when:** the smoke test places, finishes and demolishes a building and a second client sees it; the browser test shows the ghost and a finished building; every placement rule shows a readable reason.
+- **Done (25 September 2026).** 78 unit tests pass, and one of them checks every placement reason. The smoke test passes on the test map and fine Europe: kit, four refusals where the server and client give the same reason, build, finish, demolish for a refund of half, and rubble clearing, all seen by the second player. The browser test passes 30 checks with screenshots of the menu, the red and green ghosts, the site, the finished tower and the rubble. Earth bench with construction and economy running: worst tick 10.5 to 11.4 ms, join 284 KB with 16,000 buildings. Mid zoom draws the kit's map icons rather than plain dots.
 
 ### 3. Civilians (piece 5)
 

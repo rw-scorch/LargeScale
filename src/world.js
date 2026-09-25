@@ -11,8 +11,12 @@ import { planCatchUp, runCatchUp } from "./sim/offline.js";
 import { installCombat } from "./sim/combat.js";
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
+import { installConstruction } from "./sim/construction.js";
+import { installEconomy } from "./sim/economy.js";
+import { encodeRows } from "./shared/buildings.js";
+import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
-import { runOrder, RateLimit, applyPresence, victory, StateFeed, publicEvents } from "./game.js";
+import { runOrder, RateLimit, applyPresence, victory, StateFeed, BuildingFeed, purseOf, publicEvents } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
@@ -32,6 +36,8 @@ export class World extends DurableObject {
     this.queue = new NotifyQueue();
     this.limiter = new RateLimit(rules.world.messagesPerSecond, rules.world.messageBurst);
     this.feed = new StateFeed(rules.world.botTroopShare, rules.world.botStateEvery);
+    this.bfeed = new BuildingFeed();
+    this.purses = new Map();
     this.tickCount = 0;
     ctx.blockConcurrencyWhile(async () => {
       ctx.storage.sql.exec(`
@@ -113,6 +119,8 @@ export class World extends DurableObject {
       for (const [nid, acc] of saved.accounts ?? []) this.accounts.set(nid, acc);
     }
     installCombat(this.sim, scaled.combat);
+    installConstruction(this.sim, { speed: info.rules?.buildSpeed ?? 1 });
+    installEconomy(this.sim);
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.updatePresence();
@@ -298,14 +306,17 @@ export class World extends DurableObject {
     this.updatePresence();
     const g = this.sim.grid, runs = encodeRuns(this.sim.owner);
     const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
+    const buildingFrames = partFrames(MSG.BUILDINGS, encodeRows(this.bfeed.rows(this.sim)));
     server.send(JSON.stringify({
       t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
-      hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length },
+      hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length },
+      defs: buildingData.buildings, purse: purseOf(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel },
       caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(),
       victory: this.meta("victory"), frozen: this.frozen,
     }));
     for (const f of terrainFrames) server.send(f);
     for (const f of ownerFrames) server.send(f);
+    for (const f of buildingFrames) server.send(f);
     const n = this.sim.nations.get(nation);
     this.broadcast({ t: "joined", nation, name: n.name, colour: n.colour });
     if (!this.frozen) this.startLoop();
@@ -355,8 +366,17 @@ export class World extends DurableObject {
   }
 
   sendState() {
-    const d = this.feed.delta(this.sim);
-    if (d) this.broadcast({ t: "state", time: Math.floor(this.sim.time), ...d });
+    const d = this.feed.delta(this.sim), bd = this.bfeed.delta(this.sim);
+    if (d || bd) this.broadcast({ t: "state", time: Math.floor(this.sim.time), n: [], s: [], gone: [], ...d, ...(bd ? { b: bd.up, bg: bd.gone } : {}) });
+    for (const ws of this.sockets()) {
+      const me = ws.deserializeAttachment();
+      const p = purseOf(this.sim.nations.get(me?.nation));
+      if (!p) continue;
+      const key = JSON.stringify(p);
+      if (this.purses.get(me.account) === key) continue;
+      this.purses.set(me.account, key);
+      try { ws.send(JSON.stringify({ v: PROTOCOL, t: "purse", ...p })); } catch {}
+    }
   }
 
   step(dt) {

@@ -7,7 +7,7 @@ export const NIGHT = "rgba(12,18,52,0.62)";
 const ROAD_NAMES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
 const maskName = m => DIRS.filter(([b]) => m & b).map(d => d[1]).join("") || "dot";
-const ICON_FOR = { housing: "mapicon_housing", commercial: "mapicon_commercial", industry: "mapicon_industry", agriculture: "mapicon_agriculture", energy: "mapicon_energy", civic: "mapicon_civic", transport: "mapicon_transport", tourism: "mapicon_tourism", military: "mapicon_military" };
+const ICON_FOR = { housing: "mapicon_housing", res: "mapicon_housing", commercial: "mapicon_commercial", com: "mapicon_commercial", industry: "mapicon_industry", ind: "mapicon_industry", infrastructure: "mapicon_industry", agriculture: "mapicon_agriculture", farm: "mapicon_agriculture", energy: "mapicon_energy", civic: "mapicon_civic", transport: "mapicon_transport", tourism: "mapicon_tourism", military: "mapicon_military" };
 
 function hexRGB(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -20,7 +20,7 @@ export class MapRenderer {
     this.ctx = canvas.getContext("2d");
     this.atlas = atlas;
     this.state = state;
-    state.buildings ??= [];
+    state.buildings ??= new Map();
     state.units ??= [];
     state.roads ??= new Uint8Array(0);
     this.palettes = palettes;
@@ -32,6 +32,8 @@ export class MapRenderer {
     this.time = 0;
     this.selected = null;
     this.route = null;
+    this.ghost = null;
+    this.selectedBuilding = null;
     this.terrainCanvas = document.createElement("canvas");
     this.terrainCanvas.width = state.w;
     this.terrainCanvas.height = state.h;
@@ -72,20 +74,34 @@ export class MapRenderer {
     const s = this.state;
     this.occupied.fill(0);
     this.lotAt.clear();
-    for (const b of s.buildings) {
-      const sp = this.atlas.get(b.type);
-      b.sprite = sp;
-      if (!sp) continue;
-      const [fw, fh] = sp.footprint.map(Math.round);
-      b.fp = [fw, fh];
-      const ax = b.anchor % s.w, ay = (b.anchor / s.w) | 0;
-      for (let dy = 0; dy < fh; dy++) for (let dx = 0; dx < fw; dx++) {
-        const i = (ay + dy) * s.w + ax + dx;
-        this.occupied[i] = 1;
-        if (sp.lot) this.lotAt.set(i, sp.lot);
-      }
-    }
+    for (const b of s.buildings.values()) this.placeBuilding(b);
     for (let i = 0; i < s.roads.length; i++) if (s.roads[i]) this.occupied[i] = 1;
+  }
+
+  placeBuilding(b) {
+    b.fp = b.def?.fp ?? [1, 1];
+    b.sprite = this.atlas.get(b.type) ?? null;
+    for (const i of b.plots ?? []) this.occupied[i] = 1;
+  }
+
+  updateBuildings(changes) {
+    for (const { added, removed } of changes) {
+      if (removed) for (const i of removed.plots ?? []) if (!this.state.at?.has(i)) this.occupied[i] = 0;
+      if (added) this.placeBuilding(added);
+    }
+  }
+
+  spriteFor(b) {
+    const a = this.atlas;
+    if (b.state && b.state !== "active" && a.has(`${b.type}_${b.state}`)) return `${b.type}_${b.state}`;
+    return this.frameFor(b.type);
+  }
+
+  riseOf(id, fp) {
+    const sp = this.atlas.get(id);
+    if (!sp) return 0;
+    const rise = sp.h - fp[1] * 16;
+    return /_(construction|damaged|rubble)$/.test(id) ? rise - this.atlas.bottomPad(id) : Math.max(0, rise);
   }
 
   setSeason(season) { this.season = season; this.rebuildTerrain(); }
@@ -271,8 +287,33 @@ export class MapRenderer {
     if (c.scale >= ZOOM.sprites * R) this.drawSprites();
     else if (c.scale >= ZOOM.icons * R) this.drawIcons();
     else this.drawDots();
+    this.drawGhost();
     this.drawRoute();
     if (this.night) this.drawNight();
+  }
+
+  drawGhost() {
+    const g = this.ghost;
+    if (!g?.def) return;
+    const ctx = this.ctx, s = this.state, c = this.cam, R = this.ratio ?? 1, fp = g.def.fp;
+    const ax = g.anchor % s.w, ay = (g.anchor / s.w) | 0, ok = !g.reason;
+    const px = c.scale / 16, sprites = c.scale >= ZOOM.sprites * R;
+    if (sprites && ok) {
+      ctx.globalAlpha = 0.7;
+      const [sx, sy] = this.plotToScreen(ax, ay);
+      this.atlas.draw(ctx, g.def.id, sx, sy - this.riseOf(g.def.id, fp) * px, px, s.nations.get(s.you)?.colour);
+      ctx.globalAlpha = 1;
+    }
+    for (let dy = 0; dy < fp[1]; dy++) for (let dx = 0; dx < fp[0]; dx++) {
+      const [sx, sy] = this.plotToScreen(ax + dx, ay + dy);
+      if (sprites) this.atlas.draw(ctx, ok ? "ov_ghost_valid" : "ov_ghost_invalid", sx, sy, px);
+      else {
+        ctx.fillStyle = ok ? "rgba(111,207,122,.55)" : "rgba(224,106,90,.6)";
+        ctx.fillRect(sx, sy, Math.max(2, c.scale), Math.max(2, c.scale));
+      }
+    }
+    const [lx, ly] = this.plotToScreen(ax + fp[0] / 2, ay + fp[1]);
+    this.label(ok ? g.def.name : g.reason, lx, ly + 4 * R, 13 * R, ok ? "#e9dcb8" : "#f0a090");
   }
 
   drawFill(r) {
@@ -332,14 +373,16 @@ export class MapRenderer {
       const d = this.decoFor(i, x, y);
       if (d) items.push({ key: y + 1, x, draw: () => { const [sx, sy] = this.plotToScreen(x, y); a.draw(ctx, d, sx, sy, px); } });
     }
-    for (const b of s.buildings) {
+    for (const b of s.buildings.values()) {
       if (!b.sprite) continue;
       const ax = b.anchor % s.w, ay = (b.anchor / s.w) | 0;
       if (ax + b.fp[0] < r.x0 || ax > r.x1 || ay > r.y1 || ay + b.fp[1] < r.y0) continue;
       items.push({ key: ay + b.fp[1], x: ax, draw: () => {
         const [sx, sy] = this.plotToScreen(ax, ay);
-        const id = b.state && b.state !== "active" ? `${b.type}_${b.state}` : this.frameFor(b.type);
-        a.draw(ctx, id, sx, sy - (b.sprite.rise ?? 0) * px, px, s.nations.get(b.owner)?.colour);
+        const id = this.spriteFor(b);
+        a.draw(ctx, id, sx, sy - this.riseOf(id, b.fp) * px, px, s.nations.get(b.owner)?.colour);
+        if (b.state === "construction") this.progressBar(sx, sy + (this.ratio ?? 1), b.fp[0] * this.cam.scale, b.progress);
+        if (b.id === this.selectedBuilding) this.outline(sx, sy, b.fp);
       } });
     }
     for (const u of s.units) {
@@ -349,6 +392,21 @@ export class MapRenderer {
     items.sort((p, q) => p.key - q.key || p.x - q.x);
     for (const it of items) it.draw();
     for (const m of this.markers()) this.drawMarker(m, px);
+  }
+
+  progressBar(x, y, w, p) {
+    const ctx = this.ctx, k = this.ratio ?? 1, h = 4 * k, pad = 2 * k;
+    ctx.fillStyle = "rgba(15,34,51,.85)";
+    ctx.fillRect(x + pad, y, w - pad * 2, h);
+    ctx.fillStyle = "#e8c84a";
+    ctx.fillRect(x + pad + k, y + k, Math.max(0, (w - pad * 2 - 2 * k) * Math.min(1, p)), h - 2 * k);
+  }
+
+  outline(sx, sy, fp) {
+    const ctx = this.ctx, k = this.ratio ?? 1, sc = this.cam.scale;
+    ctx.strokeStyle = "#e8c84a";
+    ctx.lineWidth = 2 * k;
+    ctx.strokeRect(sx + k, sy + k, fp[0] * sc - 2 * k, fp[1] * sc - 2 * k);
   }
 
   drawBorders(r) {
@@ -395,7 +453,7 @@ export class MapRenderer {
     this.label(String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
   }
 
-  label(text, x, y, size) {
+  label(text, x, y, size, colour = "#e9dcb8") {
     const ctx = this.ctx;
     ctx.font = `600 ${Math.round(size)}px "Atkinson Hyperlegible", system-ui, sans-serif`;
     ctx.textAlign = "center";
@@ -403,23 +461,24 @@ export class MapRenderer {
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(15,34,51,.9)";
     ctx.strokeText(text, x, y);
-    ctx.fillStyle = "#e9dcb8";
+    ctx.fillStyle = colour;
     ctx.fillText(text, x, y);
   }
 
   drawIcons() {
     const ctx = this.ctx, s = this.state, a = this.atlas, c = this.cam;
     const size = Math.max(6, Math.min(16, c.scale * 1.5)), k = size / 8;
-    for (const b of s.buildings) {
-      if (!b.sprite) continue;
-      const icon = ICON_FOR[b.sprite.category];
-      if (!icon) continue;
+    for (const b of s.buildings.values()) {
+      const icon = ICON_FOR[b.def?.category ?? b.def?.zone];
+      if (!icon || b.state === "rubble") continue;
       const ax = b.anchor % s.w, ay = (b.anchor / s.w) | 0;
       const [sx, sy] = this.plotToScreen(ax + b.fp[0] / 2, ay + b.fp[1] / 2);
       if (sx < -20 || sy < -20 || sx > this.canvas.width + 20 || sy > this.canvas.height + 20) continue;
-      if (b.fp[0] * c.scale < size && hash2(ax, ay, 5) > 0.35) continue;
+      if (b.def.civilian && b.fp[0] * c.scale < size && hash2(ax, ay, 5) > 0.35) continue;
+      ctx.globalAlpha = b.state === "construction" ? 0.5 : 1;
       a.draw(ctx, icon, sx - size / 2, sy - size / 2, k);
     }
+    ctx.globalAlpha = 1;
     const rk = this.ratio ?? 1;
     for (const m of this.markers()) {
       const [sx, sy] = this.plotToScreen(m.x, m.y);
@@ -448,14 +507,14 @@ export class MapRenderer {
     ctx.fillStyle = NIGHT;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     const px = c.scale / 16;
-    for (const b of s.buildings) {
+    for (const b of s.buildings.values()) {
       if (!b.sprite || (b.state && b.state !== "active")) continue;
       const lights = `${b.type}_lights`;
       if (!a.has(lights)) continue;
       const ax = b.anchor % s.w, ay = (b.anchor / s.w) | 0;
       const [sx, sy] = this.plotToScreen(ax, ay);
       if (sx > this.canvas.width + 50 || sy > this.canvas.height + 80 || sx + b.fp[0] * c.scale < -50 || sy + b.fp[1] * c.scale < -50) continue;
-      if (c.scale >= ZOOM.sprites) a.draw(ctx, lights, sx, sy - (b.sprite.rise ?? 0) * px, px);
+      if (c.scale >= ZOOM.sprites) a.draw(ctx, lights, sx, sy - this.riseOf(b.type, b.fp) * px, px);
       else {
         ctx.fillStyle = "rgba(248,220,130,0.85)";
         const d = Math.max(1, c.scale * 0.6);

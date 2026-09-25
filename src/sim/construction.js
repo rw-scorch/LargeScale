@@ -1,54 +1,34 @@
-import { TERRAIN } from "../shared/terrain.js";
-import { ERA_ORDER, BUILDINGS, installBuildings, footprint, addBuilding, setPlots, buildingAt } from "./buildings.js";
+import { placeError, costError, eraIdx } from "../shared/buildings.js";
+import { ERA_ORDER, BUILDINGS, installBuildings, footprint, addBuilding, removeBuilding, setPlots, buildingAt, touched } from "./buildings.js";
 import rules from "../../data/rules.json" with { type: "json" };
 
-export { ERA_ORDER, footprint };
-const eraIdx = e => ERA_ORDER.indexOf(e);
+export { ERA_ORDER, footprint, buildingAt };
 
 export const PLAYER_BUILDINGS = Object.fromEntries(Object.entries(BUILDINGS.table).filter(([, d]) => !d.civilian));
 
 export const CONS_RULES = rules.construction;
 
-export function installConstruction(world, cfg = CONS_RULES) {
+export function installConstruction(world, cfg = {}) {
   const bld = installBuildings(world);
-  world.cons = { rules: { ...CONS_RULES, ...cfg }, table: bld.table };
-  return world.cons;
+  const cons = { rules: { ...CONS_RULES, ...cfg }, table: bld.table, timers: new Set() };
+  world.cons = cons;
+  for (const b of bld.list.values()) if (timed(b)) cons.timers.add(b.id);
+  world.hooks.postTick.push((w, dt) => progressConstruction(w, dt));
+  return cons;
 }
 
-function occupied(world, i, self) {
-  const id = world.bld.at.get(i);
-  return id !== undefined && id !== self;
+const timed = b => (!b.civilian && b.state === "construction") || b.state === "rubble";
+
+export function placeView(world) {
+  const bld = world.bld;
+  return {
+    w: world.grid.w, h: world.grid.h, terrain: world.terrain, owner: world.owner,
+    occupant: i => { const id = bld.at.get(i); return id === undefined || bld.list.get(id).state === "rubble" ? 0 : id; },
+  };
 }
 
 export function canPlace(world, nid, type, anchor, self = 0) {
-  const def = world.bld.table[type];
-  const n = world.nations.get(nid);
-  if (!def || def.civilian) return "unknown building";
-  if (eraIdx(def.era) > eraIdx(n.era ?? "T")) return "era locked";
-  const plots = footprint(world, anchor, def.fp);
-  if (!plots) return "off the map";
-  if (plots.some(i => occupied(world, i, self))) return "something is already there";
-  const land = plots.filter(i => TERRAIN[world.terrain[i]].land);
-  const water = plots.filter(i => !TERRAIN[world.terrain[i]].land);
-  if (def.rule === "coast") {
-    if (!land.length || !water.length) return "must sit on the coast";
-    if (land.some(i => world.owner[i] !== nid)) return "not your land";
-  } else if (def.rule === "shallows") {
-    if (land.length || plots.some(i => TERRAIN[world.terrain[i]].water !== "shallow")) return "must sit in shallow water";
-    const near = plots.some(i => nearOwned(world, i, nid, 3));
-    if (!near) return "too far from your coast";
-  } else {
-    if (water.length) return "cannot build on water";
-    if (plots.some(i => world.owner[i] !== nid)) return "not your land";
-    if (plots.some(i => !TERRAIN[world.terrain[i]].build)) return "terrain too rough";
-  }
-  return null;
-}
-
-function nearOwned(world, i, nid, r) {
-  const g = world.grid, x0 = g.x(i), y0 = g.y(i);
-  for (let y = y0 - r; y <= y0 + r; y++) for (let x = x0 - r; x <= x0 + r; x++) if (g.inside(x, y) && world.owner[g.idx(x, y)] === nid) return true;
-  return false;
+  return placeError(placeView(world), world.nations.get(nid), world.bld.table[type], anchor, self);
 }
 
 export function priceOf(cost, n, premium = 1, r = CONS_RULES) {
@@ -70,26 +50,72 @@ function charge(n, price) {
   return true;
 }
 
+function clearRubble(world, plots) {
+  for (const i of plots) {
+    const b = buildingAt(world, i);
+    if (b?.state === "rubble") { world.cons?.timers.delete(b.id); removeBuilding(world, b.id); }
+  }
+}
+
 export function place(world, nid, type, anchor) {
   const why = canPlace(world, nid, type, anchor);
   if (why) return { error: why };
   const def = world.bld.table[type], n = world.nations.get(nid);
-  const price = { money: def.cost.money ?? 0, use: {} };
-  for (const [k, v] of Object.entries(def.cost)) {
-    if (k === "money") continue;
-    if ((n.stock?.[k] ?? 0) < v) return { error: `needs ${v} ${k}` };
-    price.use[k] = v;
+  const short = costError(def, n);
+  if (short) return { error: short };
+  const use = Object.fromEntries(Object.entries(def.cost).filter(([k]) => k !== "money"));
+  charge(n, { money: def.cost.money ?? 0, use });
+  const plots = footprint(world, anchor, def.fp);
+  clearRubble(world, plots);
+  const b = addBuilding(world, { type, owner: nid, anchor, plots });
+  world.cons?.timers.add(b.id);
+  return b;
+}
+
+export function demolish(world, nid, id) {
+  const b = world.bld.list.get(id);
+  if (!b || b.owner !== nid) return { error: "not your building" };
+  if (b.state === "rubble") return { error: "that is already rubble" };
+  const n = world.nations.get(nid), r = world.cons?.rules ?? CONS_RULES;
+  const share = b.state === "construction" ? r.refundOnCancel : r.demolishRefund;
+  const refund = {};
+  for (const [k, v] of Object.entries(world.bld.table[b.type].cost)) {
+    const back = Math.floor(v * share);
+    if (!back) continue;
+    refund[k] = back;
+    if (k === "money") n.money = (n.money ?? 0) + back;
+    else { n.stock ??= {}; n.stock[k] = (n.stock[k] ?? 0) + back; }
   }
-  if (!charge(n, price)) return { error: "not enough money" };
-  return addBuilding(world, { type, owner: nid, anchor });
+  b.state = "rubble";
+  b.progress = 0;
+  b.residents = 0;
+  b.upgrading = false;
+  touched(world, b);
+  world.cons?.timers.add(b.id);
+  world.emit("demolished", { nation: nid, building: b.id, kind: b.type });
+  return { building: b.id, refund };
 }
 
 export function progressConstruction(world, dt) {
-  for (const b of world.bld.list.values()) {
-    if (b.civilian || b.state !== "construction") continue;
-    b.progress += dt / world.bld.table[b.type].time;
-    world.bld.changed.add("buildings");
-    if (b.progress >= 1) { b.state = "active"; b.progress = 1; world.emit("built", { building: b.id, type: b.type }); }
+  const cons = world.cons, table = world.bld.table, r = cons?.rules ?? CONS_RULES, speed = r.speed ?? 1;
+  const ids = cons ? cons.timers : [...world.bld.list.keys()];
+  for (const id of ids) {
+    const b = world.bld.list.get(id);
+    if (!b || !timed(b)) { cons?.timers.delete(id); continue; }
+    if (b.state === "rubble") {
+      b.progress += (dt * speed) / r.rubbleSeconds;
+      if (b.progress >= 1) { cons?.timers.delete(id); removeBuilding(world, id); }
+      else world.bld.changed.add("buildings");
+      continue;
+    }
+    b.progress += (dt * speed) / table[b.type].time;
+    touched(world, b);
+    if (b.progress >= 1) {
+      b.state = "active";
+      b.progress = 1;
+      cons?.timers.delete(id);
+      world.emit("built", { nation: b.owner, building: b.id, kind: b.type });
+    }
   }
 }
 
@@ -126,7 +152,7 @@ export function selectRange(rows, fromIndex, toIndex) {
 }
 
 export function bulkUpgrade(world, nid, picks) {
-  const n = world.nations.get(nid), bld = world.bld, table = bld.table;
+  const n = world.nations.get(nid), bld = world.bld, table = bld.table, view = placeView(world);
   const premium = world.cons?.rules.instantPremium ?? CONS_RULES.instantPremium;
   const done = [], skipped = [];
   let spent = 0;
@@ -139,17 +165,16 @@ export function bulkUpgrade(world, nid, picks) {
     if (eraIdx(nd.era) > eraIdx(n.era ?? "T")) { skipped.push([p.id, "era locked"]); continue; }
     const plots = footprint(world, b.anchor, nd.fp);
     let bad = !plots;
-    if (!bad && b.civilian) bad = plots.some(i => world.owner[i] !== nid || occupied(world, i, b.id) || bld.zone[i] !== bld.zone[b.anchor]);
+    if (!bad && b.civilian) bad = plots.some(i => { const o = view.occupant(i); return world.owner[i] !== nid || (o && o !== b.id) || bld.zone[i] !== bld.zone[b.anchor]; });
     if (!bad && !b.civilian) bad = !!canPlace(world, nid, next, b.anchor, b.id);
     if (bad) { skipped.push([p.id, "no room to grow"]); continue; }
     const price = priceOf(nd.cost, n, premium, world.cons?.rules);
     if (!charge(n, price)) { skipped.push([p.id, "not enough money"]); continue; }
     spent += price.money;
     b.type = next;
+    clearRubble(world, plots);
     setPlots(world, b, plots);
     done.push(b.id);
   }
   return { done, skipped, spent };
 }
-
-export { buildingAt };
