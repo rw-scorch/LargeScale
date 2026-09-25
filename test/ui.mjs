@@ -93,7 +93,7 @@ await page.click("#research-panel [data-node=fire_keeping]");
 await page.click("#research-queue-add");
 await page.click("#research-panel [data-node=barter]");
 await page.click("#research-queue-add");
-const queued = await page.waitForFunction(() => window.__ls.game.world.purse?.research?.queue.length >= 4 ? window.__ls.game.world.purse.research.queue : null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => []);
+const queued = await page.waitForFunction(() => { const q = window.__ls.game.world.purse?.research?.queue ?? []; return q.includes("palisades") && q.includes("barter") ? q : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => []);
 const pal = queued.indexOf("palisades");
 check(queued[0] === "clubs" && pal > 0 && pal <= 2 && queued.indexOf("stone_tools") < pal, `Research next queues what the node still needs first: ${queued.join(", ")}`);
 await page.screenshot({ path: `${OUT}/2r-research-${MAP}.png` });
@@ -114,10 +114,17 @@ const drag = async (dx0, dy0, dx1, dy1) => {
   await page.mouse.move(cell.x + dx1 * cell.px, cell.y + dy1 * cell.px, { steps: 8 });
   await page.mouse.up();
 };
+const sides = await page.evaluate(async () => {
+  const { TERRAIN } = await import("/js/shared/terrain.js");
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  const rects = [[-4, -5, 4, -2], [-4, 2, 4, 5], [-6, -4, -3, 4], [3, -4, 6, 4]];
+  const open = ([x0, y0, x1, y1]) => { let n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = (cy + y) * w.w + cx + x; if (w.owner[i] === w.you && TERRAIN[w.terrain[i]].build && !w.buildingAt(i)) n++; } return n; };
+  return rects.map(r => [open(r), r]).sort((a, b) => b[0] - a[0]).map(v => v[1]);
+});
 await page.click("#build-menu [data-zone=res]");
-await drag(-5.5, -5.5, 3.5, -1.5);
+await drag(sides[0][0] - 0.5, sides[0][1] - 0.5, sides[0][2] + 0.5, sides[0][3] + 0.5);
 await page.click("#build-menu [data-zone=com]");
-await drag(-5.5, 2.5, 3.5, 4.5);
+await drag(sides[1][0] - 0.5, sides[1][1] - 0.5, sides[1][2] + 0.5, sides[1][3] + 0.5);
 const zoned = await page.waitForFunction(() => { const w = window.__ls.game.world; let n = 0; for (const z of w.zone) if (z) n++; return n >= 20 ? n : 0; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => 0);
 check(zoned >= 20, `dragging in the Zones tab paints homes and shops: ${zoned} plots`);
 await page.screenshot({ path: `${OUT}/2a-zones-${MAP}.png` });
@@ -380,31 +387,6 @@ const home = await fix.evaluate(async () => {
 const opened = await fix.waitForSelector("#town-next", { state: "visible", timeout: 10000 }).then(() => fix.textContent("#town-next"), () => "");
 check(home !== null && /Zone homes/.test(opened), `a new nation on the coast sees the Town panel with a next step: "${opened}"`);
 await fix.screenshot({ path: `${OUT}/14-next-step.png` });
-await fix.evaluate(async () => {
-  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, x = cap % w.w, y = (cap / w.w) | 0;
-  await g.conn.request({ t: "zone", zone: "res", x: x - 4, y: y - 4, w: 9, h: 3 });
-});
-const hutsUp = await fix.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "hut_grass").length >= 3; }, null, { timeout: 30000 }).then(() => true, () => false);
-await fix.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 24 * g.view.ratio; g.view.clampCamera(); });
-await fix.waitForTimeout(4000);
-const figures = await fix.evaluate(() => { const v = window.__ls.game.view; return v.people.figures(v.visibleRange(), v.time).map(f => f.sprite.split("_").slice(0, -2).join("_")); });
-check(hutsUp && figures.length > 0, `the starter research brings huts, and people walk about at close zoom: ${figures.length} figures (${[...new Set(figures)].join(", ")})`);
-await fix.screenshot({ path: `${OUT}/15-people.png` });
-await fix.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 4 * g.view.ratio; g.view.clampCamera(); });
-await fix.waitForTimeout(300);
-const other = await fix.evaluate(() => {
-  const g = window.__ls.game, w = g.world, v = g.view;
-  for (let sy = 140; sy < v.canvas.height / v.ratio - 160; sy += 9) for (let sx = 260; sx < v.canvas.width / v.ratio - 380; sx += 9) {
-    const p = g.plotAt(sx * v.ratio, sy * v.ratio), o = p === null ? 0 : w.owner[p];
-    if (o && o !== w.you) return { x: sx, y: sy, name: w.nations.get(o).name, id: o };
-  }
-  return null;
-});
-if (other) await fix.mouse.move(other.x, other.y);
-await fix.waitForTimeout(200);
-const tip = other ? await fix.textContent("#plot-tip") : "";
-check(other && await fix.isVisible("#plot-tip") && tip.includes(other.name), `hovering another nation's land names it: "${tip}"`);
-await fix.screenshot({ path: `${OUT}/16-hover.png` });
 const shore = await fix.evaluate(() => {
   const g = window.__ls.game, w = g.world;
   const cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
@@ -428,6 +410,31 @@ check(jetty && ghost?.anchor === shore.land && ghost.reason === null, `pointing 
 await fix.screenshot({ path: `${OUT}/17-jetty.png` });
 await fix.keyboard.press("Escape");
 await fix.keyboard.press("Escape");
+await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, x = cap % w.w, y = (cap / w.w) | 0;
+  await g.conn.request({ t: "zone", zone: "res", x: x - 4, y: y - 4, w: 9, h: 9 });
+});
+const hutsUp = await fix.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "hut_grass").length >= 3; }, null, { timeout: 30000 }).then(() => true, () => false);
+await fix.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 24 * g.view.ratio; g.view.clampCamera(); });
+await fix.waitForTimeout(4000);
+const figures = await fix.evaluate(() => { const v = window.__ls.game.view; return v.people.figures(v.visibleRange(), v.time).map(f => f.sprite.split("_").slice(0, -2).join("_")); });
+check(hutsUp && figures.length > 0, `the starter research brings huts, and people walk about at close zoom: ${figures.length} figures (${[...new Set(figures)].join(", ")})`);
+await fix.screenshot({ path: `${OUT}/15-people.png` });
+await fix.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 4 * g.view.ratio; g.view.clampCamera(); });
+await fix.waitForTimeout(300);
+const other = await fix.evaluate(() => {
+  const g = window.__ls.game, w = g.world, v = g.view;
+  for (let sy = 140; sy < v.canvas.height / v.ratio - 160; sy += 9) for (let sx = 260; sx < v.canvas.width / v.ratio - 380; sx += 9) {
+    const p = g.plotAt(sx * v.ratio, sy * v.ratio), o = p === null ? 0 : w.owner[p];
+    if (o && o !== w.you) return { x: sx, y: sy, name: w.nations.get(o).name, id: o };
+  }
+  return null;
+});
+if (other) await fix.mouse.move(other.x, other.y);
+await fix.waitForTimeout(200);
+const tip = other ? await fix.textContent("#plot-tip") : "";
+check(other && await fix.isVisible("#plot-tip") && tip.includes(other.name), `hovering another nation's land names it: "${tip}"`);
+await fix.screenshot({ path: `${OUT}/16-hover.png` });
 const trip = await fix.evaluate(async () => {
   const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital;
   const st = await g.conn.request({ t: "stack", share: 0.4, at: cap });
