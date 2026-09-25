@@ -17,6 +17,7 @@ import { createBuildMenu } from "./ui/build.js";
 import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel } from "./ui/town.js";
 import { createResearchPanel } from "./ui/research.js";
+import { createTip } from "./ui/tip.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -76,6 +77,7 @@ class Game {
     this.buildingPanel = createBuildingPanel(overlay, this);
     this.town = createTownPanel(overlay, this);
     this.research = createResearchPanel(overlay, this);
+    this.tip = createTip(overlay, this);
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -84,7 +86,7 @@ class Game {
     }, {
       onTap: (x, y) => this.tap(x, y),
       onSecondary: (x, y) => this.secondary(x, y),
-      onHover: (x, y) => (this.hover = x === null ? null : [x, y]),
+      onHover: (x, y) => { this.hover = x === null ? null : [x, y]; this.tip.update(); },
       dragging: () => !!this.zoning,
       onDrag: (a, b) => this.dragZone(a, b),
       onDragEnd: (a, b) => this.paintZone(a, b),
@@ -421,6 +423,7 @@ class Game {
     if (b) return this.selectBuilding(b.id);
     this.select(null);
     this.selectBuilding(null);
+    this.tip.pin(sx, sy);
   }
 
   select(id) {
@@ -456,7 +459,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.tip]) p?.update();
   }
 
   leave() {
