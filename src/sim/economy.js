@@ -12,7 +12,7 @@ export function installEconomy(world, cfg = {}) {
     for (const n of w.nations.values()) {
       if (!n.human || !n.spawned || !n.alive) continue;
       if (n.money === undefined) grantKit(w, n, r);
-      n.money += (n.income ?? r.baseIncome) * dt;
+      n.money += ((n.income ?? r.baseIncome) + (n.pop ?? 0) * (n.tax ?? r.taxPerResident)) * dt;
     }
   });
   return world.econ;

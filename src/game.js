@@ -1,5 +1,6 @@
 import { checkVictory } from "./sim/bots.js";
-import { ORDER_CODES } from "./shared/protocol.js";
+import { ORDER_CODES, MAX_ZONE_SIDE } from "./shared/protocol.js";
+import { zonePlots, ZONE_NAMES } from "./sim/civilians.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish } from "./sim/construction.js";
 
@@ -76,6 +77,17 @@ export const ORDERS = {
     if (!Number.isInteger(m.building)) return fail("pick a building");
     const r = demolish(sim, nation, m.building);
     return r.error ? fail(r.error) : { ok: true, ...r };
+  },
+  zone(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.civ) return fail("towns are not running in this world");
+    if (!ZONE_NAMES.includes(m.zone)) return fail("unknown zone");
+    const { x, y, w, h } = m;
+    if (![x, y, w, h].every(Number.isInteger) || w < 1 || h < 1) return fail("give x, y, w and h as whole numbers");
+    if (w > MAX_ZONE_SIDE || h > MAX_ZONE_SIDE) return fail(`zone at most ${MAX_ZONE_SIDE} by ${MAX_ZONE_SIDE} plots at a time`);
+    const g = sim.grid, plots = [];
+    for (let yy = Math.max(0, y); yy < Math.min(g.h, y + h); yy++) for (let xx = Math.max(0, x); xx < Math.min(g.w, x + w); xx++) plots.push(g.idx(xx, yy));
+    return { ok: true, plots: zonePlots(sim, nation, plots, m.zone) };
   },
   route(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
@@ -173,16 +185,21 @@ export class BuildingFeed {
   }
 }
 
+const r2 = v => Math.round((v ?? 0) * 100) / 100;
+
 export function purseOf(n) {
   if (!n || n.money === undefined) return null;
   const stock = {};
   for (const [k, v] of Object.entries(n.stock ?? {})) stock[k] = Math.floor(v);
-  return { money: Math.floor(n.money), stock, era: n.era ?? "T" };
+  const s = n.stats ?? {};
+  const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
+  return { money: Math.floor(n.money), stock, era: n.era ?? "T", town };
 }
 
 const ALWAYS = new Set(["eliminated", "victory"]);
+const QUIET = new Set(["civ_build", "civ_upgrade"]);
 
 export function publicEvents(sim, events) {
   const human = id => id !== undefined && sim.nations.get(id)?.human;
-  return events.filter(e => ALWAYS.has(e.type) || human(e.nation) || human(e.by) || (e.stack !== undefined && human(sim.stacks.get(e.stack)?.owner)));
+  return events.filter(e => !QUIET.has(e.type) && (ALWAYS.has(e.type) || human(e.nation) || human(e.by) || (e.stack !== undefined && human(sim.stacks.get(e.stack)?.owner))));
 }

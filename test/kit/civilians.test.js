@@ -70,7 +70,7 @@ test("troop cap follows population and conscription costs people", () => {
   zonePlots(w, a, disc(w.grid, 30, 30, 4), "res");
   for (let i = 0; i < 80; i++) { n.stock.food = 500; econTick(w, 5, rng); }
   const cap = w.maxTroops(n);
-  assert.ok(Math.abs(cap - (w.rules.troopBase * 0.2 + n.pop * 0.35)) < 1e-6);
+  assert.ok(Math.abs(cap - (w.rules.troopBase + w.rules.troopPerPlot * n.plots + n.pop * 0.35)) < 1e-6, "land plus people");
   const before = n.pop;
   assert.ok(conscript(w, a, 20));
   assert.ok(Math.abs(before - n.pop - 5) < 1e-6);

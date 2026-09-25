@@ -13,6 +13,7 @@ import { installBots, spawnBots, BOT } from "./sim/bots.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
 import { installConstruction } from "./sim/construction.js";
 import { installEconomy } from "./sim/economy.js";
+import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { encodeRows } from "./shared/buildings.js";
 import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
@@ -121,6 +122,7 @@ export class World extends DurableObject {
     installCombat(this.sim, scaled.combat);
     installConstruction(this.sim, { speed: info.rules?.buildSpeed ?? 1 });
     installEconomy(this.sim);
+    installCivilians(this.sim, makeRng(((info.seed ?? 1) + 7919 + Math.floor(this.sim.time)) >>> 0));
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.updatePresence();
@@ -307,9 +309,10 @@ export class World extends DurableObject {
     const g = this.sim.grid, runs = encodeRuns(this.sim.owner);
     const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
     const buildingFrames = partFrames(MSG.BUILDINGS, encodeRows(this.bfeed.rows(this.sim)));
+    const zoneFrames = partFrames(MSG.ZONE, encodeRuns(this.sim.bld.zone));
     server.send(JSON.stringify({
       t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
-      hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length },
+      hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length },
       defs: buildingData.buildings, purse: purseOf(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel },
       caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(),
       victory: this.meta("victory"), frozen: this.frozen,
@@ -317,6 +320,7 @@ export class World extends DurableObject {
     for (const f of terrainFrames) server.send(f);
     for (const f of ownerFrames) server.send(f);
     for (const f of buildingFrames) server.send(f);
+    for (const f of zoneFrames) server.send(f);
     const n = this.sim.nations.get(nation);
     this.broadcast({ t: "joined", nation, name: n.name, colour: n.colour });
     if (!this.frozen) this.startLoop();
@@ -357,6 +361,8 @@ export class World extends DurableObject {
   }
 
   flushDiffs() {
+    const zones = takeZoneNews(this.sim);
+    if (zones) this.broadcast(frame(MSG.ZONE_DIFF, zones));
     const changes = this.sim.takeDirty();
     if (!changes.length) return;
     this.ownerChanged = true;
