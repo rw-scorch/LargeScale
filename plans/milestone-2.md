@@ -124,6 +124,13 @@ Evidence before the admin tools: 104 unit tests; smoke 65 of 65 on the test map 
 - A summary of what was done and what was skipped, with reasons.
 - A civilian filter.
 - **Done when:** selecting 20 watchtowers and upgrading them costs exactly 20 x 1.5 x the stone tower cost, lowest first, with the rest explained when money runs out.
+- **Done (26 September 2026).**
+  - A unit test places 24 watchtowers and upgrades 20 for exactly 2,400 gold and 600 stone, the 20 lowest ids first. With 700 gold and no stone, the rest go two at 300 gold each, and the others are skipped as "not enough money".
+  - The client's `planBatch` predicts the same numbers.
+  - The smoke test upgrades three towers through the server for 900 gold, the amount the client planned, and the friend sees stone towers.
+  - The browser script opens the menu with Y, sees locked Tribal rows with their reason, then selects all and upgrades four towers at once.
+  - Totals: 110 unit tests, smoke 82 of 82 on the test map and 83 of 83 on fine Europe, browser script 67 of 67 on both maps.
+  - Also on this branch, at Ryan's request: a zoom range from half the whole-map view to 64 px per plot, and ore names in the hover tip.
 
 ### 7. The economy while away (piece 12)
 

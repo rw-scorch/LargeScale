@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (107)
+npm test                  # unit tests (110)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -101,7 +101,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
 - **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
-- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, R deposits at mid zoom, backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, Y upgrade menu, R deposits at mid zoom, backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
@@ -139,11 +139,17 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 
   The limits are in `rules.json` `admin`. The screens are Delete and Accounts on the world list (`public/js/ui/accounts.js`) and the Admin panel in a game (`public/js/ui/admin.js`). Destructive buttons ask twice.
 
+- **Step 6 (26 September 2026, branch `m2-step6-bulk-upgrade`).** The bulk upgrade menu, piece 8's second half.
+  - The `upgrade` order in `src/game.js` takes groups (`picks: [[type, count]]`, `filter` all, player or civilian), picks that many finished buildings lowest level first, and runs the kit's `bulkUpgrade`: instant, at `instantPremium` 1.5, missing materials bought at `moneyForMissing` 4 gold before the premium. It returns `done`, `spent` and `skipped` counted by reason.
+  - Pricing and chain levels live in `src/shared/buildings.js` (`priceOf`, `planBatch`, `levelsOf`), so the menu's live total is the server's charge.
+  - The menu is `public/js/ui/upgrade.js` (Y). It shows groups with counts, locked rows with the reason, clicks or drags down the tick boxes to pick, and a count box per group.
+  - Same branch: zoom now runs from half the whole-map view to 64 px per plot (`ZOOM` in the renderer), and the hover tip names deposits (`name` in `data/deposits.json`) with the building that digs them.
+
 Open items as of 26 September 2026, in order:
 
-1. Ryan reviews and merges the playtest fixes, then redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. Ryan reviews and merges step 6, then redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan asked for real units (individual soldiers with power levels). That conflicts with "troops are a count" and needs a plan he agrees to first.
-3. Milestone two, step 6 (bulk upgrade menu), then step 7 (economy while away).
+3. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
 4. Later: a settings panel to rebind keys; players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
 5. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
