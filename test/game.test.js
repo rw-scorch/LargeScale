@@ -7,6 +7,7 @@ import { runOrder, RateLimit, applyPresence, victory, StateFeed, publicEvents, o
 import { makeTestMap } from "../src/shared/testmap.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand, TID } from "../src/shared/terrain.js";
+import { simplifyPath } from "../src/shared/pathfind.js";
 
 function setup() {
   const w = new World(makeTestMap(160, 100, 7));
@@ -181,6 +182,81 @@ test("a seeking stack refuses land a third nation took on its path, and finds an
   w.claim(cut, b);
   assert.ok(run(() => count(a, 30, 60, 0, 20) > 20), "it still gets to the unclaimed land");
   assert.equal(w.owner[cut], b, "without taking B's plot on the way");
+});
+
+function field(W, H, water = () => false) {
+  const terrain = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) terrain[i] = water(i % W, (i / W) | 0) ? TID.ocean : TID.grassland;
+  const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2 }), g = w.grid, a = w.addNation({ name: "A" });
+  w.spawn(a, 3, 3);
+  for (let i = 0; i < W * H; i++) if (isLand(terrain[i])) w.claim(i, a);
+  w.nations.get(a).troops = 5000;
+  return { w, g, a, order: m => runOrder(w, a, m) };
+}
+
+test("a move can follow a drawn path, through every point in the order drawn", () => {
+  const { w, g, a, order } = field(40, 30);
+  const s = order({ t: "stack", share: 0.5, at: g.idx(2, 2) }).stack, st = w.stacks.get(s);
+  const via = [g.idx(30, 3), g.idx(30, 25), g.idx(3, 25)], to = g.idx(15, 15);
+  const walked = [], enter = w.enter.bind(w);
+  w.enter = (x, next) => { const ok = enter(x, next); if (ok && x.id === s) walked.push(next); return ok; };
+  assert.equal(order({ t: "move", stack: s, to, via }).ok, true);
+  assert.deepEqual(ordersOf(w, a), [{ id: s, to, only: null, via }], "the purse shows the whole drawn path");
+  const trip = order({ t: "route", stack: s, to, via }), straight = order({ t: "route", stack: s, to });
+  assert.ok(trip.ok && trip.plots >= 90 && trip.seconds > straight.seconds * 3, `the route estimate follows the drawn path: ${trip.plots} plots, ${trip.seconds} s against ${straight.seconds} s straight`);
+  let k = 0;
+  while (st.pos !== via[0] && k++ < 200) w.tick(0.5);
+  w.tick(0.5);
+  assert.deepEqual(ordersOf(w, a)[0].via, via.slice(1), "points already passed drop off");
+  while (st.order === "move" && k++ < 600) w.tick(0.5);
+  const at = [...via, to].map(p => walked.indexOf(p));
+  assert.ok(at.every((n, j) => n >= 0 && (j === 0 || n > at[j - 1])), `it passes every point in order, at steps ${at}`);
+  assert.equal(st.pos, to);
+  assert.equal(st.order, "hold");
+  assert.deepEqual(ordersOf(w, a), []);
+});
+
+test("a drawn path is checked: points on land, at most 32, and a land route through each", () => {
+  const { w, g, order } = field(40, 10, x => x >= 18 && x < 22);
+  const s = order({ t: "stack", share: 0.5, at: g.idx(2, 2) }).stack, here = g.idx(5, 5);
+  assert.equal(order({ t: "move", stack: s, to: here, via: [g.idx(19, 5)] }).error, "every point of a drawn path must be on land");
+  assert.equal(order({ t: "move", stack: s, to: here, via: Array(33).fill(here) }).error, "a drawn path has at most 32 points");
+  assert.equal(order({ t: "move", stack: s, to: here, via: "5" }).error, "a drawn path is a list of plots");
+  assert.equal(order({ t: "move", stack: s, to: here, via: [-1] }).error, "that plot is off the map");
+  assert.equal(order({ t: "move", stack: s, to: here, via: [1.5] }).error, "that plot is off the map");
+  assert.equal(order({ t: "move", stack: s, to: here, via: [g.idx(30, 5)] }).error, "no land route through those points");
+  assert.equal(order({ t: "route", stack: s, to: here, via: [g.idx(30, 5)] }).error, "no land route through those points");
+  assert.equal(order({ t: "move", stack: s, to: here, via: Array(32).fill(here) }).ok, true, "32 points are fine, even repeated");
+  assert.equal(order({ t: "move", stack: s, to: here, via: [] }).ok, true);
+});
+
+test("a split, a plain move or an advance drops a drawn path", () => {
+  const { w, g, a, order } = field(40, 30);
+  const s = order({ t: "stack", share: 0.8, at: g.idx(2, 2) }).stack, st = w.stacks.get(s);
+  const via = [g.idx(30, 3), g.idx(30, 25)];
+  order({ t: "move", stack: s, to: g.idx(3, 25), via });
+  const c = order({ t: "split", stack: s, share: 0.5 }).stack;
+  assert.equal(w.stacks.get(c).via, null, "the new half holds without the path");
+  assert.equal(st.via.length, 2, "the old half keeps going");
+  order({ t: "move", stack: s, to: g.idx(10, 10) });
+  assert.equal(st.via, null);
+  order({ t: "move", stack: s, to: g.idx(3, 25), via });
+  order({ t: "advance", stack: s });
+  assert.equal(st.via, null);
+  assert.equal(ordersOf(w, a).some(o => o.via), false);
+});
+
+test("a drawn line is thinned to its corners, keeping both ends", () => {
+  const line = [];
+  for (let x = 0; x <= 20; x++) line.push([x, 0]);
+  for (let y = 1; y <= 20; y++) line.push([20, y]);
+  for (let x = 19; x >= 0; x--) line.push([x, 20]);
+  assert.deepEqual(simplifyPath(line, 100), line, "short enough already");
+  assert.deepEqual(simplifyPath(line, 10), [[0, 0], [20, 0], [20, 20], [0, 20]]);
+  const wiggle = Array.from({ length: 400 }, (_, k) => [k, Math.round(3 * Math.sin(k / 5))]);
+  const thin = simplifyPath(wiggle, 33);
+  assert.ok(thin.length <= 33 && thin.length >= 10, `${thin.length} points`);
+  assert.deepEqual([thin[0], thin.at(-1)], [wiggle[0], wiggle.at(-1)]);
 });
 
 test("split, merge and disband keep troop totals and check the rules", () => {

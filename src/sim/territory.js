@@ -20,6 +20,7 @@ export const RULES = {
   pathCell: 16,
   pathAhead: 8,
   pathLookahead: 24,
+  legAhead: 2,
   pathMaxNodes: 60000,
   seekMaxNodes: 60000,
 };
@@ -214,19 +215,32 @@ export class World {
     return true;
   }
 
-  orderMove(sid, target, order = "move") {
+  orderMove(sid, target, order = "move", via = []) {
     const s = this.stacks.get(sid);
     if (!s || !isLand(this.terrain[target])) return false;
-    const r = this.route(s.pos, target);
+    const first = via.length ? via[0] : target;
+    const r = this.route(s.pos, first);
     if (!r) return false;
-    const keep = { path: s.path, route: s.route, progress: s.progress, order: s.order };
+    const keep = { path: s.path, route: s.route, via: s.via, progress: s.progress, order: s.order };
     s.path = [];
-    s.route = { regions: r.regions, goal: target };
+    s.route = { regions: r.regions, goal: first };
+    s.via = via.length ? [...via.slice(1), target] : null;
     s.progress = 0;
-    if (target !== s.pos && !this.extendPath(s)) { Object.assign(s, keep); return false; }
-    if (target === s.pos) s.route = null;
+    if (first !== s.pos && !this.extendPath(s)) { Object.assign(s, keep); return false; }
+    if (first === s.pos) s.route = null;
     s.order = order;
     return true;
+  }
+
+  nextLeg(s) {
+    while (s.via?.length && !s.route) {
+      const from = s.path.length ? s.path[s.path.length - 1] : s.pos, goal = s.via.shift();
+      if (!s.via.length) s.via = null;
+      if (goal === from) continue;
+      const r = this.route(from, goal);
+      if (!r) { s.via = null; this.emit("path_blocked", { stack: s.id, at: s.pos }); return; }
+      s.route = { regions: r.regions, goal };
+    }
   }
 
   orderAdvance(sid, only = null, seek = false) {
@@ -304,8 +318,10 @@ export class World {
 
   stepStack(s, dt) {
     if (s.engaged) return;
+    if (!s.route && s.via?.length && s.path.length < this.rules.legAhead) this.nextLeg(s);
     if (s.route && s.path.length < this.rules.pathLookahead && !this.extendPath(s)) {
       s.route = null;
+      s.via = null;
       this.emit("path_blocked", { stack: s.id, at: s.pos });
       if (!s.path.length && s.order === "move") s.order = "hold";
     }
@@ -313,12 +329,14 @@ export class World {
       s.progress += (this.rules.stackSpeed * (s.speedMult ?? 1) * dt) / this.moveCost(s.pos, s.path[0]);
       while (s.progress >= 1 && s.path.length) {
         s.progress -= 1;
-        if (!this.enter(s, s.path[0])) { s.path = []; s.route = null; s.progress = 0; if (s.order === "move") s.order = "hold"; break; }
+        if (!this.enter(s, s.path[0])) { s.path = []; s.route = null; s.via = null; s.progress = 0; if (s.order === "move") s.order = "hold"; break; }
         s.path.shift();
       }
-      if (!s.path.length && s.order === "move") s.order = "hold";
+      if (!s.path.length && !s.route && !s.via?.length && s.order === "move") s.order = "hold";
     } else if (s.order === "advance") {
       this.advance(s, dt);
+    } else if (s.order === "move" && !s.route && !s.via?.length) {
+      s.order = "hold";
     }
   }
 

@@ -1,5 +1,6 @@
 import { checkVictory } from "./sim/bots.js";
-import { ORDER_CODES, MAX_ZONE_SIDE } from "./shared/protocol.js";
+import { ORDER_CODES, MAX_ZONE_SIDE, MAX_WAYPOINTS } from "./shared/protocol.js";
+import { isLand } from "./shared/terrain.js";
 import { zonePlots, ZONE_NAMES } from "./sim/civilians.js";
 import { orderResearch } from "./sim/research.js";
 import { ERA_ORDER } from "./shared/buildings.js";
@@ -17,6 +18,28 @@ function living(sim, nation) {
 function ownStack(sim, nation, id) {
   const s = Number.isInteger(id) ? sim.stacks.get(id) : null;
   return s && s.owner === nation ? s : null;
+}
+
+function waypoints(sim, m) {
+  if (m.via === undefined || m.via === null) return { via: [] };
+  if (!Array.isArray(m.via)) return { error: "a drawn path is a list of plots" };
+  if (m.via.length > MAX_WAYPOINTS) return { error: `a drawn path has at most ${MAX_WAYPOINTS} points` };
+  for (const p of m.via) {
+    if (!isPlot(sim, p)) return { error: "that plot is off the map" };
+    if (!isLand(sim.terrain[p])) return { error: "every point of a drawn path must be on land" };
+  }
+  return { via: m.via };
+}
+
+function legsOf(sim, from, via, to) {
+  const out = [];
+  for (const p of [...via, to]) {
+    const r = sim.route(from, p);
+    if (!r) return null;
+    out.push({ from, to: p, r });
+    from = p;
+  }
+  return out;
 }
 
 export const ORDERS = {
@@ -39,7 +62,11 @@ export const ORDERS = {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
     if (!isPlot(sim, m.to)) return fail("that plot is off the map");
-    return sim.orderMove(s.id, m.to) ? { ok: true } : fail("no land route there");
+    const { via, error } = waypoints(sim, m);
+    if (error) return fail(error);
+    const none = via.length ? "no land route through those points" : "no land route there";
+    if (via.length && !legsOf(sim, s.pos, via, m.to)) return fail(none);
+    return sim.orderMove(s.id, m.to, "move", via) ? { ok: true } : fail(none);
   },
   advance(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
@@ -136,16 +163,22 @@ export const ORDERS = {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
     if (!isPlot(sim, m.to)) return fail("that plot is off the map");
-    const r = sim.route(s.pos, m.to);
-    if (!r) return fail("no land route there");
-    const co = sim.pathGraph(), speed = sim.rules.stackSpeed * (s.speedMult ?? 1);
-    const points = r.regions.map(k => {
-      const c = co.cellOfRegion[k];
-      return [Math.min(sim.grid.w - 1, (c % co.cw) * co.size + (co.size >> 1)), Math.min(sim.grid.h - 1, Math.floor(c / co.cw) * co.size + (co.size >> 1))];
-    });
-    const g = sim.grid, straight = Math.abs(g.x(s.pos) - g.x(m.to)) + Math.abs(g.y(s.pos) - g.y(m.to));
-    const cost = r.regions.length > 1 ? r.cost : straight * co.mean[r.regions[0]];
-    return { ok: true, plots: Math.max(r.plots ?? 0, straight), seconds: Math.max(1, Math.round(cost / speed)), points };
+    const { via, error } = waypoints(sim, m);
+    if (error) return fail(error);
+    const legs = legsOf(sim, s.pos, via, m.to);
+    if (!legs) return fail(via.length ? "no land route through those points" : "no land route there");
+    const co = sim.pathGraph(), speed = sim.rules.stackSpeed * (s.speedMult ?? 1), g = sim.grid, points = [];
+    let plots = 0, cost = 0;
+    for (const { from, to, r } of legs) {
+      for (const k of r.regions) {
+        const c = co.cellOfRegion[k];
+        points.push([Math.min(g.w - 1, (c % co.cw) * co.size + (co.size >> 1)), Math.min(g.h - 1, Math.floor(c / co.cw) * co.size + (co.size >> 1))]);
+      }
+      const straight = Math.abs(g.x(from) - g.x(to)) + Math.abs(g.y(from) - g.y(to));
+      cost += r.regions.length > 1 ? Math.max(r.cost, straight) : straight * co.mean[r.regions[0]];
+      plots += Math.max(r.plots ?? 0, straight);
+    }
+    return { ok: true, plots, seconds: Math.max(1, Math.round(cost / speed)), points };
   },
 };
 
@@ -232,9 +265,13 @@ export function ordersOf(sim, nid) {
   const out = [];
   for (const s of sim.stacks.values()) {
     if (s.owner !== nid) continue;
-    const to = s.route?.goal ?? (s.path.length ? s.path[s.path.length - 1] : null);
+    const leg = s.route?.goal ?? (s.path.length ? s.path[s.path.length - 1] : null), rest = s.via ?? [];
+    const to = rest.length ? rest[rest.length - 1] : leg;
     const only = s.order === "advance" ? s.only ?? null : null;
-    if (to !== null || only !== null) out.push({ id: s.id, to, only });
+    if (to === null && only === null) continue;
+    const row = { id: s.id, to, only };
+    if (rest.length) row.via = [...(leg === null ? [] : [leg]), ...rest.slice(0, -1)];
+    out.push(row);
   }
   return out;
 }

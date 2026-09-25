@@ -36,6 +36,28 @@ export function findPath(grid, start, goal, cost, maxNodes = 200000) {
   return search(grid, start, i => i === goal, i => (Math.abs(grid.x(i) - gx) + Math.abs(grid.y(i) - gy)) * minStep, cost, maxNodes);
 }
 
+export function simplifyPath(pts, max, eps = 1) {
+  if (pts.length <= Math.max(2, max)) return pts.slice();
+  const cut = e => {
+    const keep = new Uint8Array(pts.length), todo = [[0, pts.length - 1]];
+    keep[0] = keep[pts.length - 1] = 1;
+    while (todo.length) {
+      const [a, b] = todo.pop(), [ax, ay] = pts[a], [bx, by] = pts[b], dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+      let far = -1, fd = e;
+      for (let k = a + 1; k < b; k++) {
+        const [px, py] = pts[k], d = len ? Math.abs(dy * (px - ax) - dx * (py - ay)) / len : Math.hypot(px - ax, py - ay);
+        if (d > fd) { fd = d; far = k; }
+      }
+      if (far >= 0) { keep[far] = 1; todo.push([a, far], [far, b]); }
+    }
+    return pts.filter((_, k) => keep[k]);
+  };
+  for (let e = eps; ; e *= 1.5) {
+    const out = cut(e);
+    if (out.length <= Math.max(2, max)) return out;
+  }
+}
+
 export function costField(grid, sources, cost, limit = Infinity) {
   const dist = new Float32Array(grid.size).fill(Infinity);
   const src = new Int32Array(grid.size).fill(-1);
