@@ -25,9 +25,9 @@ export class ClientWorld {
     this.name = hello.name ?? null;
     this.time = 0;
     this.nations = new Map(hello.nations.map(n => [n.id, { ...n }]));
-    this.units = unitTable(hello.units?.length ? hello.units : LEVY_ONLY);
+    this.unitTypes = unitTable(hello.units?.length ? hello.units : LEVY_ONLY);
     this.troopRules = { xpLevels: [0, 0.3, 1, 3], xpBonus: [0, 0.1, 0.2, 0.35], ...hello.troopRules };
-    this.stacks = new Map((hello.stacks ?? []).map(r => [r[0], stackFromRow(r, this.units)]));
+    this.stacks = new Map((hello.stacks ?? []).map(r => [r[0], stackFromRow(r, this.unitTypes)]));
     this.chat = [...(hello.chat ?? [])];
     this.owner = new Uint16Array(this.w * this.h);
     this.zone = new Uint8Array(this.w * this.h);
@@ -64,9 +64,9 @@ export class ClientWorld {
 
   lockOf(id, kind = "buildings") { return lockReason(this.locks, this.known(), id, kind); }
 
-  mixOf(s) { return mixParts(this.units, s.troops, s.mix); }
+  mixOf(s) { return mixParts(this.unitTypes, s.troops, s.mix); }
 
-  powerOf(s, holding = false) { return powerOf(this.units, s.troops, s.mix, holding ? "defence" : "attack", this.troopRules.xpBonus[s.xp] ?? 0); }
+  powerOf(s, holding = false) { return powerOf(this.unitTypes, s.troops, s.mix, holding ? "defence" : "attack", this.troopRules.xpBonus[s.xp] ?? 0); }
 
   researchError(id) { return researchError(this.tech, this.locks, this.known(), this.purse?.era ?? "T", id); }
 
@@ -189,7 +189,7 @@ export class ClientWorld {
         if (!this.nations.has(id)) this.nations.set(id, { id, name: `Nation ${id}`, colour: "#8a8a8a" });
         Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned, era: ERA_ORDER[era] ?? "T" });
       }
-      for (const r of m.s) this.stacks.set(r[0], stackFromRow(r, this.units));
+      for (const r of m.s) this.stacks.set(r[0], stackFromRow(r, this.unitTypes));
       for (const id of m.gone) this.stacks.delete(id);
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }

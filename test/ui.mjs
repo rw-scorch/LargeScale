@@ -549,6 +549,16 @@ const warned = await fix.textContent("#toasts").catch(() => "");
 await fix.keyboard.press("x");
 const gone = await fix.waitForFunction(id => !window.__ls.game.world.stacks.has(id), extra, { timeout: 5000 }).then(() => true, () => false);
 const toldBack = await fix.waitForFunction(() => /went home/.test(document.querySelector("#toasts")?.textContent ?? "") && document.querySelector("#toasts").textContent, null, { timeout: 3000 }).then(h => h.jsonValue(), () => "");
+const mixMade = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world;
+  await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "unit", unit: "knight", amount: 60 });
+  const r = await g.conn.request({ t: "stack", share: 0.5, at: w.nations.get(w.you).capital });
+  if (r.ok) g.select(r.stack);
+  return r.ok;
+});
+const shownMix = await fix.waitForFunction(() => /knights/.test(document.querySelector("#stack-mix")?.textContent ?? "") && document.querySelector("#stack-mix").textContent, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+check(mixMade && /\d+ levies, \d+ knights/.test(shownMix), `a stack formed with knights in the reserve lists its mix: "${shownMix}"`);
+await fix.screenshot({ path: `${OUT}/19c-stack-mix.png` });
 check(extra && /Sure/.test(disbandArmed) && /Disband again/.test(warned) && gone && /went home and .+ were lost/.test(toldBack), `X asks first, then disbands with a quarter lost: "${toldBack.match(/[^.]*went home[^.]*\./)?.[0]?.trim()}"`);
 await fix.click("#leave-world");
 const back = await fix.waitForSelector("#world-create", { timeout: 5000 }).then(() => true, () => false);
