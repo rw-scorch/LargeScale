@@ -1,7 +1,7 @@
 {
   "version": 1,
   "units": [
-    {"id":"levy","num":1,"name":"Levies","kind":"troop","era":"T","description":"Ordinary troops raised from your people. Every nation has them, and they fill out any stack.","attack":1,"defence":1,"speed":1,"capture":1,"cost":{},"builtAt":[],"sprite":"club_warrior"},
+    {"id":"levy","num":1,"name":"Levies","kind":"troop","era":"T","description":"Ordinary troops raised from your people. Every nation has them, and they fill out any stack.","attack":1,"defence":1,"speed":1,"capture":1,"cost":{},"builtAt":[],"sprite":"hunter"},
     {"id":"club_warrior","num":2,"name":"Club warriors","kind":"troop","era":"T","description":"Tribal fighters with heavy clubs, stronger than levies when attacking.","attack":1.4,"defence":1.2,"speed":1,"capture":1,"cost":{"money":0.4},"builtAt":["war_camp","barracks"],"sprite":"club_warrior"},
     {"id":"spear_thrower","num":3,"name":"Spear throwers","kind":"troop","era":"T","description":"Throw spears from cover, best when holding ground.","attack":1.2,"defence":1.5,"speed":1,"capture":1,"cost":{"money":0.4,"wood":0.1},"builtAt":["war_camp","barracks"],"sprite":"spear_thrower"},
     {"id":"horse_archer","num":4,"name":"Horse archers","kind":"troop","era":"T","description":"Mounted archers: fast, and quick to take land.","attack":1.5,"defence":1.1,"speed":1.4,"capture":1.4,"cost":{"money":1,"food":0.3},"builtAt":["war_camp","barracks"],"sprite":"horse_archer"},

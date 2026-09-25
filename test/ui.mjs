@@ -672,6 +672,31 @@ check(barracksUp && keepBox && trainedUp && /12 at home/.test(armyCount) && /Tra
 await fix.screenshot({ path: `${OUT}/26-army.png` });
 await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#army-panel")), "Esc closes the Army panel");
+const knightStack = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, me = w.you;
+  await g.conn.request({ t: "admin", op: "give", nation: me, what: "unit", unit: "knight", amount: 600 });
+  const cap = w.nations.get(me).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  let at = cap;
+  for (let r = 2; r <= 6 && at === cap; r++) for (let dy = -r; dy <= r && at === cap; dy++) for (let dx = -r; dx <= r && at === cap; dx++) {
+    const i = (cy + dy) * w.w + cx + dx;
+    if (w.owner[i] === me && !w.buildingAt(i) && ![i - 1, i + 1, i - w.w, i + w.w, i + w.w - 1, i + w.w + 1].some(j => w.buildingAt(j)) && ![...w.stacks.values()].some(s => Math.abs((s.pos % w.w) - (i % w.w)) + Math.abs(((s.pos / w.w) | 0) - ((i / w.w) | 0)) < 3)) at = i;
+  }
+  const r = await g.conn.request({ t: "stack", share: 0.9, at });
+  if (!r.ok) return null;
+  g.select(r.stack);
+  return r.stack;
+});
+const knightFigures = await fix.waitForFunction(id => {
+  const g = window.__ls.game, w = g.world, v = g.view, st = w.stacks.get(id);
+  if (!st?.mix?.knight) return null;
+  g.focus(st.pos, 40);
+  st.xp = 2;
+  const figs = v.soldiers(v.visibleRange()).filter(f => f.stack === id);
+  return figs.length ? figs.map(f => f.sprite) : null;
+}, knightStack, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+await fix.waitForTimeout(600);
+await fix.screenshot({ path: `${OUT}/27-soldiers.png` });
+check(knightFigures?.length >= 3 && knightFigures.every(s => s.startsWith("knight_")), `at close zoom a stack of mostly knights is drawn as ${knightFigures?.length} knight figures (${knightFigures?.[0]})`);
 await fix.click("#leave-world");
 await fix.waitForSelector("#open-accounts", { timeout: 5000 });
 await fix.click("#open-accounts");
