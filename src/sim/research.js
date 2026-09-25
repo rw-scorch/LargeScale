@@ -39,7 +39,12 @@ export function installResearch(world, cfg = {}, tree = TREE) {
 
 export function initResearch(n) {
   n.era ??= "T";
-  n.research ??= { known: [], queue: [...(RESEARCH_RULES.starterQueue ?? [])], partial: {}, bank: 0, current: null };
+  n.research ??= { known: [], queue: [], partial: {}, bank: 0, current: null };
+  if (!n.research.starter) {
+    const have = new Set([...n.research.known, ...n.research.queue]);
+    n.research.queue.push(...(RESEARCH_RULES.starterQueue ?? []).filter(id => !have.has(id)));
+    n.research.starter = true;
+  }
   n.effects ??= {};
   return n.research;
 }
