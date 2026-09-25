@@ -106,11 +106,16 @@ Ryan deployed steps 1 to 5 on 25 September and played. His list, and what was do
 - **Take one kind of land.** The advance order takes `only`: unclaimed land (C) or one nation's land (N, then click it).
 - **Whose land is it.** A tip follows the pointer with the owner, terrain and building; on touch, tapping shows it.
 - **World creation for the host only.** Admin accounts only (`ADMIN_NAMES`).
+- **More admin powers (asked for afterwards).** Built together, each checked on the server and written to an admin log:
+  - delete a world;
+  - accounts: set a new password, remove an account;
+  - in a world: rename, save, end or reopen, speed 1 to 8, remove a player (their nation stays as it is, Ryan's choice);
+  - testing: give gold, goods or troops, and finish research.
 - **Exit to the home screen.** A normal Exit button replaces the ghost Worlds link.
 - **Double tap zoomed the page; scrolling down could not come back up.** The viewport no longer scales, the game view blocks page pinch and double-tap zoom, and the world list no longer cuts off its top when taller than the window.
 - **Individual people in the forces, each with a power level.** Ryan picked real units over drawn soldiers. The kit's units piece covers vehicles, ships and aircraft; soldiers as individual units would replace "troops are a count". That needs its own plan and Ryan's agreement before any code.
 
-Evidence: 104 unit tests; smoke 65 of 65 on the test map and 66 of 66 on fine Europe; reload check 5 of 5; browser script 51 of 51 on both maps. Bench: Earth worst tick 35 ms, fine Europe 30.7 ms. Both were about 25 ms before this round, because the starter queue now takes the bench's 8 towns into the Medieval era. With the queue turned off, Earth measures 23 ms.
+Evidence before the admin tools: 104 unit tests; smoke 65 of 65 on the test map and 66 of 66 on fine Europe; reload check 5 of 5; browser script 51 of 51 on both maps. With them: 107 unit tests, smoke 80 of 80 on the test map and 81 of 81 on fine Europe, browser script 62 of 62 on both maps, reload check 5 of 5. Bench: Earth worst tick 35 ms, fine Europe 30.7 ms. Both were about 25 ms before this round, because the starter queue now takes the bench's 8 towns into the Medieval era. With the queue turned off, Earth measures 23 ms.
 
 ### 6. Bulk upgrade menu (piece 8, second half)
 
