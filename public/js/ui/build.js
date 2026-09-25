@@ -16,10 +16,11 @@ export function createBuildMenu(root, game) {
   root.append(box);
   let tab = null, key = "";
 
+  const cap = t => t && t[0].toUpperCase() + t.slice(1);
   const why = (w, def) => {
     const era = w.purse?.era ?? "T";
     if (eraIdx(def.era) > eraIdx(era)) return `Needs the ${ERA_NAMES[def.era]} era`;
-    return w.costError(def.id);
+    return cap(w.lockOf(def.id)) ?? w.costError(def.id);
   };
 
   return {
@@ -32,13 +33,16 @@ export function createBuildMenu(root, game) {
       const cats = ["zones", ...new Set(defs.map(d => d.category))];
       tab ??= "zones";
       const rows = defs.filter(d => d.category === tab).sort((a, b) => eraIdx(a.era) - eraIdx(b.era) || a.num - b.num);
-      const k = `${tab}:${game.building}:${game.zoning}:${rows.map(d => why(w, d)).join("|")}`;
+      const k = `${tab}:${game.building}:${game.zoning}:${rows.map(d => why(w, d)).join("|")}:${[...w.known()].join()}`;
       if (k === key) return;
       key = k;
       tabs.replaceChildren(...cats.map(c => el("button", { class: c === tab ? "on" : "", text: c === "zones" ? "Zones" : CATEGORY_NAMES[c] ?? c, onclick: () => { tab = c; key = ""; this.update(); } })));
       if (tab === "zones") {
-        list.replaceChildren(...ZONE_TOOLS.map(([z, name, text]) => el("button", { class: `build-item${game.zoning === z ? " on" : ""}`, "data-zone": z, onclick: () => game.startZone(z) },
-          el("b", { text: name }), el("span", { class: "muted", text }))),
+        list.replaceChildren(...ZONE_TOOLS.map(([z, name, text]) => {
+          const locked = z !== "none" && cap(w.lockOf(z, "zones"));
+          return el("button", { class: `build-item${game.zoning === z ? " on" : ""}`, "data-zone": z, disabled: !!locked, onclick: () => game.startZone(z) },
+            el("b", { text: name }), el("span", { class: "muted", text }), locked ? el("span", { class: "why", text: locked }) : null);
+        }),
           el("p", { class: "muted", text: "Drag over your land to paint. Up to 64 by 64 plots at a time." }));
         return;
       }

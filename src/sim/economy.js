@@ -1,5 +1,6 @@
 import { installBuildings, addBuilding, footprint } from "./buildings.js";
-import { canPlace } from "./construction.js";
+import { placeView } from "./construction.js";
+import { placeError } from "../shared/buildings.js";
 import rules from "../../data/rules.json" with { type: "json" };
 
 export const ECON_RULES = rules.economy;
@@ -36,6 +37,7 @@ function kitSpot(world, n, r) {
     if (g.inside(cx + dx, cy + dy)) spots.push([Math.abs(dx + 0.5) + Math.abs(dy + 0.5), g.idx(cx + dx, cy + dy)]);
   }
   spots.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  for (const [, at] of spots) if (!canPlace(world, n.id, r.kit, at)) return at;
+  const view = { ...placeView(world, n.id), lockOf: null }, def = world.bld.table[r.kit];
+  for (const [, at] of spots) if (!placeError(view, n, def, at)) return at;
   return null;
 }

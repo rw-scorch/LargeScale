@@ -83,6 +83,12 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - An era change is announced to everyone, plays `era_up` on the capital, and switches the stack markers to the new era.
 - The build menu and civilian self-upgrades follow what is unlocked, checked on the server.
 - **Done when:** a new nation researches through Tribal into Medieval, sees new buildings in its menu, and its huts start turning into timber cottages without help.
+- **Done (25 September 2026).** Unit tests:
+  - a new nation queues its way through Tribal, waits at the Age of Kingdoms with the reason, and enters the Medieval era, announced to everyone;
+  - Medieval buildings the tree does not gate appear in its menu;
+  - a town of 44 huts starts upgrading to timber cottages once Carpentry is known.
+
+  The smoke test on the test map and fine Europe researches eight nodes, reaches the Medieval era, and the friend hears it. The browser test covers the research panel, Research next queueing the prerequisites, the era-up animation and Medieval stack markers. Bench with research running: worst tick 21.9 ms on Earth, 24.1 ms on fine Europe. The Tribal buildings now need research first: huts need Fire keeping, shops need Barter, and the tower needs Palisades.
 
 ### 6. Bulk upgrade menu (piece 8, second half)
 

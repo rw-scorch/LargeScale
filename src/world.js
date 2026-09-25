@@ -385,8 +385,14 @@ export class World extends DurableObject {
       const now = Date.now();
       const dt = Math.min(1, (now - last) / 1000);
       last = now;
-      this.step(dt);
-      if (now - this.lastSave > SAVE_EVERY_MS) this.save();
+      try {
+        this.step(dt);
+        if (now - this.lastSave > SAVE_EVERY_MS) this.save();
+      } catch (e) {
+        this.errors = (this.errors ?? 0) + 1;
+        if (this.lastError?.message !== e.message) console.error(`world tick failed: ${e.stack}`);
+        this.lastError = { message: e.message, stack: String(e.stack).split(/\r?\n/).slice(0, 6).join(" | "), at: Date.now() };
+      }
     }, ms);
   }
 
@@ -518,7 +524,7 @@ export class World extends DurableObject {
       initialised: !!this.sim, players: this.accounts.size, online: this.sockets().length, looping: !!this.loop, time: this.sim?.time ?? 0,
       map: info?.map ?? null, w: info?.w, h: info?.h, landPlots: info?.landPlots, bots: info?.bots,
       hashes: this.sim ? this.currentHashes() : null, loadCheck: this.loadCheck ?? null, loaded: this.loaded ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
-      frozen: !!this.frozen, victory: this.meta("victory"),
+      frozen: !!this.frozen, victory: this.meta("victory"), tickErrors: this.errors ?? 0, lastError: this.lastError ?? null,
     };
   }
 }

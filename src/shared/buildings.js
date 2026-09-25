@@ -18,6 +18,7 @@ export function tableFrom(list) {
 }
 
 export function footprintAt(w, h, anchor, fp) {
+  if (!Number.isInteger(anchor) || anchor < 0) return null;
   const x0 = anchor % w, y0 = (anchor / w) | 0, out = [];
   for (let dy = 0; dy < fp[1]; dy++) for (let dx = 0; dx < fp[0]; dx++) {
     const x = x0 + dx, y = y0 + dy;

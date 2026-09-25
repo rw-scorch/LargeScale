@@ -16,6 +16,7 @@ import { createNotices } from "./ui/notice.js";
 import { createBuildMenu } from "./ui/build.js";
 import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel } from "./ui/town.js";
+import { createResearchPanel } from "./ui/research.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -26,7 +27,7 @@ const canvas = document.getElementById("map");
 
 let assets = null;
 const loadAssets = async () => (assets ??= await Promise.all([
-  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture"]),
+  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects"]),
   fetch("/assets/terrain/palettes.json").then(r => r.json()),
 ]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
 const gzCache = new Map(), depCache = new Map();
@@ -74,6 +75,7 @@ class Game {
     this.buildMenu = createBuildMenu(overlay, this);
     this.buildingPanel = createBuildingPanel(overlay, this);
     this.town = createTownPanel(overlay, this);
+    this.research = createResearchPanel(overlay, this);
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -195,6 +197,11 @@ class Game {
     if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0);
     if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0);
     if (e.type === "deposit_depleted" && e.nation === you) say(`dep${e.at}`, `A ${e.kind} deposit has run dry.`);
+    if (e.type === "era_up") say(`era${e.nation}${e.era}`, e.nation === you ? `Your nation enters the ${e.name} era.` : `${name(e.nation)} has reached the ${e.name} era.`, 0);
+    if (e.type === "researched" && e.nation === you) {
+      const node = w.locks.nodes.get(e.node), builds = (node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name).filter(Boolean);
+      say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build: ${builds.join(", ")}.` : ""}`, 0);
+    }
     if (e.type === "kit" && e.nation === you) say("kit", "Your chieftain hut stands at the capital. Press B to build more.", 0);
   }
 
@@ -215,6 +222,7 @@ class Game {
     if (action === "disband" && this.selectedBuilding !== null) return this.buildingPanel.demolish();
     if (action === "build") return this.toggleBuildMenu();
     if (action === "town") return this.toggleTown();
+    if (action === "research") return this.toggleResearch();
     if (action === "deposits") return this.toggleDeposits();
     if (action === "advance" || action === "move" || action === "split" || action === "merge" || action === "disband") act[action]();
     if (action === "next") this.nextStack();
@@ -223,6 +231,7 @@ class Game {
     if (action === "zoomOut") this.zoom(1 / 1.6);
     if (action === "cancel") {
       if (this.building || this.zoning) this.stopBuild();
+      else if (this.research.open) this.toggleResearch(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
       else if (this.stack.choosing) this.stack.cancel();
@@ -235,6 +244,11 @@ class Game {
     const me = this.world?.nations.get(this.world.you);
     this.buildMenu.show(on && !!me?.spawned && me.alive && !this.world.frozen);
     if (!this.buildMenu.open) this.stopBuild();
+    this.updatePanels();
+  }
+
+  toggleResearch(on = !this.research.open) {
+    this.research.show(on && !!this.world?.purse?.research);
     this.updatePanels();
   }
 
@@ -425,7 +439,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research]) p?.update();
   }
 
   leave() {

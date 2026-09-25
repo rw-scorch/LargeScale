@@ -11,6 +11,7 @@ import { installConstruction } from "../src/sim/construction.js";
 import { installEconomy } from "../src/sim/economy.js";
 import { installCivilians } from "../src/sim/civilians.js";
 import { installResources } from "../src/sim/resources.js";
+import { installResearch, orderResearch } from "../src/sim/research.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -93,6 +94,8 @@ for (const id of players) {
 bld.changed.add("zone");
 if (!process.env.NOCIV) installCivilians(w, makeRng(Number(a.seed) + 7));
 installResources(w, deposits, { rng: makeRng(Number(a.seed) + 9) });
+installResearch(w, { speed: 20 });
+for (const id of players) for (const node of ["palisades", "farming", "chieftains", "age_medieval", "carpentry", "masonry"]) orderResearch(w, id, node);
 let mines = 0;
 for (const id of players) {
   let here = 0;
@@ -225,7 +228,7 @@ const report = {
   },
   maxEventsPerTick: maxEvents,
   buildings: {
-    placed, perPlayer, mines, producers: [...bld.list.values()].filter(b => bld.table[b.type].producer).length, deposits: deposits.plots.length, terrainEdits: w.res.edits.size, civilianBuildings: [...bld.list.values()].filter(b => b.civilian).length, population: Math.round(players.reduce((t, id) => t + (w.nations.get(id).pop ?? 0), 0)), econTicks: Math.floor(w.time / 5), plotIndex: bld.at.size, woodPlotsCut: woodCut, 
+    placed, perPlayer, mines, researched: players.map(id => w.nations.get(id).research.known.length), eras: players.map(id => w.nations.get(id).era).join(""), producers: [...bld.list.values()].filter(b => bld.table[b.type].producer).length, deposits: deposits.plots.length, terrainEdits: w.res.edits.size, civilianBuildings: [...bld.list.values()].filter(b => b.civilian).length, population: Math.round(players.reduce((t, id) => t + (w.nations.get(id).pop ?? 0), 0)), econTicks: Math.floor(w.time / 5), plotIndex: bld.at.size, woodPlotsCut: woodCut, 
     saveBytes: Object.fromEntries(Object.entries(layers).map(([k, v]) => [k, v.length])),
     saveRows: { owner: rowsOf(runs), ...Object.fromEntries(Object.entries(layers).map(([k, v]) => [k, rowsOf(v)])), state: 1 },
     encodeMs: +layerSaveMs.toFixed(1),

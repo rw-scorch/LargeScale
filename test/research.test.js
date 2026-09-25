@@ -48,6 +48,7 @@ test("the tree is valid, and every unlock is a sprite or a building", () => {
 
 test("a new nation must research its first buildings and its shops", () => {
   const { w, a, g, n } = setup();
+  assert.ok([...w.bld.list.values()].some(b => b.type === "chieftain_hut" && b.owner === a && b.state === "active"), "the starting hut is a gift, not research");
   n.money = 1000;
   assert.equal(canPlace(w, a, "watchtower_wood", g.idx(33, 20)), "needs Palisades research");
   assert.equal(runOrder(w, a, { t: "zone", zone: "com", x: 25, y: 15, w: 3, h: 3 }).error, "needs Barter research");

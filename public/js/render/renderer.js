@@ -261,7 +261,7 @@ export class MapRenderer {
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
       const state = st.id === this.selected ? "selected" : st.order === "hold" ? "idle" : "moving";
-      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: this.era, state });
+      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state });
     }
     return out;
   }
@@ -343,8 +343,23 @@ export class MapRenderer {
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
     this.drawZoneRect();
     this.drawGhost();
+    this.drawEffects();
     this.drawRoute();
     if (this.night) this.drawNight();
+  }
+
+  drawEffects() {
+    const list = this.state.effects;
+    if (!list?.length) return;
+    const now = Date.now(), R = this.ratio ?? 1, s = this.state;
+    for (let k = list.length - 1; k >= 0; k--) if (now - list[k].at > 4000) list.splice(k, 1);
+    for (const fx of list) {
+      if (fx.kind !== "era_up") continue;
+      const frame = `era_up_${Math.floor((now - fx.at) / 180) % 3}`;
+      const size = Math.max(48 * R, this.cam.scale * 3), k = size / 32;
+      const [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5, ((fx.plot / s.w) | 0) + 0.5);
+      this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, k);
+    }
   }
 
   drawZones(r) {
