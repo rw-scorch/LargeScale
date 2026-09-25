@@ -15,8 +15,10 @@ import { createStackPanel } from "./ui/stack.js";
 import { createNotices } from "./ui/notice.js";
 import { createBuildMenu } from "./ui/build.js";
 import { createBuildingPanel } from "./ui/building.js";
-import { createTownPanel } from "./ui/town.js";
+import { createTownPanel, nodeFor } from "./ui/town.js";
 import { createResearchPanel } from "./ui/research.js";
+import { createTip } from "./ui/tip.js";
+import { createAdminPanel } from "./ui/admin.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -27,7 +29,7 @@ const canvas = document.getElementById("map");
 
 let assets = null;
 const loadAssets = async () => (assets ??= await Promise.all([
-  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects"]),
+  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects", "people"]),
   fetch("/assets/terrain/palettes.json").then(r => r.json()),
 ]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
 const gzCache = new Map(), depCache = new Map();
@@ -48,8 +50,9 @@ const terrainGz = async (dir, hash) => {
 };
 
 class Game {
-  constructor(worldId, name, onLeave) {
+  constructor(worldId, name, onLeave, account = null) {
     this.worldId = worldId;
+    this.admin = !!account?.admin;
     this.name = name;
     this.onLeave = onLeave;
     this.world = null;
@@ -76,6 +79,8 @@ class Game {
     this.buildingPanel = createBuildingPanel(overlay, this);
     this.town = createTownPanel(overlay, this);
     this.research = createResearchPanel(overlay, this);
+    this.tip = createTip(overlay, this);
+    this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -84,7 +89,7 @@ class Game {
     }, {
       onTap: (x, y) => this.tap(x, y),
       onSecondary: (x, y) => this.secondary(x, y),
-      onHover: (x, y) => (this.hover = x === null ? null : [x, y]),
+      onHover: (x, y) => { this.hover = x === null ? null : [x, y]; this.tip.update(); },
       dragging: () => !!this.zoning,
       onDrag: (a, b) => this.dragZone(a, b),
       onDragEnd: (a, b) => this.paintZone(a, b),
@@ -99,6 +104,10 @@ class Game {
       this.key(action);
     };
     addEventListener("keydown", this.onKey);
+    this.onWheel = e => { if (e.ctrlKey) e.preventDefault(); };
+    this.onGesture = e => e.preventDefault();
+    addEventListener("wheel", this.onWheel, { passive: false });
+    addEventListener("gesturestart", this.onGesture);
     this.ui = setInterval(() => this.updatePanels(), 250);
     let last = performance.now();
     const loop = now => {
@@ -167,6 +176,11 @@ class Game {
     if (m.t === "events") for (const e of m.events) this.announce(e);
     if (m.t === "state" && this.view) this.view.colours.clear();
     if (m.t === "purse" && this.view && m.season && m.season !== this.view.season) this.view.setSeason(m.season);
+    if (m.t === "purse" && this.townOnPurse) { this.townOnPurse = false; this.toggleTown(true); }
+    if (m.t === "ended") this.toast(`${m.by} ended this world. Orders are off, but you can still look around.`);
+    if (m.t === "reopened") this.toast(`${m.by} reopened this world.`);
+    if (m.t === "speed") this.toast(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
+    if (m.t === "renamed") { this.name = m.name; this.toast(`${m.by} renamed the world ${m.name}.`); }
   }
 
   onFrame(data) {
@@ -194,6 +208,7 @@ class Game {
     if (e.type === "stack_destroyed" && e.nation !== you) say(`kill${e.stack}`, `A stack of ${name(e.nation)} was destroyed.`, 0);
     if (e.type === "eliminated") say(`elim${e.nation}`, e.nation === you ? "Your nation has been eliminated." : `${name(e.nation)} has been eliminated.`, 0);
     if (e.type === "stalled" && w.stacks.get(e.stack)?.owner === you) say(`stall${e.stack}`, "A stack stopped: not enough troops to go on.");
+    if (e.type === "advance_done" && w.stacks.get(e.stack)?.owner === you) say(`done${e.stack}`, "A stack stopped advancing: nothing left to take within its reach.");
     if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0);
     if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0);
     if (e.type === "deposit_depleted" && e.nation === you) say(`dep${e.at}`, `A ${e.kind} deposit has run dry.`);
@@ -202,7 +217,11 @@ class Game {
       const node = w.locks.nodes.get(e.node), builds = (node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name).filter(Boolean);
       say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build: ${builds.join(", ")}.` : ""}`, 0);
     }
-    if (e.type === "kit" && e.nation === you) say("kit", "Your chieftain hut stands at the capital. Press B to build more.", 0);
+    if (e.type === "kit" && e.nation === you) {
+      say("kit", "Your chieftain hut stands at the capital. The Town panel says what to do next.", 0);
+      if (w.purse) this.toggleTown(true);
+      else this.townOnPurse = true;
+    }
   }
 
   plotAt(sx, sy) {
@@ -223,14 +242,17 @@ class Game {
     if (action === "build") return this.toggleBuildMenu();
     if (action === "town") return this.toggleTown();
     if (action === "research") return this.toggleResearch();
+    if (action === "admin") return this.toggleAdmin();
     if (action === "deposits") return this.toggleDeposits();
-    if (action === "advance" || action === "move" || action === "split" || action === "merge" || action === "disband") act[action]();
+    if (["advance", "claim", "target", "move", "split", "merge", "disband"].includes(action)) act[action]();
     if (action === "next") this.nextStack();
     if (action === "home") this.home();
     if (action === "zoomIn") this.zoom(1.6);
     if (action === "zoomOut") this.zoom(1 / 1.6);
+    this.updatePanels();
     if (action === "cancel") {
       if (this.building || this.zoning) this.stopBuild();
+      else if (this.adminPanel?.open) this.toggleAdmin(false);
       else if (this.research.open) this.toggleResearch(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
@@ -249,6 +271,13 @@ class Game {
 
   toggleResearch(on = !this.research.open) {
     this.research.show(on && !!this.world?.purse?.research);
+    this.updatePanels();
+  }
+
+  toggleAdmin(on = !this.adminPanel?.open) {
+    if (!this.adminPanel) return;
+    if (on && this.research.open) this.toggleResearch(false);
+    this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
@@ -296,7 +325,9 @@ class Game {
       if (!res.ok) return this.toast(res.error ?? "could not zone there");
       painted += res.plots;
     }
-    if (!painted) this.toast(zone === "none" ? "Nothing to erase there." : "Zones go on your own open land.");
+    if (!painted) return this.toast(zone === "none" ? "Nothing to erase there." : "Zones go on your own open land.");
+    const node = zone === "res" && nodeFor(this.world, "hut_grass");
+    if (node) this.toast(`Homes zoned. Huts go up once you know ${node.name}; it is in your research (U).`);
   }
 
   startBuild(type) {
@@ -326,17 +357,30 @@ class Game {
     return ay * w.w + ax;
   }
 
+  placeAnchor(plot, def) {
+    const w = this.world, base = this.anchorFor(plot, def);
+    if (def.rule !== "coast" || !w.placeError(def.id, base)) return base;
+    const x = plot % w.w, y = (plot / w.w) | 0;
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= w.w || ny >= w.h) continue;
+      const at = this.anchorFor(ny * w.w + nx, def);
+      if (!w.placeError(def.id, at)) return at;
+    }
+    return base;
+  }
+
   updateGhost() {
     const def = this.building && this.world?.defs.table[this.building];
     if (!def) { this.view.ghost = null; return; }
     const plot = this.hover ? this.plotAt(...this.hover) : null;
-    const anchor = plot !== null ? this.anchorFor(plot, def) : this.ghostAt;
+    const anchor = plot !== null ? this.placeAnchor(plot, def) : this.ghostAt;
     this.view.ghost = anchor === null ? null : { def, anchor, reason: this.world.placeError(def.id, anchor) };
   }
 
   async buildAt(plot) {
     const def = this.world.defs.table[this.building];
-    const anchor = this.anchorFor(plot, def);
+    const anchor = this.placeAnchor(plot, def);
     if (!this.hover && this.ghostAt !== anchor) { this.ghostAt = anchor; return; }
     const why = this.world.placeError(def.id, anchor);
     if (why) return this.toast(why);
@@ -404,6 +448,7 @@ class Game {
     if (b) return this.selectBuilding(b.id);
     this.select(null);
     this.selectBuilding(null);
+    this.tip.pin(sx, sy);
   }
 
   select(id) {
@@ -439,7 +484,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {
@@ -448,6 +493,8 @@ class Game {
     clearInterval(this.ui);
     removeEventListener("resize", this.onResize);
     removeEventListener("keydown", this.onKey);
+    removeEventListener("wheel", this.onWheel);
+    removeEventListener("gesturestart", this.onGesture);
     this.onLeave();
   }
 }
@@ -469,7 +516,7 @@ async function worlds(account) {
 function enter(id, name, account) {
   showScreen("game");
   history.replaceState(null, "", `#w=${id}`);
-  new Game(id, name, () => worlds(account));
+  new Game(id, name, () => worlds(account), account);
 }
 
 async function start() {

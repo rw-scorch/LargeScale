@@ -90,6 +90,33 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 
   The smoke test on the test map and fine Europe researches eight nodes, reaches the Medieval era, and the friend hears it. The browser test covers the research panel, Research next queueing the prerequisites, the era-up animation and Medieval stack markers. Bench with research running: worst tick 21.9 ms on Earth, 24.1 ms on fine Europe. The Tribal buildings now need research first: huts need Fire keeping, shops need Barter, and the tower needs Palisades.
 
+### Playtest fixes (26 September 2026, branch `m2-playtest-fixes`)
+
+Ryan deployed steps 1 to 5 on 25 September and played. His list, and what was done:
+
+- **Jetties could not be placed.** The coast rule wanted land and water inside one footprint, which a one-plot jetty never has. A coast building now needs own land that touches water; pointing at the water snaps it onto the shore. A harbour anchored in the sea now changes hands with its first land plot.
+- **No people, no gathering, "like I have no workers".** Homes needed Fire keeping research and nothing said so; towns that grew then starved at about 14 minutes. Ryan chose a guided start:
+  - new nations start with a research queue (Fire keeping, Stone tools, Foraging, Barter, Farming);
+  - the chieftain hut gathers 0.06 food and 0.04 wood a second;
+  - homes fill only as far as food income plus a ten-minute share of the stock feeds;
+  - the Town panel opens at spawn with a next step, workers and jobs filled, and how many people the food feeds.
+
+  People are drawn at close zoom: workers, gatherers, builders and townsfolk.
+- **Where moving troops are going.** The purse lists each player's own stack destinations (never anyone else's); selecting your moving stack draws the route to it with the time left.
+- **Take one kind of land.** The advance order takes `only`: unclaimed land (C) or one nation's land (N, then click it).
+- **Whose land is it.** A tip follows the pointer with the owner, terrain and building; on touch, tapping shows it.
+- **World creation for the host only.** Admin accounts only (`ADMIN_NAMES`).
+- **More admin powers (asked for afterwards).** Built together, each checked on the server and written to an admin log:
+  - delete a world;
+  - accounts: set a new password, remove an account;
+  - in a world: rename, save, end or reopen, speed 1 to 8, remove a player (their nation stays as it is, Ryan's choice);
+  - testing: give gold, goods or troops, and finish research.
+- **Exit to the home screen.** A normal Exit button replaces the ghost Worlds link.
+- **Double tap zoomed the page; scrolling down could not come back up.** The viewport no longer scales, the game view blocks page pinch and double-tap zoom, and the world list no longer cuts off its top when taller than the window.
+- **Individual people in the forces, each with a power level.** Ryan picked real units over drawn soldiers. The kit's units piece covers vehicles, ships and aircraft; soldiers as individual units would replace "troops are a count". That needs its own plan and Ryan's agreement before any code.
+
+Evidence before the admin tools: 104 unit tests; smoke 65 of 65 on the test map and 66 of 66 on fine Europe; reload check 5 of 5; browser script 51 of 51 on both maps. With them: 107 unit tests, smoke 80 of 80 on the test map and 81 of 81 on fine Europe, browser script 62 of 62 on both maps, reload check 5 of 5. Bench: Earth worst tick 35 ms, fine Europe 30.7 ms. Both were about 25 ms before this round, because the starter queue now takes the bench's 8 towns into the Medieval era. With the queue turned off, Earth measures 23 ms.
+
 ### 6. Bulk upgrade menu (piece 8, second half)
 
 - The list of upgradable buildings, lowest first, with identical rows grouped into one line with a count.

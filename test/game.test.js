@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { World } from "../src/sim/territory.js";
 import { installCombat, findEngagements } from "../src/sim/combat.js";
 import { installBots, spawnBots } from "../src/sim/bots.js";
-import { runOrder, RateLimit, applyPresence, victory, StateFeed, publicEvents } from "../src/game.js";
+import { runOrder, RateLimit, applyPresence, victory, StateFeed, publicEvents, ordersOf } from "../src/game.js";
 import { makeTestMap } from "../src/shared/testmap.js";
 import { makeRng } from "../src/shared/rng.js";
-import { isLand } from "../src/shared/terrain.js";
+import { isLand, TID } from "../src/shared/terrain.js";
 
 function setup() {
   const w = new World(makeTestMap(160, 100, 7));
@@ -71,6 +71,38 @@ test("move, advance and route refuse other players' stacks and bad plots", () =>
   assert.ok(w.stacks.get(s).path.length > 0);
   assert.equal(order(a, { t: "advance", stack: s }).ok, true);
   assert.equal(w.stacks.get(s).route, null);
+});
+
+test("an advance can keep to unclaimed land or to one nation's land, and players see their own stacks' orders", () => {
+  const W = 40, H = 20, terrain = new Uint8Array(W * H).fill(TID.grassland);
+  const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2, advanceRate: 40, enemyCostFactor: 0.01 });
+  const a = w.addNation({ name: "A" }), b = w.addNation({ name: "B" }), g = w.grid;
+  w.spawn(a, 3, 10);
+  w.spawn(b, 30, 3);
+  for (let y = 0; y < H; y++) for (let x = 0; x < 10; x++) w.claim(g.idx(x, y), a);
+  for (let y = 0; y < 10; y++) for (let x = 10; x < 22; x++) w.claim(g.idx(x, y), b);
+  w.nations.get(a).troops = 5000;
+  const order = m => runOrder(w, a, m);
+  const s = order({ t: "stack", share: 1, at: g.idx(9, 9) }).stack;
+  const bPlots = w.nations.get(b).plots;
+  const freeTaken = () => { let n = 0; for (let y = 10; y < H; y++) for (let x = 10; x < W; x++) if (w.owner[g.idx(x, y)] === a) n++; return n; };
+  assert.deepEqual(order({ t: "advance", stack: s, only: "free" }), { t: "result", of: "advance", ok: true, only: 0 });
+  w.tick(0.1);
+  assert.ok(freeTaken() > 0, "unclaimed land is taken");
+  assert.equal(w.nations.get(b).plots, bPlots, "B's land next to the stack is left alone");
+  const freeBefore = freeTaken();
+  assert.equal(order({ t: "advance", stack: s, only: b }).ok, true);
+  for (let k = 0; k < 5; k++) w.tick(0.1);
+  assert.ok(w.nations.get(b).plots < bPlots, "B's land is taken");
+  assert.equal(freeTaken(), freeBefore, "unclaimed land within reach is left alone");
+  assert.deepEqual(ordersOf(w, a), [{ id: s, to: null, only: b }]);
+  for (const only of [a, 999, "x", 1.5]) assert.equal(order({ t: "advance", stack: s, only }).error, "pick another nation's land");
+  w.hostile = (p, q) => p !== q && !(p === a && q === b);
+  assert.equal(order({ t: "advance", stack: s, only: b }).error, "you are at peace with B");
+  const s2 = order({ t: "split", stack: s, share: 0.5 }).stack;
+  assert.equal(order({ t: "move", stack: s2, to: g.idx(2, 18) }).ok, true);
+  assert.deepEqual(ordersOf(w, a).find(o => o.id === s2), { id: s2, to: g.idx(2, 18), only: null });
+  assert.deepEqual(ordersOf(w, b), [], "nobody sees another nation's orders");
 });
 
 test("split, merge and disband keep troop totals and check the rules", () => {

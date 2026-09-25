@@ -34,6 +34,13 @@ function nearOwned(v, i, nid, r) {
   return false;
 }
 
+function onShore(v, i) {
+  const x = i % v.w, wet = j => !TERRAIN[v.terrain[j]].land;
+  return (i >= v.w && wet(i - v.w)) || (i + v.w < v.w * v.h && wet(i + v.w)) || (x > 0 && wet(i - 1)) || (x < v.w - 1 && wet(i + 1));
+}
+
+export const keyPlot = (terrain, plots) => plots.find(i => TERRAIN[terrain[i]].land) ?? plots[0];
+
 export function placeError(v, nation, def, anchor, self = 0) {
   if (!def || def.civilian) return "unknown building";
   if (eraIdx(def.era) > eraIdx(nation.era ?? "T")) return `needs the ${ERA_NAMES[def.era]} era`;
@@ -44,7 +51,7 @@ export function placeError(v, nation, def, anchor, self = 0) {
   if (plots.some(i => { const id = v.occupant(i); return id && id !== self; })) return "something is already there";
   const nid = nation.id, land = plots.filter(i => TERRAIN[v.terrain[i]].land), water = plots.length - land.length;
   if (def.rule === "coast") {
-    if (!land.length || !water) return "must sit on the coast";
+    if (!land.length || !(water || land.some(i => onShore(v, i)))) return "must sit on the coast";
     if (land.some(i => v.owner[i] !== nid)) return "not your land";
   } else if (def.rule === "shallows") {
     if (land.length || plots.some(i => TERRAIN[v.terrain[i]].water !== "shallow")) return "must sit in shallow water";

@@ -44,7 +44,15 @@ export const ORDERS = {
   advance(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
-    return sim.orderAdvance(s.id) ? { ok: true } : fail("cannot advance");
+    let only = null;
+    if (m.only === "free") only = 0;
+    else if (m.only !== undefined && m.only !== null) {
+      const t = Number.isInteger(m.only) && m.only !== nation ? sim.nations.get(m.only) : null;
+      if (!t?.alive || !t.spawned) return fail("pick another nation's land");
+      if (!sim.hostile(nation, m.only)) return fail(`you are at peace with ${t.name}`);
+      only = m.only;
+    }
+    return sim.orderAdvance(s.id, only) ? { ok: true, only } : fail("cannot advance");
   },
   split(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
@@ -198,6 +206,17 @@ export class BuildingFeed {
   }
 }
 
+export function ordersOf(sim, nid) {
+  const out = [];
+  for (const s of sim.stacks.values()) {
+    if (s.owner !== nid) continue;
+    const to = s.route?.goal ?? (s.path.length ? s.path[s.path.length - 1] : null);
+    const only = s.order === "advance" ? s.only ?? null : null;
+    if (to !== null || only !== null) out.push({ id: s.id, to, only });
+  }
+  return out;
+}
+
 const r2 = v => Math.round((v ?? 0) * 100) / 100;
 
 export function purseOf(n, extra = {}) {
@@ -205,7 +224,7 @@ export function purseOf(n, extra = {}) {
   const stock = {};
   for (const [k, v] of Object.entries(n.stock ?? {})) stock[k] = Math.floor(v);
   const s = n.stats ?? {};
-  const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
+  const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), fed: Math.floor(s.fed ?? 0), foodCap: r2(s.foodCap ?? 1), worked: r2(s.worked ?? 0), zoned: s.zoned ?? [0, 0, 0, 0], jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
   const making = {};
   for (const [k, v] of Object.entries(n.made ?? {})) making[k] = r2(v / (n.madeEvery ?? 5));
   return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, ...extra };

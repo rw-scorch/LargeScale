@@ -180,6 +180,7 @@ export function econTick(world, dt, rng) {
     const workers = s.pop * r.workerShare;
     const foodNeed = s.pop * r.foodPerPerson * dt;
     const foodSat = foodNeed > 0 ? Math.min(1, n.stock.food / foodNeed) : 1;
+    const fed = ((n.made?.food ?? 0) / r.econEvery + n.stock.food / r.foodReserveSeconds) / r.foodPerPerson;
     n.stock.food = Math.max(0, n.stock.food - foodNeed);
     const jobSat = workers > 0 ? Math.min(1, s.jobs / workers) : 1;
     const worked = workers > 0 ? Math.min(1, workers / Math.max(1, s.jobs)) : 0;
@@ -188,13 +189,15 @@ export function econTick(world, dt, rng) {
     const goodsSat = goodsNeed > 0 ? Math.min(1, n.stock.goods / goodsNeed) : 1;
     n.stock.goods = Math.max(0, n.stock.goods - goodsNeed);
     const needs = foodSat * (0.6 + 0.4 * jobSat) * (0.8 + 0.2 * goodsSat);
-    n.stats = { ...s, workers, worked, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson };
+    const foodCap = s.housing * needs > fed ? fed / (s.housing * needs) : 1;
+    const zoned = world.civ?.zoned.get(n.id)?.slice(1).map(set => set.size) ?? [0, 0, 0, 0];
+    n.stats = { ...s, workers, worked, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson, fed, foodCap, zoned };
     let pop = 0;
     for (const b of nationBuildings(world, n.id)) {
       if (!b.civilian) continue;
       const cap = table[b.type].housing;
       if (!cap || b.state !== "active") { pop += b.residents; continue; }
-      const target = cap * needs;
+      const target = cap * needs * foodCap;
       b.residents += (target - b.residents) * Math.min(1, r.growth * (1 + (n.effects?.pop_growth ?? 0)) * dt);
       if (foodSat < 1) b.residents *= 1 - (1 - foodSat) * r.starveLoss * dt;
       b.residents = Math.max(0, Math.min(cap, b.residents));

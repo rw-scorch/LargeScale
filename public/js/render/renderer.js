@@ -1,6 +1,7 @@
 import { TERRAIN } from "../shared/terrain.js";
 import { hash2 } from "../shared/rng.js";
 import { areaAround } from "../shared/buildings.js";
+import { People } from "./people.js";
 
 export const ZOOM = { max: 16, sprites: 10, icons: 3, maxRatio: 2 };
 export const CHUNK = 256;
@@ -50,6 +51,7 @@ export class MapRenderer {
     this.colours = new Map();
     this.occupied = new Uint8Array(state.w * state.h);
     this.lotAt = new Map();
+    this.people = new People(state);
     this.indexBuildings();
     this.rebuildTerrain();
     this.rebuildTerritory();
@@ -507,6 +509,7 @@ export class MapRenderer {
         if (b.id === this.selectedBuilding) this.outline(sx, sy, b.fp);
       } });
     }
+    for (const f of this.people.figures(r, this.time)) items.push({ key: f.y + 0.1, x: f.x, draw: () => this.drawPerson(f, px) });
     for (const u of s.units) {
       if (u.x < r.x0 - 4 || u.x > r.x1 + 4 || u.y < r.y0 - 4 || u.y > r.y1 + 4) continue;
       items.push({ key: u.air ? 1e9 : u.y + 1, x: u.x, draw: () => this.drawUnit(u, px) });
@@ -577,6 +580,13 @@ export class MapRenderer {
     const sp = a.get(id);
     if (!sp) return;
     a.draw(ctx, id, sx - sp.w * px / 2, sy - sp.h * px / 2 - (u.air ? 6 * px : 0), px, colour, u.flip);
+  }
+
+  drawPerson(f, px) {
+    const k = px * 0.85, sp = this.atlas.get(f.sprite);
+    if (!sp) return;
+    const [sx, sy] = this.plotToScreen(f.x, f.y);
+    this.atlas.draw(this.ctx, f.sprite, sx - (sp.w * k) / 2, sy - sp.h * k, k, this.state.nations.get(f.owner)?.colour, f.flip);
   }
 
   drawMarker(m, px) {

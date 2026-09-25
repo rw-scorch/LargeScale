@@ -15,6 +15,7 @@ export function checkTree(tree = TREE, knownIds = null) {
 }
 
 checkTree();
+for (const id of RESEARCH_RULES.starterQueue ?? []) if (!TREE.nodes.some(n => n.id === id)) throw new Error(`rules.json research.starterQueue names unknown research ${id}`);
 
 export function installResearch(world, cfg = {}, tree = TREE) {
   const r = { ...RESEARCH_RULES, ...cfg };
@@ -39,6 +40,11 @@ export function installResearch(world, cfg = {}, tree = TREE) {
 export function initResearch(n) {
   n.era ??= "T";
   n.research ??= { known: [], queue: [], partial: {}, bank: 0, current: null };
+  if (!n.research.starter) {
+    const have = new Set([...n.research.known, ...n.research.queue]);
+    n.research.queue.push(...(RESEARCH_RULES.starterQueue ?? []).filter(id => !have.has(id)));
+    n.research.starter = true;
+  }
   n.effects ??= {};
   return n.research;
 }

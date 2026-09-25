@@ -58,6 +58,33 @@ async function discordRoute(request, env) {
   return json(reply);
 }
 
+async function adminRoute(request, env, dir, me, path) {
+  if (!me.admin) return json({ error: "not allowed" }, 403);
+  const post = request.method === "POST";
+  if (path === "/api/admin/accounts" && !post) return json(await dir.listAccounts());
+  if (path === "/api/admin/log" && !post) return json(await dir.adminLog());
+  const acc = path.match(/^\/api\/admin\/accounts\/(\d+)\/(password|remove)$/);
+  if (acc && post) {
+    const id = Number(acc[1]);
+    if (acc[2] === "password") {
+      const r = await dir.setPassword(id, ((await body(request)) ?? {}).password, me);
+      return json(r, r.error ? 400 : 200);
+    }
+    const r = await dir.removeAccount(id, me);
+    if (r.error) return json(r, 400);
+    await Promise.all(r.worlds.map(w => env.WORLD.getByName(w).accountRemoved(id, me.name).catch(() => null)));
+    return json(r);
+  }
+  const del = path.match(/^\/api\/admin\/worlds\/([A-Za-z0-9_-]+)\/delete$/);
+  if (del && post) {
+    if (!(await dir.worldConfig(del[1]))) return json({ error: "no such world" }, 404);
+    await env.WORLD.getByName(del[1]).wipe(me.name);
+    await dir.removeWorld(del[1], me);
+    return json({ ok: true });
+  }
+  return json({ error: "not found" }, 404);
+}
+
 export default {
   async scheduled(event, env, ctx) {
     const dir = env.DIRECTORY.getByName("directory");
@@ -92,17 +119,19 @@ export default {
     if (path === "/api/notify" && request.method === "POST") return json(await dir.setPrefs(me.id, (await body(request)) ?? {}));
     if (path === "/api/worlds" && request.method === "GET") return json(await dir.listWorlds(me));
     if (path === "/api/worlds" && request.method === "POST") {
+      if (!me.admin) return json({ error: "only the host can create worlds" }, 403);
       const b = (await body(request)) ?? {};
       const bad = parseWorldConfig(b.config ?? {}).error;
       if (bad) return json({ error: bad }, 400);
       const { id } = await dir.createWorld(me, b.name ?? "New world", b.config ?? {});
-      const r = await env.WORLD.getByName(id).init({ name: b.name, ...(b.config ?? {}) });
+      const r = await env.WORLD.getByName(id).init({ name: b.name, ...(b.config ?? {}), id });
       if (r.error) {
         await dir.removeWorld(id);
         return json({ error: r.error }, 500);
       }
       return json({ id, ...r });
     }
+    if (path.startsWith("/api/admin/")) return adminRoute(request, env, dir, me, path);
     const joinMatch = path.match(/^\/api\/worlds\/([A-Za-z0-9_-]+)\/join$/);
     if (joinMatch && request.method === "POST") {
       const r = await dir.joinWorld(me, joinMatch[1]);

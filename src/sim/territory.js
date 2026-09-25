@@ -228,12 +228,13 @@ export class World {
     return true;
   }
 
-  orderAdvance(sid) {
+  orderAdvance(sid, only = null) {
     const s = this.stacks.get(sid);
     if (!s) return false;
     s.path = [];
     s.route = null;
     s.order = "advance";
+    s.only = only;
     s.carry = 0;
     return true;
   }
@@ -294,13 +295,14 @@ export class World {
   }
 
   frontier(s, limit = Infinity) {
-    const g = this.grid, ow = this.owner, w = g.w, me = s.owner;
+    const g = this.grid, ow = this.owner, w = g.w, me = s.owner, only = s.only ?? null;
     const sx = g.x(s.pos), sy = g.y(s.pos), out = [];
     for (const [, dy, dx] of this.discOffsets()) {
       const x = sx + dx, y = sy + dy;
       if (x < 0 || y < 0 || x >= w || y >= g.h) continue;
       const i = y * w + x, o = ow[i];
       if (o === me || !isLand(this.terrain[i])) continue;
+      if (only !== null && o !== only) continue;
       if (o && !this.hostile(me, o)) continue;
       if (!((y > 0 && ow[i - w] === me) || (x < w - 1 && ow[i + 1] === me) || (y < g.h - 1 && ow[i + w] === me) || (x > 0 && ow[i - 1] === me))) continue;
       out.push(i);

@@ -10,4 +10,23 @@ export function el(tag, props = {}, ...kids) {
   return e;
 }
 
+export function armed(label, sure, action, props = {}) {
+  let at = -Infinity;
+  const b = el("button", { ...props, text: label });
+  b.addEventListener("click", async () => {
+    if (performance.now() - at > 4000) {
+      at = performance.now();
+      b.textContent = sure;
+      b.classList.add("danger");
+      setTimeout(() => { if (performance.now() - at >= 3990) { b.textContent = label; b.classList.remove("danger"); } }, 4000);
+      return;
+    }
+    at = -Infinity;
+    b.textContent = label;
+    b.classList.remove("danger");
+    await action();
+  });
+  return b;
+}
+
 export const fmt = n => (n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : String(Math.round(n)));

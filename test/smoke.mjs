@@ -128,6 +128,8 @@ check(b.status === 200 && b.body.account.admin === false, "friends are not admin
 const wrong = await api("/api/login", { name: "friend" + suffix, password: "wrong pass" });
 check(wrong.status === 401, "wrong password is refused");
 const ta = alogin.body.token, tb = b.body.token;
+const denied = await api("/api/worlds", { name: "Mine", config: M.config }, tb);
+check(denied.status === 403 && denied.body.error === "only the host can create worlds", `a friend cannot create worlds: ${denied.status} "${denied.body.error}"`);
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
@@ -181,7 +183,7 @@ check(aSpawn >= 0, "player spawns on land");
 {
   const cw = view.world;
   const kit = await until(() => { view.pump(); return [...cw.buildings.values()].find(b => b.owner === you && b.type === "chieftain_hut"); });
-  check(kit && kit.state === "active" && cw.purse?.money >= 100 && cw.purse.stock.food === 50 && cw.purse.stock.wood === 40, `starting kit: a finished chieftain hut at the capital, ${cw.purse?.money} gold, ${cw.purse?.stock.food} food and ${cw.purse?.stock.wood} wood`);
+  check(kit && kit.state === "active" && cw.purse?.money >= 100 && cw.purse.stock.food >= 50 && cw.purse.stock.wood >= 40, `starting kit: a finished chieftain hut at the capital, ${cw.purse?.money} gold, ${cw.purse?.stock.food} food and ${cw.purse?.stock.wood} wood`);
   const near = [];
   for (let r = 1; r < 12 * K && near.length < 400; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
@@ -192,11 +194,15 @@ check(aSpawn >= 0, "player spawns on land");
   A.ws.send(JSON.stringify({ t: "build", type: "watchtower_wood", at: open }));
   const gated = await nextResult(A, "build");
   check(gated?.error === "needs Palisades research" && gated.error === cw.placeError("watchtower_wood", open), `before research the tower is refused: "${gated?.error}"`);
+  const r0 = cw.purse?.research, starter = ["fire_keeping", "stone_tools", "foraging", "barter", "farming"];
+  check(r0 && starter.every(id => r0.queue.includes(id) || r0.known.includes(id)), `a new nation starts with a research queue: ${[...(r0?.known ?? []).map(id => `${id} (done)`), ...(r0?.queue ?? [])].join(", ")}`);
+  const gathered = await until(() => { view.pump(); return cw.purse?.making?.food > 0 && cw.purse.making.wood > 0 ? cw.purse.making : null; }, 8000);
+  check(gathered, `the chieftain hut gathers from the start: ${JSON.stringify(gathered)} a second (this world runs production 200 times faster)`);
   const wanted = ["palisades", "fire_keeping", "barter", "farming", "chieftains"];
   const replies = [];
   for (const id of wanted) { A.ws.send(JSON.stringify({ t: "research", id })); replies.push(await nextResult(A, "research")); }
-  const first = replies[0]?.queue ?? [];
-  check(replies.every(r => r?.ok) && first.join() === "clubs,stone_tools,palisades", `queueing Palisades queues what it needs first: ${first.join(", ")}`);
+  const first = replies[0]?.queue ?? [], pal = first.indexOf("palisades");
+  check(replies.every(r => r?.ok || r?.error === "already known") && pal > 0 && first.includes("clubs") && first.indexOf("clubs") < pal && first.indexOf("stone_tools") < pal, `queueing Palisades queues what it still needs ahead of it: ${first.join(", ")}`);
   const learned = await until(() => { view.pump(); const k = cw.purse?.research?.known ?? []; return wanted.every(id => k.includes(id)) ? k.length : 0; }, 30000);
   check(learned, `research carries through the queue: ${learned} nodes known, ${cw.purse?.research?.rate} points a second`);
   const water = near.find(i => !isLand(terrain[i])) ?? terrain.findIndex(t => !isLand(t));
@@ -253,9 +259,9 @@ check(aSpawn >= 0, "player spawns on land");
   A.ws.send(JSON.stringify({ t: "build", type: prod?.type, at: prod?.at }));
   const pb = await nextResult(A, "build");
   const out = prod?.type === "woodcutter_camp" ? "wood" : "food";
-  const stockBefore = cw.purse.stock[out] ?? 0;
-  const making = await until(() => { view.pump(); return cw.purse?.making?.[out] > 0 ? cw.purse.making[out] : 0; }, 20000);
-  check(pb?.ok && making, `a ${prod?.type} on your land starts making ${out}: ${making} a second (stock ${stockBefore} before)`);
+  const stockBefore = cw.purse.stock[out] ?? 0, makingBefore = cw.purse.making?.[out] ?? 0;
+  const making = await until(() => { view.pump(); return cw.purse?.making?.[out] > makingBefore + 0.05 ? cw.purse.making[out] : 0; }, 20000);
+  check(pb?.ok && making, `a ${prod?.type} on your land starts making ${out}: ${(making - makingBefore).toFixed(2)} a second on top of the chieftain hut's ${makingBefore} (stock ${stockBefore} before)`);
   if (prod?.type === "woodcutter_camp") {
     const edited = await until(() => B.binary.some(f => f[0] === MSG.TERRAIN_EDIT), 60000);
     check(edited, "the woodcutter clears a forest plot, and the friend receives the terrain edit");
@@ -276,8 +282,11 @@ A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
 const st = await nextResult(A, "stack");
 check(st?.ok, "stack created from the garrison");
 const before = (await until(() => view.pump().nations.get(you)?.plots > 0 && view.nations.get(you)))?.plots;
-A.ws.send(JSON.stringify({ t: "advance", stack: st.stack }));
-check((await nextResult(A, "advance"))?.ok, "advance order accepted");
+A.ws.send(JSON.stringify({ t: "advance", stack: st.stack, only: "free" }));
+const adv = await nextResult(A, "advance");
+const stopped = () => A.json.some(m => m.t === "events" && m.events.some(e => e.stack === st.stack && (e.type === "advance_done" || e.type === "stalled")));
+const freeShown = await until(() => view.pump().world.purse?.orders?.find(o => o.id === st.stack && o.only === 0) ? "the host's purse shows it" : stopped() ? "it ran out of land within reach before the next purse" : null, 3000);
+check(adv?.ok && adv.only === 0 && freeShown, `an advance kept to unclaimed land is accepted, and ${freeShown ?? "the host's purse never showed it"}`);
 await sleep(3000);
 check(A.binary.some(f => f[0] === MSG.DIFF && f[1] === PROTOCOL), "territory changes stream as binary diffs");
 A.ws.send(JSON.stringify({ t: "admin", op: "hashes" }));
@@ -299,6 +308,9 @@ for (const i of land.filter((_, k) => k % 211 === 0)) {
   if ((await nextResult(A, "move"))?.ok) { moved = { to: i, ms: Date.now() - sent }; break; }
 }
 check(moved, `a stack takes a move order at least ${far} plots away (reply seen within ${moved?.ms} ms; the test polls every 50 ms)`);
+const heading = await until(() => view.pump().world.purse?.orders?.find(o => o.id === st2.stack && o.to === moved?.to), 5000);
+const leaked = B.json.some(m => m.t === "purse" && (m.orders ?? []).some(o => o.id === st2.stack));
+check(heading && !leaked, `the host's purse says where the moving stack is heading (plot ${heading?.to}); the friend's does not`);
 
 const bHello = await waitFor(B, m => m.t === "hello");
 const bNation = bHello.you;
@@ -388,5 +400,92 @@ const ls = saved.lastSave;
 check(ls && ls.maxSteady <= 6, `saves wrote at most ${ls?.maxSteady} rows each once every layer has its row (${ls?.maxRows} including first writes, which also write the key index), ${ls?.totalRows} rows over ${ls?.saves} saves (last: ${ls?.rows} rows, owner layer ${ls?.ownerBytes} bytes, ${ls?.ms} ms; biggest save ${JSON.stringify(ls?.worst)})`);
 const { writeFileSync } = await import("node:fs");
 writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ wid, token: ta, you: hello.you, plots: again.plots, hashes: saved.hashes }));
+
+const pal = await api("/api/register", { name: "pal" + suffix, password: "pal password", invite: INVITE });
+const tp = pal.body.token, palId = pal.body.account?.id;
+const refused = [];
+for (const [path, body] of [["/api/admin/accounts"], ["/api/admin/log"], [`/api/admin/accounts/${palId}/password`, { password: "sneaky pass" }], [`/api/admin/accounts/${palId}/remove`, {}], [`/api/admin/worlds/${wid}/delete`, {}]]) {
+  const r = await api(path, body, tp);
+  if (r.status !== 403 || r.body.error !== "not allowed") refused.push(`${path}: ${r.status}`);
+}
+check(!refused.length && (await api(`/api/worlds`, null, ta)).body.some(w => w.id === wid), `a friend gets 403 "not allowed" from all five admin routes, and nothing changed${refused.length ? ": " + refused.join(", ") : ""}`);
+const aw = await api("/api/worlds", { name: "Admin test", config: { w: 120, h: 90, seed: 3, bots: 2 } }, ta);
+const awid = aw.body.id;
+await api(`/api/worlds/${awid}/join`, {}, tp);
+const H = await connect(awid, ta), P = await connect(awid, tp);
+const hh = await waitFor(H, m => m.t === "hello"), ph = await waitFor(P, m => m.t === "hello");
+const spawnSomewhere = async (who, xs) => {
+  for (let y = 12; y < 80; y += 9) for (const x of xs) {
+    who.ws.send(JSON.stringify({ t: "spawn", x, y }));
+    if ((await nextResult(who, "spawn"))?.ok) return true;
+  }
+  return false;
+};
+const placed = (await spawnSomewhere(H, [15, 25, 35])) && (await spawnSomewhere(P, [100, 90, 80]));
+const adminOp = async (who, m) => { who.ws.send(JSON.stringify({ t: "admin", ...m })); return nextResult(who, "admin"); };
+P.ws.send(JSON.stringify({ t: "admin", op: "give", nation: ph.you, what: "money", amount: 5000 }));
+const sneaky = await nextResult(P, "admin");
+check(placed && sneaky?.ok === false && sneaky.error === "not allowed", `inside a world a friend's admin order is refused: "${sneaky?.error}"`);
+await until(() => H.json.some(m => m.t === "purse"), 5000);
+const gift = await adminOp(H, { op: "give", nation: hh.you, what: "money", amount: 5000 });
+const rich = await until(() => H.json.filter(m => m.t === "purse").at(-1)?.money >= 5000 ? H.json.filter(m => m.t === "purse").at(-1).money : 0, 5000);
+check(gift?.ok && gift.now >= 5000 && rich, `the host gives themself 5000 gold: ${gift?.now} now, and the purse shows ${rich}`);
+const done = await adminOp(H, { op: "finish", nation: hh.you });
+check(done?.ok && done.done.join() === "fire_keeping,stone_tools,foraging,barter,farming", `finishing the research queue completes ${done?.done?.join(", ")}`);
+const t0 = (await api(`/api/worlds/${awid}/status`, null, ta)).body.time;
+const sp = await adminOp(H, { op: "speed", factor: 4 });
+await sleep(2000);
+const t1 = (await api(`/api/worlds/${awid}/status`, null, ta)).body.time;
+const heardSpeed = await waitFor(P, m => m.t === "speed" && m.factor === 4, 2000);
+check(sp?.ok && t1 - t0 > 5 && heardSpeed, `at 4x speed about 2 s of real time moved the world on ${(t1 - t0).toFixed(1)} s, and the friend was told`);
+await adminOp(H, { op: "speed", factor: 1 });
+const badSpeed = await adminOp(H, { op: "speed", factor: 99 });
+check(badSpeed?.ok === false && /from 1 to 8/.test(badSpeed.error), `an out-of-range speed is refused: "${badSpeed?.error}"`);
+const rn = await adminOp(H, { op: "rename", name: "Renamed test" });
+const heardName = await waitFor(P, m => m.t === "renamed" && m.name === "Renamed test", 2000);
+const listed = (await api("/api/worlds", null, ta)).body.find(w => w.id === awid)?.name;
+check(rn?.ok && heardName && listed === "Renamed test", `renaming reaches the friend and the world list: "${listed}"`);
+const ended = await adminOp(H, { op: "end" });
+const heardEnd = await waitFor(P, m => m.t === "ended", 2000);
+P.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
+const refusedOrder = await nextResult(P, "stack");
+const reopened = await adminOp(H, { op: "reopen" });
+const heardReopen = await waitFor(P, m => m.t === "reopened", 2000);
+P.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
+const acceptedOrder = await nextResult(P, "stack");
+check(ended?.ok && heardEnd && refusedOrder?.error === "the world has ended" && reopened?.ok && heardReopen && acceptedOrder?.ok, `ending freezes the world for everyone ("${refusedOrder?.error}"), and reopening lets orders through again`);
+const selfKick = await adminOp(H, { op: "kick", nation: hh.you });
+const kick = await adminOp(H, { op: "kick", nation: ph.you });
+const told = await waitFor(P, m => m.t === "removed", 2000);
+for (let k = 0; k < 40 && !P.closed; k++) await sleep(50);
+const rejoin = await api(`/api/worlds/${awid}/join`, {}, tp);
+const back = await connect(awid, tp).then(g => { g.ws.close(); return true; }, () => false);
+const stays = await adminOp(H, { op: "give", nation: ph.you, what: "troops", amount: 10 });
+const palList = (await api("/api/worlds", null, tp)).body.find(w => w.id === awid);
+check(selfKick?.error === "you cannot remove yourself" && kick?.ok && told && P.closed?.code === CLOSE.REMOVED && rejoin.body.error === "the host removed you from this world" && !back && stays?.ok && palList?.removed === 1,
+  `removing the friend closes their game with "${told?.text}", they cannot rejoin ("${rejoin.body.error}") or reconnect, their nation stays, and their list marks the world`);
+const accounts = (await api("/api/admin/accounts", null, ta)).body;
+const palRow = accounts.find(a => a.id === palId);
+check(Array.isArray(accounts) && palRow?.name === "pal" + suffix && palRow.lastLogin > 0 && accounts.some(a => a.admin), `the host lists ${accounts.length} accounts with worlds and last login`);
+const reset = await api(`/api/admin/accounts/${palId}/password`, { password: "fresh password" }, ta);
+const oldToken = await api("/api/me", null, tp);
+const oldPass = await api("/api/login", { name: "pal" + suffix, password: "pal password" });
+const newPass = await api("/api/login", { name: "pal" + suffix, password: "fresh password" });
+const short = await api(`/api/admin/accounts/${palId}/password`, { password: "short" }, ta);
+check(reset.body.ok && oldToken.status === 401 && oldPass.status === 401 && newPass.status === 200 && short.body.error === "password must be at least 8 characters", "a new password logs the friend out everywhere; the old one stops working, the new one works, short ones are refused");
+const selfRemove = await api(`/api/admin/accounts/${alogin.body.account.id}/remove`, {}, ta);
+const gone = await api(`/api/admin/accounts/${palId}/remove`, {}, ta);
+const goneLogin = await api("/api/login", { name: "pal" + suffix, password: "fresh password" });
+check(selfRemove.body.error === "you cannot remove your own account" && gone.body.ok && goneLogin.status === 401 && !(await api("/api/admin/accounts", null, ta)).body.some(a => a.id === palId), `removing an account stops its logins ("${goneLogin.body.error}"); the host cannot remove themself`);
+const hLog = await adminOp(H, { op: "log" });
+check(hLog?.ok && ["kick", "end", "reopen", "rename", "speed", "finish", "give"].every(op => hLog.log.some(e => e.op === op)), `the world's admin log has every action: ${hLog?.log?.map(e => e.op).join(", ")}`);
+const del = await api(`/api/admin/worlds/${awid}/delete`, {}, ta);
+const toldDeleted = await waitFor(H, m => m.t === "deleted", 2000);
+for (let k = 0; k < 40 && !H.closed; k++) await sleep(50);
+const afterDelete = await api("/api/worlds", null, ta);
+const statusGone = await api(`/api/worlds/${awid}/status`, null, ta);
+check(del.body.ok && toldDeleted && H.closed?.code === CLOSE.DELETED && !afterDelete.body.some(w => w.id === awid) && statusGone.status === 403, `deleting the world closes the host's game ("${toldDeleted?.text}") and it is gone from the list`);
+const dLog = (await api("/api/admin/log", null, ta)).body;
+check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);
 console.log(failures ? `${failures} checks failed` : "all checks passed");
 process.exit(failures ? 1 : 0);

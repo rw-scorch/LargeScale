@@ -6,7 +6,7 @@ import { installConstruction, canPlace } from "../src/sim/construction.js";
 import { installEconomy } from "../src/sim/economy.js";
 import { installCivilians } from "../src/sim/civilians.js";
 import { installResources, addProducer, produce } from "../src/sim/resources.js";
-import { installResearch, orderResearch, researchView, researchRate, complete, TREE, knownOf } from "../src/sim/research.js";
+import { installResearch, initResearch, orderResearch, researchView, researchRate, complete, TREE, knownOf } from "../src/sim/research.js";
 import { validateTree } from "../src/sim/techtree.js";
 import { BUILDINGS, addBuilding } from "../src/sim/buildings.js";
 import { researchError } from "../src/shared/research.js";
@@ -61,8 +61,30 @@ test("a new nation must research its first buildings and its shops", () => {
   assert.equal(canPlace(w, 2, "watchtower_wood", g.idx(8, 8)), null, "bots are not gated");
 });
 
+test("a new player starts with a queue that brings homes, wood, food, shops and fields; bots have none", () => {
+  const { w, a, bot, n } = setup({ speed: 10 });
+  assert.deepEqual(n.research.queue, ["fire_keeping", "stone_tools", "foraging", "barter", "farming"]);
+  assert.equal(researchView(w, n).current, "fire_keeping");
+  assert.equal(w.nations.get(bot).research, undefined);
+  for (let t = 0; t < 11; t++) w.tick(1);
+  assert.deepEqual(n.research.known, ["fire_keeping"], "20 points at 2 a second");
+  assert.equal(research(w, a, "farming", "remove").ok, true);
+  assert.deepEqual(n.research.queue, ["stone_tools", "foraging", "barter"], "the player can change it");
+});
+
+test("a nation saved before the guided start gets the starter queue once, when its world loads", () => {
+  const old = { human: true, research: { known: ["clubs", "stone_tools"], queue: ["palisades"], partial: {}, bank: 0, current: null } };
+  initResearch(old);
+  assert.deepEqual(old.research.queue, ["palisades", "fire_keeping", "foraging", "barter", "farming"], "known and queued nodes are skipped");
+  const reloaded = JSON.parse(JSON.stringify(old));
+  reloaded.research.queue = [];
+  initResearch(reloaded);
+  assert.deepEqual(reloaded.research.queue, [], "after that, a queue the player cleared stays cleared through saves");
+});
+
 test("queueing a node adds its missing prerequisites, and points carry over", () => {
   const { w, a, n } = setup();
+  research(w, a, null, "clear");
   const r = research(w, a, "palisades");
   assert.equal(r.ok, true);
   assert.deepEqual(r.queue, ["clubs", "stone_tools", "palisades"]);
@@ -81,6 +103,7 @@ test("queueing a node adds its missing prerequisites, and points carry over", ()
 
 test("with nothing queued, points bank up to the cap and pay into the next node", () => {
   const { w, a, n } = setup({ speed: 100 });
+  research(w, a, null, "clear");
   for (let t = 0; t < 30; t++) w.tick(1);
   assert.equal(n.research.bank, 500);
   research(w, a, "fire_keeping");

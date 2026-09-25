@@ -93,8 +93,9 @@ await page.click("#research-panel [data-node=fire_keeping]");
 await page.click("#research-queue-add");
 await page.click("#research-panel [data-node=barter]");
 await page.click("#research-queue-add");
-const queued = await page.waitForFunction(() => window.__ls.game.world.purse?.research?.queue.length >= 4 ? window.__ls.game.world.purse.research.queue : null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => []);
-check(queued.slice(0, 3).join() === "clubs,stone_tools,palisades", `Research next queues what the node needs first: ${queued.join(", ")}`);
+const queued = await page.waitForFunction(() => { const q = window.__ls.game.world.purse?.research?.queue ?? []; return q.includes("palisades") && q.includes("barter") ? q : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => []);
+const pal = queued.indexOf("palisades");
+check(queued[0] === "clubs" && pal > 0 && pal <= 2 && queued.indexOf("stone_tools") < pal, `Research next queues what the node still needs first: ${queued.join(", ")}`);
 await page.screenshot({ path: `${OUT}/2r-research-${MAP}.png` });
 const learned = await page.waitForFunction(() => { const k = window.__ls.game.world.purse?.research?.known ?? []; return ["palisades", "fire_keeping", "barter"].every(id => k.includes(id)); }, null, { timeout: 60000 }).then(() => true, () => false);
 check(learned, "the queue researches through to Palisades, Fire keeping and Barter");
@@ -113,10 +114,17 @@ const drag = async (dx0, dy0, dx1, dy1) => {
   await page.mouse.move(cell.x + dx1 * cell.px, cell.y + dy1 * cell.px, { steps: 8 });
   await page.mouse.up();
 };
+const sides = await page.evaluate(async () => {
+  const { TERRAIN } = await import("/js/shared/terrain.js");
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  const rects = [[-4, -5, 4, -2], [-4, 2, 4, 5], [-6, -4, -3, 4], [3, -4, 6, 4]];
+  const open = ([x0, y0, x1, y1]) => { let n = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = (cy + y) * w.w + cx + x; if (w.owner[i] === w.you && TERRAIN[w.terrain[i]].build && !w.buildingAt(i)) n++; } return n; };
+  return rects.map(r => [open(r), r]).sort((a, b) => b[0] - a[0]).map(v => v[1]);
+});
 await page.click("#build-menu [data-zone=res]");
-await drag(-5.5, -5.5, 3.5, -1.5);
+await drag(sides[0][0] - 0.5, sides[0][1] - 0.5, sides[0][2] + 0.5, sides[0][3] + 0.5);
 await page.click("#build-menu [data-zone=com]");
-await drag(-5.5, 2.5, 3.5, 4.5);
+await drag(sides[1][0] - 0.5, sides[1][1] - 0.5, sides[1][2] + 0.5, sides[1][3] + 0.5);
 const zoned = await page.waitForFunction(() => { const w = window.__ls.game.world; let n = 0; for (const z of w.zone) if (z) n++; return n >= 20 ? n : 0; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => 0);
 check(zoned >= 20, `dragging in the Zones tab paints homes and shops: ${zoned} plots`);
 await page.screenshot({ path: `${OUT}/2a-zones-${MAP}.png` });
@@ -159,9 +167,9 @@ await page.screenshot({ path: `${OUT}/2e-site-${MAP}.png` });
 const finished = await page.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", site, { timeout: 40000 }).then(() => true, () => false);
 check(finished, "the wooden watchtower finishes after its 30 seconds");
 const grown = await page.waitForFunction(() => { const w = window.__ls.game.world; return w.purse?.town?.pop > 0 && [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "hut_grass").length >= 2; }, null, { timeout: 30000 }).then(() => true, () => false);
-await page.keyboard.press("t");
+if (!(await page.isVisible("#town-panel"))) await page.keyboard.press("t");
 const people = await page.textContent("#town-population").catch(() => "");
-check(grown && await page.isVisible("#town-panel") && /of/.test(people), `huts rise in the zone, and T opens the town panel: "${people}"`);
+check(grown && await page.isVisible("#town-panel") && /of/.test(people), `huts rise in the zone, and the town panel shows them: "${people}"`);
 await page.screenshot({ path: `${OUT}/2h-town-${MAP}.png` });
 await page.keyboard.press("t");
 await page.mouse.click(spots.ok.x, spots.ok.y);
@@ -283,6 +291,11 @@ check(/another tab/.test(replaced), `the desktop tab is told the game opened els
 const phoneFrames = await frames(phone, () => window.__ls.game.home());
 console.log(`phone frame times near home: ${JSON.stringify(phoneFrames)}`);
 await phone.screenshot({ path: `${OUT}/8-phone-landscape-${MAP}.png` });
+const hudBox = await phone.locator(".hud").boundingBox();
+for (let k = 0; k < 2; k++) { await phone.touchscreen.tap(hudBox.x + hudBox.width / 2, hudBox.y + hudBox.height / 2); await phone.waitForTimeout(80); }
+await phone.waitForTimeout(500);
+const pageZoom = await phone.evaluate(() => window.visualViewport?.scale ?? 1);
+check(pageZoom === 1, `a double tap on the bar does not zoom the page (scale ${pageZoom})`);
 await phone.setViewportSize({ width: 390, height: 844 });
 await phone.waitForTimeout(400);
 check(await phone.isVisible("#rotate"), "portrait phones are asked to turn sideways");
@@ -351,6 +364,177 @@ await quarry.waitForTimeout(300);
 await quarry.screenshot({ path: `${OUT}/13-era-up-${MAP}.png` });
 const marker = await quarry.evaluate(() => { const v = window.__ls.game.view; return v.markers().find(m => m.owner === window.__ls.game.world.you)?.era; });
 check(age && marker === "M", `reaching the Medieval era plays era_up on the capital and the stack marker turns Medieval (${marker})`);
+
+const fix = await openPage({ viewport: { width: 1280, height: 720 } });
+await login(fix, "rw_scorch", "correct horse");
+const fid = await fix.evaluate(async () => {
+  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name: "UI fixes", config: { map: "test", w: 240, h: 160, seed: 5, bots: 12, rules: { buildSpeed: 20, researchSpeed: 40, produceSpeed: 5, stackSpeed: 3 } } }) });
+  return (await r.json()).id;
+});
+await fix.goto(`${BASE}/#w=${fid}`);
+await fix.reload();
+await ready(fix);
+const home = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, land = t => t >= 7 && t <= 26;
+  for (let y = 12; y < w.h - 12; y += 3) for (let x = 12; x < w.w - 12; x += 3) {
+    let shore = false;
+    for (let dy = -2; dy <= 2 && !shore; dy++) for (let dx = -2; dx <= 2 && !shore; dx++) shore = !land(w.terrain[(y + dy) * w.w + x + dx]);
+    if (!shore || !land(w.terrain[y * w.w + x])) continue;
+    if ((await g.conn.request({ t: "spawn", x, y })).ok) return y * w.w + x;
+  }
+  return null;
+});
+const opened = await fix.waitForSelector("#town-next", { state: "visible", timeout: 10000 }).then(() => fix.textContent("#town-next"), () => "");
+check(home !== null && /Zone homes/.test(opened), `a new nation on the coast sees the Town panel with a next step: "${opened}"`);
+await fix.screenshot({ path: `${OUT}/14-next-step.png` });
+const shore = await fix.evaluate(() => {
+  const g = window.__ls.game, w = g.world;
+  const cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  for (let r = 1; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = (cy + dy) * w.w + cx + dx;
+    if (w.owner[i] !== w.you || w.placeError("jetty", i)) continue;
+    for (const n of [i - 1, i + 1, i - w.w, i + w.w]) if (w.terrain[n] < 7) return { land: i, water: n };
+  }
+  return null;
+});
+await fix.evaluate(p => { const g = window.__ls.game; g.focus(p, 16); }, shore?.land ?? home);
+await fix.keyboard.press("b");
+await fix.click("#build-menu .tabs button:has-text('Water')");
+await fix.click("#build-menu [data-type=jetty]");
+const waterAt = shore && await toScreen(fix, shore.water);
+if (waterAt) { await fix.mouse.move(waterAt.x, waterAt.y); await fix.waitForTimeout(300); }
+const ghost = await fix.evaluate(() => { const v = window.__ls.game.view; return v.ghost && { anchor: v.ghost.anchor, reason: v.ghost.reason }; });
+if (waterAt) await fix.mouse.click(waterAt.x, waterAt.y);
+const jetty = ghost && await fix.waitForFunction(p => window.__ls.game.world.buildingAt(p)?.type === "jetty", ghost.anchor, { timeout: 5000 }).then(() => true, () => false);
+const beside = ghost && [shore.water - 1, shore.water + 1, shore.water - 240, shore.water + 240, shore.water - 241, shore.water - 239, shore.water + 239, shore.water + 241].includes(ghost.anchor);
+check(jetty && beside && ghost.reason === null, `pointing at the water beside your shore snaps the jetty onto a shore plot next to it, and it builds (water ${shore?.water}, jetty ${ghost?.anchor})`);
+await fix.screenshot({ path: `${OUT}/17-jetty.png` });
+await fix.keyboard.press("Escape");
+await fix.keyboard.press("Escape");
+await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, x = cap % w.w, y = (cap / w.w) | 0;
+  await g.conn.request({ t: "zone", zone: "res", x: x - 4, y: y - 4, w: 9, h: 9 });
+});
+const hutsUp = await fix.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "hut_grass").length >= 3; }, null, { timeout: 30000 }).then(() => true, () => false);
+await fix.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 24 * g.view.ratio; g.view.clampCamera(); });
+await fix.waitForTimeout(4000);
+const figures = await fix.evaluate(() => { const v = window.__ls.game.view; return v.people.figures(v.visibleRange(), v.time).map(f => f.sprite.split("_").slice(0, -2).join("_")); });
+check(hutsUp && figures.length > 0, `the starter research brings huts, and people walk about at close zoom: ${figures.length} figures (${[...new Set(figures)].join(", ")})`);
+await fix.screenshot({ path: `${OUT}/15-people.png` });
+await fix.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 4 * g.view.ratio; g.view.clampCamera(); });
+await fix.waitForTimeout(300);
+const other = await fix.evaluate(() => {
+  const g = window.__ls.game, w = g.world, v = g.view;
+  for (let sy = 140; sy < v.canvas.height / v.ratio - 160; sy += 9) for (let sx = 260; sx < v.canvas.width / v.ratio - 380; sx += 9) {
+    const p = g.plotAt(sx * v.ratio, sy * v.ratio), o = p === null ? 0 : w.owner[p];
+    if (o && o !== w.you) return { x: sx, y: sy, name: w.nations.get(o).name, id: o };
+  }
+  return null;
+});
+if (other) await fix.mouse.move(other.x, other.y);
+await fix.waitForTimeout(200);
+const tip = other ? await fix.textContent("#plot-tip") : "";
+check(other && await fix.isVisible("#plot-tip") && tip.includes(other.name), `hovering another nation's land names it: "${tip}"`);
+await fix.screenshot({ path: `${OUT}/16-hover.png` });
+const trip = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital;
+  const st = await g.conn.request({ t: "stack", share: 0.4, at: cap });
+  for (let r = 30; r < 90; r += 6) for (let a = 0; a < 12; a++) {
+    const x = Math.round((cap % w.w) + r * Math.cos(a)), y = Math.round(((cap / w.w) | 0) + r * Math.sin(a)), i = y * w.w + x;
+    if (x < 0 || y < 0 || x >= w.w || y >= w.h || !(w.terrain[i] >= 7 && w.terrain[i] <= 26)) continue;
+    if ((await g.conn.request({ t: "move", stack: st.stack, to: i })).ok) { g.select(st.stack); g.focus(cap, 3); return { stack: st.stack, to: i }; }
+  }
+  return null;
+});
+const going = await fix.waitForFunction(() => /moving, about \d+ s to go/.test(document.querySelector("#stack-info")?.textContent ?? "") && window.__ls.game.view.route ? document.querySelector("#stack-info").textContent : null, null, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+const routeEnd = await fix.evaluate(() => window.__ls.game.view.route?.points.at(-1));
+check(trip && going && routeEnd && routeEnd[1] * 240 + routeEnd[0] === trip.to, `selecting your moving stack shows where it is going: "${going?.trim()}", the line ends at its destination`);
+await fix.screenshot({ path: `${OUT}/18-destination.png` });
+const neighbour = await fix.evaluate(async id => {
+  const g = window.__ls.game, w = g.world, v = g.view;
+  g.select(id);
+  for (let k = 0; k < w.owner.length; k++) {
+    const o = w.owner[k];
+    if (!o || o === w.you || w.nations.get(o)?.bot !== true) continue;
+    g.focus(k, 6);
+    const [px, py] = v.plotToScreen((k % w.w) + 0.5, ((k / w.w) | 0) + 0.5);
+    return { x: px / v.ratio, y: py / v.ratio, id: o, name: w.nations.get(o).name };
+  }
+  return null;
+}, trip?.stack);
+await fix.keyboard.press("n");
+const asked = await fix.textContent("#stack-hint");
+if (neighbour) await fix.mouse.click(neighbour.x, neighbour.y);
+const told = await fix.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).find(o => o.only === id) ? document.querySelector("#stack-info").textContent : /stopped advancing/.test(document.querySelector("#toasts")?.textContent ?? "") ? "done at once" : null, neighbour?.id, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+check(/Click the land of the nation/.test(asked) && told, `N asks which nation, and clicking ${neighbour?.name}'s land sets the advance: "${told?.trim()}"`);
+await fix.click("#leave-world");
+const back = await fix.waitForSelector("#world-create", { timeout: 5000 }).then(() => true, () => false);
+check(back && await fix.isVisible("#leave-world") === false, "Exit goes back to the world list");
+await fix.setViewportSize({ width: 900, height: 300 });
+await fix.evaluate(() => document.getElementById("screen").scrollTo(0, 1e6));
+await fix.evaluate(() => document.getElementById("screen").scrollTo(0, 0));
+const top = await fix.evaluate(() => document.querySelector("#screen h1").getBoundingClientRect().top);
+const tall = await fix.evaluate(() => document.getElementById("screen").scrollHeight > document.getElementById("screen").clientHeight);
+check(tall && top >= 0, `a world list taller than the window scrolls back to its top (title at ${Math.round(top)} px)`);
+await fix.screenshot({ path: `${OUT}/19-short-window.png` });
+const friend = await openPage({ viewport: { width: 1280, height: 720 } });
+await friend.goto(BASE + "/");
+await friend.fill("#login-name", `pal${Math.floor(Math.random() * 1e6)}`);
+await friend.fill("#login-pass", "friendly pass");
+await friend.fill("#login-invite", INVITE);
+await friend.click("#register-go");
+const hostOnly = await friend.waitForSelector("#host-only", { timeout: 5000 }).then(() => friend.textContent("#host-only"), () => "");
+check(/Only the host/.test(hostOnly) && !(await friend.isVisible("#world-create")), `a friend's world list has no create form: "${hostOnly}"`);
+await friend.screenshot({ path: `${OUT}/20-friend-list.png` });
+check(await friend.locator("[data-delete]").count() === 0 && !(await friend.isVisible("#open-accounts")), "a friend's list has no Delete or Accounts buttons");
+await friend.click(`[data-world="${fid}"]`);
+await ready(friend);
+check(!(await friend.isVisible("#open-admin")), "inside a world a friend has no Admin button");
+
+await fix.setViewportSize({ width: 1280, height: 720 });
+await fix.click(`[data-world="${fid}"]`);
+await ready(fix);
+await fix.waitForTimeout(500);
+await fix.keyboard.press("`");
+check(await fix.isVisible("#open-admin") && await fix.isVisible("#admin-panel"), "the host has an Admin button, and the backquote key opens the panel");
+const listed = await fix.waitForFunction(() => document.querySelectorAll("#admin-players [data-kick]").length ? document.querySelector("#admin-players").textContent : null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+check(/not placed yet/.test(listed), `the Players list includes a friend who has not placed a nation yet: "${listed.replace(/Remove/g, "").trim()}"`);
+const gold0 = await fix.evaluate(() => window.__ls.game.world.purse?.money ?? 0);
+await fix.fill("#admin-amount", "2500");
+await fix.click("#admin-panel [data-give=money]");
+const gold1 = await fix.waitForFunction(g => (window.__ls.game.world.purse?.money ?? 0) >= g + 2400 ? window.__ls.game.world.purse.money : null, gold0, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+check(gold1 !== null, `+ Gold gives 2500: ${gold0} to ${gold1}`);
+await fix.click("#admin-panel [data-speed='2']");
+const badge = await fix.waitForSelector("#world-speed:not([hidden])", { timeout: 5000 }).then(() => fix.textContent("#world-speed"), () => "");
+check(badge === "2x speed", `the speed buttons set the world speed, shown in the bar: "${badge}"`);
+await fix.click("#admin-end");
+const armedText = await fix.textContent("#admin-end");
+await fix.click("#admin-end");
+const endNote = await fix.waitForSelector("#notice-text", { timeout: 5000 }).then(() => fix.textContent("#notice-text"), () => "");
+const friendNote = await friend.waitForSelector("#notice-text", { timeout: 5000 }).then(() => friend.textContent("#notice-text"), () => "");
+check(armedText === "Really end it?" && /ended this world/.test(endNote) && /ended this world/.test(friendNote), `End world asks once more ("${armedText}"), then everyone sees: "${friendNote}"`);
+await fix.screenshot({ path: `${OUT}/21-admin-panel.png` });
+await fix.click("#admin-reopen");
+const reopenedUi = await fix.waitForFunction(() => !window.__ls.game.world.frozen && document.querySelector("#notice")?.hidden, null, { timeout: 5000 }).then(() => true, () => false);
+await fix.click("#admin-panel [data-speed='1']");
+check(reopenedUi, "Reopen world unfreezes it and the banner goes");
+await fix.keyboard.press("Escape");
+check(!(await fix.isVisible("#admin-panel")), "Esc closes the Admin panel");
+await fix.click("#leave-world");
+await fix.waitForSelector("#open-accounts", { timeout: 5000 });
+await fix.click("#open-accounts");
+const rows = await fix.waitForFunction(() => document.querySelectorAll("#accounts [data-account]").length, null, { timeout: 5000 }).then(h => h.jsonValue(), () => 0);
+check(rows > 1 && await fix.isVisible("#accounts-log"), `Accounts lists ${rows} accounts with New password and Remove, and the admin log`);
+await fix.locator("#accounts-panel h2").first().scrollIntoViewIfNeeded();
+await fix.screenshot({ path: `${OUT}/22-accounts.png` });
+const doomed = await newWorld(fix, "UI delete me", { map: "test", w: 100, h: 80, bots: 0 });
+await fix.reload();
+await fix.waitForSelector(`[data-delete="${doomed}"]`, { timeout: 5000 });
+await fix.click(`[data-delete="${doomed}"]`);
+const sure = await fix.textContent(`[data-delete="${doomed}"]`);
+await fix.click(`[data-delete="${doomed}"]`);
+const vanished = await fix.waitForSelector(`[data-delete="${doomed}"]`, { state: "detached", timeout: 5000 }).then(() => true, () => false);
+check(sure === "Really delete?" && vanished && /Deleted UI delete me/.test(await fix.textContent(".msg")), `Delete asks once more ("${sure}"), then the world is gone from the list`);
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
