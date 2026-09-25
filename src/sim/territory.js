@@ -23,6 +23,7 @@ export const RULES = {
   legAhead: 2,
   pathMaxNodes: 60000,
   seekMaxNodes: 60000,
+  disbandLoss: 0.25,
 };
 
 export class World {
@@ -165,6 +166,20 @@ export class World {
     n.troops = Math.min(this.maxTroops(n) * 1.25, n.troops + s.troops);
     this.stacks.delete(sid);
     return true;
+  }
+
+  dischargeStack(sid, loss = this.rules.disbandLoss) {
+    const s = this.stacks.get(sid);
+    if (!s || this.owner[s.pos] !== s.owner) return null;
+    const n = this.nations.get(s.owner), keep = 1 - loss, cap = this.maxTroops(n), before = n.troops;
+    const room = Math.max(0, cap - n.troops);
+    let used = Math.min(s.troops, keep > 0 ? room / keep : s.troops);
+    if (s.troops - used < 1) used = s.troops;
+    if (used <= 0) return { back: 0, lost: 0, left: s.troops };
+    n.troops = Math.min(Math.max(before, cap), before + used * keep);
+    s.troops -= used;
+    if (s.troops < 1) this.stacks.delete(sid);
+    return { back: n.troops - before, lost: used * loss, left: this.stacks.has(sid) ? s.troops : 0 };
   }
 
   splitStack(sid, amount) {

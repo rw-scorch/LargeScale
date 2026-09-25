@@ -98,7 +98,11 @@ export const ORDERS = {
   disband(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
-    return sim.disbandStack(s.id) ? { ok: true } : fail("disband on your own land");
+    const had = Math.floor(s.troops), r = sim.dischargeStack(s.id);
+    if (!r) return fail("disband on your own land");
+    if (!(r.back > 0)) return fail("your troops are already at their cap, so the stack stays");
+    const left = Math.floor(r.left), back = Math.round(r.back);
+    return { ok: true, back, lost: Math.max(0, had - left - back), left };
   },
   build(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");

@@ -15,7 +15,8 @@ export function createStackPanel(root, game) {
   const actions = el("div", { class: "row wrap" });
   const box = el("section", { id: "stack-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), hint, actions);
   root.append(box);
-  let mode = null, preview = null, key = "", trip = null, asking = false, drawn = null;
+  let mode = null, preview = null, key = "", trip = null, asking = false, drawn = null, disbandAt = -Infinity;
+  const confirming = () => performance.now() - disbandAt < 4000;
 
   const view = () => game.view;
   const cancel = () => { mode = null; preview = null; drawn = null; key = ""; };
@@ -48,7 +49,21 @@ export function createStackPanel(root, game) {
       if (!near.length) return game.toast("No stacks of yours right next to this one.");
       for (const o of near) await order({ t: "merge", stack: o.id, into: s.id });
     },
-    disband() { const s = mine(); if (s) order({ t: "disband", stack: s.id }, () => game.select(null)); },
+    disband() {
+      const s = mine();
+      if (!s) return;
+      const share = Math.round(game.world.disbandLoss * 100);
+      if (!confirming()) {
+        disbandAt = performance.now();
+        key = "";
+        return game.toast(`Disband again to confirm: ${share}% of the ${fmt(s.troops)} troops are lost, and only as many go home as your troop cap has room for.`);
+      }
+      disbandAt = -Infinity;
+      order({ t: "disband", stack: s.id }, r => {
+        game.toast(r.left ? `${fmt(r.back)} troops went home and ${fmt(r.lost)} were lost. ${fmt(r.left)} stay in the stack: your troops are at their cap.` : `${fmt(r.back)} troops went home and ${fmt(r.lost)} were lost.`);
+        if (!r.left) game.select(null);
+      });
+    },
     go() { const s = mine(); if (s && preview) order({ t: "move", stack: s.id, to: preview.to }, cancel); },
     async moveNow(plot) {
       const s = mine();
@@ -120,7 +135,7 @@ export function createStackPanel(root, game) {
       button("stack-draw", "Draw path", "draw", { title: "drag along the way the stack should go; with a mouse, right-drag does this without the button" }),
       button("stack-split", "Split half", "split"),
       button("stack-merge", "Merge nearby", "merge", { disabled: !adjacent(s).length }),
-      button("stack-disband", "Disband", "disband"),
+      button("stack-disband", confirming() ? "Sure? Disband" : "Disband", "disband", { class: confirming() ? "danger" : "", title: `send the troops home; ${Math.round(game.world.disbandLoss * 100)}% of them are lost` }),
     ];
   };
 
@@ -179,7 +194,7 @@ export function createStackPanel(root, game) {
         : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."
         : yours && !w.frozen ? "Right-click the map to send it straight there, or right-drag to draw its way." : "";
       hint.classList.toggle("fine-only", !preview && !mode);
-      const k = `${s.id}:${yours}:${mode}:${!!preview}:${w.frozen}:${adjacent(s).length}`;
+      const k = `${s.id}:${yours}:${mode}:${!!preview}:${w.frozen}:${adjacent(s).length}:${confirming()}`;
       if (k === key) return;
       key = k;
       actions.replaceChildren(...(yours && !w.frozen ? buttons(s) : []), el("button", { text: "Close", onclick: () => game.select(null) }));

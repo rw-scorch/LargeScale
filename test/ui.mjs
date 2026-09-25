@@ -537,6 +537,19 @@ if (drawn) await drawWith([...drawn].reverse(), "right", `${OUT}/19b-right-drag.
 const again = drawn ? await followed(trip?.stack, drawn[0].i) : null;
 const line = await fix.evaluate(() => window.__ls.game.view.route?.points.length ?? 0);
 check(/following your path/.test(again ?? "") && line >= 3, `with a mouse, a right-drag draws a path without the button: "${again?.trim()}", drawn through ${line} points`);
+const extra = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, r = await g.conn.request({ t: "stack", share: 0.2, at: w.nations.get(w.you).capital });
+  if (r.ok) g.select(r.stack);
+  return r.ok ? r.stack : null;
+});
+await fix.waitForSelector("#stack-disband", { timeout: 3000 }).catch(() => {});
+await fix.keyboard.press("x");
+const disbandArmed = await fix.waitForFunction(() => /Sure/.test(document.querySelector("#stack-disband")?.textContent ?? "") && document.querySelector("#stack-disband").textContent, null, { timeout: 2000 }).then(h => h.jsonValue(), () => "");
+const warned = await fix.textContent("#toasts").catch(() => "");
+await fix.keyboard.press("x");
+const gone = await fix.waitForFunction(id => !window.__ls.game.world.stacks.has(id), extra, { timeout: 5000 }).then(() => true, () => false);
+const toldBack = await fix.waitForFunction(() => /went home/.test(document.querySelector("#toasts")?.textContent ?? "") && document.querySelector("#toasts").textContent, null, { timeout: 3000 }).then(h => h.jsonValue(), () => "");
+check(extra && /Sure/.test(disbandArmed) && /Disband again/.test(warned) && gone && /went home and .+ were lost/.test(toldBack), `X asks first, then disbands with a quarter lost: "${toldBack.match(/[^.]*went home[^.]*\./)?.[0]?.trim()}"`);
 await fix.click("#leave-world");
 const back = await fix.waitForSelector("#world-create", { timeout: 5000 }).then(() => true, () => false);
 check(back && await fix.isVisible("#leave-world") === false, "Exit goes back to the world list");

@@ -246,6 +246,27 @@ test("a split, a plain move or an advance drops a drawn path", () => {
   assert.equal(ordersOf(w, a).some(o => o.via), false);
 });
 
+test("disbanding loses a quarter, and sends home only what the troop cap has room for", () => {
+  const { w, g, a, order } = field(40, 30);
+  const n = w.nations.get(a), cap = w.maxTroops(n);
+  n.troops = 3000;
+  const s1 = w.createStack(a, g.idx(5, 5), 400);
+  assert.deepEqual(order({ t: "disband", stack: s1.id }), { t: "result", of: "disband", ok: true, back: 300, lost: 100, left: 0 });
+  assert.equal(n.troops, 2900);
+  assert.equal(w.stacks.has(s1.id), false);
+  const s2 = w.createStack(a, g.idx(5, 5), 400);
+  n.troops = cap - 100;
+  assert.deepEqual(order({ t: "disband", stack: s2.id }), { t: "result", of: "disband", ok: true, back: 100, lost: 34, left: 266 }, "133.3 leave the stack: 100 fill the cap and 33.3 are lost");
+  assert.equal(n.troops, cap, "the garrison is exactly full");
+  assert.ok(Math.abs(s2.troops - 800 / 3) < 1e-9, `the other 266.7 stay in the stack, none wasted: ${s2.troops}`);
+  assert.equal(order({ t: "disband", stack: s2.id }).error, "your troops are already at their cap, so the stack stays");
+  assert.ok(Math.abs(s2.troops - 800 / 3) < 1e-9);
+  const fold = w.createStack(a, g.idx(5, 5), 10);
+  n.troops = 1000;
+  w.disbandStack(fold.id);
+  assert.equal(n.troops, 1010, "bots folding a stack back in lose nothing, as before");
+});
+
 test("a drawn line is thinned to its corners, keeping both ends", () => {
   const line = [];
   for (let x = 0; x <= 20; x++) line.push([x, 0]);

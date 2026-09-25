@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (119)
+npm test                  # unit tests (120)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -149,6 +149,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
   - **Advances go looking.** A player's advance (plain, unclaimed only or one nation) with nothing within `advanceRadius` finds a path to the nearest land it wants and walks there (`seek` in `src/sim/territory.js`, at most `seekMaxNodes`). It crosses its own land, and for one nation's land unclaimed land too, never a third nation's; `enter` refuses a third nation's plot met on the way. With nothing reachable it stops with `advance_done` carrying `sought` and `only`, and a seek with no border plot to aim at gives up at once unless an ally borders you. Bots call `orderAdvance` without `seek` and keep the old behaviour.
   - **Descriptions.** Every entry in `data/buildings.json` has a `description`, shown in the build menu, the building panel and the upgrade rows. Buildings with no effect yet say so, and a unit test holds that.
   - **Drawn paths.** `move` and `route` take `via`, up to `MAX_WAYPOINTS` (32) land plots, each leg checked for a land route. The stack walks the legs in turn (`nextLeg`, planning the next when `legAhead` plots are left), and the purse's orders carry the points still ahead. Right-drag draws with a mouse; Draw path (D) makes a one-finger drag draw on touch. `simplifyPath` in `src/shared/pathfind.js` thins the line.
+  - **Disbanding costs a quarter.** `dischargeStack` loses `disbandLoss` (0.25) of the troops that leave the stack and sends the rest home only as far as the troop cap has room; what does not fit stays in the stack. At the cap the order is refused. The button and X ask once more. Bots fold stacks back with the old `disbandStack`, without loss.
 
   Protocol stays 5.
 
