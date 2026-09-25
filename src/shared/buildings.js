@@ -18,6 +18,7 @@ export function tableFrom(list) {
 }
 
 export function footprintAt(w, h, anchor, fp) {
+  if (!Number.isInteger(anchor) || anchor < 0) return null;
   const x0 = anchor % w, y0 = (anchor / w) | 0, out = [];
   for (let dy = 0; dy < fp[1]; dy++) for (let dx = 0; dx < fp[0]; dx++) {
     const x = x0 + dx, y = y0 + dy;
@@ -36,6 +37,8 @@ function nearOwned(v, i, nid, r) {
 export function placeError(v, nation, def, anchor, self = 0) {
   if (!def || def.civilian) return "unknown building";
   if (eraIdx(def.era) > eraIdx(nation.era ?? "T")) return `needs the ${ERA_NAMES[def.era]} era`;
+  const locked = v.lockOf?.(def.id);
+  if (locked) return locked;
   const plots = footprintAt(v.w, v.h, anchor, def.fp);
   if (!plots) return "off the edge of the map";
   if (plots.some(i => { const id = v.occupant(i); return id && id !== self; })) return "something is already there";

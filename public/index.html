@@ -62,6 +62,22 @@ h2{font-size:16px;margin:18px 0 8px}
 .demand .fill{position:absolute;top:0;bottom:0}
 .demand .fill.up{background:var(--good)}
 .demand .fill.down{background:var(--bad)}
+.panel.center{left:50%;transform:translateX(-50%);top:calc(var(--hud,48px) + 16px);width:min(980px,calc(100% - 16px));max-height:calc(100% - var(--hud,48px) - 32px);overflow:auto;display:flex;flex-direction:column;gap:8px;z-index:2}
+.tech-era{display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--line);padding-top:6px}
+.tech-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:6px}
+.tech-col{display:flex;flex-direction:column;gap:4px}
+button.tech{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:1px;font-size:13px;padding:4px 8px}
+button.tech span{font-size:12px;color:var(--mute)}
+button.tech.known{background:#24452c;border-color:#3f7f4c}
+button.tech.current{border-color:var(--signal);background:#3a3a1c}
+button.tech.queued{border-color:#8fa8c0;border-style:dashed}
+button.tech.ready{border-color:var(--good)}
+button.tech.locked{opacity:.6}
+button.tech.picked{outline:2px solid var(--parch)}
+button.tech.era{align-items:center;text-align:center}
+.tech-detail{border-top:2px solid var(--line);padding:6px 0 2px;position:sticky;bottom:-8px;background:#0f2233}
+.tech-detail p{margin:2px 0}
+button.chip{min-height:28px;padding:2px 8px;font-size:12px}
 .panel.bottom{left:50%;transform:translateX(-50%);bottom:8px;width:min(560px,calc(100% - 16px));display:flex;flex-direction:column;gap:6px}
 #chat .lines{height:160px;overflow:auto;font-size:13px}
 #chat .lines p{margin:2px 0}

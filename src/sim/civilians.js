@@ -27,7 +27,7 @@ export function installCivilians(world, rng, cfg = CIV_RULES) {
     if (nid) zonedOf(civ, nid)[z].add(i);
   };
   const baseMax = world.maxTroops.bind(world);
-  world.maxTroops = n => baseMax(n) + (n.pop ?? 0) * (n.conscription ?? r.conscriptShare);
+  world.maxTroops = n => (baseMax(n) + (n.pop ?? 0) * (n.conscription ?? r.conscriptShare)) * (1 + (n.effects?.troop_cap ?? 0));
   world.hooks.postTick.push((w, dt) => {
     civ.clock += dt;
     while (civ.clock >= r.econEvery) {
@@ -89,10 +89,10 @@ function fits(world, nid, plots, zone, self = 0) {
 function affordable(n, cost) { return Object.entries(cost).every(([k, v]) => (n.stock[k] ?? 0) >= v); }
 function pay(n, cost) { for (const [k, v] of Object.entries(cost)) n.stock[k] -= v; }
 
-export function bestTypeFor(zone, era, table = CIVIL) {
+export function bestTypeFor(zone, era, table = CIVIL, allowed = () => true) {
   let best = null;
   for (const [id, b] of Object.entries(table)) {
-    if (!b.civilian || b.zone !== zone || eraIdx(b.era) > eraIdx(era)) continue;
+    if (!b.civilian || b.zone !== zone || eraIdx(b.era) > eraIdx(era) || !allowed(id)) continue;
     if (!best || eraIdx(b.era) > eraIdx(table[best].era)) best = id;
   }
   return best;
@@ -112,12 +112,12 @@ export function tryUpgrade(world, b, force = false) {
   const table = world.bld.table, r = world.civ?.rules ?? CIV_RULES, def = table[b.type], n = world.nations.get(b.owner);
   if (!def.next || b.state !== "active") return false;
   const nd = table[def.next];
-  if (eraIdx(nd.era) > eraIdx(n.era) || !affordable(n, nd.cost)) return false;
+  if (eraIdx(nd.era) > eraIdx(n.era) || !affordable(n, nd.cost) || world.unlocked?.(b.owner, def.next) === false) return false;
   const plots = footprint(world, b.anchor, nd.fp);
   if (!fits(world, b.owner, plots, nd.zone, b.id)) return false;
   if (!force) {
-    const occ = def.housing ? b.residents / def.housing : 1;
-    if (occ < r.upgradeOccupancy || (n.stats.needs ?? 0) < r.upgradeNeeds) return false;
+    const needs = n.stats.needs ?? 0, occ = def.housing ? b.residents / def.housing : 1;
+    if (needs < r.upgradeNeeds || occ < r.upgradeOccupancy * needs) return false;
   }
   pay(n, nd.cost);
   b.type = def.next;
@@ -195,7 +195,7 @@ export function econTick(world, dt, rng) {
       const cap = table[b.type].housing;
       if (!cap || b.state !== "active") { pop += b.residents; continue; }
       const target = cap * needs;
-      b.residents += (target - b.residents) * Math.min(1, r.growth * dt);
+      b.residents += (target - b.residents) * Math.min(1, r.growth * (1 + (n.effects?.pop_growth ?? 0)) * dt);
       if (foodSat < 1) b.residents *= 1 - (1 - foodSat) * r.starveLoss * dt;
       b.residents = Math.max(0, Math.min(cap, b.residents));
       pop += b.residents;
@@ -209,7 +209,7 @@ export function econTick(world, dt, rng) {
     n.stats.demand = demand;
     for (const zone of ["res", "com", "ind"]) {
       if (demand[zone] <= 0) continue;
-      const type = bestTypeFor(zone, n.era, table);
+      const type = bestTypeFor(zone, n.era, table, id => world.unlocked?.(n.id, id) !== false);
       if (!type) continue;
       const candidates = freePlots(world, n.id, zone);
       for (let k = 0; k < r.buildTriesPerTick && candidates.length; k++) {

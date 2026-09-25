@@ -131,7 +131,7 @@ const ta = alogin.body.token, tb = b.body.token;
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
-const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200 } } }, ta);
+const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200, researchSpeed: 100 } } }, ta);
 check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
@@ -188,6 +188,17 @@ check(aSpawn >= 0, "player spawns on land");
     const x = (aSpawn % M.w) + dx, y = Math.floor(aSpawn / M.w) + dy;
     if (x >= 0 && y >= 0 && x < M.w && y < M.h) near.push(y * M.w + x);
   }
+  const open = near.find(i => cw.owner[i] === you && !cw.buildingAt(i) && isLand(terrain[i]));
+  A.ws.send(JSON.stringify({ t: "build", type: "watchtower_wood", at: open }));
+  const gated = await nextResult(A, "build");
+  check(gated?.error === "needs Palisades research" && gated.error === cw.placeError("watchtower_wood", open), `before research the tower is refused: "${gated?.error}"`);
+  const wanted = ["palisades", "fire_keeping", "barter", "farming", "chieftains"];
+  const replies = [];
+  for (const id of wanted) { A.ws.send(JSON.stringify({ t: "research", id })); replies.push(await nextResult(A, "research")); }
+  const first = replies[0]?.queue ?? [];
+  check(replies.every(r => r?.ok) && first.join() === "clubs,stone_tools,palisades", `queueing Palisades queues what it needs first: ${first.join(", ")}`);
+  const learned = await until(() => { view.pump(); const k = cw.purse?.research?.known ?? []; return wanted.every(id => k.includes(id)) ? k.length : 0; }, 30000);
+  check(learned, `research carries through the queue: ${learned} nodes known, ${cw.purse?.research?.rate} points a second`);
   const water = near.find(i => !isLand(terrain[i])) ?? terrain.findIndex(t => !isLand(t));
   const neutral = near.find(i => isLand(terrain[i]) && cw.owner[i] === 0) ?? land.find(i => cw.owner[i] === 0);
   const refusals = [["barracks", near.find(i => cw.owner[i] === you)], ["watchtower_wood", kit?.anchor], ["watchtower_wood", water], ["watchtower_wood", neutral]];
@@ -249,6 +260,14 @@ check(aSpawn >= 0, "player spawns on land");
     const edited = await until(() => B.binary.some(f => f[0] === MSG.TERRAIN_EDIT), 60000);
     check(edited, "the woodcutter clears a forest plot, and the friend receives the terrain edit");
   }
+  const pursesBefore = A.json.filter(m => m.t === "purse").length;
+  const clock0 = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
+  A.ws.send(JSON.stringify({ t: "research", id: "age_medieval", mode: "first" }));
+  const ageOrder = await nextResult(A, "research");
+  const heard = await until(() => B.json.find(m => m.t === "events" && m.events.some(e => e.type === "era_up" && e.nation === you)), 30000);
+  await until(() => { view.pump(); return cw.purse?.era === "M"; }, 5000);
+  const bRow = await until(() => B.json.some(m => m.t === "state" && m.n.some(r => r[0] === you && r[5] === 1)), 5000);
+  check(ageOrder?.ok && heard && bRow && cw.purse?.era === "M", `the host reaches the Medieval era; the friend hears it and sees the era in the nation list (${cw.purse?.era}${cw.purse?.era === "M" ? "" : `; world clock ${clock0.world.toFixed(1)} at the order, wall ${Math.round((Date.now() - clock0.wall) / 1000)} s since; purses after the order ${A.json.filter(m => m.t === "purse").length - pursesBefore}; status ${JSON.stringify((({ time, looping, frozen, tickErrors, lastError }) => ({ time, looping, frozen, tickErrors, lastError }))((await api(`/api/worlds/${wid}/status`, null, ta)).body))}; order ${JSON.stringify(ageOrder)}; research ${JSON.stringify({ ...cw.purse?.research, known: cw.purse?.research?.known.length })}`})`);
   check(erased?.ok && erased.plots > 0 && cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0) === zonedBefore - erased.plots, `erasing clears ${erased?.plots} zoned plots on the client too`);
 }
 B.ws.send(JSON.stringify({ t: "chat", text: "hello from friend" }));

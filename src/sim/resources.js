@@ -153,6 +153,7 @@ export function produce(world, dt) {
     } else if (p.kind === "pasture") {
       got = want * (res.seasonOf(b.anchor) === "winter" ? r.winterPasture : 1);
     }
+    got *= 1 + (n?.effects?.[`${kind}_rate`] ?? 0);
     b.idle = got <= 1e-9;
     b.made = (b.made ?? 0) + got;
     if (got > 0 && kind) {

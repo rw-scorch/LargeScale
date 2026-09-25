@@ -3,6 +3,8 @@ import { decodeRuns, gunzip } from "./codec.js";
 import { baseLayer } from "./maps.js";
 import { tableFrom, decodeRows, footprintAt, placeError, costError, STATES } from "./buildings.js";
 import { emptyDeposits, decodeDeposits, cropDeposits, depositIndex } from "./deposits.js";
+import { lockMap, lockReason, researchError } from "./research.js";
+import { ERA_ORDER } from "./buildings.js";
 
 const stackFromRow = ([id, owner, pos, troops, order]) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold" });
 
@@ -39,7 +41,20 @@ export class ClientWorld {
     this.depositIds = hello.depositIds ?? [];
     this.deposits = emptyDeposits();
     this.depleted = new Set(hello.depleted ?? []);
+    this.tech = hello.tech ?? { eras: [], branches: [], nodes: [] };
+    this.locks = lockMap(this.tech);
+    this.effects = [];
   }
+
+  known() {
+    const list = this.purse?.research?.known ?? [];
+    if (this.knownCache?.list !== list) this.knownCache = { list, set: new Set(list) };
+    return this.knownCache.set;
+  }
+
+  lockOf(id, kind = "buildings") { return lockReason(this.locks, this.known(), id, kind); }
+
+  researchError(id) { return researchError(this.tech, this.locks, this.known(), this.purse?.era ?? "T", id); }
 
   setDeposits(dep) { this.deposits = dep; }
 
@@ -90,7 +105,7 @@ export class ClientWorld {
   placeError(type, anchor) {
     const def = this.defs.table[type], me = this.nations.get(this.you);
     if (!def || !me) return "unknown building";
-    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i) };
+    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id) };
     const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} };
     return placeError(view, nation, def, anchor) ?? costError(def, nation);
   }
@@ -154,16 +169,16 @@ export class ClientWorld {
     if (m.v !== undefined && m.v !== PROTOCOL) { this.stale = true; return m; }
     if (m.t === "state") {
       this.time = m.time;
-      for (const [id, plots, troops, alive, spawned] of m.n) {
+      for (const [id, plots, troops, alive, spawned, era] of m.n) {
         if (!this.nations.has(id)) this.nations.set(id, { id, name: `Nation ${id}`, colour: "#8a8a8a" });
-        Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned });
+        Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned, era: ERA_ORDER[era] ?? "T" });
       }
       for (const r of m.s) this.stacks.set(r[0], stackFromRow(r));
       for (const id of m.gone) this.stacks.delete(id);
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null };
     if (m.t === "joined") {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));
@@ -173,6 +188,11 @@ export class ClientWorld {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
         if (e.type === "capital_moved" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.to;
         if (e.type === "deposit_depleted") this.depleted.add(e.at);
+        if (e.type === "era_up" && this.nations.has(e.nation)) {
+          const n = this.nations.get(e.nation);
+          n.era = e.era;
+          if (n.capital != null) this.effects.push({ kind: "era_up", plot: n.capital, at: Date.now() });
+        }
         this.events.push(e);
       }
       if (this.events.length > 500) this.events.splice(0, this.events.length - 500);

@@ -57,6 +57,15 @@ await ready(page);
 check(await page.isVisible("#spawn-hint"), `a ${MAP} world opens and asks where to start`);
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${OUT}/1-world-${MAP}.png` });
+const newWorld = (p, name, config) => p.evaluate(async ([name, config]) => {
+  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name, config }) });
+  return (await r.json()).id;
+}, [name, config]);
+const playId = await newWorld(page, `UI ${MAP} play`, { map: MAP, rules: { buildSpeed: 10, researchSpeed: 40 } });
+await page.goto(`${BASE}/#w=${playId}`);
+await page.reload();
+await ready(page);
+await page.waitForTimeout(800);
 
 const spawned = await page.evaluate(async () => {
   const g = window.__ls.game, w = g.world, v = g.view;
@@ -74,6 +83,23 @@ await page.waitForTimeout(1500);
 check(spawned && !(await page.isVisible("#spawn-hint")), `spawned at ${spawned?.x}, ${spawned?.y}; the hint goes away`);
 await page.screenshot({ path: `${OUT}/2-spawned-${MAP}.png` });
 
+await page.keyboard.press("u");
+check(await page.isVisible("#research-panel"), "U opens the research panel");
+await page.click("#research-panel [data-node=palisades]");
+const whyNot = await page.textContent("#research-why").catch(() => "");
+check(/needs Clubs and spears and Stone tools first/.test(whyNot), `a node says why it cannot start: "${whyNot}"`);
+await page.click("#research-first");
+await page.click("#research-panel [data-node=fire_keeping]");
+await page.click("#research-queue-add");
+await page.click("#research-panel [data-node=barter]");
+await page.click("#research-queue-add");
+const queued = await page.waitForFunction(() => window.__ls.game.world.purse?.research?.queue.length >= 4 ? window.__ls.game.world.purse.research.queue : null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => []);
+check(queued.slice(0, 3).join() === "clubs,stone_tools,palisades", `Research next queues what the node needs first: ${queued.join(", ")}`);
+await page.screenshot({ path: `${OUT}/2r-research-${MAP}.png` });
+const learned = await page.waitForFunction(() => { const k = window.__ls.game.world.purse?.research?.known ?? []; return ["palisades", "fire_keeping", "barter"].every(id => k.includes(id)); }, null, { timeout: 60000 }).then(() => true, () => false);
+check(learned, "the queue researches through to Palisades, Fire keeping and Barter");
+await page.screenshot({ path: `${OUT}/2s-researched-${MAP}.png` });
+await page.keyboard.press("u");
 const kit = await page.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].some(b => b.owner === w.you && b.type === "chieftain_hut" && b.state === "active"); }, null, { timeout: 5000 }).then(() => true, () => false);
 const purseText = await page.textContent("#purse");
 check(kit && /gold/.test(purseText), `the starting chieftain hut stands at the capital; the bar shows "${purseText}"`);
@@ -265,7 +291,7 @@ await phone.screenshot({ path: `${OUT}/9-phone-portrait-${MAP}.png` });
 const quarry = await openPage({ viewport: { width: 1280, height: 720 } });
 await login(quarry, "rw_scorch", "correct horse");
 const qid = await quarry.evaluate(async () => {
-  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name: "UI quarry", config: { map: "test", w: 240, h: 160, seed: 11, bots: 0, rules: { buildSpeed: 60, produceSpeed: 2000 } } }) });
+  const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name: "UI quarry", config: { map: "test", w: 240, h: 160, seed: 11, bots: 0, rules: { buildSpeed: 60, produceSpeed: 2000, researchSpeed: 400 } } }) });
   return (await r.json()).id;
 });
 await quarry.goto(`${BASE}/#w=${qid}`);
@@ -284,6 +310,8 @@ const spot = await quarry.evaluate(async () => {
   }
   return null;
 });
+for (const id of ["stone_tools", "fire_keeping", "barter", "farming", "chieftains", "palisades"]) await quarry.evaluate(id => window.__ls.game.conn.request({ t: "research", id }), id);
+await quarry.waitForFunction(() => (window.__ls.game.world.purse?.research?.known.length ?? 0) >= 8, null, { timeout: 30000 }).catch(() => {});
 await quarry.waitForFunction(() => window.__ls.game.world.purse?.money >= 40, null, { timeout: 10000 }).catch(() => {});
 const qat = await quarry.evaluate(p => {
   const g = window.__ls.game, w = g.world;
@@ -314,6 +342,15 @@ await quarry.keyboard.press("r");
 await quarry.waitForTimeout(600);
 check(await quarry.evaluate(() => window.__ls.game.view.showDeposits), "R shows deposits at mid zoom");
 await quarry.screenshot({ path: `${OUT}/12-deposits-overlay-${MAP}.png` });
+await quarry.keyboard.press("r");
+await quarry.evaluate(() => window.__ls.game.conn.request({ t: "stack", share: 0.3 }));
+await quarry.evaluate(p => window.__ls.game.focus(p, 12), spot);
+await quarry.evaluate(() => window.__ls.game.conn.request({ t: "research", id: "age_medieval", mode: "first" }));
+const age = await quarry.waitForFunction(() => window.__ls.game.world.purse?.era === "M" && window.__ls.game.world.effects.length > 0, null, { timeout: 20000 }).then(() => true, () => false);
+await quarry.waitForTimeout(300);
+await quarry.screenshot({ path: `${OUT}/13-era-up-${MAP}.png` });
+const marker = await quarry.evaluate(() => { const v = window.__ls.game.view; return v.markers().find(m => m.owner === window.__ls.game.world.you)?.era; });
+check(age && marker === "M", `reaching the Medieval era plays era_up on the capital and the stack marker turns Medieval (${marker})`);
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();

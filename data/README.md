@@ -7,3 +7,5 @@ Stat files loaded by the server at world start, and editable through the dev pan
 - rules.json       tuning constants: territory, combat, civilians, supply, market, landings
 
 The formats are described in the development kit under docs/data-formats.md.
+
+Effects a tech node can give, and what reads them: research (research points), troop_cap (troop cap), wood_rate and food_rate (producer output of that good), pop_growth (civilian growth), defence (capture cost against the nation). Any other name does nothing.
