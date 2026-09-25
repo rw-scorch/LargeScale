@@ -4,6 +4,7 @@ import { World } from "../src/sim/territory.js";
 import { installConstruction } from "../src/sim/construction.js";
 import { installEconomy } from "../src/sim/economy.js";
 import { installCivilians, econTick, takeZoneNews } from "../src/sim/civilians.js";
+import { installResources } from "../src/sim/resources.js";
 import { ZONES } from "../src/sim/buildings.js";
 import { runOrder, purseOf, publicEvents } from "../src/game.js";
 import { makeRng } from "../src/shared/rng.js";
@@ -61,6 +62,28 @@ test("a zoned area fills with huts and grows while fed; starving empties it", ()
   for (let t = 0; t < 600; t++) w.tick(1);
   assert.ok(n.pop < fed * 0.3, `starving: ${Math.round(fed)} fell to ${Math.round(n.pop)}`);
   assert.ok(n.stats.foodSat < 0.01);
+});
+
+test("the chieftain hut gathers food and wood, and a town levels off at what its food feeds instead of starving", () => {
+  const { w, a, n } = setup();
+  installResources(w, undefined, { rng: makeRng(9) });
+  for (let t = 0; t < 100; t++) w.tick(1);
+  assert.ok(Math.abs(n.made.food - 0.3) < 1e-9 && Math.abs(n.made.wood - 0.2) < 1e-9, `made ${JSON.stringify(n.made)} in five seconds`);
+  assert.ok(Math.abs(n.stock.food - 56) < 0.5 && Math.abs(n.stock.wood - 44) < 0.5, `stock ${JSON.stringify(n.stock)}`);
+  town(w, a);
+  n.stock.wood = 400;
+  let peak = 0, low = Infinity, starved = 0;
+  for (let t = 0; t < 2400; t++) {
+    w.tick(1);
+    if (n.pop > peak) { peak = n.pop; low = n.pop; }
+    low = Math.min(low, n.pop);
+    if (n.stats.foodSat < 1) starved++;
+  }
+  assert.ok(peak > 40, `the town grows on its stock first: peak ${Math.round(peak)}`);
+  assert.equal(starved, 0, "the food never runs out");
+  assert.ok(low > 20, `no crash after the peak: lowest ${Math.round(low)}`);
+  assert.ok(Math.abs(n.pop - 30) < 8, `it settles near the 30 people 0.06 food a second feeds: ${Math.round(n.pop)}`);
+  assert.ok(n.stats.foodCap < 1 && Math.abs(n.stats.fed - n.pop) < 10, `food is what limits it: feeds ${Math.round(n.stats.fed)}`);
 });
 
 test("the town finds free plots from its zone sets, not by scanning the map", () => {

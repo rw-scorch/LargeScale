@@ -7,6 +7,14 @@ const CATEGORY_NAMES = { resources: "Resources", farming: "Farming", civic: "Civ
 
 export const costText = cost => Object.entries(cost).map(([k, v]) => `${v} ${k === "money" ? "gold" : k}`).join(", ");
 
+function laterNote(w, z) {
+  const era = eraIdx(w.purse?.era ?? "T");
+  const types = Object.values(w.defs.table).filter(d => d.civilian && d.zone === z && eraIdx(d.era) <= era).sort((a, b) => eraIdx(a.era) - eraIdx(b.era));
+  if (!types.length || types.some(d => !w.lockOf(d.id))) return null;
+  const node = w.locks.nodes.get(w.locks.buildings.get(types[0].id));
+  return node ? `${types[0].name}s need ${node.name} research. Zone now; they go up once it is done.` : null;
+}
+
 export function createBuildMenu(root, game) {
   const tabs = el("div", { class: "row wrap tabs" });
   const list = el("div", { class: "build-list" });
@@ -40,8 +48,9 @@ export function createBuildMenu(root, game) {
       if (tab === "zones") {
         list.replaceChildren(...ZONE_TOOLS.map(([z, name, text]) => {
           const locked = z !== "none" && cap(w.lockOf(z, "zones"));
+          const later = !locked && z !== "none" && laterNote(w, z);
           return el("button", { class: `build-item${game.zoning === z ? " on" : ""}`, "data-zone": z, disabled: !!locked, onclick: () => game.startZone(z) },
-            el("b", { text: name }), el("span", { class: "muted", text }), locked ? el("span", { class: "why", text: locked }) : null);
+            el("b", { text: name }), el("span", { class: "muted", text }), locked ? el("span", { class: "why", text: locked }) : null, later ? el("span", { class: "why", text: later }) : null);
         }),
           el("p", { class: "muted", text: "Drag over your land to paint. Up to 64 by 64 plots at a time." }));
         return;

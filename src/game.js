@@ -224,7 +224,7 @@ export function purseOf(n, extra = {}) {
   const stock = {};
   for (const [k, v] of Object.entries(n.stock ?? {})) stock[k] = Math.floor(v);
   const s = n.stats ?? {};
-  const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
+  const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), fed: Math.floor(s.fed ?? 0), foodCap: r2(s.foodCap ?? 1), worked: r2(s.worked ?? 0), zoned: s.zoned ?? [0, 0, 0, 0], jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
   const making = {};
   for (const [k, v] of Object.entries(n.made ?? {})) making[k] = r2(v / (n.madeEvery ?? 5));
   return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, ...extra };

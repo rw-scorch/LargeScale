@@ -1,8 +1,8 @@
 {
   "version": 1,
   "buildings": [
-    {"id":"chieftain_hut","num":1,"name":"Chieftain hut","civilian":false,"category":"civic","era":"T","footprint":[2,2],"cost":{"money":50,"wood":20},"time":60,"next":"great_hall"},
-    {"id":"great_hall","num":2,"name":"Great hall","civilian":false,"category":"civic","era":"M","footprint":[2,2],"cost":{"money":200,"wood":60,"stone":20},"time":120,"next":"town_hall"},
+    {"id":"chieftain_hut","num":1,"name":"Chieftain hut","civilian":false,"category":"civic","era":"T","footprint":[2,2],"cost":{"money":50,"wood":20},"time":60,"next":"great_hall","gathers":{"food":0.06,"wood":0.04}},
+    {"id":"great_hall","num":2,"name":"Great hall","civilian":false,"category":"civic","era":"M","footprint":[2,2],"cost":{"money":200,"wood":60,"stone":20},"time":120,"next":"town_hall","gathers":{"food":0.08,"wood":0.05}},
     {"id":"town_hall","num":3,"name":"Town hall","civilian":false,"category":"civic","era":"G","footprint":[2,2],"cost":{"money":600,"stone":80},"time":180,"next":"parliament"},
     {"id":"parliament","num":4,"name":"Parliament","civilian":false,"category":"civic","era":"I","footprint":[3,3],"cost":{"money":2000,"stone":200,"steel":50},"time":300,"next":null},
     {"id":"watchtower_wood","num":5,"name":"Wooden watchtower","civilian":false,"category":"military","era":"T","footprint":[1,1],"cost":{"money":20,"wood":15},"time":30,"next":"tower_stone"},

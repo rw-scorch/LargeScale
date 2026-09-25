@@ -105,10 +105,25 @@ function nearestFirst(world, b, radius) {
   return areaAround({ w: g.w, h: g.h }, b.plots, radius).map(i => [(g.x(i) - ax) ** 2 + (g.y(i) - ay) ** 2, i]).sort((p, q) => p[0] - q[0] || p[1] - q[1]).map(v => v[1]);
 }
 
+function gather(world, b, rates, k, out) {
+  if (world.owner[b.anchor] !== b.owner) return;
+  const n = world.nations.get(b.owner);
+  if (!out.has(b.owner)) out.set(b.owner, {});
+  const o = out.get(b.owner);
+  let got = 0;
+  for (const [kind, rate] of Object.entries(rates)) {
+    const v = rate * k * (1 + (n?.effects?.[`${kind}_rate`] ?? 0));
+    o[kind] = (o[kind] ?? 0) + v;
+    got += v;
+  }
+  b.made = (b.made ?? 0) + got;
+}
+
 export function produce(world, dt) {
   const res = world.res, bld = world.bld, dep = res.dep, r = res.rules, out = new Map();
   for (const b of bld.list.values()) {
     const def = bld.table[b.type], p = def.producer;
+    if (def.gathers && b.state === "active") gather(world, b, def.gathers, dt * (r.speed ?? 1), out);
     if (!p || b.state !== "active" || world.owner[b.anchor] !== b.owner) continue;
     const n = world.nations.get(b.owner);
     const staffed = Math.max(r.minWorkforce, n?.stats?.worked ?? 1);
@@ -166,9 +181,10 @@ export function produce(world, dt) {
 }
 
 export function productionTick(world, dt) {
-  for (const [nid, made] of produce(world, dt)) {
-    const n = world.nations.get(nid);
-    if (!n) continue;
+  const all = produce(world, dt);
+  for (const n of world.nations.values()) {
+    const made = all.get(n.id);
+    if (!made) { if (n.made) n.made = {}; continue; }
     n.stock ??= {};
     for (const [k, v] of Object.entries(made)) n.stock[k] = (n.stock[k] ?? 0) + v;
     n.made = made;

@@ -183,7 +183,7 @@ check(aSpawn >= 0, "player spawns on land");
 {
   const cw = view.world;
   const kit = await until(() => { view.pump(); return [...cw.buildings.values()].find(b => b.owner === you && b.type === "chieftain_hut"); });
-  check(kit && kit.state === "active" && cw.purse?.money >= 100 && cw.purse.stock.food === 50 && cw.purse.stock.wood === 40, `starting kit: a finished chieftain hut at the capital, ${cw.purse?.money} gold, ${cw.purse?.stock.food} food and ${cw.purse?.stock.wood} wood`);
+  check(kit && kit.state === "active" && cw.purse?.money >= 100 && cw.purse.stock.food >= 50 && cw.purse.stock.wood >= 40, `starting kit: a finished chieftain hut at the capital, ${cw.purse?.money} gold, ${cw.purse?.stock.food} food and ${cw.purse?.stock.wood} wood`);
   const near = [];
   for (let r = 1; r < 12 * K && near.length < 400; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
@@ -194,11 +194,15 @@ check(aSpawn >= 0, "player spawns on land");
   A.ws.send(JSON.stringify({ t: "build", type: "watchtower_wood", at: open }));
   const gated = await nextResult(A, "build");
   check(gated?.error === "needs Palisades research" && gated.error === cw.placeError("watchtower_wood", open), `before research the tower is refused: "${gated?.error}"`);
+  const r0 = cw.purse?.research, starter = ["fire_keeping", "stone_tools", "foraging", "barter", "farming"];
+  check(r0 && starter.every(id => r0.queue.includes(id) || r0.known.includes(id)), `a new nation starts with a research queue: ${[...(r0?.known ?? []).map(id => `${id} (done)`), ...(r0?.queue ?? [])].join(", ")}`);
+  const gathered = await until(() => { view.pump(); return cw.purse?.making?.food > 0 && cw.purse.making.wood > 0 ? cw.purse.making : null; }, 8000);
+  check(gathered, `the chieftain hut gathers from the start: ${JSON.stringify(gathered)} a second (this world runs production 200 times faster)`);
   const wanted = ["palisades", "fire_keeping", "barter", "farming", "chieftains"];
   const replies = [];
   for (const id of wanted) { A.ws.send(JSON.stringify({ t: "research", id })); replies.push(await nextResult(A, "research")); }
-  const first = replies[0]?.queue ?? [];
-  check(replies.every(r => r?.ok) && first.join() === "clubs,stone_tools,palisades", `queueing Palisades queues what it needs first: ${first.join(", ")}`);
+  const first = replies[0]?.queue ?? [], pal = first.indexOf("palisades");
+  check(replies.every(r => r?.ok || r?.error === "already known") && pal > 0 && first.includes("clubs") && first.indexOf("clubs") < pal && first.indexOf("stone_tools") < pal, `queueing Palisades queues what it still needs ahead of it: ${first.join(", ")}`);
   const learned = await until(() => { view.pump(); const k = cw.purse?.research?.known ?? []; return wanted.every(id => k.includes(id)) ? k.length : 0; }, 30000);
   check(learned, `research carries through the queue: ${learned} nodes known, ${cw.purse?.research?.rate} points a second`);
   const water = near.find(i => !isLand(terrain[i])) ?? terrain.findIndex(t => !isLand(t));
@@ -255,9 +259,9 @@ check(aSpawn >= 0, "player spawns on land");
   A.ws.send(JSON.stringify({ t: "build", type: prod?.type, at: prod?.at }));
   const pb = await nextResult(A, "build");
   const out = prod?.type === "woodcutter_camp" ? "wood" : "food";
-  const stockBefore = cw.purse.stock[out] ?? 0;
-  const making = await until(() => { view.pump(); return cw.purse?.making?.[out] > 0 ? cw.purse.making[out] : 0; }, 20000);
-  check(pb?.ok && making, `a ${prod?.type} on your land starts making ${out}: ${making} a second (stock ${stockBefore} before)`);
+  const stockBefore = cw.purse.stock[out] ?? 0, makingBefore = cw.purse.making?.[out] ?? 0;
+  const making = await until(() => { view.pump(); return cw.purse?.making?.[out] > makingBefore + 0.05 ? cw.purse.making[out] : 0; }, 20000);
+  check(pb?.ok && making, `a ${prod?.type} on your land starts making ${out}: ${(making - makingBefore).toFixed(2)} a second on top of the chieftain hut's ${makingBefore} (stock ${stockBefore} before)`);
   if (prod?.type === "woodcutter_camp") {
     const edited = await until(() => B.binary.some(f => f[0] === MSG.TERRAIN_EDIT), 60000);
     check(edited, "the woodcutter clears a forest plot, and the friend receives the terrain edit");

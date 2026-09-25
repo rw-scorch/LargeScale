@@ -15,7 +15,7 @@ import { createStackPanel } from "./ui/stack.js";
 import { createNotices } from "./ui/notice.js";
 import { createBuildMenu } from "./ui/build.js";
 import { createBuildingPanel } from "./ui/building.js";
-import { createTownPanel } from "./ui/town.js";
+import { createTownPanel, nodeFor } from "./ui/town.js";
 import { createResearchPanel } from "./ui/research.js";
 import { createTip } from "./ui/tip.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
@@ -209,7 +209,10 @@ class Game {
       const node = w.locks.nodes.get(e.node), builds = (node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name).filter(Boolean);
       say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build: ${builds.join(", ")}.` : ""}`, 0);
     }
-    if (e.type === "kit" && e.nation === you) say("kit", "Your chieftain hut stands at the capital. Press B to build more.", 0);
+    if (e.type === "kit" && e.nation === you) {
+      say("kit", "Your chieftain hut stands at the capital. The Town panel says what to do next.", 0);
+      this.toggleTown(true);
+    }
   }
 
   plotAt(sx, sy) {
@@ -303,7 +306,9 @@ class Game {
       if (!res.ok) return this.toast(res.error ?? "could not zone there");
       painted += res.plots;
     }
-    if (!painted) this.toast(zone === "none" ? "Nothing to erase there." : "Zones go on your own open land.");
+    if (!painted) return this.toast(zone === "none" ? "Nothing to erase there." : "Zones go on your own open land.");
+    const node = zone === "res" && nodeFor(this.world, "hut_grass");
+    if (node) this.toast(`Homes zoned. Huts go up once you know ${node.name}; it is in your research (U).`);
   }
 
   startBuild(type) {
