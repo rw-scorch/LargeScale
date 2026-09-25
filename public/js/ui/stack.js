@@ -62,24 +62,27 @@ export function createStackPanel(root, game) {
     trip = { id: s.id, to, points: r.ok ? r.points : [], seconds: r.ok ? r.seconds : null, at: performance.now() };
   };
 
+  const aimOf = (o, w) => (o?.only === 0 ? "unclaimed land" : o?.only ? `${w.nations.get(o.only)?.name ?? "one nation"}'s land` : null);
+
   const drawRoute = (s, w) => {
     const v = view();
     if (!v) return;
     if (preview) return;
-    const o = s && s.owner === w.you && s.order === "move" ? orderOf(s) : null;
+    const o = s && s.owner === w.you && s.order !== "hold" ? orderOf(s) : null;
     if (!o || o.to === null) { v.route = null; return; }
     if (!trip || trip.id !== s.id || trip.to !== o.to || performance.now() - trip.at > 3000) follow(s, o.to);
     const at = [s.pos % w.w, (s.pos / w.w) | 0], end = [o.to % w.w, (o.to / w.w) | 0];
     const left = p => Math.hypot(p[0] - end[0], p[1] - end[1]), now = left(at);
     const mid = trip?.id === s.id && trip.to === o.to ? trip.points.filter(p => left(p) < now) : [];
     const secs = trip?.id === s.id && trip.to === o.to ? trip.seconds : null;
-    v.route = { points: [at, ...mid, end], label: secs ? `destination, about ${secs} s` : "destination" };
+    const name = s.order === "advance" ? aimOf(o, w) ?? "land to take" : "destination";
+    v.route = { points: [at, ...mid, end], label: secs ? `${name}, about ${secs} s` : name };
   };
 
   const statusOf = (s, w) => {
-    const o = s.owner === w.you ? orderOf(s) : null;
-    if (s.order === "advance" && o?.only === 0) return "advancing into unclaimed land";
-    if (s.order === "advance" && o?.only) return `advancing into ${w.nations.get(o.only)?.name ?? "one nation"}'s land`;
+    const o = s.owner === w.you ? orderOf(s) : null, aim = aimOf(o, w);
+    if (s.order === "advance" && o?.to !== null && o?.to !== undefined) return aim ? `heading for ${aim}` : "heading for the nearest land to take";
+    if (s.order === "advance" && aim) return `advancing into ${aim}`;
     if (s.order === "move" && trip?.id === s.id && trip.seconds) return `moving, about ${trip.seconds} s to go`;
     return ORDER_TEXT[s.order] ?? s.order;
   };
@@ -92,9 +95,9 @@ export function createStackPanel(root, game) {
     ];
     if (mode) return [el("button", { text: "Cancel", onclick: cancel })];
     return [
-      button("stack-advance", "Advance", "advance", { class: "primary", title: "take any land next to the stack" }),
-      button("stack-claim", "Unclaimed only", "claim", { title: "take only land nobody owns" }),
-      button("stack-target", "One nation", "target", { title: "take only the land of the nation you click next" }),
+      button("stack-advance", "Advance", "advance", { class: "primary", title: "take any land; with nothing near, the stack goes to the nearest border" }),
+      button("stack-claim", "Unclaimed only", "claim", { title: "take only land nobody owns; the stack goes looking for it, but never through another nation" }),
+      button("stack-target", "One nation", "target", { title: "take only the land of the nation you click next; the stack goes looking for it, crossing unclaimed land but no other nation" }),
       button("stack-move", "Move", "move"),
       button("stack-split", "Split half", "split"),
       button("stack-merge", "Merge nearby", "merge", { disabled: !adjacent(s).length }),

@@ -52,7 +52,7 @@ export const ORDERS = {
       if (!sim.hostile(nation, m.only)) return fail(`you are at peace with ${t.name}`);
       only = m.only;
     }
-    return sim.orderAdvance(s.id, only) ? { ok: true, only } : fail("cannot advance");
+    return sim.orderAdvance(s.id, only, true) ? { ok: true, only } : fail("cannot advance");
   },
   split(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
