@@ -1,5 +1,5 @@
 import { TERRAIN } from "../shared/terrain.js";
-import { ERA_ORDER, ZONES, BUILDINGS, installBuildings, footprint, addBuilding, setPlots, nationBuildings } from "./buildings.js";
+import { ERA_ORDER, ZONES, BUILDINGS, installBuildings, footprint, addBuilding, setPlots, nationBuildings, touched } from "./buildings.js";
 import rules from "../../data/rules.json" with { type: "json" };
 
 export { ERA_ORDER, ZONES, footprint };
@@ -72,7 +72,7 @@ export function startBuilding(world, nid, anchor, type) {
   if (!fits(world, nid, plots, def.zone) || !affordable(n, def.cost)) return null;
   pay(n, def.cost);
   const b = addBuilding(world, { type, owner: nid, anchor, plots });
-  world.emit("civ_build", { nation: nid, building: b.id, type });
+  world.emit("civ_build", { nation: nid, building: b.id, kind: type });
   return b;
 }
 
@@ -119,6 +119,7 @@ export function econTick(world, dt, rng) {
   for (const b of bld.list.values()) {
     if (!b.civilian || b.state !== "construction") continue;
     b.progress += dt / table[b.type].time;
+    touched(world, b);
     if (b.progress >= 1) {
       b.state = "active";
       b.upgrading = false;

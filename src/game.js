@@ -1,8 +1,15 @@
 import { checkVictory } from "./sim/bots.js";
 import { ORDER_CODES } from "./shared/protocol.js";
+import { rowOf } from "./shared/buildings.js";
+import { place, demolish } from "./sim/construction.js";
 
 const isPlot = (sim, v) => Number.isInteger(v) && v >= 0 && v < sim.grid.size;
 const fail = error => ({ ok: false, error });
+
+function living(sim, nation) {
+  const n = sim.nations.get(nation);
+  return n?.spawned && n.alive ? n : null;
+}
 
 function ownStack(sim, nation, id) {
   const s = Number.isInteger(id) ? sim.stacks.get(id) : null;
@@ -54,6 +61,21 @@ export const ORDERS = {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
     return sim.disbandStack(s.id) ? { ok: true } : fail("disband on your own land");
+  },
+  build(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.cons) return fail("building is not running in this world");
+    if (typeof m.type !== "string" || !Object.hasOwn(sim.bld.table, m.type)) return fail("unknown building");
+    if (!isPlot(sim, m.at)) return fail("that plot is off the map");
+    const b = place(sim, nation, m.type, m.at);
+    return b.error ? fail(b.error) : { ok: true, building: b.id };
+  },
+  demolish(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.cons) return fail("building is not running in this world");
+    if (!Number.isInteger(m.building)) return fail("pick a building");
+    const r = demolish(sim, nation, m.building);
+    return r.error ? fail(r.error) : { ok: true, ...r };
   },
   route(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
@@ -132,6 +154,30 @@ export class StateFeed {
     for (const id of this.stacks.keys()) if (!sim.stacks.has(id)) { gone.push(id); this.stacks.delete(id); }
     return n.length || s.length || gone.length ? { n, s, gone } : null;
   }
+}
+
+export class BuildingFeed {
+  rows(sim) {
+    return [...sim.bld.list.values()].map(b => rowOf(b, sim.bld.table));
+  }
+  delta(sim) {
+    const bld = sim.bld;
+    if (!bld?.news.size) return null;
+    const up = [], gone = [];
+    for (const id of bld.news) {
+      const b = bld.list.get(id);
+      if (b) up.push(rowOf(b, bld.table)); else gone.push(id);
+    }
+    bld.news.clear();
+    return { up, gone };
+  }
+}
+
+export function purseOf(n) {
+  if (!n || n.money === undefined) return null;
+  const stock = {};
+  for (const [k, v] of Object.entries(n.stock ?? {})) stock[k] = Math.floor(v);
+  return { money: Math.floor(n.money), stock, era: n.era ?? "T" };
 }
 
 const ALWAYS = new Set(["eliminated", "victory"]);
