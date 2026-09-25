@@ -281,8 +281,15 @@ export class World {
     return best;
   }
 
+  alliedNear(s) {
+    const g = this.grid, ow = this.owner, me = s.owner;
+    for (const i of this.borderOf(me)) for (const n of g.neighbours4(i)) if (ow[n] && ow[n] !== me && this.passable(me, ow[n])) return true;
+    return false;
+  }
+
   seek(s) {
     const g = this.grid, ow = this.owner, t = this.terrain, aim = this.seekTarget(s);
+    if (aim < 0 && (s.only || !this.alliedNear(s))) return false;
     const ax = aim < 0 ? 0 : g.x(aim), ay = aim < 0 ? 0 : g.y(aim);
     const h = aim < 0 ? () => 0 : i => Math.abs(g.x(i) - ax) + Math.abs(g.y(i) - ay);
     const cost = (a, b) => (this.wants(s, ow[b]) || this.crosses(s, ow[b]) ? this.moveCost(a, b) : Infinity);
