@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (72)
+npm test                  # unit tests (78)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -101,7 +101,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
 - **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
-- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, M move, S split, G merge, X disband, Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, M move, S split, G merge, X disband or demolish, B build menu, Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
@@ -109,12 +109,15 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 
 - **Step 1 (25 September 2026, branch `m2-step1-building-layer`).** One building registry in `src/sim/buildings.js` (`world.bld`): buildings by id, a sparse plot index, per-nation sets, a `civilian` flag, and one-byte zone and wood layers. Definitions are in `data/buildings.json`; each type has a `num` that is saved and must never be reused or changed. Construction, civilians, resources and nukes use the registry. Save format 3 adds `zone`, `wood` and `buildings` rows, written only when changed; format 2 worlds load with empty layers. Capturing a building's anchor plot passes it to the capturer. `test/kit/` runs the kit's civilian, resource and construction tests against `src/sim`.
 
+- **Step 2 (25 September 2026, branch `m2-step2-construction`, stacked on step 1).** Protocol 3. Placement rules live in `src/shared/buildings.js`, so the server and the client ghost give the same reason. `build` and `demolish` orders are in `src/game.js`. Human nations get 1 gold a second and the starting kit from `src/sim/economy.js` (`rules.json` `economy`: 100 gold, a finished chieftain hut; food and wood from `civilians.startStock`). Demolish refunds half and leaves rubble for 120 s, which can be built over. Clients get the building table in `hello`, a varint snapshot frame (`MSG.BUILDINGS`) and row changes in `state`, plus a per-player `purse`. Panels: `public/js/ui/build.js` and `building.js`. The world config's `rules.buildSpeed` speeds construction up for tests. The renderer sits construction, damaged and rubble sprites on the ground, because their art is drawn at the top of tall canvases.
+
 Open items as of 25 September 2026, in order:
 
-1. Milestone two, step 2 (player construction) is next, once Ryan has reviewed step 1.
-2. Ryan redeploys when he wants the fine map live: `git pull`, `npm test`, `npx wrangler deploy`.
-3. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset; tax and conscription sliders.
-4. Each session's record goes in `devpack/` (see `devpack/README.md`).
+1. Milestone two, step 3 (civilians) is next, once Ryan has reviewed steps 1 and 2.
+2. The save counter `rowsWritten` counts each replaced row twice (owner and state alone show 4). Step 3 starts writing the zone row often, so measure saves against the 6-row budget there.
+3. Ryan redeploys when he wants the fine map live: `git pull`, `npm test`, `npx wrangler deploy`.
+4. Later: a settings panel to rebind keys; admin tools to delete worlds and remove accounts; a password reset; tax and conscription sliders.
+5. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 

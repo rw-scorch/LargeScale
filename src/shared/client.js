@@ -32,6 +32,7 @@ export class ClientWorld {
     this.buildingsReady = !hello.frames?.buildings;
     this.early = new Set();
     this.purse = hello.purse ?? null;
+    this.consRules = hello.consRules ?? { demolishRefund: 0.5, refundOnCancel: 0.5 };
     this.changed = [];
   }
 

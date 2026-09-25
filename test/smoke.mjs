@@ -68,7 +68,7 @@ class Mirror {
       });
       this.baseHashOk = true;
     } catch { this.baseHashOk = false; return this; }
-    const need = this.hello.frames.terrain + this.hello.frames.owner;
+    const need = this.hello.frames.terrain + this.hello.frames.owner + (this.hello.frames.buildings ?? 0);
     for (let k = 0; k < 200 && this.got.binary.length < this.bin + need; k++) await sleep(50);
     this.pump(this.bin + need);
     this.joinFrameBytes = this.frameBytes;
@@ -131,7 +131,7 @@ const ta = alogin.body.token, tb = b.body.token;
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
-const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K } } }, ta);
+const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10 } } }, ta);
 check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
@@ -178,6 +178,44 @@ for (const i of nearMiddle) {
   if ((await nextResult(A, "spawn"))?.ok) { aSpawn = i; break; }
 }
 check(aSpawn >= 0, "player spawns on land");
+{
+  const cw = view.world;
+  const kit = await until(() => { view.pump(); return [...cw.buildings.values()].find(b => b.owner === you && b.type === "chieftain_hut"); });
+  check(kit && kit.state === "active" && cw.purse?.money >= 100 && cw.purse.stock.food === 50 && cw.purse.stock.wood === 40, `starting kit: a finished chieftain hut at the capital, ${cw.purse?.money} gold, ${cw.purse?.stock.food} food and ${cw.purse?.stock.wood} wood`);
+  const near = [];
+  for (let r = 1; r < 12 * K && near.length < 400; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    const x = (aSpawn % M.w) + dx, y = Math.floor(aSpawn / M.w) + dy;
+    if (x >= 0 && y >= 0 && x < M.w && y < M.h) near.push(y * M.w + x);
+  }
+  const water = near.find(i => !isLand(terrain[i])) ?? terrain.findIndex(t => !isLand(t));
+  const neutral = near.find(i => isLand(terrain[i]) && cw.owner[i] === 0) ?? land.find(i => cw.owner[i] === 0);
+  const refusals = [["barracks", near.find(i => cw.owner[i] === you)], ["watchtower_wood", kit?.anchor], ["watchtower_wood", water], ["watchtower_wood", neutral]];
+  const said = [];
+  for (const [type, at] of refusals) {
+    A.ws.send(JSON.stringify({ t: "build", type, at }));
+    const r = await nextResult(A, "build");
+    said.push(`${type}: "${r?.error}"`);
+    check(r && !r.ok && r.error === cw.placeError(type, at), `the server refuses ${type} with the same reason the client shows: "${r?.error}"`);
+  }
+  const spot = near.find(i => cw.owner[i] === you && !cw.placeError("watchtower_wood", i));
+  A.ws.send(JSON.stringify({ t: "build", type: "watchtower_wood", at: spot }));
+  const built = await nextResult(A, "build");
+  check(built?.ok && built.building, `a wooden watchtower is placed next to the capital (building ${built?.building})`);
+  const bid = built?.building;
+  const seenByB = row => B.json.some(m => m.t === "state" && m.b?.some(r => r[0] === bid && r[4] === row));
+  const siteSeen = await until(() => seenByB(0), 3000);
+  const done = await until(() => { view.pump(); return cw.buildings.get(bid)?.state === "active"; }, 8000);
+  check(siteSeen && done && seenByB(1), `the site finishes, and the friend's client sees the site and the finished tower`);
+  check(A.json.some(m => m.t === "events" && m.events.some(e => e.type === "built" && e.building === bid)), "a built event reaches the owner");
+  const before = cw.purse.money;
+  A.ws.send(JSON.stringify({ t: "demolish", building: bid }));
+  const gone = await nextResult(A, "demolish");
+  check(gone?.ok && gone.refund?.money === 10 && gone.refund?.wood === 7, `demolish refunds half: ${JSON.stringify(gone?.refund)}`);
+  await until(() => { view.pump(); return cw.buildings.get(bid)?.state === "rubble" && cw.purse.money >= before + 10; }, 3000);
+  check(cw.buildings.get(bid)?.state === "rubble" && await until(() => seenByB(3), 3000), "the tower turns to rubble for both players");
+  check(await until(() => B.json.some(m => m.t === "state" && m.bg?.includes(bid)), 20000), "the rubble clears on its own, and the friend's client drops it");
+}
 B.ws.send(JSON.stringify({ t: "chat", text: "hello from friend" }));
 check(!!(await waitFor(A, m => m.t === "chat" && m.text === "hello from friend")), "chat reaches the other player");
 A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));

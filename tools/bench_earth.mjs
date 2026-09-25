@@ -7,11 +7,14 @@ import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
 import { installBots, spawnBots } from "../src/sim/bots.js";
 import { installBuildings, addBuilding, footprint, saveLayers, ZONES, WOOD_FULL } from "../src/sim/buildings.js";
+import { installConstruction } from "../src/sim/construction.js";
+import { installEconomy } from "../src/sim/economy.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
 import { encodeRuns, countRuns } from "../src/shared/codec.js";
 import { MSG, partFrames } from "../src/shared/protocol.js";
-import { StateFeed, publicEvents } from "../src/game.js";
+import { StateFeed, BuildingFeed, publicEvents } from "../src/game.js";
+import { encodeRows } from "../src/shared/buildings.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -51,6 +54,8 @@ for (let k = 0; k < Number(a.players); k++) {
   if (w.nations.get(id).spawned) players.push(id);
 }
 const bld = installBuildings(w);
+installConstruction(w);
+installEconomy(w);
 const perPlayer = Number(a.buildings);
 const pick = t => (t % 10 < 7 ? "hut_grass" : t % 10 < 9 ? "market_stall" : "chieftain_hut");
 let placed = 0, woodCut = 0;
@@ -171,6 +176,8 @@ const runs = encodeRuns(w.owner);
 const nations = [...w.nations.values()].map(n => ({ id: n.id, name: n.name, colour: n.colour, plots: n.plots, troops: Math.floor(n.troops), alive: n.alive, spawned: n.spawned, bot: n.bot }));
 const helloBytes = Buffer.byteLength(JSON.stringify({ t: "hello", v: 1, you: 1, w: meta.w, h: meta.h, map: { kind: "earth", baseHash: "00000000", srcW: meta.w, srcH: meta.h }, hashes: { terrain: "00000000", owner: "00000000" }, frames: { terrain: 1, owner: 1 }, caughtUp: 0, nations, chat: [] }));
 const ownerFrameBytes = partFrames(MSG.OWNER, runs).reduce((s, f) => s + f.length, 0);
+const buildingFrameBytes = partFrames(MSG.BUILDINGS, encodeRows(new BuildingFeed().rows(w))).reduce((s, f) => s + f.length, 0);
+const defsBytes = Buffer.byteLength(JSON.stringify(Object.values(bld.table).map(({ fp, cat, ...d }) => d)));
 const okMoves = moves.filter(m => m.ok);
 let owned = 0;
 for (const v of w.owner) if (v) owned++;
@@ -190,7 +197,7 @@ const report = {
   borderPlots,
   borderSetsMatchFullScan: borderOk,
   bytes: {
-    join: helloBytes + ownerFrameBytes, joinHello: helloBytes, joinOwner: ownerFrameBytes, largestDiff: maxDiffBytes,
+    join: helloBytes + defsBytes + ownerFrameBytes + buildingFrameBytes, joinHello: helloBytes + defsBytes, joinOwner: ownerFrameBytes, joinBuildings: buildingFrameBytes, largestDiff: maxDiffBytes,
     stateMessage: { median: [...stateSizes].sort((x, y) => x - y)[stateSizes.length >> 1], worst: Math.max(...stateSizes) },
     perPlayerPerSecond: { state: Math.round(stateSizes.reduce((x, y) => x + y, 0) / w.time), events: Math.round(eventSizes.reduce((x, y) => x + y, 0) / w.time) },
   },

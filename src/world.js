@@ -310,7 +310,7 @@ export class World extends DurableObject {
     server.send(JSON.stringify({
       t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
       hashes: { terrain: this.hashes.terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length },
-      defs: buildingData.buildings, purse: purseOf(this.sim.nations.get(nation)),
+      defs: buildingData.buildings, purse: purseOf(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel },
       caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(),
       victory: this.meta("victory"), frozen: this.frozen,
     }));

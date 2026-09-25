@@ -74,6 +74,60 @@ await page.waitForTimeout(1500);
 check(spawned && !(await page.isVisible("#spawn-hint")), `spawned at ${spawned?.x}, ${spawned?.y}; the hint goes away`);
 await page.screenshot({ path: `${OUT}/2-spawned-${MAP}.png` });
 
+const kit = await page.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].some(b => b.owner === w.you && b.type === "chieftain_hut" && b.state === "active"); }, null, { timeout: 5000 }).then(() => true, () => false);
+const purseText = await page.textContent("#purse");
+check(kit && /gold/.test(purseText), `the starting chieftain hut stands at the capital; the bar shows "${purseText}"`);
+await page.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 22 * g.view.ratio; g.view.clampCamera(); });
+await page.keyboard.press("b");
+check(await page.isVisible("#build-menu"), "B opens the build menu");
+await page.click("#build-menu .tabs button:has-text('Military')");
+const locked = await page.textContent("#build-menu [data-type=barracks]");
+check(await page.isDisabled("#build-menu [data-type=barracks]") && /Needs the Medieval era/.test(locked), `a locked building is greyed out with its reason: "${locked.match(/Needs.*/)?.[0]}"`);
+await page.screenshot({ path: `${OUT}/2b-build-menu-${MAP}.png` });
+await page.click("#build-menu [data-type=watchtower_wood]");
+const spots = await page.evaluate(() => {
+  const g = window.__ls.game, w = g.world, v = g.view, cap = w.nations.get(w.you).capital, out = { ok: null, bad: null };
+  for (let r = 1; r < 10; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = cap + dy * w.w + dx, [px, py] = v.plotToScreen((i % w.w) + 0.5, ((i / w.w) | 0) + 0.5);
+    if (px < 60 || py < 120 || px > v.canvas.width - 420 * v.ratio || py > v.canvas.height - 140) continue;
+    const why = w.placeError("watchtower_wood", i), at = { plot: i, x: px / v.ratio, y: py / v.ratio, why };
+    if (!why && !out.ok) out.ok = at;
+    if (why && why !== "something is already there" && !out.bad) out.bad = at;
+  }
+  return out;
+});
+if (spots.bad) {
+  await page.mouse.move(spots.bad.x, spots.bad.y);
+  await page.waitForTimeout(300);
+  const g = await page.evaluate(() => ({ ...window.__ls.game.view.ghost, def: undefined }));
+  check(g.reason === spots.bad.why, `the ghost turns red with the reason next to it: "${g.reason}"`);
+  await page.screenshot({ path: `${OUT}/2c-ghost-invalid-${MAP}.png` });
+}
+await page.mouse.move(spots.ok.x, spots.ok.y);
+await page.waitForTimeout(300);
+check(await page.evaluate(() => window.__ls.game.view.ghost?.reason === null), "over your own open land the ghost is green");
+await page.screenshot({ path: `${OUT}/2d-ghost-valid-${MAP}.png` });
+await page.mouse.click(spots.ok.x, spots.ok.y);
+const site = await page.waitForFunction(p => { const b = window.__ls.game.world.buildingAt(p); return b && b.type === "watchtower_wood" ? b.id : null; }, spots.ok.plot, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+check(site !== null, `clicking builds a construction site (building ${site})`);
+await page.keyboard.press("Escape");
+await page.keyboard.press("Escape");
+check(!(await page.isVisible("#build-menu")) && await page.evaluate(() => window.__ls.game.building === null), "Esc leaves building mode, then closes the menu");
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${OUT}/2e-site-${MAP}.png` });
+const finished = await page.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", site, { timeout: 40000 }).then(() => true, () => false);
+check(finished, "the wooden watchtower finishes after its 30 seconds");
+await page.mouse.click(spots.ok.x, spots.ok.y);
+check(await page.waitForSelector("#building-demolish", { timeout: 3000 }).then(() => true, () => false), `clicking it opens its panel: "${await page.textContent("#building-title").catch(() => "")}"`);
+await page.screenshot({ path: `${OUT}/2f-built-${MAP}.png` });
+await page.click("#building-demolish");
+const rubble = await page.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "rubble", site, { timeout: 5000 }).then(() => true, () => false);
+check(rubble, "Demolish turns it to rubble");
+await page.waitForTimeout(500);
+await page.screenshot({ path: `${OUT}/2g-rubble-${MAP}.png` });
+await page.keyboard.press("Escape");
+await page.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 6));
+
 const toScreen = (page, plot) => page.evaluate(p => {
   const g = window.__ls.game, w = g.world, v = g.view;
   const [px, py] = v.plotToScreen((p % w.w) + 0.5, ((p / w.w) | 0) + 0.5);
