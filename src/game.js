@@ -6,6 +6,8 @@ import { orderResearch } from "./sim/research.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
+import { UNITS, xpLevelOf } from "./sim/troops.js";
+import { mixRow } from "./shared/units.js";
 
 const isPlot = (sim, v) => Number.isInteger(v) && v >= 0 && v < sim.grid.size;
 const fail = error => ({ ok: false, error });
@@ -171,7 +173,7 @@ export const ORDERS = {
     if (error) return fail(error);
     const legs = legsOf(sim, s.pos, via, m.to);
     if (!legs) return fail(via.length ? "no land route through those points" : "no land route there");
-    const co = sim.pathGraph(), speed = sim.rules.stackSpeed * (s.speedMult ?? 1), g = sim.grid, points = [];
+    const co = sim.pathGraph(), speed = sim.rules.stackSpeed * sim.speedOf(s), g = sim.grid, points = [];
     let plots = 0, cost = 0;
     for (const { from, to, r } of legs) {
       for (const k of r.regions) {
@@ -215,7 +217,19 @@ export function victory(sim) {
 }
 
 const nationRow = n => [n.id, n.plots, Math.floor(n.troops), n.alive ? 1 : 0, n.spawned ? 1 : 0, Math.max(0, ERA_ORDER.indexOf(n.era ?? "T"))];
-const stackRow = s => [s.id, s.owner, s.pos, Math.floor(s.troops), ORDER_CODES.indexOf(s.order)];
+const stackRow = s => {
+  const row = [s.id, s.owner, s.pos, Math.floor(s.troops), ORDER_CODES.indexOf(s.order)];
+  const mix = s.mix ? mixRow(UNITS, s.mix) : [], lv = xpLevelOf(s);
+  if (mix.length || lv) row.push(mix, lv);
+  return row;
+};
+const NONE = [];
+const sameTypes = (p, q) => {
+  const a = p[5] ?? NONE, b = q[5] ?? NONE;
+  if (a.length !== b.length || (p[6] ?? 0) !== (q[6] ?? 0)) return false;
+  for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return false;
+  return true;
+};
 
 export class StateFeed {
   constructor(botShare = 0.01, botEvery = 5) { this.botShare = botShare; this.botEvery = botEvery; this.round = 0; this.nations = new Map(); this.stacks = new Map(); }
@@ -238,7 +252,7 @@ export class StateFeed {
       const row = stackRow(st), prev = this.stacks.get(st.id);
       const bot = sim.nations.get(st.owner)?.bot;
       if (bot && !st.engaged && waits(st.id, prev)) continue;
-      const same = prev && prev[1] === row[1] && prev[2] === row[2] && prev[4] === row[4] && (prev[3] === row[3] || (bot && this.close(prev[3], row[3])));
+      const same = prev && prev[1] === row[1] && prev[2] === row[2] && prev[4] === row[4] && (prev[3] === row[3] || (bot && this.close(prev[3], row[3]))) && sameTypes(prev, row);
       if (same) continue;
       this.stacks.set(st.id, row);
       s.push(row);

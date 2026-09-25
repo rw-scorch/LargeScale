@@ -9,6 +9,8 @@ import { parseWorldConfig, defaultBots, scaledRules, MIN_MAP_SIDE, MAX_PLOTS, BA
 import rules from "../data/rules.json" with { type: "json" };
 import { planCatchUp, runCatchUp } from "./sim/offline.js";
 import { installCombat } from "./sim/combat.js";
+import { installTroops, TROOP_RULES } from "./sim/troops.js";
+import unitData from "../data/units.json" with { type: "json" };
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
 import { installConstruction } from "./sim/construction.js";
@@ -144,6 +146,7 @@ export class World extends DurableObject {
       for (const [nid, acc] of saved.accounts ?? []) this.accounts.set(nid, acc);
     }
     installCombat(this.sim, scaled.combat);
+    installTroops(this.sim);
     installConstruction(this.sim, { speed: info.rules?.buildSpeed ?? 1 });
     installEconomy(this.sim);
     installCivilians(this.sim, makeRng(((info.seed ?? 1) + 7919 + Math.floor(this.sim.time)) >>> 0));
@@ -362,6 +365,7 @@ export class World extends DurableObject {
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss,
+      units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus },
       caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));

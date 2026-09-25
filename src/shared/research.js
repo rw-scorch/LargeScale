@@ -1,12 +1,13 @@
 import { ERA_NAMES, eraIdx } from "./buildings.js";
 
 export function lockMap(tree) {
-  const buildings = new Map(), zones = new Map();
+  const buildings = new Map(), zones = new Map(), units = new Map();
   for (const n of tree.nodes) {
     for (const b of n.unlocks?.buildings ?? []) if (!buildings.has(b)) buildings.set(b, n.id);
     for (const z of n.unlocks?.zones ?? []) if (!zones.has(z)) zones.set(z, n.id);
+    for (const u of n.unlocks?.units ?? []) if (!units.has(u)) units.set(u, n.id);
   }
-  return { buildings, zones, nodes: new Map(tree.nodes.map(n => [n.id, n])) };
+  return { buildings, zones, units, nodes: new Map(tree.nodes.map(n => [n.id, n])) };
 }
 
 export function lockReason(locks, known, id, kind = "buildings") {

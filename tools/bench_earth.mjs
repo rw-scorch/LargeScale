@@ -5,6 +5,7 @@ import { scaledRules, defaultBots } from "../src/worldconfig.js";
 import { parseArgs } from "node:util";
 import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
+import { installTroops } from "../src/sim/troops.js";
 import { installBots, spawnBots } from "../src/sim/bots.js";
 import { installBuildings, addBuilding, footprint, saveLayers, ZONES, WOOD_FULL } from "../src/sim/buildings.js";
 import { installConstruction } from "../src/sim/construction.js";
@@ -45,6 +46,7 @@ const terrain = rect ? cropLayer(new Uint8Array(raw), src.w, rect) : new Uint8Ar
 const w = new World({ w: meta.w, h: meta.h, terrain }, rules.territory);
 const rng = makeRng(Number(a.seed));
 installCombat(w, rules.combat);
+installTroops(w);
 if (a.bots === "auto") { let land = 0; for (const v of terrain) if (isLand(v)) land++; a.bots = String(defaultBots(land, scale)); }
 console.log(`map ${a.map}${a.crop ? ` crop ${a.crop}` : ""}: ${meta.w} by ${meta.h}, scale ${scale}, ${a.bots} bots`);
 

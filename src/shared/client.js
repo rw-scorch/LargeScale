@@ -5,8 +5,11 @@ import { tableFrom, decodeRows, footprintAt, placeError, costError, STATES } fro
 import { emptyDeposits, decodeDeposits, cropDeposits, depositIndex } from "./deposits.js";
 import { lockMap, lockReason, researchError } from "./research.js";
 import { ERA_ORDER } from "./buildings.js";
+import { unitTable, mixFromRow, mixParts, powerOf } from "./units.js";
 
-const stackFromRow = ([id, owner, pos, troops, order]) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold" });
+const LEVY_ONLY = [{ id: "levy", num: 1, name: "Levies", kind: "troop", era: "T", attack: 1, defence: 1, speed: 1, capture: 1 }];
+
+const stackFromRow = ([id, owner, pos, troops, order, mix, xp], units) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold", mix: mixFromRow(units, mix), xp: xp ?? 0 });
 
 export class ClientWorld {
   constructor(hello) {
@@ -22,7 +25,9 @@ export class ClientWorld {
     this.name = hello.name ?? null;
     this.time = 0;
     this.nations = new Map(hello.nations.map(n => [n.id, { ...n }]));
-    this.stacks = new Map((hello.stacks ?? []).map(r => [r[0], stackFromRow(r)]));
+    this.units = unitTable(hello.units?.length ? hello.units : LEVY_ONLY);
+    this.troopRules = { xpLevels: [0, 0.3, 1, 3], xpBonus: [0, 0.1, 0.2, 0.35], ...hello.troopRules };
+    this.stacks = new Map((hello.stacks ?? []).map(r => [r[0], stackFromRow(r, this.units)]));
     this.chat = [...(hello.chat ?? [])];
     this.owner = new Uint16Array(this.w * this.h);
     this.zone = new Uint8Array(this.w * this.h);
@@ -58,6 +63,10 @@ export class ClientWorld {
   }
 
   lockOf(id, kind = "buildings") { return lockReason(this.locks, this.known(), id, kind); }
+
+  mixOf(s) { return mixParts(this.units, s.troops, s.mix); }
+
+  powerOf(s, holding = false) { return powerOf(this.units, s.troops, s.mix, holding ? "defence" : "attack", this.troopRules.xpBonus[s.xp] ?? 0); }
 
   researchError(id) { return researchError(this.tech, this.locks, this.known(), this.purse?.era ?? "T", id); }
 
@@ -180,7 +189,7 @@ export class ClientWorld {
         if (!this.nations.has(id)) this.nations.set(id, { id, name: `Nation ${id}`, colour: "#8a8a8a" });
         Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned, era: ERA_ORDER[era] ?? "T" });
       }
-      for (const r of m.s) this.stacks.set(r[0], stackFromRow(r));
+      for (const r of m.s) this.stacks.set(r[0], stackFromRow(r, this.units));
       for (const id of m.gone) this.stacks.delete(id);
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
