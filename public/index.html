@@ -15,6 +15,7 @@ button:hover:not(:disabled){border-color:var(--mute)}
 button:disabled{opacity:.45;cursor:default}
 button.primary{background:#2a5a36;border-color:#3f7f4c}
 button.ghost{background:transparent;border-color:transparent}
+button.danger{background:#5a2420;border-color:var(--bad)}
 input[type=range]{padding:0;min-height:0;accent-color:var(--signal)}
 input[type=checkbox]{min-height:0;width:18px;height:18px;vertical-align:middle}
 h1{font-size:22px;margin:0 0 12px}
@@ -43,7 +44,7 @@ h2{font-size:16px;margin:18px 0 8px}
 .status{display:flex;align-items:center;gap:6px}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--mute)}
 .dot.online{background:var(--good)}
-.dot.waiting,.dot.replaced,.dot.outdated,.dot.closed{background:var(--bad)}
+.dot.waiting,.dot.replaced,.dot.outdated,.dot.closed,.dot.removed,.dot.deleted{background:var(--bad)}
 .dot.connecting,.dot.reconnecting{background:var(--signal)}
 .panel{position:absolute;background:var(--panel);border:2px solid var(--line);border-radius:4px;padding:4px 8px 8px}
 .panel .title{padding:4px 0;font-weight:600;min-height:0}
@@ -66,6 +67,13 @@ h2{font-size:16px;margin:18px 0 8px}
 .demand .fill.up{background:var(--good)}
 .demand .fill.down{background:var(--bad)}
 .panel.center{left:50%;transform:translateX(-50%);top:calc(var(--hud,48px) + 16px);width:min(980px,calc(100% - 16px));max-height:calc(100% - var(--hud,48px) - 32px);overflow:auto;display:flex;flex-direction:column;gap:8px;z-index:2}
+.admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.admin-grid section{display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--line);padding-top:6px}
+.admin-list{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+.admin-log{font-size:12px;max-height:200px;overflow:auto}
+.admin-log p{margin:1px 0}
+.admin-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+input.small{width:110px}
 .tech-era{display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--line);padding-top:6px}
 .tech-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:6px}
 .tech-col{display:flex;flex-direction:column;gap:4px}

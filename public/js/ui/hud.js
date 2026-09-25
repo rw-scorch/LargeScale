@@ -1,12 +1,15 @@
 import { el, fmt } from "./dom.js";
 import { keyTag } from "./stack.js";
 
-const STATUS = { online: "Online", connecting: "Connecting", reconnecting: "Reconnecting", waiting: "Offline", replaced: "Opened elsewhere", outdated: "Needs reload", closed: "Closed" };
+const STATUS = { online: "Online", connecting: "Connecting", reconnecting: "Reconnecting", waiting: "Offline", replaced: "Opened elsewhere", outdated: "Needs reload", closed: "Closed", removed: "Removed", deleted: "Deleted" };
 
 export function createHud(root, game) {
   const dot = el("span", { class: "dot" });
   const status = el("span", { id: "status-text" });
   const mine = el("span", { id: "my-nation", class: "muted" });
+  const worldName = el("b", { class: "world-name", text: game.name });
+  const speed = el("span", { id: "world-speed", class: "badge", hidden: true });
+  const admin = game.admin ? el("button", { id: "open-admin", onclick: () => game.toggleAdmin() }, "Admin", " ", keyTag("admin")) : null;
   const purse = el("span", { id: "purse" });
   const build = el("button", { id: "open-build", onclick: () => game.toggleBuildMenu() }, "Build", " ", keyTag("build"));
   const town = el("button", { id: "open-town", onclick: () => game.toggleTown() }, "Town", " ", keyTag("town"));
@@ -20,7 +23,8 @@ export function createHud(root, game) {
   const buildHint = el("div", { id: "build-hint", class: "banner", hidden: true });
   const bar = el("header", { class: "hud" },
     el("button", { id: "leave-world", title: "leave this world and go back to the world list", text: "Exit", onclick: () => game.leave() }),
-    el("b", { class: "world-name", text: game.name }),
+    worldName,
+    speed,
     el("span", { class: "status" }, dot, status),
     mine,
     purse,
@@ -29,6 +33,7 @@ export function createHud(root, game) {
     town,
     research,
     deposits,
+    admin,
     el("span", { class: "stackform" }, share, shareLabel, form),
     el("span", { class: "zoom" },
       el("button", { title: "zoom out (-)", text: "-", onclick: () => game.zoom(1 / 1.6) }),
@@ -42,6 +47,10 @@ export function createHud(root, game) {
       const c = game.conn;
       dot.className = `dot ${c.status}`;
       status.textContent = STATUS[c.status] ?? c.status;
+      worldName.textContent = game.name;
+      speed.hidden = !(game.world?.speed > 1);
+      speed.textContent = `${game.world?.speed ?? 1}x speed`;
+      admin?.classList.toggle("on", !!game.adminPanel?.open);
       const n = game.world?.nations.get(game.world.you);
       mine.textContent = n?.spawned ? `${fmt(n.plots)} plots, ${fmt(n.troops)} troops` : n ? "not placed yet" : "";
       form.disabled = !n?.spawned || !n.alive || game.world.frozen;

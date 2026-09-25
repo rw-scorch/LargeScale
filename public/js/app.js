@@ -18,6 +18,7 @@ import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel, nodeFor } from "./ui/town.js";
 import { createResearchPanel } from "./ui/research.js";
 import { createTip } from "./ui/tip.js";
+import { createAdminPanel } from "./ui/admin.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -49,8 +50,9 @@ const terrainGz = async (dir, hash) => {
 };
 
 class Game {
-  constructor(worldId, name, onLeave) {
+  constructor(worldId, name, onLeave, account = null) {
     this.worldId = worldId;
+    this.admin = !!account?.admin;
     this.name = name;
     this.onLeave = onLeave;
     this.world = null;
@@ -78,6 +80,7 @@ class Game {
     this.town = createTownPanel(overlay, this);
     this.research = createResearchPanel(overlay, this);
     this.tip = createTip(overlay, this);
+    this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -174,6 +177,10 @@ class Game {
     if (m.t === "state" && this.view) this.view.colours.clear();
     if (m.t === "purse" && this.view && m.season && m.season !== this.view.season) this.view.setSeason(m.season);
     if (m.t === "purse" && this.townOnPurse) { this.townOnPurse = false; this.toggleTown(true); }
+    if (m.t === "ended") this.toast(`${m.by} ended this world. Orders are off, but you can still look around.`);
+    if (m.t === "reopened") this.toast(`${m.by} reopened this world.`);
+    if (m.t === "speed") this.toast(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
+    if (m.t === "renamed") { this.name = m.name; this.toast(`${m.by} renamed the world ${m.name}.`); }
   }
 
   onFrame(data) {
@@ -235,6 +242,7 @@ class Game {
     if (action === "build") return this.toggleBuildMenu();
     if (action === "town") return this.toggleTown();
     if (action === "research") return this.toggleResearch();
+    if (action === "admin") return this.toggleAdmin();
     if (action === "deposits") return this.toggleDeposits();
     if (["advance", "claim", "target", "move", "split", "merge", "disband"].includes(action)) act[action]();
     if (action === "next") this.nextStack();
@@ -244,6 +252,7 @@ class Game {
     this.updatePanels();
     if (action === "cancel") {
       if (this.building || this.zoning) this.stopBuild();
+      else if (this.adminPanel?.open) this.toggleAdmin(false);
       else if (this.research.open) this.toggleResearch(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
@@ -262,6 +271,13 @@ class Game {
 
   toggleResearch(on = !this.research.open) {
     this.research.show(on && !!this.world?.purse?.research);
+    this.updatePanels();
+  }
+
+  toggleAdmin(on = !this.adminPanel?.open) {
+    if (!this.adminPanel) return;
+    if (on && this.research.open) this.toggleResearch(false);
+    this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
@@ -468,7 +484,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.tip]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {
@@ -500,7 +516,7 @@ async function worlds(account) {
 function enter(id, name, account) {
   showScreen("game");
   history.replaceState(null, "", `#w=${id}`);
-  new Game(id, name, () => worlds(account));
+  new Game(id, name, () => worlds(account), account);
 }
 
 async function start() {

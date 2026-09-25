@@ -1,8 +1,11 @@
-import { el } from "./dom.js";
+import { el, armed } from "./dom.js";
 import { api } from "../api.js";
+import { createAccounts } from "./accounts.js";
 
 export async function showWorlds(root, account, { onOpen, onLogout }) {
   const msg = el("p", { class: "msg" });
+  const say = text => { msg.textContent = text; msg.scrollIntoView({ block: "nearest" }); };
+  const accounts = account.admin ? createAccounts(account, say) : null;
   const list = el("div", { class: "worlds" });
   const name = el("input", { id: "world-name", placeholder: "world name", maxlength: 40, value: "New world" });
   const map = el("select", { id: "world-map" },
@@ -23,8 +26,17 @@ export async function showWorlds(root, account, { onOpen, onLogout }) {
     const worlds = await api("/api/worlds");
     if (worlds.error) return (msg.textContent = worlds.error);
     list.replaceChildren(...(worlds.length ? worlds.map(w => el("div", { class: "world" },
-      el("div", {}, el("b", { text: w.name }), el("span", { class: "muted", text: ` ${w.players} player${w.players === 1 ? "" : "s"}${w.host ? ", yours" : ""}` })),
-      el("button", { class: "primary", "data-world": w.id, onclick: () => open(w), text: w.member ? "Open" : "Join" }))) : [el("p", { class: "muted", text: account.admin ? "No worlds yet. Create one below." : "No worlds yet. The host creates them." })]));
+      el("div", {}, el("b", { text: w.name }), el("span", { class: "muted", text: ` ${w.players} player${w.players === 1 ? "" : "s"}${w.host ? ", yours" : ""}${w.removed ? ", the host removed you" : ""}` })),
+      el("div", { class: "row" },
+        account.admin ? armed("Delete", "Really delete?", () => remove(w), { "data-delete": w.id }) : null,
+        w.removed ? null : el("button", { class: "primary", "data-world": w.id, onclick: () => open(w), text: w.member ? "Open" : "Join" })))) : [el("p", { class: "muted", text: account.admin ? "No worlds yet. Create one below." : "No worlds yet. The host creates them." })]));
+  };
+  const remove = async w => {
+    const r = await api(`/api/admin/worlds/${w.id}/delete`, {});
+    if (r.error) return say(r.error);
+    say(`Deleted ${w.name}.`);
+    await refresh();
+    accounts?.refresh();
   };
   const open = async w => {
     if (!w.member) {
@@ -43,7 +55,7 @@ export async function showWorlds(root, account, { onOpen, onLogout }) {
   };
 
   root.replaceChildren(el("div", { class: "card wide" },
-    el("div", { class: "row spread" }, el("h1", { text: "Worlds" }), el("span", { class: "muted" }, `${account.name} `, el("button", { onclick: onLogout, text: "Log out" }))),
+    el("div", { class: "row spread" }, el("h1", { text: "Worlds" }), el("span", { class: "muted" }, `${account.name} `, accounts ? el("button", { id: "open-accounts", onclick: () => accounts.toggle(), text: "Accounts" }) : null, " ", el("button", { onclick: onLogout, text: "Log out" }))),
     list,
     ...(account.admin ? [
       el("h2", { text: "New world" }),
@@ -54,6 +66,7 @@ export async function showWorlds(root, account, { onOpen, onLogout }) {
         el("label", {}, "Bots ", bots, " ", botsLabel),
         el("button", { id: "world-create", class: "primary", onclick: create, text: "Create and open" })),
     ] : [el("p", { id: "host-only", class: "muted", text: "Only the host can create worlds. Join one above." })]),
+    accounts?.el ?? null,
     msg));
   await refresh();
 }
