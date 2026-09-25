@@ -6,7 +6,8 @@ import { installEconomy } from "../src/sim/economy.js";
 import { buildingAt } from "../src/sim/buildings.js";
 import { runOrder, BuildingFeed, purseOf } from "../src/game.js";
 import { ClientWorld } from "../src/shared/client.js";
-import { encodeRows, decodeRows } from "../src/shared/buildings.js";
+import { encodeRows, decodeRows, planBatch } from "../src/shared/buildings.js";
+import { installResearch } from "../src/sim/research.js";
 import { frame, MSG, PROTOCOL } from "../src/shared/protocol.js";
 import { TID, TERRAIN } from "../src/shared/terrain.js";
 import data from "../data/buildings.json" with { type: "json" };
@@ -91,6 +92,48 @@ test("coast buildings: a jetty sits on your shore, and a harbour half in the sea
   assert.equal(harbour.owner, a, "only its first land plot decides");
   w.claim(g.idx(12, 6), b);
   assert.equal(harbour.owner, b, "the harbour passes to whoever takes its land");
+});
+
+test("the upgrade order: 20 watchtowers cost exactly 20 x 1.5 x a stone tower, lowest first, and the rest are explained", () => {
+  const { w, a, g, n } = setup();
+  Object.assign(n, { era: "M", money: 1e6, stock: { wood: 1e6, stone: 1e6 } });
+  const towers = [];
+  for (let k = 0; k < 24; k++) towers.push(place(w, a, "watchtower_wood", g.idx(19 + (k % 6) * 2, [8, 10, 12, 20][Math.floor(k / 6)])));
+  assert.ok(towers.every(t => t.id), towers.find(t => !t.id)?.error);
+  for (let t = 0; t < 31; t++) w.tick(1);
+  assert.ok(towers.every(t => t.state === "active"));
+  const stone = data.buildings.find(d => d.id === "tower_stone").cost;
+  Object.assign(n, { money: 20 * 1.5 * stone.money, stock: { stone: 20 * stone.stone } });
+  const plan = planBatch(Array(20).fill(stone), n, 1.5, 4);
+  const r = runOrder(w, a, { t: "upgrade", picks: [["watchtower_wood", 20]] });
+  assert.deepEqual({ ok: r.ok, done: r.done, spent: r.spent, skipped: r.skipped }, { ok: true, done: 20, spent: 2400, skipped: {} });
+  assert.deepEqual({ done: plan.done, spent: plan.spent, used: plan.used }, { done: 20, spent: 2400, used: { stone: 600 } }, "the client's plan matches the server's charge");
+  assert.equal(n.money, 0);
+  assert.equal(n.stock.stone, 0);
+  assert.ok(towers.slice(0, 20).every(t => t.type === "tower_stone") && towers.slice(20).every(t => t.type === "watchtower_wood"), "the lowest ids go first");
+  n.money = 700;
+  const each = 1.5 * (stone.money + stone.stone * 4);
+  assert.equal(planBatch(Array(4).fill(stone), n, 1.5, 4).done, 2, "with no stone, each costs 300 gold, so 700 gold does two");
+  const short = runOrder(w, a, { t: "upgrade", picks: [["watchtower_wood", 99]] });
+  assert.deepEqual({ done: short.done, spent: short.spent, skipped: short.skipped, missing: short.missing }, { done: 2, spent: 2 * each, skipped: { "not enough money": 2 }, missing: 95 });
+  assert.ok(w.events.some(e => e.type === "upgraded" && e.nation === a && e.count === 2));
+});
+
+test("the upgrade order checks its picks, the filter, research and the era", () => {
+  const { w, a, g, n } = setup();
+  Object.assign(n, { era: "T", money: 1e6, stock: { wood: 1e6, stone: 1e6 } });
+  const t = place(w, a, "watchtower_wood", g.idx(20, 10));
+  for (let k = 0; k < 31; k++) w.tick(1);
+  const up = m => runOrder(w, a, { t: "upgrade", ...m });
+  assert.equal(up({ picks: "all" }).error, "pick 1 to 60 groups");
+  for (const picks of [[["nope", 1]], [["watchtower_wood", 0]], [["__proto__", 1]], [["watchtower_wood", 1.5]], [[]]]) assert.equal(up({ picks }).error, "each pick is a building type and a count");
+  assert.equal(up({ picks: [["watchtower_wood", 1]], filter: "mine" }).error, "filter is all, civilian or player");
+  assert.equal(up({ picks: [["watchtower_wood", 1]], filter: "civilian" }).error, "none of those can be upgraded now");
+  assert.deepEqual(up({ picks: [["watchtower_wood", 1]] }).skipped, { "era locked": 1 });
+  n.era = "M";
+  installResearch(w);
+  assert.deepEqual(up({ picks: [["watchtower_wood", 1]] }).skipped, { "needs Masonry research": 1 });
+  assert.equal(t.type, "watchtower_wood");
 });
 
 test("the build order pays up front, and the site finishes over its build time", () => {

@@ -67,6 +67,14 @@ h2{font-size:16px;margin:18px 0 8px}
 .demand .fill.up{background:var(--good)}
 .demand .fill.down{background:var(--bad)}
 .panel.center{left:50%;transform:translateX(-50%);top:calc(var(--hud,48px) + 16px);width:min(980px,calc(100% - 16px));max-height:calc(100% - var(--hud,48px) - 32px);overflow:auto;display:flex;flex-direction:column;gap:8px;z-index:2}
+.upgrade-list{display:flex;flex-direction:column;gap:4px;max-height:calc(100vh - var(--hud,48px) - 260px);min-height:120px;overflow:auto}
+.upgrade-row{display:grid;grid-template-columns:28px 34px 1fr auto;gap:8px;align-items:center;border:2px solid var(--line);border-radius:3px;padding:4px 6px;cursor:pointer;user-select:none}
+.upgrade-row.on{border-color:var(--signal);background:#3a3a1c}
+.upgrade-row.locked{opacity:.6;cursor:default}
+.upgrade-row .tick{touch-action:none;width:24px;height:24px;border:2px solid var(--mute);border-radius:3px;display:grid;place-items:center;cursor:ns-resize}
+.upgrade-row.on .tick::after{content:"";width:12px;height:12px;background:var(--signal)}
+.upgrade-row .thumb{width:32px;height:32px;image-rendering:pixelated}
+#upgrade-summary{margin:0;color:var(--signal)}
 .admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .admin-grid section{display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--line);padding-top:6px}
 .admin-list{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}

@@ -16,6 +16,7 @@ console.log(`map: ${MAP}`);
 import { PROTOCOL, MSG, CLOSE } from "../src/shared/protocol.js";
 import { hashBytes, hashRuns } from "../src/shared/codec.js";
 import { ClientWorld } from "../src/shared/client.js";
+import { planBatch } from "../src/shared/buildings.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
@@ -275,6 +276,31 @@ check(aSpawn >= 0, "player spawns on land");
   const bRow = await until(() => B.json.some(m => m.t === "state" && m.n.some(r => r[0] === you && r[5] === 1)), 5000);
   check(ageOrder?.ok && heard && bRow && cw.purse?.era === "M", `the host reaches the Medieval era; the friend hears it and sees the era in the nation list (${cw.purse?.era}${cw.purse?.era === "M" ? "" : `; world clock ${clock0.world.toFixed(1)} at the order, wall ${Math.round((Date.now() - clock0.wall) / 1000)} s since; purses after the order ${A.json.filter(m => m.t === "purse").length - pursesBefore}; status ${JSON.stringify((({ time, looping, frozen, tickErrors, lastError }) => ({ time, looping, frozen, tickErrors, lastError }))((await api(`/api/worlds/${wid}/status`, null, ta)).body))}; order ${JSON.stringify(ageOrder)}; research ${JSON.stringify({ ...cw.purse?.research, known: cw.purse?.research?.known.length })}`})`);
   check(erased?.ok && erased.plots > 0 && cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0) === zonedBefore - erased.plots, `erasing clears ${erased?.plots} zoned plots on the client too`);
+  A.ws.send(JSON.stringify({ t: "research", id: "masonry", mode: "first" }));
+  await nextResult(A, "research");
+  const masonry = await until(() => { view.pump(); return cw.purse?.research?.known.includes("masonry"); }, 20000);
+  A.ws.send(JSON.stringify({ t: "admin", op: "give", nation: you, what: "money", amount: 5000 }));
+  await nextResult(A, "admin");
+  await until(() => { view.pump(); return cw.purse?.money >= 5000; }, 5000);
+  const towers = [];
+  for (const i of near) {
+    if (towers.length >= 3) break;
+    if (cw.placeError("watchtower_wood", i) || towers.some(j => Math.max(Math.abs((i % M.w) - (j % M.w)), Math.abs(Math.floor(i / M.w) - Math.floor(j / M.w))) < 2)) continue;
+    A.ws.send(JSON.stringify({ t: "build", type: "watchtower_wood", at: i }));
+    const r = await nextResult(A, "build");
+    if (r?.ok) towers.push(i);
+  }
+  const ready = await until(() => { view.pump(); return towers.every(i => cw.buildingAt(i)?.state === "active"); }, 10000);
+  const stoneTower = cw.defs.table.tower_stone, purse0 = { money: cw.purse.money, stone: cw.purse.stock.stone ?? 0 };
+  const expected = planBatch(Array(towers.length).fill(stoneTower.cost), cw.purse, cw.consRules.instantPremium, cw.consRules.moneyForMissing);
+  A.ws.send(JSON.stringify({ t: "upgrade", picks: [["watchtower_wood", 3]] }));
+  const up = await nextResult(A, "upgrade");
+  const ids = towers.map(i => cw.buildingAt(i)?.id);
+  const friendSaw = await until(() => ids.every(id => B.json.some(m => m.t === "state" && (m.b ?? []).some(r => r[0] === id && r[1] === stoneTower.num))), 5000);
+  check(masonry && ready && towers.length === 3 && up?.ok && up.done === 3 && Math.abs(up.spent - expected.spent) < 0.01 && friendSaw,
+    `three wooden watchtowers upgrade at once: ${up?.done} done for ${up?.spent} gold (the client's plan said ${expected.spent}), and the friend sees stone towers`);
+  const wait = await until(() => { view.pump(); return towers.every(i => cw.buildingAt(i)?.type === "tower_stone") && cw.purse.money < purse0.money ? cw.purse : null; }, 5000);
+  check(wait && towers.every(i => cw.buildingAt(i).state === "active"), `the host's own client shows them finished at once, with gold down from ${purse0.money} to ${wait?.money}`);
 }
 B.ws.send(JSON.stringify({ t: "chat", text: "hello from friend" }));
 check(!!(await waitFor(A, m => m.t === "chat" && m.text === "hello from friend")), "chat reaches the other player");

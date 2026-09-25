@@ -91,6 +91,44 @@ export function producerError(v, p, plots) {
   return null;
 }
 
+export function levelsOf(table) {
+  const prev = new Map(), out = new Map();
+  for (const d of Object.values(table)) if (d.next) prev.set(d.next, d.id);
+  for (const id of Object.keys(table)) {
+    let base = id, level = 0;
+    while (prev.has(base) && level < 20) { base = prev.get(base); level++; }
+    out.set(id, { base, level });
+  }
+  return out;
+}
+
+export function priceOf(cost, stock, premium, moneyForMissing) {
+  let money = (cost.money ?? 0) * premium;
+  const use = {};
+  for (const [k, v] of Object.entries(cost)) {
+    if (k === "money") continue;
+    const have = stock?.[k] ?? 0;
+    use[k] = Math.min(have, v);
+    money += (v - use[k]) * moneyForMissing * premium;
+  }
+  return { money, use };
+}
+
+export function planBatch(costs, nation, premium, moneyForMissing) {
+  const stock = { ...(nation.stock ?? {}) }, used = {};
+  let money = nation.money ?? 0, spent = 0, done = 0, bought = 0;
+  for (const cost of costs) {
+    const p = priceOf(cost, stock, premium, moneyForMissing);
+    if (money < p.money) continue;
+    money -= p.money;
+    spent += p.money;
+    bought += p.money - (cost.money ?? 0) * premium;
+    done++;
+    for (const [k, v] of Object.entries(p.use)) { if (!v) continue; stock[k] -= v; used[k] = (used[k] ?? 0) + v; }
+  }
+  return { done, spent, used, bought, short: costs.length - done };
+}
+
 export function costError(def, nation) {
   for (const [k, v] of Object.entries(def.cost)) {
     if (k === "money") continue;

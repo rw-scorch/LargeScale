@@ -3,7 +3,7 @@ import { hash2 } from "../shared/rng.js";
 import { areaAround } from "../shared/buildings.js";
 import { People } from "./people.js";
 
-export const ZOOM = { max: 16, sprites: 10, icons: 3, maxRatio: 2 };
+export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
 const ROAD_NAMES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
@@ -62,14 +62,15 @@ export class MapRenderer {
     this.ratio = r;
     this.canvas.width = Math.max(1, Math.round(cssW * r));
     this.canvas.height = Math.max(1, Math.round(cssH * r));
-    this.minScale = Math.min(this.canvas.width / this.state.w, this.canvas.height / this.state.h);
+    this.fitScale = Math.min(this.canvas.width / this.state.w, this.canvas.height / this.state.h);
+    this.minScale = this.fitScale * ZOOM.out;
     this.clampCamera();
   }
 
   fitWorld() {
     this.cam.x = this.state.w / 2;
     this.cam.y = this.state.h / 2;
-    this.cam.scale = this.minScale;
+    this.cam.scale = this.fitScale;
   }
 
   clampCamera() {

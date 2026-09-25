@@ -275,6 +275,18 @@ const close = await frames(page, () => { const g = window.__ls.game; g.home(); g
 console.log(`frame times at whole-map view: ${JSON.stringify(world)}`);
 console.log(`frame times at 16 px per plot: ${JSON.stringify(close)}`);
 check(close.cssPxPerPlot === 16, "zoom reaches 16 px per plot");
+const limits = await page.evaluate(() => {
+  const g = window.__ls.game, v = g.view;
+  v.cam.scale = 1e9; v.clampCamera();
+  const most = v.cam.scale / v.ratio;
+  v.cam.scale = 1e-9; v.clampCamera();
+  const least = Math.round((v.cam.scale / v.fitScale) * 100) / 100;
+  g.home(); v.cam.scale = 64 * v.ratio; v.clampCamera();
+  return { most, least };
+});
+await page.waitForTimeout(600);
+await page.screenshot({ path: `${OUT}/7b-closest-${MAP}.png` });
+check(limits.most === 64 && limits.least === 0.5, `zoom now runs from half the whole-map view to 64 px per plot (${JSON.stringify(limits)})`);
 await page.screenshot({ path: `${OUT}/7-close-${MAP}.png` });
 const worldUrl = page.url();
 
@@ -436,6 +448,21 @@ await fix.waitForTimeout(200);
 const tip = other ? await fix.textContent("#plot-tip") : "";
 check(other && await fix.isVisible("#plot-tip") && tip.includes(other.name), `hovering another nation's land names it: "${tip}"`);
 await fix.screenshot({ path: `${OUT}/16-hover.png` });
+await fix.evaluate(() => window.__ls.game.fit());
+await fix.waitForTimeout(300);
+const ore = await fix.evaluate(() => {
+  const g = window.__ls.game, w = g.world, v = g.view, W = v.canvas.width / v.ratio, H = v.canvas.height / v.ratio;
+  for (let k = 0; k < w.deposits.plots.length; k++) {
+    const i = w.deposits.plots[k], [px, py] = v.plotToScreen((i % w.w) + 0.5, ((i / w.w) | 0) + 0.5), x = px / v.ratio, y = py / v.ratio;
+    if (x > 260 && y > 150 && x < W - 380 && y < H - 170 && !w.buildingAt(i) && g.plotAt(px, py) === i) return { x, y, name: w.depositKind(i).name };
+  }
+  return null;
+});
+if (ore) await fix.mouse.move(ore.x, ore.y);
+await fix.waitForTimeout(200);
+const oreTip = ore ? await fix.textContent("#plot-tip") : "";
+check(ore && oreTip.includes(ore.name), `hovering a deposit names the ore and what digs it: "${oreTip}"`);
+await fix.screenshot({ path: `${OUT}/16b-ore-hover.png` });
 const trip = await fix.evaluate(async () => {
   const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital;
   const st = await g.conn.request({ t: "stack", share: 0.4, at: cap });
@@ -520,6 +547,38 @@ await fix.click("#admin-panel [data-speed='1']");
 check(reopenedUi, "Reopen world unfreezes it and the banner goes");
 await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#admin-panel")), "Esc closes the Admin panel");
+await fix.keyboard.press("y");
+const lockedRow = await fix.waitForSelector("#upgrade-panel .upgrade-row.locked", { timeout: 5000 }).then(() => fix.textContent("#upgrade-panel .upgrade-row.locked"), () => "");
+check(await fix.isVisible("#upgrade-panel") && /Needs the Medieval era|research/.test(lockedRow), `Y opens the upgrade menu; Tribal buildings show why they cannot upgrade yet: "${lockedRow.trim()}"`);
+await fix.screenshot({ path: `${OUT}/23-upgrade-locked.png` });
+const medieval = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, me = w.you;
+  for (const id of ["clubs", "palisades", "chieftains", "mud_building", "healers", "herding", "age_medieval", "masonry"]) await g.conn.request({ t: "research", id });
+  await g.conn.request({ t: "admin", op: "finish", nation: me });
+  await g.conn.request({ t: "admin", op: "give", nation: me, what: "money", amount: 5000 });
+  await g.conn.request({ t: "admin", op: "give", nation: me, what: "wood", amount: 500 });
+  const cap = w.nations.get(me).capital, cx = cap % w.w, cy = (cap / w.w) | 0, placed = [];
+  for (let dy = -6; dy <= 6 && placed.length < 4; dy += 2) for (let dx = -6; dx <= 6 && placed.length < 4; dx += 2) {
+    const i = (cy + dy) * w.w + cx + dx;
+    if (w.owner[i] !== me || w.placeError("watchtower_wood", i)) continue;
+    if ((await g.conn.request({ t: "build", type: "watchtower_wood", at: i })).ok) placed.push(i);
+  }
+  return placed;
+});
+const towersUp = await fix.waitForFunction(ps => ps.every(i => window.__ls.game.world.buildingAt(i)?.state === "active") && window.__ls.game.world.purse?.era === "M", medieval, { timeout: 15000 }).then(() => true, () => false);
+await fix.waitForSelector("#upgrade-panel .upgrade-row[data-type=watchtower_wood]:not(.locked)", { timeout: 5000 }).catch(() => {});
+await fix.click("#upgrade-all");
+const totalText = await fix.textContent("#upgrade-total");
+const goText = await fix.textContent("#upgrade-go");
+await fix.screenshot({ path: `${OUT}/24-upgrade-picked.png` });
+await fix.click("#upgrade-go");
+const summaryText = await fix.waitForSelector("#upgrade-summary:not([hidden])", { timeout: 5000 }).then(() => fix.textContent("#upgrade-summary"), () => "");
+const upgraded = await fix.waitForFunction(ps => ps.every(i => window.__ls.game.world.buildingAt(i)?.type === "tower_stone"), medieval, { timeout: 5000 }).then(() => true, () => false);
+check(towersUp && medieval.length === 4 && /Upgrade \d+/.test(goText) && /gold/.test(totalText) && /^Upgraded \d+ for/.test(summaryText) && upgraded,
+  `Select all shows a live total ("${totalText.trim()}"), and ${goText} upgrades them at once: "${summaryText}"`);
+await fix.screenshot({ path: `${OUT}/25-upgrade-done.png` });
+await fix.keyboard.press("Escape");
+check(!(await fix.isVisible("#upgrade-panel")), "Esc closes the upgrade menu");
 await fix.click("#leave-world");
 await fix.waitForSelector("#open-accounts", { timeout: 5000 });
 await fix.click("#open-accounts");
