@@ -39,7 +39,7 @@ export class ClientWorld {
     this.buildingsReady = !hello.frames?.buildings;
     this.early = new Set();
     this.purse = hello.purse ?? null;
-    this.consRules = hello.consRules ?? { demolishRefund: 0.5, refundOnCancel: 0.5 };
+    this.consRules = { demolishRefund: 0.5, refundOnCancel: 0.5, instantPremium: 1.5, moneyForMissing: 4, ...hello.consRules };
     this.changed = [];
     this.depositIds = hello.depositIds ?? [];
     this.deposits = emptyDeposits();

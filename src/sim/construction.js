@@ -1,4 +1,4 @@
-import { placeError, costError, eraIdx } from "../shared/buildings.js";
+import { placeError, costError, eraIdx, levelsOf, priceOf as sharedPrice } from "../shared/buildings.js";
 import { ERA_ORDER, BUILDINGS, installBuildings, footprint, addBuilding, removeBuilding, setPlots, buildingAt, touched } from "./buildings.js";
 import rules from "../../data/rules.json" with { type: "json" };
 
@@ -34,15 +34,7 @@ export function canPlace(world, nid, type, anchor, self = 0) {
 }
 
 export function priceOf(cost, n, premium = 1, r = CONS_RULES) {
-  let money = (cost.money ?? 0) * premium;
-  const use = {};
-  for (const [k, v] of Object.entries(cost)) {
-    if (k === "money") continue;
-    const have = n.stock?.[k] ?? 0;
-    use[k] = Math.min(have, v);
-    money += (v - use[k]) * r.moneyForMissing * premium;
-  }
-  return { money, use };
+  return sharedPrice(cost, n.stock, premium, r.moneyForMissing);
 }
 
 function charge(n, price) {
@@ -121,28 +113,22 @@ export function progressConstruction(world, dt) {
   }
 }
 
-function chainOf(table, type) {
-  let base = type;
-  for (let guard = 0; guard < 20; guard++) {
-    const prev = Object.keys(table).find(k => table[k].next === base);
-    if (!prev) break;
-    base = prev;
-  }
-  const chain = [base];
-  while (table[chain[chain.length - 1]].next) chain.push(table[chain[chain.length - 1]].next);
-  return chain;
+const levels = new WeakMap();
+function levelOf(table, type) {
+  if (!levels.has(table)) levels.set(table, levelsOf(table));
+  return levels.get(table).get(type);
 }
 
 export function listUpgradable(world, nid, { filter = "all", category = null } = {}) {
-  const rows = [], table = world.bld.table;
-  for (const b of world.bld.list.values()) {
-    const def = table[b.type], civilian = b.civilian;
+  const rows = [], bld = world.bld, table = bld.table;
+  for (const id of bld.mine.get(nid) ?? []) {
+    const b = bld.list.get(id), def = table[b.type], civilian = b.civilian;
     if (b.owner !== nid || b.state !== "active" || !def.next) continue;
     if (filter === "civilian" && !civilian) continue;
     if (filter === "player" && civilian) continue;
     if (category && (def.cat ?? def.zone) !== category) continue;
-    const chain = chainOf(table, b.type);
-    rows.push({ id: b.id, civilian, type: b.type, next: def.next, level: chain.indexOf(b.type), chain: chain[0], era: def.era });
+    const lv = levelOf(table, b.type);
+    rows.push({ id: b.id, civilian, type: b.type, next: def.next, level: lv.level, chain: lv.base, era: def.era });
   }
   rows.sort((a, b) => a.level - b.level || eraIdx(a.era) - eraIdx(b.era) || a.chain.localeCompare(b.chain) || a.id - b.id);
   return rows;
