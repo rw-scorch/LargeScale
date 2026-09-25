@@ -3,7 +3,7 @@ import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
 
 const ZONE_TOOLS = [["res", "Residential", "Homes. Huts go up while people want them."], ["com", "Commercial", "Shops and stalls give jobs."], ["ind", "Industrial", "Workshops, from the Medieval era."], ["none", "Erase", "Removes zoning. Buildings stay."]];
 
-const CATEGORY_NAMES = { civic: "Civic", military: "Military", infrastructure: "Storage", transport: "Water", industry: "Industry" };
+const CATEGORY_NAMES = { resources: "Resources", farming: "Farming", civic: "Civic", military: "Military", infrastructure: "Storage", transport: "Water", industry: "Industry" };
 
 export const costText = cost => Object.entries(cost).map(([k, v]) => `${v} ${k === "money" ? "gold" : k}`).join(", ");
 
@@ -47,6 +47,7 @@ export function createBuildMenu(root, game) {
         return el("button", { class: `build-item${game.building === d.id ? " on" : ""}`, "data-type": d.id, disabled: !!reason, onclick: () => game.startBuild(d.id) },
           el("span", { class: "row spread" }, el("b", { text: d.name }), el("span", { class: "muted", text: `${d.time} s` })),
           el("span", { class: "muted", text: `${costText(d.cost)}, ${d.footprint[0]} by ${d.footprint[1]}` }),
+          d.producer ? el("span", { class: "muted", text: `Makes ${d.producer.rate} ${d.producer.out ?? "ore"} a second${d.producer.kind === "farm" ? " times fertility and season" : ""}, ${d.jobs} workers` }) : null,
           reason ? el("span", { class: "why", text: reason }) : null);
       }));
     },

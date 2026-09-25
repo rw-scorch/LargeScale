@@ -40,6 +40,7 @@ export function createTownPanel(root, game) {
         ["Food", `${fmt(food)}, eating ${t.foodUse < 0.1 ? t.foodUse.toFixed(2) : t.foodUse.toFixed(1)} a second${Number.isFinite(lasts) ? `, lasts ${lasts > 120 ? `${Math.round(lasts / 60)} min` : `${Math.round(lasts)} s`}` : ""}`],
         ["Goods", `${fmt(p.stock.goods ?? 0)} (${pct(t.goodsSat)} supplied)`],
         ["Needs met", pct(t.needs)],
+        ["Making", Object.entries(p.making ?? {}).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`).join(", ") + (Object.keys(p.making ?? {}).length ? " a second" : "nothing yet")],
       ];
       lines.replaceChildren(...rows.map(([k, v]) => el("div", { class: "row spread" }, el("span", { class: "muted", text: k }), el("span", { id: `town-${k.split(" ")[0].toLowerCase()}`, text: v }))));
       if (t.foodSat < 1 && t.pop > 0) lines.append(el("p", { class: "why", text: "Starving: people are leaving. Food comes from fields and fishing huts (next update)." }));

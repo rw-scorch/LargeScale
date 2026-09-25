@@ -202,9 +202,10 @@ export class World extends DurableObject {
     if (!this.sim) return;
     const t0 = Date.now();
     let rows = 0, ownerBytes = 0;
+    const detail = {}, known = new Set(Object.entries(this.parts ?? {}).filter(([, n]) => n > 0).map(([k]) => k));
     if (all || this.ownerChanged || this.sim.dirty.size) {
       const runs = encodeRuns(this.sim.owner);
-      rows += this.writeRows("owner", runs);
+      rows += detail.owner = this.writeRows("owner", runs);
       ownerBytes = runs.length;
       this.hashes.owner = hashBytes(runs);
       this.ownerChanged = false;
@@ -212,18 +213,19 @@ export class World extends DurableObject {
     const layers = saveLayers(this.sim);
     const layerBytes = {};
     for (const [name, bytes] of Object.entries(layers)) {
-      rows += this.writeRows(name, bytes);
+      rows += detail[name] = this.writeRows(name, bytes);
       layerBytes[name] = bytes.length;
       this.hashes[name] = hashBytes(bytes);
     }
-    rows += this.meta("state", {
+    rows += detail.state = this.meta("state", {
       time: this.sim.time, nextNation: this.sim.nextNation, nextStack: this.sim.nextStack,
       nations: [...this.sim.nations.values()], stacks: [...this.sim.stacks.values()], accounts: [...this.accounts],
       savedAt: Date.now(), hashes: this.currentHashes(),
     });
     this.lastSave = Date.now();
     const prev = this.saveStats ?? { saves: 0, totalRows: 0, maxRows: 0 };
-    this.saveStats = { rows, ownerBytes, layerBytes, ms: Date.now() - t0, saves: prev.saves + 1, totalRows: prev.totalRows + rows, maxRows: Math.max(prev.maxRows, rows) };
+    const fresh = Object.keys(detail).some(k => k !== "state" && !known.has(k)) || !prev.saves;
+    this.saveStats = { rows, ownerBytes, layerBytes, detail, ms: Date.now() - t0, saves: prev.saves + 1, totalRows: prev.totalRows + rows, maxRows: Math.max(prev.maxRows, rows), worst: rows >= prev.maxRows ? detail : prev.worst, maxSteady: fresh ? prev.maxSteady ?? 0 : Math.max(prev.maxSteady ?? 0, rows) };
   }
 
   sockets() { return this.ctx.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN); }

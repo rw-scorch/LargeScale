@@ -73,6 +73,7 @@ Memory is the tight one. The kit keeps full-size arrays of 4 bytes per plot for 
 - A deposits overlay toggle at mid zoom.
 - Output multiplies by available workers from step 3.
 - **Done when:** a quarry runs a deposit to zero and the sprite changes; a woodcutter clears the forest around it; winter farms make much less.
+- **Done (25 September 2026).** Unit tests: a quarry drains its vein nearest first to exactly its 50 stone and goes idle; a woodcutter clears the nearest plots, which regrow and fill up again; winter wheat makes 0.2 / 1.2 of summer, and the southern hemisphere is reversed. The browser test runs a quarry dry on a stone deposit; the screenshots show the quarry dimmed with the depleted sprite. The smoke test on fine Europe sees a woodcutter clear a plot live for the second player; the restart check reloads the terrain edits identically. Earth bench with about 1,900 producers and 55,000 people: worst tick 22.4 ms; fine Europe 24.2 ms. Deposits are committed next to the maps. Region worlds cut them, but the fine client still downloads the whole 791 KB fine file once, as it does the fine terrain.
 
 ### 5. Research and eras (piece 9)
 

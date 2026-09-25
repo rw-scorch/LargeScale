@@ -7,6 +7,7 @@ export const ACTIONS = {
   disband: { key: "x", label: "Disband, or demolish the selected building" },
   build: { key: "b", label: "Open the build menu" },
   town: { key: "t", label: "Town: population, jobs, food and demand" },
+  deposits: { key: "r", label: "Show deposits on the map" },
   next: { key: "Tab", label: "Select your next stack" },
   home: { key: "h", label: "Go to your capital" },
   cancel: { key: "Escape", label: "Cancel" },

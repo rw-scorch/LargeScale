@@ -10,6 +10,7 @@ export function createHud(root, game) {
   const purse = el("span", { id: "purse" });
   const build = el("button", { id: "open-build", onclick: () => game.toggleBuildMenu() }, "Build", " ", keyTag("build"));
   const town = el("button", { id: "open-town", onclick: () => game.toggleTown() }, "Town", " ", keyTag("town"));
+  const deposits = el("button", { id: "show-deposits", title: "deposits at mid zoom (R)", onclick: () => game.toggleDeposits() }, "Deposits", " ", keyTag("deposits"));
   const share = el("input", { id: "stack-share", type: "range", min: 10, max: 100, step: 5, value: 30, title: "share of your garrison" });
   const shareLabel = el("span", { class: "muted", text: "30%" });
   share.oninput = () => (shareLabel.textContent = `${share.value}%`);
@@ -25,6 +26,7 @@ export function createHud(root, game) {
     el("span", { class: "grow" }),
     build,
     town,
+    deposits,
     el("span", { class: "stackform" }, share, shareLabel, form),
     el("span", { class: "zoom" },
       el("button", { title: "zoom out (-)", text: "-", onclick: () => game.zoom(1 / 1.6) }),
@@ -42,10 +44,11 @@ export function createHud(root, game) {
       mine.textContent = n?.spawned ? `${fmt(n.plots)} plots, ${fmt(n.troops)} troops` : n ? "not placed yet" : "";
       form.disabled = !n?.spawned || !n.alive || game.world.frozen;
       const p = game.world?.purse;
-      purse.textContent = p ? [...(p.town ? [`${fmt(p.town.pop)} people`] : []), `${fmt(p.money)} gold`, ...Object.entries(p.stock).filter(([k, v]) => v > 0 || k === "food" || k === "wood").map(([k, v]) => `${fmt(v)} ${k}`)].join(", ") : "";
+      purse.textContent = p ? [...(p.season ? [p.season[0].toUpperCase() + p.season.slice(1)] : []), ...(p.town ? [`${fmt(p.town.pop)} people`] : []), `${fmt(p.money)} gold`, ...Object.entries(p.stock).filter(([k, v]) => v > 0 || k === "food" || k === "wood").map(([k, v]) => `${fmt(v)} ${k}`)].join(", ") : "";
       build.disabled = form.disabled || !p;
       build.classList.toggle("on", !!game.buildMenu?.open);
       town.disabled = !p;
+      deposits.classList.toggle("on", !!game.view?.showDeposits);
       town.classList.toggle("on", !!game.town?.open);
       form.classList.toggle("on", !!game.placing);
       placeHint.hidden = !game.placing;

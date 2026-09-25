@@ -17,6 +17,7 @@ import { createBuildMenu } from "./ui/build.js";
 import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel } from "./ui/town.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
+import { gunzip } from "./shared/codec.js";
 
 const screen = document.getElementById("screen");
 const gameRoot = document.getElementById("game");
@@ -25,10 +26,17 @@ const canvas = document.getElementById("map");
 
 let assets = null;
 const loadAssets = async () => (assets ??= await Promise.all([
-  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial"]),
+  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture"]),
   fetch("/assets/terrain/palettes.json").then(r => r.json()),
 ]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
-const gzCache = new Map();
+const gzCache = new Map(), depCache = new Map();
+const depositsGz = async (dir, hash) => {
+  if (!depCache.has(hash)) {
+    const r = await fetch(`/${dir}/deposits.bin.gz?v=${hash}`);
+    depCache.set(hash, r.ok ? new Uint8Array(await r.arrayBuffer()) : null);
+  }
+  return depCache.get(hash);
+};
 const terrainGz = async (dir, hash) => {
   if (!gzCache.has(hash)) {
     const r = await fetch(`/${dir}/terrain.bin.gz?v=${hash}`);
@@ -127,6 +135,10 @@ class Game {
     try {
       await loadAssets();
       await world.loadBase(() => terrainGz(m.map.dir ?? "map", m.map.baseHash ?? "test"));
+      if (m.map.kind !== "test") {
+        const gz = await depositsGz(m.map.dir ?? "map", m.map.baseHash);
+        if (gz) world.loadDeposits(await gunzip(gz));
+      }
     } catch (e) {
       this.toast(e.message);
       return;
@@ -152,13 +164,15 @@ class Game {
     if (this.view && this.world.changed.length) this.view.updateBuildings(this.world.takeChanged());
     if (m.t === "events") for (const e of m.events) this.announce(e);
     if (m.t === "state" && this.view) this.view.colours.clear();
+    if (m.t === "purse" && this.view && m.season && m.season !== this.view.season) this.view.setSeason(m.season);
   }
 
   onFrame(data) {
     if (!this.world) return;
     const r = this.world.frame(data);
     if (!r || !this.view) return;
-    if (r.layer === "zone") return;
+    if (r.layer === "zone" || r.layer === "deposits") return;
+    if (r.layer === "terrain" && r.plots) return this.view.updateTerrain(r.plots);
     if (r.layer === "buildings") { this.world.takeChanged(); this.view.indexBuildings(); }
     else if (r.layer === "terrain") this.view.rebuildTerrain();
     else if (r.all) this.view.rebuildTerritory();
@@ -180,6 +194,7 @@ class Game {
     if (e.type === "stalled" && w.stacks.get(e.stack)?.owner === you) say(`stall${e.stack}`, "A stack stopped: not enough troops to go on.");
     if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0);
     if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0);
+    if (e.type === "deposit_depleted" && e.nation === you) say(`dep${e.at}`, `A ${e.kind} deposit has run dry.`);
     if (e.type === "kit" && e.nation === you) say("kit", "Your chieftain hut stands at the capital. Press B to build more.", 0);
   }
 
@@ -200,6 +215,7 @@ class Game {
     if (action === "disband" && this.selectedBuilding !== null) return this.buildingPanel.demolish();
     if (action === "build") return this.toggleBuildMenu();
     if (action === "town") return this.toggleTown();
+    if (action === "deposits") return this.toggleDeposits();
     if (action === "advance" || action === "move" || action === "split" || action === "merge" || action === "disband") act[action]();
     if (action === "next") this.nextStack();
     if (action === "home") this.home();
@@ -219,6 +235,13 @@ class Game {
     const me = this.world?.nations.get(this.world.you);
     this.buildMenu.show(on && !!me?.spawned && me.alive && !this.world.frozen);
     if (!this.buildMenu.open) this.stopBuild();
+    this.updatePanels();
+  }
+
+  toggleDeposits() {
+    if (!this.view) return;
+    this.view.showDeposits = !this.view.showDeposits;
+    this.toast(this.view.showDeposits ? "Deposits shown at mid zoom. Grey ones are used up." : "Deposits hidden at mid zoom.");
     this.updatePanels();
   }
 
