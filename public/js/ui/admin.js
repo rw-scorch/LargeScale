@@ -23,13 +23,14 @@ export function createAdminPanel(root, game) {
   const target = el("select", { id: "admin-target" });
   const amount = el("input", { id: "admin-amount", class: "small", type: "number", value: 1000, step: 100 });
   const log = el("div", { id: "admin-log", class: "admin-log" });
-  let key = "", logged = 0;
+  let key = {}, logged = 0;
+  const counts = new Map();
+  const changed = (part, value) => { const k = JSON.stringify(value); if (key[part] === k) return false; key[part] = k; return true; };
 
   const op = async (msg, done) => {
     const r = await game.conn.request({ t: "admin", ...msg });
     if (!r.ok) game.toast(r.error ?? "that did not work");
     else if (done) game.toast(done(r));
-    key = "";
     loadLog();
     return r;
   };
@@ -66,7 +67,7 @@ export function createAdminPanel(root, game) {
     get open() { return !box.hidden; },
     show(on) {
       box.hidden = !on;
-      key = "";
+      key = {};
       if (on) { name.value = game.name; loadLog(); }
     },
     update() {
@@ -75,17 +76,17 @@ export function createAdminPanel(root, game) {
       title.textContent = `Admin: ${game.name}`;
       const living = [...w.nations.values()].filter(n => n.spawned && n.alive !== false);
       const humans = [...w.nations.values()].filter(n => !n.bot && n.id !== w.you);
-      const k = JSON.stringify([w.speed, w.ended, !!w.victory, living.map(n => [n.id, n.bot]), humans.map(n => [n.name, n.spawned, n.alive, n.plots])]);
       if (performance.now() - logged > 10000) loadLog();
-      if (k === key) return;
-      key = k;
-      speeds.replaceChildren(...SPEEDS.map(f => el("button", { class: w.speed === f ? "on" : "", "data-speed": f, text: `${f}x`, onclick: () => op({ op: "speed", factor: f }, r => `Speed set to ${r.factor}x.`) })));
-      endSlot.replaceChildren(w.victory ? el("span", { class: "muted", text: "This world is won and stays frozen." })
+      const where = n => ` ${n.name}, ${!n.spawned ? "not placed yet" : n.alive === false ? "eliminated" : `${fmt(n.plots ?? 0)} plots`}`;
+      for (const n of humans) { const s = counts.get(n.id); if (s) s.textContent = where(n); }
+      if (changed("speed", w.speed)) speeds.replaceChildren(...SPEEDS.map(f => el("button", { class: w.speed === f ? "on" : "", "data-speed": f, text: `${f}x`, onclick: () => op({ op: "speed", factor: f }, r => `Speed set to ${r.factor}x.`) })));
+      if (changed("end", [w.ended, !!w.victory])) endSlot.replaceChildren(w.victory ? el("span", { class: "muted", text: "This world is won and stays frozen." })
         : w.ended ? el("button", { id: "admin-reopen", text: "Reopen world", onclick: () => op({ op: "reopen" }, () => "Reopened.") })
         : armed("End world", "Really end it?", () => op({ op: "end" }, () => "Ended. Everyone can still look around."), { id: "admin-end" }));
-      players.replaceChildren(...(humans.length ? humans.map(n => el("div", { class: "admin-row" },
-        el("span", {}, el("i", { class: "swatch", style: `background:${n.colour}` }), ` ${n.name}, ${!n.spawned ? "not placed yet" : n.alive === false ? "eliminated" : `${fmt(n.plots ?? 0)} plots`}`),
+      if (changed("players", humans.map(n => [n.id, n.name]))) players.replaceChildren(...(humans.length ? humans.map(n => el("div", { class: "admin-row" },
+        el("span", {}, el("i", { class: "swatch", style: `background:${n.colour}` }), counts.set(n.id, el("span", { text: where(n) })).get(n.id)),
         armed("Remove", `Remove ${n.name}?`, () => op({ op: "kick", nation: n.id }, r => `${r.name} was removed.`), { "data-kick": n.id }))) : [el("span", { class: "muted", text: "No other players here." })]));
+      if (!changed("target", living.map(n => [n.id, n.bot]))) return;
       const pick = target.value;
       target.replaceChildren(...living.sort((a, b) => (a.id === w.you ? -1 : b.id === w.you ? 1 : 0) || (a.bot - b.bot) || a.name.localeCompare(b.name)).map(n => el("option", { value: n.id, text: n.id === w.you ? `${n.name} (you)` : n.bot ? `${n.name} (bot)` : n.name })));
       if ([...target.options].some(o => o.value === pick)) target.value = pick;
