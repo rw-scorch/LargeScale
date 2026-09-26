@@ -4,6 +4,7 @@
   "civilians": { "econEvery": 5, "growth": 0.02, "foodPerPerson": 0.002, "goodsPerPerson": 0.0004, "workerShare": 0.5, "comPerPerson": 0.08, "indPerPerson": 0.15, "buildTriesPerTick": 6, "upgradeChance": 0.03, "conscriptShare": 0.35, "conscriptCost": 0.25, "startResidents": 3, "upgradeOccupancy": 0.9, "resDemandAt": 0.75, "upgradeNeeds": 0.5, "starveLoss": 0.02, "foodReserveSeconds": 600, "settleStep": 60, "startStock": {"food": 50, "wood": 40, "stone": 0, "clay": 0, "steel": 0, "concrete": 0, "goods": 0} },
   "construction": { "instantPremium": 1.5, "moneyForMissing": 4, "refundOnCancel": 0.5, "demolishRefund": 0.5, "rubbleSeconds": 120, "speed": 1 },
   "economy": { "baseIncome": 1, "taxPerResident": 0.01, "startMoney": 100, "kit": "chieftain_hut", "kitSearch": 3 },
+  "policy": { "taxSteps": [0, 0.5, 1, 1.5, 2], "taxNames": ["None", "Low", "Normal", "High", "Very high"], "taxUnrest": 0.3, "taxGrowth": 0.5, "conscriptMin": 0.1, "conscriptMax": 0.6, "conscriptStep": 0.05, "conscriptWorkLoss": 1 },
   "buildings": { "capturedResidentsKept": 1 },
   "resources": { "forestWood": 250, "regrowPerMinute": 0.002, "regrowStart": 0.3, "regrowMinutes": 60, "minWorkforce": 0.25, "speed": 1, "seasonYield": {"spring": 0.8, "summer": 1.2, "autumn": 1, "winter": 0.2, "dry": 0.6}, "winterPasture": 0.5 },
   "supply": { "range": 18, "attritionPerSec": 0.004, "minMult": 0.5 },

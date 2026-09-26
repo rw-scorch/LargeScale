@@ -1,7 +1,7 @@
 import { checkVictory } from "./sim/bots.js";
 import { ORDER_CODES, MAX_ZONE_SIDE, MAX_WAYPOINTS } from "./shared/protocol.js";
 import { isLand } from "./shared/terrain.js";
-import { zonePlots, ZONE_NAMES } from "./sim/civilians.js";
+import { zonePlots, ZONE_NAMES, POLICY, CIV_RULES } from "./sim/civilians.js";
 import { orderResearch } from "./sim/research.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
@@ -215,6 +215,17 @@ export const ORDERS = {
     if (mode !== "clear" && typeof m.id !== "string") return fail("pick a research node");
     const r = orderResearch(sim, nation, m.id, mode);
     return r.error ? { ok: false, ...r } : { ok: true, ...r };
+  },
+  policy(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    const P = POLICY, n = sim.nations.get(nation);
+    if (m.tax === undefined && m.conscription === undefined) return fail("set tax or army share");
+    if (m.tax !== undefined && !(Number.isInteger(m.tax) && m.tax >= 0 && m.tax < P.taxSteps.length)) return fail(`tax is a step from 0 to ${P.taxSteps.length - 1}`);
+    if (m.conscription !== undefined && !(typeof m.conscription === "number" && m.conscription >= P.conscriptMin - 1e-9 && m.conscription <= P.conscriptMax + 1e-9))
+      return fail(`army share is from ${Math.round(P.conscriptMin * 100)}% to ${Math.round(P.conscriptMax * 100)}%`);
+    if (m.tax !== undefined) n.taxLevel = P.taxSteps[m.tax];
+    if (m.conscription !== undefined) n.conscription = Math.round(Math.round(m.conscription / P.conscriptStep) * P.conscriptStep * 100) / 100;
+    return { ok: true, ...policyOf(n) };
   },
   standing(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
@@ -450,8 +461,14 @@ export function vitalsOf(sim, n) {
   if (!n?.spawned) return null;
   const r = sim.rules, cap = sim.maxTroops(n), e = sim.econ?.rules;
   const grow = n.alive && n.troops < cap ? r.growthFloor + r.growthRate * n.troops * (1 - n.troops / cap) : 0;
-  const income = e && n.money !== undefined ? ((n.income ?? e.baseIncome) + (n.pop ?? 0) * (n.tax ?? e.taxPerResident)) * (1 + (sim.effectOf?.(n, "income") ?? 0)) * (n.outputMult ?? 1) : 0;
+  const income = e && n.money !== undefined ? ((n.income ?? e.baseIncome) + (n.pop ?? 0) * e.taxPerResident * (n.taxLevel ?? 1)) * (1 + (sim.effectOf?.(n, "income") ?? 0)) * (n.outputMult ?? 1) : 0;
   return { troops: Math.floor(n.troops), cap: Math.floor(cap), grow: r2(grow), income: r2(income) };
+}
+
+export function policyOf(n) {
+  const level = n?.taxLevel ?? 1, steps = POLICY.taxSteps;
+  const tax = steps.reduce((best, v, i) => (Math.abs(v - level) < Math.abs(steps[best] - level) ? i : best), 0);
+  return { tax, conscription: n?.conscription ?? CIV_RULES.conscriptShare };
 }
 
 export function purseOf(n, extra = {}) {
@@ -459,10 +476,10 @@ export function purseOf(n, extra = {}) {
   const stock = {};
   for (const [k, v] of Object.entries(n.stock ?? {})) stock[k] = Math.floor(v);
   const s = n.stats ?? {};
-  const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), fed: Math.floor(s.fed ?? 0), foodCap: r2(s.foodCap ?? 1), worked: r2(s.worked ?? 0), zoned: s.zoned ?? [0, 0, 0, 0], jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
+  const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), staff: Math.round(s.staff ?? s.workers ?? 0), mood: r2(s.mood ?? 1), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), fed: Math.floor(s.fed ?? 0), foodCap: r2(s.foodCap ?? 1), worked: r2(s.worked ?? 0), zoned: s.zoned ?? [0, 0, 0, 0], jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
   const making = {};
   for (const [k, v] of Object.entries(n.made ?? {})) making[k] = r2(v / (n.madeEvery ?? 5));
-  return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, ...extra };
+  return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, policy: policyOf(n), ...extra };
 }
 
 const ALWAYS = new Set(["eliminated", "victory", "era_up"]);
