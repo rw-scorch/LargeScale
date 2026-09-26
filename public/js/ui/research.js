@@ -44,7 +44,12 @@ export function createResearchPanel(root, game) {
     if (u.zones?.length) out.push(`Zones: ${u.zones.map(z => ({ res: "homes", com: "shops", ind: "industry", farm: "farmland" })[z] ?? z).join(", ")}`);
     for (const [k, v] of Object.entries(u.effects ?? {})) out.push(`+${Math.round(v * 100)}% ${EFFECT_NAMES[k] ?? k}`);
     if (node.advances) out.push(`Moves your nation into the ${ERA_NAMES[node.advances]} era`);
-    if (later.length || u.units?.length) out.push(`Later updates: ${[...later, ...(u.units ?? []).map(pretty)].join(", ")}`);
+    const units = (u.units ?? []).map(id => w.unitTypes.table[id]).filter(Boolean);
+    const trains = units.filter(d => d.kind === "troop").map(d => d.name), machines = units.filter(d => d.kind === "machine").map(d => d.name);
+    if (trains.length) out.push(`Trains: ${trains.join(", ")}`);
+    if (machines.length) out.push(`Machines: ${machines.join(", ")}`);
+    const laterUnits = (u.units ?? []).filter(id => !w.unitTypes.table[id]).map(pretty);
+    if (later.length || laterUnits.length) out.push(`Later updates: ${[...later, ...laterUnits].join(", ")}`);
     return out;
   };
 

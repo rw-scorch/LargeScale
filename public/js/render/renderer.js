@@ -43,6 +43,7 @@ export class MapRenderer {
     this.showZones = false;
     this.showDeposits = false;
     this.selectedBuilding = null;
+    this.selectedMachine = null;
     this.terrainCanvas = document.createElement("canvas");
     this.terrainCanvas.width = state.w;
     this.terrainCanvas.height = state.h;
@@ -515,12 +516,20 @@ export class MapRenderer {
     }
     for (const f of this.people.figures(r, this.time)) items.push({ key: f.y + 0.1, x: f.x, draw: () => this.drawPerson(f, px) });
     for (const f of this.soldiers(r)) items.push({ key: f.y + 0.05, x: f.x, draw: () => this.drawPerson(f, px) });
+    const shown = [];
+    for (const u of s.machines?.values() ?? []) {
+      const x = u.at % s.w, y = (u.at / s.w) | 0;
+      if (x < r.x0 - 2 || x > r.x1 + 2 || y < r.y0 - 2 || y > r.y1 + 2) continue;
+      shown.push(u);
+      items.push({ key: y + 0.95, x, draw: () => this.drawMachine(u, px) });
+    }
     for (const u of s.units) {
       if (u.x < r.x0 - 4 || u.x > r.x1 + 4 || u.y < r.y0 - 4 || u.y > r.y1 + 4) continue;
       items.push({ key: u.air ? 1e9 : u.y + 1, x: u.x, draw: () => this.drawUnit(u, px) });
     }
     items.sort((p, q) => p.key - q.key || p.x - q.x);
     for (const it of items) it.draw();
+    for (const u of shown) this.machineOverlay(u, px);
     for (const m of this.markers()) this.drawMarker(m, px);
   }
 
@@ -537,11 +546,11 @@ export class MapRenderer {
     return dry;
   }
 
-  progressBar(x, y, w, p) {
+  progressBar(x, y, w, p, colour = "#e8c84a") {
     const ctx = this.ctx, k = this.ratio ?? 1, h = 4 * k, pad = 2 * k;
     ctx.fillStyle = "rgba(15,34,51,.85)";
     ctx.fillRect(x + pad, y, w - pad * 2, h);
-    ctx.fillStyle = "#e8c84a";
+    ctx.fillStyle = colour;
     ctx.fillRect(x + pad + k, y + k, Math.max(0, (w - pad * 2 - 2 * k) * Math.min(1, p)), h - 2 * k);
   }
 
@@ -585,6 +594,62 @@ export class MapRenderer {
     const sp = a.get(id);
     if (!sp) return;
     a.draw(ctx, id, sx - sp.w * px / 2, sy - sp.h * px / 2 - (u.air ? 6 * px : 0), px, colour, u.flip);
+  }
+
+  machineScale() {
+    const R = this.ratio ?? 1, px = this.cam.scale / 16;
+    return this.cam.scale >= ZOOM.sprites * R ? px : Math.max(px, 0.8 * R);
+  }
+
+  machineSprite(u) {
+    const base = u.def.sprite ?? u.type;
+    return u.state === "wreck" && this.atlas.has(`${base}_wreck`) ? `${base}_wreck` : base;
+  }
+
+  machineBox(u, k) {
+    const s = this.state, sp = this.atlas.get(this.machineSprite(u));
+    if (!sp) return null;
+    const [sx, sy] = this.plotToScreen((u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5);
+    if (sx < -80 || sy < -80 || sx > this.canvas.width + 80 || sy > this.canvas.height + 80) return null;
+    return { sx, sy, w: sp.w * k, h: sp.h * k };
+  }
+
+  drawMachine(u, k) {
+    const m = this.machineBox(u, k);
+    if (m) this.atlas.draw(this.ctx, this.machineSprite(u), m.sx - m.w / 2, m.sy - m.h / 2, k, this.state.nations.get(u.owner)?.colour, u.face < 0);
+  }
+
+  machineOverlay(u, k) {
+    const m = this.machineBox(u, k), ctx = this.ctx, R = this.ratio ?? 1;
+    if (!m) return;
+    const { sx, sy, w, h } = m;
+    if (u.id === this.selectedMachine) {
+      ctx.strokeStyle = "#e8c84a";
+      ctx.lineWidth = 2 * R;
+      ctx.strokeRect(sx - w / 2 - 2 * R, sy - h / 2 - 2 * R, w + 4 * R, h + 4 * R);
+    }
+    if (u.state !== "wreck" && u.hp < u.def.hp) this.progressBar(sx - w / 2, sy + h / 2 + R, w, u.hp / u.def.hp, u.hp < u.def.hp / 3 ? "#e06a5a" : "#6fcf7a");
+    if (u.cargo) this.label(String(u.cargo), sx, sy + h / 2 + 8 * R, 11 * R);
+  }
+
+  drawMachines() {
+    const k = this.machineScale();
+    for (const u of this.state.machines?.values() ?? []) this.drawMachine(u, k);
+    for (const u of this.state.machines?.values() ?? []) this.machineOverlay(u, k);
+  }
+
+  machineAt(sx, sy) {
+    const s = this.state, R = this.ratio ?? 1, k = this.machineScale();
+    let best = null, bd = Infinity;
+    for (const u of s.machines?.values() ?? []) {
+      const sp = this.atlas.get(this.machineSprite(u));
+      if (!sp) continue;
+      const [mx, my] = this.plotToScreen((u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5);
+      if (Math.abs(sx - mx) > Math.max((sp.w * k) / 2, 8 * R) || Math.abs(sy - my) > Math.max((sp.h * k) / 2, 8 * R)) continue;
+      const d = Math.hypot(sx - mx, sy - my);
+      if (d < bd) { bd = d; best = u.id; }
+    }
+    return best;
   }
 
   drawPerson(f, px) {
@@ -684,6 +749,7 @@ export class MapRenderer {
     }
     ctx.globalAlpha = 1;
     const rk = this.ratio ?? 1;
+    this.drawMachines();
     for (const m of this.markers()) {
       const [sx, sy] = this.plotToScreen(m.x, m.y);
       a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - 8 * rk, sy - 8 * rk, rk, s.nations.get(m.owner)?.colour);
@@ -698,6 +764,7 @@ export class MapRenderer {
       const [sx, sy] = this.plotToScreen(n.capital % s.w + 0.5, ((n.capital / s.w) | 0) + 0.5);
       this.atlas.draw(ctx, "mapicon_capital", sx - 4 * k, sy - 4 * k, k);
     }
+    this.drawMachines();
     for (const m of this.markers()) {
       const [sx, sy] = this.plotToScreen(m.x, m.y);
       this.atlas.draw(ctx, `army_${m.era}_${m.state}`, sx - 6 * k, sy - 6 * k, 0.75 * k, s.nations.get(m.owner)?.colour);

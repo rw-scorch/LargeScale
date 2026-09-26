@@ -61,31 +61,38 @@ Troops stay a count, so "troops are a count" still holds. What changes is that e
 
 ## Part B: machine units
 
-Draft, for Ryan to agree before it is built (26 September 2026).
+Ryan's decisions (26 September 2026): the Medieval machines now (catapult, trebuchet, galley and cog), and the rest when the later eras are built; and ships carry stacks across the sea, so islands and other continents become reachable.
 
-The kit's piece 15 (`src/sim/units.js`, copied in with its tests but not installed) has 17 machines, from catapults and galleys to battleships, tanks and fighter planes: individual units with hit points, and `embark` and `disembark` for ships carrying stacks. The research tree only reaches the Medieval era, where Siegecraft unlocks the siege workshop, the catapult and the trebuchet, and Harbours the harbour, the fishing boat, the galley and the cog. The art for all five is in the kit, wrecks included; the trebuchet and the fishing boat need adding to the machine list. Tanks, destroyers and aircraft come with the later eras (piece 16), as data in the same registry.
+The kit's piece 15 (`src/sim/units.js`) is the base. Machines are individual objects with hit points, outside the troop count; land machines pay terrain move costs, ships sail any water but sea ice, and `embark` and `disembark` load and land troops. It has no production, battles or saving, and it is not installed yet.
 
 ### B1. Machines in the simulation
-- The machine list moves into `data/units.json` as `kind: "machine"` entries with a cost, a build time and `builtAt`.
-- Each machine is one object with hit points, outside the troop count. Land machines pay terrain move costs; ships sail water only.
-- A machine on the same plot as a friendly stack adds its attack and defence to that stack's power, so a catapult helps an advance without touching the troop count. Siege machines also make capture cheaper next to them.
-- Battles damage machines. At 0 hit points a machine becomes a wreck for a while.
+- The four machines join `data/units.json` as `kind: "machine"` (numbers 10 to 13), with domain, hit points, attack, defence, range, speed (relative to a levy), siege, capacity, cost, build time, `builtAt` and a description. Siegecraft unlocks the catapult and trebuchet and Harbours the galley and cog, as the tree already says. The fishing boat waits for sea trade.
+- `src/sim/machines.js` installs the kit's module and adds what it lacks. Machines are saved with the world state and reach clients as rows in `hello` and `state`, sent only when they change.
+- **Moving.** Land machines use the stacks' region graph, so long moves work on the Earth map; ships get the same kind of graph built over water. A land machine can follow a stack, keeping within one plot of it at its own speed.
+- **Supporting a stack.** A land machine within one plot of a friendly stack (the one it follows, otherwise the nearest) adds its attack, or its defence while the stack holds, to that stack's battle power. It takes its share of the stack's battle losses as hit points.
+- **Siege.** Taking another nation's plot within a siege machine's range costs its owner's stacks less: half next to a catapult (range 3), a third next to a trebuchet (range 5). Unclaimed land costs the same as before.
+- **Capture.** A land machine with no friendly stack within one plot is taken by an enemy stack that comes within one plot: the design's re-crewing.
+- **Ships fight ships.** Hostile ships within one plot fight each other like stacks, in hit points.
+- **Wrecks.** At 0 hit points a machine becomes a wreck for 5 minutes, and a ship's cargo is lost.
+- Bots build no machines, so their balance and the bench stay as they are.
+- **Done (26 September 2026).** The kit's `src/sim/units.js` is extended, installed in `world.js` and saved with the world state. Unit tests: 14 in `test/machines.test.js`. A 300-against-300 fight with a catapult beside the attackers costs the catapult about 16 of its 40 hit points in 10 seconds and wrecks it in 19 (`hpPerLoss` 1), and a catapult halves and a trebuchet thirds the capture cost. Unreachable targets are refused at once, because each connected body of water (or land) is labelled. The water graph costs 78 ms to build on Earth and 27 ms on fine Europe; it is built only once a world has a ship. After that, ship orders take 0.35 ms at the median and under 8 ms at worst on Earth. `npm run bench` gives each player 6 catapults following its stacks and 3 cogs sailing to random water: Earth's worst tick is 34 ms, fine Europe's 34.7 ms.
 
 ### B2. Building them
-- The siege workshop builds catapults and trebuchets; the harbour builds galleys and cogs. One at a time or a batch, for gold and materials, over time like construction.
+- A siege workshop (new, Medieval, research Siegecraft) builds catapults and trebuchets; the harbour builds galleys and cogs. Each keeps a queue of up to 10. The cost is paid as each one starts; when gold or materials run short the queue waits and the building panel says why. A finished machine appears next to its building, on land or on water.
+- **Done (26 September 2026).** The `produce` order queues or clears; the purse's `machines.queues` has each queue's items, progress and reason. The browser script builds a siege workshop after Siegecraft and a catapult from its panel.
 
 ### B3. Ships carry stacks
-- A stack next to its own galley (120) or cog (200) embarks up to the ship's capacity. The ship sails, and the stack lands on a coast next to it, losing 15% (`rules.json` `landing`), or nothing into its own port. Landing on enemy or unclaimed land pays the normal capture cost.
-- This is the first way across water.
+- A stack ordered to board walks to the coast next to its own ship and embarks up to the ship's capacity, with its mix of types and its experience. What does not fit stays ashore.
+- A ship ordered to land sails next to the chosen coastal plot and puts the troops ashore as a stack. The landing loses 15% (`rules.json` `landing`), or nothing within 2 plots of your own harbour or jetty. Landing on enemy or unclaimed land pays the normal capture cost for that plot; with too few troops the landing fails, with an event.
+- **Done (26 September 2026).** Orders `board` (a stack) and `machine` with `do` `land`. Smoke: 200 knights board a cog and land further along the coast, 170 ashore.
 
 ### B4. Showing and ordering them
-- Machines are selected and moved like stacks: click, right-click or a drawn path. Ships show their cargo. Counts stay small, tens rather than hundreds.
+- Machines are drawn with the kit's art, facing their way, with a health bar once damaged and the cargo count on ships; wrecks use the wreck art. At far zoom they show as small markers.
+- Clicking a machine selects it. Its panel shows health, cargo and what it is doing, with Move, Follow a stack, Land troops (ships) and Stop. A right-click moves it; with troops aboard, a right-click on the coast lands them. With a stack selected, a right-click on your own ship boards it.
+- The siege workshop and harbour panels have build buttons and the queue.
+- **Done (26 September 2026).** `public/js/ui/machine.js` is the machine panel. The Army panel lists machines by type, and research names the troop types and machines it unlocks. Screenshots: `.screens/28-machines.png`, `28b-cog-close.png` and `28c-catapult-close.png`.
 
 ### B5. Ryan's check
-
-### Decisions for Ryan
-1. Medieval machines now (catapult, trebuchet, galley, cog) and the rest with the later eras, or the later eras first.
-2. Whether ships carrying stacks across the sea is in. It changes the map: islands and other continents become reachable.
 
 ## Part C: the new interface
 

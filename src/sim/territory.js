@@ -138,6 +138,7 @@ export class World {
   loseReserve(nation, n) { nation.troops = Math.max(0, nation.troops - n); }
   reserveStrength(nation) { return nation.troops; }
   stackAttack() { return 1; }
+  siegeAt() { return 1; }
   speedOf(s) { return s.speedMult ?? 1; }
   advanceMultOf(s) { return s.speedMult ?? 1; }
   gainXp() {}
@@ -328,7 +329,7 @@ export class World {
     if (o === s.owner || (o && this.passable(s.owner, o))) { s.pos = next; return true; }
     if (o && !this.hostile(s.owner, o)) return false;
     if (s.order === "advance" && !this.wants(s, o) && !this.crosses(s, o)) return false;
-    const raw = this.captureCost(next, s.owner), cost = raw / this.stackAttack(s);
+    const raw = this.captureCost(next, s.owner), cost = raw / (this.stackAttack(s) * (o ? this.siegeAt(s.owner, next) : 1));
     if (s.troops <= cost) {
       this.emit("stalled", { stack: s.id, at: next });
       if (s.order === "advance") s.order = "hold";
@@ -417,7 +418,7 @@ export class World {
     for (const i of f) {
       if (budget-- <= 0) break;
       const o = this.owner[i];
-      const raw = this.captureCost(i, s.owner), cost = raw / attack;
+      const raw = this.captureCost(i, s.owner), cost = raw / (attack * (o ? this.siegeAt(s.owner, i) : 1));
       if (s.troops <= cost + this.rules.minStack) { s.order = "hold"; this.emit("stalled", { stack: s.id, at: i }); break; }
       this.loseTroops(s, cost);
       if (o) {

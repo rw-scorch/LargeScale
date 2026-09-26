@@ -34,7 +34,7 @@ test("give adds gold, goods or troops to a living nation, never below zero", () 
   assert.equal(runAdmin(w, { op: "give", nation: bot, what: "troops", amount: 250 }).now, Math.floor(troops + 250), "bots can be given troops");
   assert.equal(runAdmin(w, { op: "give", nation: bot, what: "money", amount: 5 }).error, "Bot has no economy");
   assert.equal(runAdmin(w, { op: "give", nation: late, what: "money", amount: 5 }).error, "pick a living nation", "not spawned yet");
-  assert.equal(runAdmin(w, { op: "give", nation: a, what: "gems", amount: 5 }).error, "give one of money, food, wood, stone, clay, troops, unit");
+  assert.equal(runAdmin(w, { op: "give", nation: a, what: "gems", amount: 5 }).error, "give one of money, food, wood, stone, clay, troops, unit, machine");
   for (const amount of [0, 1.5, "10", ADMIN_RULES.maxGive + 1, NaN]) assert.match(runAdmin(w, { op: "give", nation: a, what: "money", amount }).error, /whole number/);
 });
 

@@ -71,6 +71,13 @@ export function createStackPanel(root, game) {
       });
     },
     go() { const s = mine(); if (s && preview) order({ t: "move", stack: s.id, to: preview.to }, cancel); },
+    board() { if (mine()) { cancel(); mode = "board"; } },
+    boardNow(ship) {
+      const s = mine();
+      if (!s) return;
+      cancel();
+      return order({ t: "board", stack: s.id, ship }, () => game.toast("The stack marches to the ship and boards it."));
+    },
     async moveNow(plot) {
       const s = mine();
       if (!s) return false;
@@ -127,6 +134,7 @@ export function createStackPanel(root, game) {
   };
 
   const button = (id, text, action, props = {}) => el("button", { id, onclick: () => act[action](), ...props }, text, " ", keyTag(action));
+  const ships = () => game.world.myMachines().filter(u => u.def.capacity && u.state !== "wreck" && u.cargo < u.def.capacity);
   const buttons = s => {
     if (preview) return [
       el("button", { id: "move-go", class: "primary", text: "Go", onclick: act.go }),
@@ -141,6 +149,7 @@ export function createStackPanel(root, game) {
       button("stack-draw", "Draw path", "draw", { title: "drag along the way the stack should go; with a mouse, right-drag does this without the button" }),
       button("stack-split", "Split half", "split"),
       button("stack-merge", "Merge nearby", "merge", { disabled: !adjacent(s).length }),
+      ...(ships().length ? [el("button", { id: "stack-board", text: "Board a ship", title: "click one of your ships; the stack marches to the coast beside it and goes aboard", onclick: () => act.board() })] : []),
       button("stack-disband", confirming() ? "Sure? Disband" : "Disband", "disband", { class: confirming() ? "danger" : "", title: `send the troops home; ${Math.round(game.world.disbandLoss * 100)}% of them are lost` }),
     ];
   };
@@ -168,9 +177,14 @@ export function createStackPanel(root, game) {
     },
     cancel,
     act,
-    async pickTarget(plot) {
+    async pickTarget(plot, sx, sy) {
       const w = game.world, s = w.stacks.get(game.selected);
       if (!s) return cancel();
+      if (mode === "board") {
+        const u = w.machines.get(game.view?.machineAt(sx, sy));
+        if (!u || u.owner !== w.you || !u.def.capacity) return game.toast("Click one of your ships.");
+        return act.boardNow(u.id);
+      }
       if (mode === "nation") {
         const o = w.owner[plot];
         if (!o || o === w.you) return game.toast("Click land that belongs to another nation.");
@@ -203,10 +217,10 @@ export function createStackPanel(root, game) {
       if (yours && document.activeElement !== standing) standing.value = orderOf(s)?.standing ?? "hold";
       info.textContent = ` ${statusOf(s, w)}`;
       hint.textContent = preview ? `About ${preview.plots} plots and ${preview.seconds} s. Stacks take neutral and enemy land on the way.`
-        : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."
+        : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "board" ? "Click one of your ships." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."
         : yours && !w.frozen ? "Right-click the map to send it straight there, or right-drag to draw its way." : "";
       hint.classList.toggle("fine-only", !preview && !mode);
-      const k = `${s.id}:${yours}:${mode}:${!!preview}:${w.frozen}:${adjacent(s).length}:${confirming()}`;
+      const k = `${s.id}:${yours}:${mode}:${!!preview}:${w.frozen}:${adjacent(s).length}:${confirming()}:${ships().length > 0}`;
       if (k === key) return;
       key = k;
       actions.replaceChildren(...(yours && !w.frozen ? buttons(s) : []), el("button", { text: "Close", onclick: () => game.select(null) }));
