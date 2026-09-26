@@ -154,6 +154,30 @@ Ryan's asks after step 6:
 - A "while you were away" summary on return: buildings finished, population change, research done, land lost.
 - **Done when:** a world left for 12 hours of game time wakes in under 2 seconds with the economy advanced, and the summary shows it.
 
+#### Progress (27 September 2026, branch `m2-step7-away`, stacked on `m4-gunpowder`)
+
+- **Catch-up.**
+  - `World.catchUp(dt)` runs every end-of-tick system except the bots: towns, production, construction, income, research, training, machine building and effects. Stacks, battles and bots do not move.
+  - A system can give a whole-step version (`whole`) and an order (`rank`): production runs first and income last.
+  - It runs on every wake: after a reload from storage (since `savedAt`) and when the loop restarts in memory (since `stopLoop`). A won or ended world does not catch up.
+  - At most 240 steps (`rules.json` `offline.catchupSteps`), so 12 hours takes 3-minute steps and 72 hours 18-minute steps. It continues across ticks with a 40 ms budget, and clients get `catchup` messages.
+- **Long steps stay right.**
+  - Growth and starvation use exact exponentials. Food made in a step no longer counts as reserve, and the reserve spreads over the step when the step is longer than 10 minutes.
+  - Building starts scale with the step. Growth moves at most `civilians.settleStep` (60 s) per step, which stops the town, farm and staffing loop from swinging.
+  - Producers cache the plots around them. That also cut the live economy tick: Earth worst tick 37 to 31 ms, fine Europe 37.5 to 28.7 ms.
+- **Away output.** A player who leaves gets `n.away` and `n.outputMult` 0.9, applied to gold, gathering, producers and research.
+- **Summary.**
+  - The away record counts land lost by attacker, buildings finished, town starts and upgrades, research, machines built and lost, stacks lost, used-up deposits, a moved capital and elimination (`recordAway`).
+  - `awaySummary` adds gold, stock, people, land, troops and era changes, and `hello` is followed by an `away` message. It is sent after 2 minutes away (real or caught up), or at once if anything was lost.
+  - `public/js/ui/away.js` shows it; Esc or its button closes it, and the feed keeps a line.
+- **Tests.** The world config's `rules.sleepSpeed` multiplies sleeping time, for tests.
+- **Evidence.**
+  - `test/away.test.js`: live and catch-up agree after 30 minutes, 1 hour, and 3 hours in 9-minute steps (gold within 2.5%, people within 2%, the same buildings and research).
+  - `npm test` 166 of 166, reference 95 of 95.
+  - Smoke 95 of 95: 12 game hours catch up in 272 ms with the summary. After a restart, a reloaded world caught up 26.5 game hours in 273 ms (the restart recheck, 7 of 7).
+  - `npm run ui` 121 of 121 on the test map and on fine Europe, with the panel on a landscape phone and on a computer.
+  - Heavy benchmark, 8 players with 2,000 buildings each: 12 hours on Earth in 1.67 s, fine Europe in 1.53 s, and 72 hours on Earth in 1.73 s.
+
 ### 8. Ryan's check
 
 - Ryan deploys and plays a weekend world on fine Europe with at least one friend.

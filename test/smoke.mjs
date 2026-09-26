@@ -115,7 +115,18 @@ if (process.env.RECHECK) {
   const h = await waitFor(again, m => m.t === "hello");
   const n = h?.nations.find(x => x.id === last.you);
   check(n && n.plots >= last.plots, `after a server restart the nation still has ${n?.plots} plots (saved ${last.plots})`);
+  const st1 = (await api(`/api/worlds/${last.wid}/status`, null, last.token)).body;
+  check(st1.frozen && !st1.lastCatchUp, "a won world stays frozen: it does not catch up");
   again.ws.close();
+  if (last.awayWid) {
+    const back = await connect(last.awayWid, last.token);
+    const woke = await waitFor(back, m => m.t === "catchup" && m.left === 0, 20000);
+    const summary = await waitFor(back, m => m.t === "away", 5000);
+    const st2 = (await api(`/api/worlds/${last.awayWid}/status`, null, last.token)).body;
+    check(woke && st2.lastCatchUp?.seconds > 0 && st2.lastCatchUp.ms < 2000 && summary?.caught > 0,
+      `reloaded from storage, the away-test world catches up ${((st2.lastCatchUp?.seconds ?? 0) / 3600).toFixed(1)} game hours in ${st2.lastCatchUp?.ms} ms${st2.lastCatchUp?.dropped ? ` (${(st2.lastCatchUp.dropped / 3600).toFixed(1)} h over the 72-hour cap dropped)` : ""}, and the player gets the summary`);
+    back.ws.close();
+  }
   process.exit(failures ? 1 : 0);
 }
 
@@ -629,6 +640,7 @@ const zAway = await waitFor(Z, m => m.t === "away", 5000);
 const zStatus = (await api(`/api/worlds/${swid}/status`, null, ta)).body;
 check(zAt && zZone?.ok && asleep && zCaught && zAway && zAway.caught >= 11.9 * 3600 && zStatus.lastCatchUp?.ms < 2000,
   `a world left for 12 game hours catches up ${zAway?.caught ? (zAway.caught / 3600).toFixed(1) : "?"} hours in ${zStatus.lastCatchUp?.ms} ms when its player returns`);
+writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ ...JSON.parse((await import("node:fs")).readFileSync(new URL("./.last.json", import.meta.url))), awayWid: swid }));
 check(zAway && zAway.gold > 0 && zAway.pop[1] > zAway.pop[0] && zAway.town > 0 && zAway.share === 0.9,
   `the "while you were away" summary shows the economy moved on: ${zAway?.gold} gold, people ${zAway?.pop?.join(" to ")}, ${zAway?.town} town buildings, research ${zAway?.researched?.length}, output at ${zAway?.share}`);
 Z.ws.close();

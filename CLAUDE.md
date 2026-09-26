@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (160)
+npm test                  # unit tests (166)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -153,6 +153,12 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 
   Protocol stays 5.
 
+- **Step 7, economy while away (27 September 2026, branch `m2-step7-away`, stacked on `m4-gunpowder`).**
+  - A sleeping world catches up its economy on every wake (reload or loop restart), not only troops: `World.catchUp(dt)` runs all end-of-tick systems but the bots, in at most 240 steps (`rules.json` `offline`), spread over ticks within 40 ms.
+  - Systems give a whole-step version with `hook.whole` and an order with `hook.rank`; bots mark theirs `live`. Town growth moves at most `civilians.settleStep` per step, so long steps settle where live play does.
+  - Away players make 90% (`n.outputMult`) and keep an away record (`n.away`), sent as an `away` message on return and shown by `public/js/ui/away.js`.
+  - Details and evidence are in `plans/milestone-2.md`.
+
 ## Milestone three progress
 
 Ryan chose unit types inside stacks (26 September 2026) over drawn soldiers only, individual soldiers, or machine units first; machine units come next, then a new interface. His decisions: one training building line, no counters, everyone sees the full mix, troop types before milestone two's step 7. Branch `m3-troop-types`, stacked on `m2-orders-descriptions`.
@@ -197,7 +203,7 @@ Open items as of 26 September 2026, in order:
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. After it: the Industrial slice with Age of Industry and a steel mill, then Modern and Future. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
 5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
 6. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
-7. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
+7. Milestone two, step 7 (economy while away) is built on `m2-step7-away`, stacked on `m4-gunpowder`; step 8 is Ryan's check.
 8. Later: players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
 9. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
