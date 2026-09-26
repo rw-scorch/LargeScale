@@ -71,11 +71,20 @@ export function nearestSafe(world, s) {
 export function standingOrders(world, presence, rules = OFFLINE) {
   const moved = [];
   for (const s of world.stacks.values()) {
-    if (presence.isOnline(s.owner) || !world.nations.get(s.owner)?.human) continue;
+    if (!world.nations.get(s.owner)?.human) continue;
+    if (presence.isOnline(s.owner)) {
+      if (s.awayOnly) {
+        if (s.order === "advance" && s.only === 0) s.only = null;
+        delete s.awayOnly;
+      }
+      continue;
+    }
     const mode = s.standing ?? "hold";
     if (mode === "hold" || mode === "guard") {
-      if (s.order === "advance") {
-        s.order = "hold";
+      if (s.order === "advance" && s.only !== 0) {
+        if (s.only == null) s.awayOnly = true;
+        else s.order = "hold";
+        s.only = s.only == null ? 0 : s.only;
         s.path = [];
         s.route = null;
         s.via = null;

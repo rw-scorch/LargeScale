@@ -473,7 +473,7 @@ test("a short route inside one block of the route graph still has a length and a
   assert.ok(r.seconds >= 1);
 });
 
-test("while a player is away, advancing stacks hold, and fall-back stacks retreat when outnumbered", () => {
+test("while a player is away, advances into unclaimed land go on, plain advances keep to unclaimed land, attacks hold, and fall-back stacks retreat", () => {
   const { w, g, nation, fill } = strip(60, 20);
   const a = nation("A", 3, 10), b = nation("B", 50, 10);
   fill(a, 0, 30, 0, 20);
@@ -487,7 +487,20 @@ test("while a player is away, advancing stacks hold, and fall-back stacks retrea
   assert.equal(s.order, "advance", "while its owner is online it keeps going");
   online.delete(a);
   standingOrders(w, presence);
-  assert.deepEqual({ order: s.order, path: s.path.length }, { order: "hold", path: 0 }, "with its owner away it holds, and drops the path it was on");
+  assert.deepEqual({ order: s.order, only: s.only }, { order: "advance", only: 0 }, "with its owner away it keeps taking unclaimed land");
+  const plain = w.createStack(a, g.idx(2, 5), 800), attack = w.createStack(a, g.idx(29, 12), 800);
+  runOrder(w, a, { t: "advance", stack: plain.id });
+  runOrder(w, a, { t: "advance", stack: attack.id, only: b });
+  standingOrders(w, presence);
+  assert.deepEqual({ order: plain.order, only: plain.only }, { order: "advance", only: 0 }, "a plain advance keeps going, into unclaimed land only");
+  assert.deepEqual({ order: attack.order, path: attack.path.length }, { order: "hold", path: 0 }, "an attack on a nation holds and drops its path");
+  for (let t = 0; t < 5; t++) w.tick(1);
+  assert.ok([...w.lost.values()].every(e => e.nation !== b) && w.events.filter(e => e.type === "plot_lost" && e.nation === b).length === 0, "nobody's land is taken while the owner is away");
+  online.add(a);
+  standingOrders(w, presence);
+  assert.deepEqual({ order: plain.order, only: plain.only ?? null }, { order: "advance", only: null }, "back online, the plain advance takes any land again");
+  assert.equal(s.only, 0, "and the unclaimed-only advance stays as it was");
+  online.delete(a);
   const f = w.createStack(a, g.idx(28, 10), 200);
   assert.equal(runOrder(w, a, { t: "standing", stack: f.id, mode: "fallback" }).ok, true);
   const enemy = w.createStack(b, g.idx(41, 10), 500);

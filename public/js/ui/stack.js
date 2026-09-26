@@ -15,9 +15,9 @@ export function createStackPanel(root, game) {
   const mixLine = el("span", { id: "stack-mix", class: "muted" });
   const hint = el("span", { id: "stack-hint" });
   const actions = el("div", { class: "row wrap" });
-  const STANDING = { hold: "hold their ground while you are away", fallback: "fall back when outnumbered while you are away", guard: "guard your land: they go to meet enemies inside it" };
+  const STANDING = { hold: "take only unclaimed land and start no fights while you are away", fallback: "fall back when outnumbered while you are away", guard: "guard your land: they go to meet enemies inside it" };
   const standing = el("select", { id: "stack-standing", class: "small" },
-    el("option", { value: "hold", text: "holds its ground while you are away" }),
+    el("option", { value: "hold", text: "takes only unclaimed land and starts no fights while you are away" }),
     el("option", { value: "fallback", text: "falls back when outnumbered while you are away" }),
     el("option", { value: "guard", text: "guards your land: meets enemies inside it" }));
   const away = el("div", { class: "row wrap", id: "stack-away" }, el("span", { class: "muted", text: "Standing order: this stack" }), standing,
