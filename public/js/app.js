@@ -22,6 +22,7 @@ import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
 import { createMachinePanel } from "./ui/machine.js";
+import { createRing, ownerItems } from "./ui/ring.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -55,6 +56,7 @@ const terrainGz = async (dir, hash) => {
 class Game {
   constructor(worldId, name, onLeave, account = null) {
     this.worldId = worldId;
+    this.canvas = canvas;
     this.admin = !!account?.admin;
     this.name = name;
     this.onLeave = onLeave;
@@ -88,6 +90,7 @@ class Game {
     this.army = createArmyPanel(overlay, this);
     this.machinePanel = createMachinePanel(side, this);
     this.tip = createTip(overlay, this);
+    this.ring = createRing(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     const self = this;
     attachInput(canvas, {
@@ -385,7 +388,9 @@ class Game {
     this.zoning = null;
     if (this.view) { this.view.showZones = false; this.view.zoneRect = null; }
     this.building = type;
-    this.ghostAt = null;
+    const def = type && this.world?.defs.table[type];
+    this.ghostAt = def && this.buildPlot != null ? this.placeAnchor(this.buildPlot, def) : null;
+    this.buildPlot = null;
     this.updatePanels();
   }
 
@@ -477,18 +482,38 @@ class Game {
     return this.stack.traceEnd(line);
   }
 
-  async secondary(sx, sy) {
+  secondary(sx, sy) {
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
     if (this.placing) return this.togglePlacing(false);
     if (this.building || this.zoning) return this.stopBuild();
-    const u = this.world.machines.get(this.selectedMachine);
-    if (u && u.owner === this.world.you) return this.machinePanel.secondary(plot, sx, sy);
-    const s = this.world.stacks.get(this.selected);
-    if (!s || s.owner !== this.world.you) return this.toast("Select one of your stacks or machines first, then right-click where it should go.");
-    const ship = this.world.machines.get(this.view.machineAt(sx, sy));
-    if (ship && ship.owner === this.world.you && ship.def.capacity && ship.state !== "wreck") return this.stack.act.boardNow(ship.id);
-    await this.stack.act.moveNow(plot);
+    this.stack.cancel();
+    this.machinePanel.cancel();
+    const w = this.world, me = w.nations.get(w.you);
+    if (!me?.spawned || !me.alive || w.frozen) return this.tip.pin(sx, sy);
+    const u = w.machines.get(this.selectedMachine), s = w.stacks.get(this.selected);
+    const items = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
+    if (!items.length) return this.tip.pin(sx, sy);
+    this.ring.show(sx, sy, [...items, { id: "info", label: "Info", icon: "ui_info", run: () => this.tip.pin(sx, sy, 5000) }]);
+  }
+
+  async attackAt(plot) {
+    const w = this.world, o = w.owner[plot];
+    const r = await this.conn.request({ t: "attack", at: plot, share: this.hud.share });
+    if (!r.ok) return this.toast(r.error ?? "could not attack");
+    const s = w.stacks.get(r.stack);
+    this.toast(`${s ? `${Math.round(s.troops)} troops go` : "A stack goes"} to take ${o ? `${w.nations.get(o)?.name ?? "their"}'s land` : "unclaimed land"}.`);
+  }
+
+  buildHere(plot) {
+    this.buildPlot = plot;
+    this.toggleBuildMenu(true);
+    if (this.buildMenu.tab === "zones") this.buildMenu.setTab(null);
+  }
+
+  zoneHere() {
+    this.toggleBuildMenu(true);
+    this.buildMenu.setTab("zones");
   }
 
   tap(sx, sy) {
@@ -570,6 +595,7 @@ class Game {
   leave() {
     this.left = true;
     this.conn.close();
+    this.ring.destroy();
     clearInterval(this.ui);
     removeEventListener("resize", this.onResize);
     removeEventListener("keydown", this.onKey);

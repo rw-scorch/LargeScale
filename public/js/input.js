@@ -1,6 +1,8 @@
+const HOLD_MS = 500;
+
 export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChange, dragging, onDrag, onDragEnd, tracing, onTrace, onTraceEnd }) {
   const pts = new Map();
-  let gesture = null, right = null;
+  let gesture = null, right = null, swallow = false;
   const ratio = () => view.ratio ?? 1;
   const at = e => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * ratio(), (e.clientY - r.top) * ratio()]; };
   const far = g => g.moved >= 8 * ratio();
@@ -21,8 +23,14 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     }
     canvas.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, at(e));
-    if (pts.size === 1) gesture = { start: at(e), t: performance.now(), moved: 0, multi: false, paint: !!dragging?.(), line: tracing?.() ? [at(e)] : null };
-    else if (gesture) gesture.multi = true;
+    if (pts.size === 1) {
+      const g = gesture = { start: at(e), t: performance.now(), moved: 0, multi: false, paint: !!dragging?.(), line: tracing?.() ? [at(e)] : null, held: false };
+      if (e.pointerType !== "mouse" && !g.paint && !g.line) g.hold = setTimeout(() => {
+        if (gesture !== g || g.multi || far(g)) return;
+        g.held = true;
+        onSecondary?.(...g.start);
+      }, HOLD_MS);
+    } else if (gesture) gesture.multi = true;
   });
 
   canvas.addEventListener("pointermove", e => {
@@ -67,15 +75,19 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     if (pts.size || !gesture) return;
     const g = gesture;
     gesture = null;
+    clearTimeout(g.hold);
+    if (g.held) { swallow = true; return; }
     if (g.line) return onTraceEnd?.(g.multi ? null : g.line);
     if (g.paint && !g.multi) return onDragEnd?.(g.start, at(e));
     if (!g.multi && g.moved < 8 * ratio() && performance.now() - g.t < 500) onTap?.(...at(e));
   };
   canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("touchend", e => { if (swallow) { swallow = false; e.preventDefault(); } }, { passive: false });
   canvas.addEventListener("pointerleave", e => e.pointerType === "mouse" && onHover?.(null, null));
   canvas.addEventListener("pointercancel", e => {
     if (right?.id === e.pointerId) { right = null; onTraceEnd?.(null); }
     pts.delete(e.pointerId);
+    clearTimeout(gesture?.hold);
     if (gesture?.line) onTraceEnd?.(null);
     gesture = null;
   });

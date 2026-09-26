@@ -83,14 +83,16 @@ export function createMachinePanel(root, game) {
       if (m === "land") return land(u, plot);
       return order({ t: "machine", machine: u.id, do: "move", to: plot });
     },
-    async secondary(plot, sx, sy) {
+    ringFor(plot, sx, sy) {
       const u = mine();
-      if (!u) return;
-      cancel();
-      const s = isShip(u) ? null : ownStackAt(sx, sy);
-      if (s) return follow(u, s);
-      if (isShip(u) && u.cargo && isLand(w().terrain[plot])) return land(u, plot);
-      return order({ t: "machine", machine: u.id, do: "move", to: plot });
+      if (!u) return [];
+      const onLand = isLand(w().terrain[plot]), ship = isShip(u), items = [];
+      const s = ship ? null : ownStackAt(sx, sy);
+      if (s) items.push({ id: "follow", label: "Follow stack", note: fmt(s.troops), icon: "ui_eye", run: () => follow(u, s) });
+      if (ship && onLand && u.cargo) items.push({ id: "land", label: "Land troops", note: fmt(u.cargo), icon: "ui_flag", run: () => land(u, plot) });
+      if (ship !== onLand) items.push({ id: "move", label: ship ? "Sail here" : "Move here", icon: "cursor_move", run: () => order({ t: "machine", machine: u.id, do: "move", to: plot }) });
+      items.push({ id: "stop", label: "Stop", icon: "ui_pause", run: () => act.stop() });
+      return items;
     },
     update() {
       const world = w(), u = world?.machines.get(game.selectedMachine);
@@ -110,7 +112,7 @@ export function createMachinePanel(root, game) {
       hint.textContent = mode === "move" ? (isShip(u) ? "Click the water to sail to." : "Click where it should go.")
         : mode === "follow" ? "Click one of your stacks."
         : mode === "land" ? "Click the coast to land the troops on."
-        : yours && u.state !== "wreck" && !world.frozen ? (isShip(u) ? "Right-click water to sail there. With troops aboard, right-click the coast to land them." : "Right-click to send it, or right-click one of your stacks to follow it.") : "";
+        : yours && u.state !== "wreck" && !world.frozen ? (isShip(u) ? "Right-click the map for its orders: sail, or land the troops aboard on a coast." : "Right-click the map for its orders: move, or follow one of your stacks.") : "";
       hint.classList.toggle("fine-only", !mode);
       const k = `${u.id}:${yours}:${mode}:${u.state}:${!!u.cargo}:${world.frozen}`;
       if (k === key) return;

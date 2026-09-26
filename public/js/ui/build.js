@@ -34,6 +34,13 @@ export function createBuildMenu(root, game) {
   return {
     get open() { return !box.hidden; },
     show(on) { box.hidden = !on; key = ""; },
+    get tab() { return tab; },
+    setTab(t) {
+      const w = game.world;
+      tab = t ?? Object.values(w?.defs.table ?? {}).find(d => !d.civilian && !w.lockOf(d.id))?.category ?? "zones";
+      key = "";
+      this.update();
+    },
     update() {
       const w = game.world;
       if (box.hidden || !w?.defs) return;
