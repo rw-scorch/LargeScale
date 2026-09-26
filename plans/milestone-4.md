@@ -1,6 +1,6 @@
 # Milestone 4: the Gunpowder era
 
-Draft for Ryan to agree (26 September 2026). This is the first slice of the kit's piece 16 (`reference/tasks/16-later-eras/GUIDE.md`). Industrial, Modern and Future come later, one era at a time.
+Agreed with Ryan on 26 September 2026 (decisions at the end). This is the first slice of the kit's piece 16 (`reference/tasks/16-later-eras/GUIDE.md`). Industrial, Modern and Future come later, one era at a time.
 
 ## Why now
 
@@ -103,7 +103,17 @@ The caps stop a nation from stacking a hundred banks.
 
 ### G7. Ryan's check
 
-## Decisions for Ryan
+## Decisions (answered by Ryan, 26 September 2026)
+
+1. **Yes**: towers and forts change combat.
+2. **Stop at the end of Gunpowder** ("I trust you"). Age of Industry comes with the Industrial slice.
+3. **Gunpowder first**, then milestone two's step 7.
+
+Two changes found while starting:
+- Walls are not buildable today: the tree names wall sprites, but only the wooden, stone and concrete towers are buildings. The defence rule therefore goes to the three towers and the star fort.
+- The research rate already adds a flat `research` number for each building that has one. Libraries and schools use that, at 0.2 and 0.1 points a second with the same caps, instead of percentages.
+
+## The questions as asked
 
 1. **Should forts, walls and towers finally change combat?** Recommended: yes. Land within reach of a star fort defends at 1.5 times. Walls and towers use the same rule with smaller numbers, so the Medieval defences stop being decoration too.
 2. **Stop at the end of Gunpowder, or add Age of Industry now?** Recommended: stop. Reaching Industrial would unlock factories and tenements that need steel, which nothing makes yet. Age of Industry comes with the Industrial slice, together with its steel mill.
