@@ -25,6 +25,7 @@ import { createMachinePanel } from "./ui/machine.js";
 import { createRing, ownerItems } from "./ui/ring.js";
 import { createAttacks } from "./ui/attacks.js";
 import { createGuide } from "./ui/guide.js";
+import { createNationCard } from "./ui/nation.js";
 import { createSettings, loadPrefs } from "./ui/settings.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
@@ -95,6 +96,7 @@ class Game {
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
     this.machinePanel = createMachinePanel(side, this);
+    this.nationCard = createNationCard(side, this);
     this.tip = createTip(overlay, this);
     this.ring = createRing(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
@@ -302,7 +304,7 @@ class Game {
       else if (this.placing) this.togglePlacing(false);
       else if (this.stack.choosing) this.stack.cancel();
       else if (this.machinePanel.choosing) this.machinePanel.cancel();
-      else { this.select(null); this.selectMachine(null); }
+      else { this.select(null); this.selectMachine(null); this.selectNation(null); }
     }
   }
 
@@ -458,6 +460,7 @@ class Game {
   }
 
   selectBuilding(id) {
+    if (id !== null) this.nationCard?.show(null);
     if (id !== null && this.selectedMachine !== null) { this.selectedMachine = null; if (this.view) this.view.selectedMachine = null; }
     this.selectedBuilding = id;
     if (this.view) this.view.selectedBuilding = id;
@@ -554,10 +557,22 @@ class Game {
     if (b) return this.selectBuilding(b.id);
     this.select(null);
     this.selectBuilding(null);
+    this.selectNation(w.owner[plot] && w.owner[plot] !== w.you ? w.owner[plot] : null, plot);
     this.tip.pin(sx, sy);
   }
 
+  selectNation(id, plot = null) {
+    if (id !== null) {
+      if (this.selected !== null) this.select(null);
+      if (this.selectedBuilding !== null) this.selectBuilding(null);
+      if (this.selectedMachine !== null) this.selectMachine(null);
+    }
+    this.nationCard.show(id, plot ?? this.world?.nations.get(id)?.capital ?? null);
+    this.updatePanels();
+  }
+
   selectMachine(id) {
+    if (id !== null) this.nationCard?.show(null);
     this.selectedMachine = id;
     if (this.view) this.view.selectedMachine = id;
     if (id !== null) {
@@ -571,6 +586,7 @@ class Game {
   }
 
   select(id) {
+    if (id !== null) this.nationCard?.show(null);
     if (id !== null && this.selectedMachine !== null) { this.selectedMachine = null; if (this.view) this.view.selectedMachine = null; }
     if (id !== null && this.selectedBuilding !== null) { this.selectedBuilding = null; if (this.view) this.view.selectedBuilding = null; }
     this.selected = id;
@@ -604,7 +620,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {

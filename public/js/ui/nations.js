@@ -32,7 +32,7 @@ export function createNations(root, game) {
       const sig = top.map(n => `${n.id}:${rank.get(n.id)}:${n.plots}:${fmt(n.troops ?? 0)}:${n.era}:${n.alive}:${w.online?.has(n.id)}`).join();
       if (sig === last) return;
       last = sig;
-      rows.replaceChildren(...top.map(n => el("tr", { class: `${n.id === w.you ? "me" : ""} ${n.alive === false ? "dead" : ""}`, "data-nation": n.id, onclick: () => n.capital != null && game.focus(n.capital, Math.max(game.view.cam.scale / game.view.ratio, 3)) },
+      rows.replaceChildren(...top.map(n => el("tr", { class: `${n.id === w.you ? "me" : ""} ${n.alive === false ? "dead" : ""}`, "data-nation": n.id, onclick: () => { if (n.capital != null) game.focus(n.capital, Math.max(game.view.cam.scale / game.view.ratio, 3)); if (n.id !== w.you) game.selectNation(n.id); } },
         el("td", { class: "rank", text: rank.has(n.id) ? String(rank.get(n.id)) : "" }),
         el("td", { class: "who" }, el("i", { class: "swatch", style: `background:${n.colour}` }), n.bot ? null : el("i", { class: `dot ${w.online?.has(n.id) ? "on" : "off"}`, title: w.online?.has(n.id) ? "online now" : "away" }), el("span", { class: "name", text: n.name, title: n.name })),
         el("td", {}, n.spawned ? icon(`era_badge_${n.era ?? "T"}`, 1) : null),

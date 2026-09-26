@@ -332,6 +332,29 @@ await page.screenshot({ path: `${OUT}/5c-ring-attack-${MAP}.png` });
 if (foeRing[0] === "attack") await page.click("#ring [data-ring=attack]");
 const attacking = await page.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).some(o => o.only === id), ringSpots.foeId, { timeout: 5000 }).then(() => true, () => false);
 check(foeRing.join() === "attack,info" && attackLabel === `Attack ${ringSpots.foeName}` && attacking, `on ${ringSpots.foeName}'s land the ring offers "${attackLabel}", which forms a stack at your nearest land that advances into that nation only`);
+await page.keyboard.press("Escape");
+const cardSpot = await page.evaluate(([foe, id]) => {
+  const g = window.__ls.game, w = g.world, v = g.view;
+  g.focus(foe, 8);
+  const fx = foe % w.w, fy = (foe / w.w) | 0;
+  for (let r = 0; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = (fy + dy) * w.w + fx + dx;
+    if (w.owner[i] !== id || w.buildingAt(i)) continue;
+    const [px, py] = v.plotToScreen(fx + dx + 0.5, fy + dy + 0.5);
+    if (v.stackAt(px, py) === null && v.machineAt(px, py) === null) return { x: px / v.ratio, y: py / v.ratio };
+  }
+  return null;
+}, [ringSpots.foe, ringSpots.foeId]);
+if (cardSpot) await page.mouse.click(cardSpot.x, cardSpot.y);
+const cardTitle = await page.waitForSelector("#nation-card:not([hidden])", { timeout: 3000 }).then(() => page.textContent("#nation-title"), () => "");
+const cardFacts = await page.textContent("#nation-facts").catch(() => "");
+await page.screenshot({ path: `${OUT}/5e-nation-card-${MAP}.png` });
+const stacksBefore = await page.evaluate(() => window.__ls.game.world.myStacks().length);
+if (cardTitle) await page.click("#nation-attack");
+const cardSent = await page.waitForFunction(n => window.__ls.game.world.myStacks().length > n, stacksBefore, { timeout: 5000 }).then(() => true, () => false);
+check(cardTitle === ringSpots.foeName && /Rank \d+ of \d+/.test(cardFacts) && cardSent, `a click on ${ringSpots.foeName}'s land opens its card ("${cardFacts}"), and its Attack button sends a stack`);
+await page.keyboard.press("Escape");
+check(await page.evaluate(() => document.querySelector("#nation-card").hidden), "Esc closes the nation card");
 const attackRow = await page.waitForSelector("#attacks [data-halt]", { timeout: 5000 }).then(() => page.textContent("#attacks .attack.out"), () => "");
 const haltId = await page.evaluate(() => Number(document.querySelector("#attacks [data-halt]")?.dataset.halt));
 if (attackRow) await page.click(`#attacks [data-halt="${haltId}"]`);
@@ -746,7 +769,7 @@ const armedText = await fix.textContent("#admin-end");
 await fix.click("#admin-end");
 const endNote = await fix.waitForSelector("#notice-text", { timeout: 5000 }).then(() => fix.textContent("#notice-text"), () => "");
 const friendNote = await friend.waitForSelector("#notice-text", { timeout: 5000 }).then(() => friend.textContent("#notice-text"), () => "");
-check(armedText === "Really end it?" && /ended this world/.test(endNote) && /ended this world/.test(friendNote), `End world asks once more ("${armedText}"), then everyone sees: "${friendNote}"`);
+check(armedText === "Really end it?" && /ended this world/.test(endNote) && /ended this world/.test(friendNote), `End world asks once more ("${armedText}"), then everyone sees: "${friendNote}" (host: "${endNote}")`);
 await fix.screenshot({ path: `${OUT}/21-admin-panel.png` });
 await fix.click("#admin-reopen");
 const reopenedUi = await fix.waitForFunction(() => !window.__ls.game.world.frozen && document.querySelector("#notice")?.hidden, null, { timeout: 5000 }).then(() => true, () => false);
