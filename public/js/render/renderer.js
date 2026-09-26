@@ -270,7 +270,7 @@ export class MapRenderer {
     const s = this.state, out = [], showBots = this.cam.scale >= ZOOM.icons * (this.ratio ?? 1);
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
-      const state = st.id === this.selected ? "selected" : st.order === "hold" ? "idle" : "moving";
+      const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) ? "selected" : st.order === "hold" ? "idle" : "moving";
       out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
     }
     return out;
@@ -357,6 +357,7 @@ export class MapRenderer {
     this.drawGhost();
     this.drawEffects();
     this.drawRoute();
+    this.drawSwipe();
     this.drawFortRing();
     this.drawGuide();
     if (this.night) this.drawNight();
@@ -534,6 +535,30 @@ export class MapRenderer {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  drawSwipe() {
+    const sw = this.swipe;
+    if (!sw?.line?.length) return;
+    const ctx = this.ctx, k = this.ratio ?? 1;
+    ctx.save();
+    ctx.strokeStyle = "rgba(232,200,74,.9)";
+    ctx.fillStyle = "rgba(232,200,74,.12)";
+    ctx.lineWidth = 2 * k;
+    if (sw.kind === "box") {
+      const [a, b] = [sw.line[0], sw.line[sw.line.length - 1]];
+      ctx.setLineDash([6 * k, 4 * k]);
+      ctx.fillRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+      ctx.strokeRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+    } else {
+      ctx.lineWidth = 14 * k;
+      ctx.lineCap = ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(232,200,74,.35)";
+      ctx.beginPath();
+      sw.line.forEach(([x, y], n) => (n ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   drawRoute() {

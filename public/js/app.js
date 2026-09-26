@@ -32,6 +32,7 @@ import { createAim } from "./ui/aim.js";
 import { fmt } from "./ui/dom.js";
 import { createAwayPanel, span } from "./ui/away.js";
 import { createLayout } from "./ui/layout.js";
+import { createGroupPanel } from "./ui/group.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -98,6 +99,7 @@ class Game {
     this.feed = createFeed(side, this);
     this.attacks = createAttacks(overlay, side, this);
     this.stack = createStackPanel(side, this);
+    this.groupPanel = createGroupPanel(side, this);
     this.notices = createNotices(overlay, this, top);
     this.buildMenu = createBuildMenu(side, this);
     this.buildingPanel = createBuildingPanel(side, this);
@@ -126,6 +128,9 @@ class Game {
       onHover: (x, y) => { if (this.prefs.crosshair) return; this.hover = x === null ? null : [x, y]; this.tip.update(); },
       dragging: () => !this.prefs.crosshair && (!!this.zoning || this.painting()),
       rightPans: () => !this.prefs.crosshair && (!!this.zoning || this.painting()),
+      swipeStart: (x, y, e) => this.swipeStart(x, y, e),
+      onSwipe: (kind, line) => this.swiping(kind, line),
+      onSwipeEnd: (kind, line) => this.swiped(kind, line),
       onDrag: (a, b) => (this.building ? this.paintAt(b) : this.dragZone(a, b)),
       onDragEnd: (a, b) => (this.building ? this.paintAt(b, true) : this.paintZone(a, b)),
       tracing: () => this.stack.drawing,
@@ -374,6 +379,7 @@ class Game {
     if (action === "upgrade") return this.toggleUpgrade();
     if (action === "army") return this.toggleArmy();
     if (action === "deposits") return this.toggleDeposits();
+    if (this.group && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.groupPanel.act[action](); return this.updatePanels(); }
     if (["advance", "claim", "target", "move", "draw", "split", "merge", "disband"].includes(action)) act[action]();
     if (action === "next") this.nextStack();
     if (action === "home") this.home();
@@ -394,6 +400,8 @@ class Game {
       else if (this.research.open) this.toggleResearch(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
+      else if (this.groupPanel.choosing) { this.groupPanel.cancel(); }
+      else if (this.group) this.selectGroup(null);
       else if (this.stack.choosing) this.stack.cancel();
       else if (this.machinePanel.choosing) this.machinePanel.cancel();
       else { this.select(null); this.selectMachine(null); this.selectNation(null); }
@@ -682,7 +690,7 @@ class Game {
     const w = this.world, me = w.nations.get(w.you);
     if (!me?.spawned || !me.alive || w.frozen) return this.tip.pin(sx, sy);
     const u = w.machines.get(this.selectedMachine), s = w.stacks.get(this.selected);
-    const items = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
+    const items = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
     if (!items.length) return this.tip.pin(sx, sy);
     this.ring.show(sx, sy, [...items, { id: "info", label: "Info", icon: "ui_info", run: () => this.tip.pin(sx, sy, 5000) }]);
   }
@@ -718,6 +726,7 @@ class Game {
       if (w.owner[plot] !== w.you) return this.toast("Pick a plot of your own land.");
       return this.formAt(plot);
     }
+    if (this.groupPanel.choosing) return this.groupPanel.pick(plot);
     if (this.stack.choosing) return this.stack.pickTarget(plot, sx, sy);
     if (this.machinePanel.choosing) return this.machinePanel.pick(plot, sx, sy);
     const hit = v.stackAt(sx, sy), mh = v.machineAt(sx, sy);
@@ -731,6 +740,7 @@ class Game {
     if (me && !me.spawned && !w.frozen) return this.spawn.tryAt(x, y);
     const b = w.buildingAt(plot);
     if (b) return this.selectBuilding(b.id);
+    this.selectGroup(null);
     this.select(null);
     this.selectBuilding(null);
     this.selectNation(w.owner[plot] && w.owner[plot] !== w.you ? w.owner[plot] : null, plot);
@@ -761,7 +771,57 @@ class Game {
     this.updatePanels();
   }
 
+  swipeStart(sx, sy, e) {
+    if (this.prefs.crosshair || this.building || this.zoning || this.placing || this.stack.choosing || this.machinePanel.choosing || this.groupPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
+    if (e.shiftKey && e.pointerType === "mouse") return "box";
+    const id = this.view.stackAt(sx, sy);
+    return id !== null && this.world.stacks.get(id)?.owner === this.world.you ? "swipe" : null;
+  }
+
+  stacksBy(kind, line) {
+    const v = this.view, w = this.world, R = 22 * (v.ratio ?? 1), lift = v.markerLift(v.cam.scale / 16), [a, b] = [line[0], line[line.length - 1]];
+    const seg = (px, py, p, q) => {
+      const dx = q[0] - p[0], dy = q[1] - p[1], len = dx * dx + dy * dy;
+      const t = len ? Math.max(0, Math.min(1, ((px - p[0]) * dx + (py - p[1]) * dy) / len)) : 0;
+      return Math.hypot(px - p[0] - t * dx, py - p[1] - t * dy);
+    };
+    const near = (px, py) => line.some((p, n) => (n ? seg(px, py, line[n - 1], p) : Math.hypot(px - p[0], py - p[1])) <= R);
+    const inBox = (px, py) => px >= Math.min(a[0], b[0]) && px <= Math.max(a[0], b[0]) && py >= Math.min(a[1], b[1]) && py <= Math.max(a[1], b[1]);
+    return w.myStacks().filter(s => {
+      const [mx, my] = v.plotToScreen((s.pos % w.w) + 0.5, Math.floor(s.pos / w.w) + 0.5);
+      return kind === "box" ? inBox(mx, my) || inBox(mx, my - lift) : near(mx, my) || near(mx, my - lift);
+    }).map(s => s.id);
+  }
+
+  swiping(kind, line) {
+    if (!this.view) return;
+    this.view.swipe = { kind, line };
+    this.view.groupPreview = new Set(this.stacksBy(kind, line));
+  }
+
+  swiped(kind, line) {
+    if (this.view) { this.view.swipe = null; this.view.groupPreview = null; }
+    if (!line || !this.view) return;
+    const ids = this.stacksBy(kind, line);
+    if (ids.length === 1) return this.select(ids[0]);
+    if (ids.length > 1) this.selectGroup(ids);
+  }
+
+  selectGroup(ids, single = null) {
+    this.group = ids?.length >= 2 ? new Set(ids) : null;
+    if (this.view) this.view.group = this.group;
+    this.groupPanel?.cancel();
+    if (this.group) {
+      this.select(null);
+      this.selectMachine(null);
+      this.selectBuilding(null);
+      this.nationCard?.show(null);
+    } else if (single !== null) this.select(single);
+    this.updatePanels();
+  }
+
   select(id) {
+    if (id !== null && this.group) { this.group = null; if (this.view) this.view.group = null; }
     if (id !== null) this.nationCard?.show(null);
     if (id !== null && this.selectedMachine !== null) { this.selectedMachine = null; if (this.view) this.view.selectedMachine = null; }
     if (id !== null && this.selectedBuilding !== null) { this.selectedBuilding = null; if (this.view) this.view.selectedBuilding = null; }
@@ -796,7 +856,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {

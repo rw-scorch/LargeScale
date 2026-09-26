@@ -1223,6 +1223,56 @@ check(guardOn && guardStack !== null && standingGuard, "on a phone, Guard my lan
 check(armyBox && armySet && /usual workers/.test(armyWords), `a tap on a phone moves the army share to ${armySet}: "${armyWords}"`);
 
 const rectIn = (p, sel) => p.$eval(sel, e => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; }).catch(() => null);
+const makeStacks = p => p.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, made = [];
+  g.away?.show(false);
+  for (const dx of [-4, 0, 4]) { const r = await g.conn.request({ t: "stack", share: 0.1, at: cap + dx }); if (r.ok) made.push(r.stack); await new Promise(r => setTimeout(r, 80)); }
+  g.focus(cap, 14);
+  await new Promise(r => setTimeout(r, 900));
+  return made.map(id => { const s = w.stacks.get(id), [x, y] = g.view.plotToScreen((s.pos % w.w) + 0.5, Math.floor(s.pos / w.w) + 0.5); return { id, x: x / g.view.ratio, y: y / g.view.ratio }; });
+});
+await gp.bringToFront();
+const sw = await makeStacks(gp);
+await gp.mouse.move(sw[0].x, sw[0].y);
+await gp.mouse.down();
+for (const s of sw.slice(1)) await gp.mouse.move(s.x, s.y, { steps: 5 });
+await gp.screenshot({ path: `${OUT}/41-swipe.png` });
+await gp.mouse.up();
+const swiped = await gp.evaluate(() => [...(window.__ls.game.group ?? [])]);
+const groupTitle = await gp.textContent("#group-title").catch(() => "");
+await gp.keyboard.press("c");
+const allTake = await gp.waitForFunction(ids => ids.every(id => window.__ls.game.world.stacks.get(id)?.order === "advance"), sw.map(s => s.id), { timeout: 5000 }).then(() => true, () => false);
+await gp.screenshot({ path: `${OUT}/42-group-panel.png` });
+check(sw.length === 3 && sw.every(s => swiped.includes(s.id)) && /stacks/.test(groupTitle) && allTake, `a mouse drag that starts on your stack selects every stack it crosses ("${groupTitle}"), and C sends them all into unclaimed land`);
+await gp.click("#group-halt");
+await gp.keyboard.press("Escape");
+await gp.keyboard.down("Shift");
+await gp.mouse.move(sw[0].x - 20, sw[0].y - 40);
+await gp.mouse.down();
+await gp.mouse.move(sw[1].x + 20, sw[1].y + 20, { steps: 5 });
+await gp.mouse.up();
+await gp.keyboard.up("Shift");
+const boxed = await gp.evaluate(() => [...(window.__ls.game.group ?? [])]);
+await gp.click("#group-move");
+await gp.mouse.click(sw[2].x + 60, sw[2].y + 40);
+const moved = await gp.waitForFunction(ids => ids.every(id => window.__ls.game.world.stacks.get(id)?.order === "move"), [sw[0].id, sw[1].id], { timeout: 5000 }).then(() => true, () => false);
+check(boxed.includes(sw[0].id) && boxed.includes(sw[1].id) && !boxed.includes(sw[2].id) && moved, `Shift-drag boxes two of the three stacks, and Move then a click sends both`);
+await gp.keyboard.press("Escape");
+await mp.bringToFront();
+const ms = await makeStacks(mp);
+const phoneSwipe = await mp.evaluate(pts => {
+  const c = document.getElementById("map"), keep = c.setPointerCapture;
+  c.setPointerCapture = () => {};
+  const at = (type, x, y) => c.dispatchEvent(new PointerEvent(type, { pointerId: 31, pointerType: "touch", clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+  at("pointerdown", pts[0].x, pts[0].y);
+  for (let k = 1; k < pts.length; k++) for (let t = 1; t <= 4; t++) at("pointermove", pts[k - 1].x + (pts[k].x - pts[k - 1].x) * t / 4, pts[k - 1].y + (pts[k].y - pts[k - 1].y) * t / 4);
+  at("pointerup", pts.at(-1).x, pts.at(-1).y);
+  c.setPointerCapture = keep;
+  return [...(window.__ls.game.group ?? [])];
+}, ms);
+await mp.screenshot({ path: `${OUT}/43-swipe-phone.png` });
+check(ms.length === 3 && ms.every(s => phoneSwipe.includes(s.id)) && await mp.isVisible("#group-panel"), `on a phone a finger swiped across three stacks selects all ${phoneSwipe.length}`);
+await mp.evaluate(() => window.__ls.game.selectGroup(null));
 const zonesOf = (p, code) => p.evaluate(c => { let n = 0; for (const z of window.__ls.game.world.zone) if (z === c) n++; return n; }, code);
 await gp.bringToFront();
 await gp.evaluate(() => { const g = window.__ls.game, w = g.world; g.setPref("crosshair", true); g.focus(w.nations.get(w.you).capital, 12); g.startZone("com"); });
