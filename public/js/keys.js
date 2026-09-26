@@ -17,6 +17,13 @@ export const ACTIONS = {
   admin: { key: "`", label: "Admin panel (host only)" },
   next: { key: "Tab", label: "Select your next stack" },
   home: { key: "h", label: "Go to your capital" },
+  confirm: { key: "Enter", label: "Build here: confirm the building you placed" },
+  panUp: { key: "ArrowUp", label: "Move the view up" },
+  panDown: { key: "ArrowDown", label: "Move the view down" },
+  panLeft: { key: "ArrowLeft", label: "Move the view left" },
+  panRight: { key: "ArrowRight", label: "Move the view right" },
+  select: { key: " ", label: "Crosshair: select what is under it; hold to paint or zone" },
+  orders: { key: "e", label: "Crosshair: open the orders ring there" },
   cancel: { key: "Escape", label: "Cancel" },
   zoomIn: { key: "=", label: "Zoom in" },
   zoomOut: { key: "-", label: "Zoom out" },
@@ -65,5 +72,5 @@ export function actionFor(map, e) {
 
 export const keyOf = action => {
   const k = bound[action] ?? ACTIONS[action]?.key ?? "";
-  return k.length === 1 ? k.toUpperCase() : k === "Escape" ? "Esc" : k;
+  return k === " " ? "Space" : k.length === 1 ? k.toUpperCase() : k === "Escape" ? "Esc" : k.startsWith("Arrow") ? k.slice(5) : k;
 };

@@ -76,7 +76,11 @@ export function createHud(root, game) {
   const bar = el("nav", { id: "action-bar", class: "panel" }, build, town, research, upgrade, army, deposits);
 
   const placeHint = el("div", { id: "place-hint", class: "banner", hidden: true }, "Click your own land to place the stack. ", el("span", { class: "fine-only", text: "Or point and press F. " }), "Esc cancels.");
-  const buildHint = el("div", { id: "build-hint", class: "banner", hidden: true });
+  const buildText = el("span", { id: "build-text" });
+  const paint = el("button", { id: "paint-toggle", class: "chip", title: "Paint: drag to place one on every free spot you pass", onclick: () => game.setPref("paint", !game.prefs.paint) });
+  const buildHint = el("div", { id: "build-hint", class: "banner", hidden: true }, buildText, paint);
+  const both = (mouse, touch) => [el("span", { class: "fine-only", text: mouse }), el("span", { class: "coarse-only", text: touch })];
+  let hintKey = "";
   cols.top.append(pill, placeHint, buildHint);
   root.append(cols.left, cols.side, cols.top, corner, bar);
 
@@ -132,9 +136,20 @@ export function createHud(root, game) {
 
       placeHint.hidden = !game.placing;
       const def = game.building && w?.defs.table[game.building];
-      buildHint.hidden = !def;
-      if (def) buildHint.textContent = `Placing ${def.name}. Click to build, tap twice on touch. Right-click or Esc stops.`;
-      else if (game.zoning) { buildHint.hidden = false; buildHint.textContent = `${game.zoning === "none" ? "Erasing zones" : "Zoning"}: drag over your land. Right-click or Esc stops.`; }
+      buildHint.hidden = !def && !game.zoning;
+      paint.hidden = !def;
+      paint.textContent = `Paint: ${game.prefs.paint ? "on" : "off"}`;
+      paint.classList.toggle("on", !!game.prefs.paint);
+      const mode = !def ? "zone" : game.prefs.paint ? "paint" : game.placeMode() === "click" ? "click" : game.pinned !== null ? "pinned" : "confirm";
+      const k = `${mode}:${def?.id}:${game.zoning}`;
+      if (k !== hintKey) {
+        hintKey = k;
+        buildText.replaceChildren(...(mode === "zone" ? [`${game.zoning === "none" ? "Erasing zones" : "Zoning"}: drag over your land. `, ...both("Right-click or Esc stops.", "Two fingers move the map.")]
+          : mode === "paint" ? [`Painting ${def.name}: drag across your land to put one on every free spot. `, ...both("Right-drag or the arrow keys move the map; Esc stops.", "Two fingers move the map.")]
+          : mode === "click" ? [`Placing ${def.name}. `, ...both("Click to build. Right-click or Esc stops.", "Tap twice to build.")]
+          : mode === "pinned" ? [`Placing ${def.name}: press Build here to confirm, or pick another spot. `, ...both("Enter confirms, Esc cancels.", "")]
+          : [`Placing ${def.name}: `, ...both("click a spot, then Build here. Right-click or Esc stops.", "tap a spot, then Build here.")]));
+      }
     },
     get share() { return readShare(); },
   };

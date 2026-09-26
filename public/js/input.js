@@ -1,6 +1,6 @@
 const HOLD_MS = 500;
 
-export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChange, dragging, onDrag, onDragEnd, tracing, onTrace, onTraceEnd }) {
+export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChange, dragging, rightPans, onDrag, onDragEnd, tracing, onTrace, onTraceEnd }) {
   const pts = new Map();
   let gesture = null, right = null, swallow = false;
   const ratio = () => view.ratio ?? 1;
@@ -17,7 +17,7 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     if (e.pointerType === "mouse" && e.button !== 0) {
       if (e.button === 2) {
         canvas.setPointerCapture(e.pointerId);
-        right = { id: e.pointerId, line: [at(e)], moved: 0 };
+        right = { id: e.pointerId, line: [at(e)], moved: 0, pans: !!rightPans?.() };
       }
       return;
     }
@@ -36,8 +36,10 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
   canvas.addEventListener("pointermove", e => {
     if (e.pointerType === "mouse") onHover?.(...at(e));
     if (right?.id === e.pointerId && !pts.has(e.pointerId)) {
-      extend(right, at(e));
-      if (far(right)) onTrace?.(right.line);
+      const prev = right.line.at(-1), now = at(e);
+      extend(right, now);
+      if (right.pans) view.pan(now[0] - prev[0], now[1] - prev[1]);
+      else if (far(right)) onTrace?.(right.line);
       return;
     }
     if (!pts.has(e.pointerId)) return;
@@ -66,7 +68,7 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     if (right?.id === e.pointerId && !pts.has(e.pointerId)) {
       const r = right;
       right = null;
-      if (far(r)) onTraceEnd?.(r.line);
+      if (far(r)) { if (!r.pans) onTraceEnd?.(r.line); }
       else onSecondary?.(...r.line[0]);
       return;
     }
