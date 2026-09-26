@@ -115,6 +115,11 @@ export default {
     if (!me) return json({ error: "log in first" }, 401);
     if (path === "/api/logout") return json(await dir.logout(token));
     if (path === "/api/me") return json(me);
+    if (path === "/api/password" && request.method === "POST") {
+      const b = (await body(request)) ?? {};
+      const r = await dir.changePassword(me, token, b.current, b.password);
+      return json(r, r.error ? 400 : 200);
+    }
     if (path === "/api/link-code" && request.method === "POST") return json(await dir.linkCode(me));
     if (path === "/api/notify" && request.method === "POST") return json(await dir.setPrefs(me.id, (await body(request)) ?? {}));
     if (path === "/api/worlds" && request.method === "GET") return json(await dir.listWorlds(me));

@@ -1,11 +1,13 @@
 import { el, armed } from "./dom.js";
 import { api } from "../api.js";
 import { createAccounts } from "./accounts.js";
+import { createPasswordForm } from "./password.js";
 
 export async function showWorlds(root, account, { onOpen, onLogout }) {
   const msg = el("p", { class: "msg" });
   const say = text => { msg.textContent = text; msg.scrollIntoView({ block: "nearest" }); };
   const accounts = account.admin ? createAccounts(account, say) : null;
+  const password = createPasswordForm(say);
   const list = el("div", { class: "worlds" });
   const name = el("input", { id: "world-name", placeholder: "world name", maxlength: 40, value: "New world" });
   const map = el("select", { id: "world-map" },
@@ -55,7 +57,8 @@ export async function showWorlds(root, account, { onOpen, onLogout }) {
   };
 
   root.replaceChildren(el("div", { class: "card wide" },
-    el("div", { class: "row spread" }, el("h1", { text: "Worlds" }), el("span", { class: "muted" }, `${account.name} `, accounts ? el("button", { id: "open-accounts", onclick: () => accounts.toggle(), text: "Accounts" }) : null, " ", el("button", { onclick: onLogout, text: "Log out" }))),
+    el("div", { class: "row spread" }, el("h1", { text: "Worlds" }), el("span", { class: "muted" }, `${account.name} `, accounts ? el("button", { id: "open-accounts", onclick: () => accounts.toggle(), text: "Accounts" }) : null, " ", el("button", { id: "open-password", onclick: () => password.toggle(), text: "Password" }), " ", el("button", { onclick: onLogout, text: "Log out" }))),
+    password.el,
     list,
     ...(account.admin ? [
       el("h2", { text: "New world" }),

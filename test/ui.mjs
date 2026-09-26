@@ -1187,6 +1187,23 @@ if (armyBox) await mp.touchscreen.tap(armyBox.x + armyBox.width * 0.92, armyBox.
 const armySet = await mp.waitForFunction(() => { const c = window.__ls.game.world.purse?.policy?.conscription; return c > 0.5 ? c : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
 const armyWords = await mp.textContent("#policy-army-effect");
 await mp.screenshot({ path: `${OUT}/35-policies-phone.png` });
+const pwName = "pwui" + Math.floor(Math.random() * 1e6);
+const pp = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+await pp.goto(`${BASE}/`);
+const pwReg = await pp.evaluate(async ([name, invite]) => { const r = await fetch("/api/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, password: "old password", invite }) }); const b = await r.json(); localStorage.setItem("ls_token", b.token); return !!b.token; }, [pwName, INVITE]);
+await pp.reload();
+await pp.tap("#open-password").catch(() => {});
+await pp.fill("#password-current", "old password").catch(() => {});
+await pp.fill("#password-new", "new password").catch(() => {});
+await pp.fill("#password-again", "new passwort").catch(() => {});
+await pp.tap("#password-save").catch(() => {});
+const pwMismatch = await pp.textContent(".msg").catch(() => "");
+await pp.fill("#password-again", "new password").catch(() => {});
+await pp.tap("#password-save").catch(() => {});
+const pwDone = await pp.waitForFunction(() => /Password changed/.test(document.querySelector(".msg")?.textContent ?? ""), null, { timeout: 5000 }).then(() => true, () => false);
+await pp.screenshot({ path: `${OUT}/36-password.png` });
+const pwLogin = await pp.evaluate(async name => (await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, password: "new password" }) })).status, pwName);
+check(pwReg && /not the same/.test(pwMismatch) && pwDone && pwLogin === 200, `a player changes their own password from the world list on a phone ("${pwMismatch}" first), and the new one logs in`);
 check(armyBox && armySet && /usual workers/.test(armyWords), `a tap on a phone moves the army share to ${armySet}: "${armyWords}"`);
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
