@@ -8,6 +8,7 @@ import { makeTestMap } from "../src/shared/testmap.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand, TID } from "../src/shared/terrain.js";
 import { simplifyPath } from "../src/shared/pathfind.js";
+import { standingOrders, summarise } from "../src/sim/offline.js";
 
 function setup() {
   const w = new World(makeTestMap(160, 100, 7));
@@ -422,4 +423,69 @@ test("a short route inside one block of the route graph still has a length and a
   const straight = Math.abs(w.grid.x(near) - w.grid.x(s.pos)) + Math.abs(w.grid.y(near) - w.grid.y(s.pos));
   assert.equal(r.plots, straight);
   assert.ok(r.seconds >= 1);
+});
+
+test("while a player is away, advancing stacks hold, and fall-back stacks retreat when outnumbered", () => {
+  const { w, g, nation, fill } = strip(60, 20);
+  const a = nation("A", 3, 10), b = nation("B", 50, 10);
+  fill(a, 0, 30, 0, 20);
+  fill(b, 40, 60, 0, 20);
+  const s = w.createStack(a, g.idx(2, 10), 1000);
+  runOrder(w, a, { t: "advance", stack: s.id, only: "free" });
+  w.tick(0.5);
+  assert.ok(s.path.length > 0, "it is walking to unclaimed land");
+  const online = new Set([a]), presence = { isOnline: n => online.has(n) };
+  standingOrders(w, presence);
+  assert.equal(s.order, "advance", "while its owner is online it keeps going");
+  online.delete(a);
+  standingOrders(w, presence);
+  assert.deepEqual({ order: s.order, path: s.path.length }, { order: "hold", path: 0 }, "with its owner away it holds, and drops the path it was on");
+  const f = w.createStack(a, g.idx(28, 10), 200);
+  assert.equal(runOrder(w, a, { t: "standing", stack: f.id, mode: "fallback" }).ok, true);
+  const enemy = w.createStack(b, g.idx(41, 10), 500);
+  enemy.pos = g.idx(31, 10);
+  standingOrders(w, presence);
+  assert.deepEqual({ order: f.order, retreating: f.retreating, goal: f.route?.goal ?? f.path.at(-1) }, { order: "move", retreating: true, goal: w.nations.get(a).capital }, "outnumbered 2.5 to 1, it falls back to the capital");
+});
+
+test("the standing order checks its mode, can set every stack and new ones, and the purse shows fall-back stacks", () => {
+  const { w, g, a, order } = field(40, 30);
+  const s1 = order({ t: "stack", share: 0.2, at: g.idx(5, 5) }).stack;
+  assert.equal(order({ t: "standing", stack: s1, mode: "flee" }).error, "mode is hold or fallback");
+  assert.equal(order({ t: "standing", stack: 999, mode: "hold" }).error, "not your stack");
+  assert.deepEqual(order({ t: "standing", mode: "fallback", all: true }), { t: "result", of: "standing", ok: true, mode: "fallback", stacks: 1 });
+  const s2 = order({ t: "stack", share: 0.2, at: g.idx(6, 6) }).stack;
+  assert.equal(w.stacks.get(s2).standing, "fallback", "new stacks take the default");
+  assert.deepEqual(ordersOf(w, a).map(o => [o.id, o.standing]), [[s1, "fallback"], [s2, "fallback"]]);
+  order({ t: "standing", stack: s1, mode: "hold" });
+  assert.deepEqual(ordersOf(w, a).map(o => o.id), [s2], "holding is the default and not listed");
+});
+
+test("land-loss events name every attacker, even two in the same tick", () => {
+  const { w, g, nation, fill } = strip(60, 20);
+  const a = nation("A", 3, 10), b = nation("B", 30, 10), c = nation("C", 55, 10);
+  fill(a, 0, 20, 0, 20);
+  fill(b, 20, 40, 0, 20);
+  fill(c, 40, 60, 0, 20);
+  const sa = w.createStack(a, g.idx(19, 10), 2000), sc = w.createStack(c, g.idx(40, 10), 2000);
+  w.orderAdvance(sa.id);
+  w.orderAdvance(sc.id);
+  w.events.length = 0;
+  w.tick(0.5);
+  const lost = w.events.filter(e => e.type === "plot_lost" && e.nation === b);
+  assert.deepEqual(lost.map(e => e.by).sort(), [a, c].sort(), "one event for each attacker");
+  assert.ok(lost.every(e => e.count > 1));
+  const taken = by => lost.find(e => e.by === by).count;
+  assert.deepEqual(summarise(lost), { plotsLost: taken(a) + taken(c), byAttacker: { [a]: taken(a), [c]: taken(c) }, stacksLost: 0, convoysLost: 0, wars: [], built: 0, other: 0 }, "the away summary counts plots, not events");
+});
+
+test("land taken by closing a pocket is reported to the nation that loses it", () => {
+  const { w, g, nation, fill } = strip(60, 20);
+  const a = nation("A", 3, 10), b = nation("B", 50, 10);
+  fill(a, 0, 30, 0, 20);
+  fill(b, 10, 12, 10, 12);
+  w.events.length = 0;
+  w.fillEnclaves(g.idx(12, 10), a);
+  assert.deepEqual(w.events.filter(e => e.type === "plot_lost").map(e => [e.nation, e.by, e.count]), [[b, a, 4]]);
+  assert.equal(w.owner[g.idx(10, 10)], a);
 });

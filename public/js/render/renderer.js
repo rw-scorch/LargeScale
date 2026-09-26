@@ -6,6 +6,7 @@ import { People } from "./people.js";
 export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
+const FORMATION = [[0, 0], [-0.32, 0.12], [0.32, 0.12], [-0.18, -0.2], [0.18, -0.2]];
 const ROAD_NAMES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
 const ZONE_SPRITE = [null, "ov_zone_residential", "ov_zone_commercial", "ov_zone_industrial", "ov_zone_farmland"];
@@ -52,6 +53,7 @@ export class MapRenderer {
     this.occupied = new Uint8Array(state.w * state.h);
     this.lotAt = new Map();
     this.people = new People(state);
+    this.facing = new Map();
     this.indexBuildings();
     this.rebuildTerrain();
     this.rebuildTerritory();
@@ -264,16 +266,17 @@ export class MapRenderer {
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
       const state = st.id === this.selected ? "selected" : st.order === "hold" ? "idle" : "moving";
-      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state });
+      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
     }
     return out;
   }
 
   stackAt(sx, sy, radius = 14 * (this.ratio ?? 1)) {
     let best = null, bestD = radius;
+    const lift = this.markerLift(this.cam.scale / 16);
     for (const m of this.markers()) {
       const [mx, my] = this.plotToScreen(m.x, m.y);
-      const d = Math.hypot(mx - sx, my - sy);
+      const d = Math.min(Math.hypot(mx - sx, my - sy), Math.hypot(mx - sx, my - lift - sy));
       if (d <= bestD) { bestD = d; best = m.id; }
     }
     return best;
@@ -511,6 +514,7 @@ export class MapRenderer {
       } });
     }
     for (const f of this.people.figures(r, this.time)) items.push({ key: f.y + 0.1, x: f.x, draw: () => this.drawPerson(f, px) });
+    for (const f of this.soldiers(r)) items.push({ key: f.y + 0.05, x: f.x, draw: () => this.drawPerson(f, px) });
     for (const u of s.units) {
       if (u.x < r.x0 - 4 || u.x > r.x1 + 4 || u.y < r.y0 - 4 || u.y > r.y1 + 4) continue;
       items.push({ key: u.air ? 1e9 : u.y + 1, x: u.x, draw: () => this.drawUnit(u, px) });
@@ -584,7 +588,7 @@ export class MapRenderer {
   }
 
   drawPerson(f, px) {
-    const k = px * 0.85, sp = this.atlas.get(f.sprite);
+    const k = px * (f.size ?? 0.85), sp = this.atlas.get(f.sprite);
     if (!sp) return;
     const [sx, sy] = this.plotToScreen(f.x, f.y);
     this.atlas.draw(this.ctx, f.sprite, sx - (sp.w * k) / 2, sy - sp.h * k, k, this.state.nations.get(f.owner)?.colour, f.flip);
@@ -592,11 +596,65 @@ export class MapRenderer {
 
   drawMarker(m, px) {
     const ctx = this.ctx, a = this.atlas, colour = this.state.nations.get(m.owner)?.colour;
-    const [sx, sy] = this.plotToScreen(m.x, m.y);
+    const [sx, sy0] = this.plotToScreen(m.x, m.y);
     const size = Math.max(16 * (this.ratio ?? 1), 16 * px);
-    const k = size / 16;
+    const k = size / 16, sy = sy0 - this.markerLift(px);
     a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
     this.label(String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
+    if (m.xp) this.rank(sx, sy - size / 2 - 2 * k, m.xp, Math.max(this.ratio ?? 1, k * 0.6));
+  }
+
+  markerLift(px) {
+    return px >= 1 ? Math.max(16 * (this.ratio ?? 1), 16 * px) * 1.5 : 0;
+  }
+
+  rank(x, y, level, k) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.lineWidth = 2 * k;
+    ctx.lineJoin = "round";
+    for (let i = 0; i < level; i++) {
+      const cy = y - i * 3.5 * k;
+      ctx.beginPath();
+      ctx.moveTo(x - 4 * k, cy - 2 * k);
+      ctx.lineTo(x, cy + 1 * k);
+      ctx.lineTo(x + 4 * k, cy - 2 * k);
+      ctx.strokeStyle = "rgba(15,34,51,.9)";
+      ctx.lineWidth = 3.5 * k;
+      ctx.stroke();
+      ctx.strokeStyle = "#e8c84a";
+      ctx.lineWidth = 2 * k;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  soldiers(r) {
+    const s = this.state, types = s.unitTypes, out = [];
+    if (!types) return out;
+    const near = [...s.stacks.values()].filter(st => { const x = st.pos % s.w, y = (st.pos / s.w) | 0; return x >= r.x0 - 2 && x <= r.x1 + 2 && y >= r.y0 - 2 && y <= r.y1 + 2; });
+    for (const st of near) {
+      const x = st.pos % s.w, y = (st.pos / s.w) | 0;
+      const seen = this.facing.get(st.id);
+      if (!seen) this.facing.set(st.id, { pos: st.pos, dir: "s" });
+      else if (seen.pos !== st.pos) {
+        const dx = x - (seen.pos % s.w), dy = y - ((seen.pos / s.w) | 0);
+        seen.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? "e" : "w") : dy > 0 ? "s" : "n";
+        seen.pos = st.pos;
+      }
+      const dir = this.facing.get(st.id).dir;
+      let main = "levy", most = st.troops - Object.values(st.mix ?? {}).reduce((a, b) => a + b, 0);
+      for (const [id, n] of Object.entries(st.mix ?? {})) if (n > most) { most = n; main = id; }
+      const base = types.table[main]?.sprite ?? "hunter";
+      const fighting = near.some(o => o.owner !== st.owner && Math.max(Math.abs((o.pos % s.w) - x), Math.abs(((o.pos / s.w) | 0) - y)) <= 1);
+      const count = Math.max(1, Math.min(5, Math.floor(1 + Math.log2(Math.max(1, st.troops / 40)))));
+      for (let k = 0; k < count; k++) {
+        const [ox, oy] = FORMATION[k], beat = Math.floor(this.time * 4 + k + st.id) % 2;
+        const frame = fighting ? (beat ? "attack" : "idle") : st.order !== "hold" ? (beat ? "walk1" : "walk2") : "idle";
+        out.push({ x: x + 0.5 + ox, y: y + 0.75 + oy, sprite: `${base}_${dir === "w" ? "e" : dir}_${frame}`, flip: dir === "w", owner: st.owner, stack: st.id, size: 1.1 });
+      }
+    }
+    return out;
   }
 
   label(text, x, y, size, colour = "#e9dcb8") {

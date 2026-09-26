@@ -6,6 +6,8 @@ import { orderResearch } from "./sim/research.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
+import { UNITS, xpLevelOf, setKeep } from "./sim/troops.js";
+import { mixRow } from "./shared/units.js";
 
 const isPlot = (sim, v) => Number.isInteger(v) && v >= 0 && v < sim.grid.size;
 const fail = error => ({ ok: false, error });
@@ -56,6 +58,7 @@ export const ORDERS = {
     const at = m.at === undefined ? home : m.at;
     if (!isPlot(sim, at) || sim.owner[at] !== nation) return fail("stacks form on your own land");
     const s = sim.createStack(nation, at, n.troops * share);
+    if (s && n.standing) s.standing = n.standing;
     return s ? { ok: true, stack: s.id } : fail("not enough troops");
   },
   move(sim, nation, m) {
@@ -163,6 +166,26 @@ export const ORDERS = {
     const r = orderResearch(sim, nation, m.id, mode);
     return r.error ? { ok: false, ...r } : { ok: true, ...r };
   },
+  standing(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!["hold", "fallback"].includes(m.mode)) return fail("mode is hold or fallback");
+    if (m.all === true) {
+      sim.nations.get(nation).standing = m.mode;
+      let stacks = 0;
+      for (const s of sim.stacks.values()) if (s.owner === nation) { s.standing = m.mode; stacks++; }
+      return { ok: true, mode: m.mode, stacks };
+    }
+    const s = ownStack(sim, nation, m.stack);
+    if (!s) return fail("not your stack");
+    s.standing = m.mode;
+    return { ok: true, mode: m.mode, stacks: 1 };
+  },
+  army(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.troops) return fail("troop types are not running in this world");
+    const r = setKeep(sim, nation, m.keep);
+    return r.error ? fail(r.error) : { ok: true, keep: r.keep };
+  },
   route(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
@@ -171,7 +194,7 @@ export const ORDERS = {
     if (error) return fail(error);
     const legs = legsOf(sim, s.pos, via, m.to);
     if (!legs) return fail(via.length ? "no land route through those points" : "no land route there");
-    const co = sim.pathGraph(), speed = sim.rules.stackSpeed * (s.speedMult ?? 1), g = sim.grid, points = [];
+    const co = sim.pathGraph(), speed = sim.rules.stackSpeed * sim.speedOf(s), g = sim.grid, points = [];
     let plots = 0, cost = 0;
     for (const { from, to, r } of legs) {
       for (const k of r.regions) {
@@ -215,7 +238,19 @@ export function victory(sim) {
 }
 
 const nationRow = n => [n.id, n.plots, Math.floor(n.troops), n.alive ? 1 : 0, n.spawned ? 1 : 0, Math.max(0, ERA_ORDER.indexOf(n.era ?? "T"))];
-const stackRow = s => [s.id, s.owner, s.pos, Math.floor(s.troops), ORDER_CODES.indexOf(s.order)];
+const stackRow = s => {
+  const row = [s.id, s.owner, s.pos, Math.floor(s.troops), ORDER_CODES.indexOf(s.order)];
+  const mix = s.mix ? mixRow(UNITS, s.mix) : [], lv = xpLevelOf(s);
+  if (mix.length || lv) row.push(mix, lv);
+  return row;
+};
+const NONE = [];
+const sameTypes = (p, q) => {
+  const a = p[5] ?? NONE, b = q[5] ?? NONE;
+  if (a.length !== b.length || (p[6] ?? 0) !== (q[6] ?? 0)) return false;
+  for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return false;
+  return true;
+};
 
 export class StateFeed {
   constructor(botShare = 0.01, botEvery = 5) { this.botShare = botShare; this.botEvery = botEvery; this.round = 0; this.nations = new Map(); this.stacks = new Map(); }
@@ -238,7 +273,7 @@ export class StateFeed {
       const row = stackRow(st), prev = this.stacks.get(st.id);
       const bot = sim.nations.get(st.owner)?.bot;
       if (bot && !st.engaged && waits(st.id, prev)) continue;
-      const same = prev && prev[1] === row[1] && prev[2] === row[2] && prev[4] === row[4] && (prev[3] === row[3] || (bot && this.close(prev[3], row[3])));
+      const same = prev && prev[1] === row[1] && prev[2] === row[2] && prev[4] === row[4] && (prev[3] === row[3] || (bot && this.close(prev[3], row[3]))) && sameTypes(prev, row);
       if (same) continue;
       this.stacks.set(st.id, row);
       s.push(row);
@@ -272,8 +307,9 @@ export function ordersOf(sim, nid) {
     const leg = s.route?.goal ?? (s.path.length ? s.path[s.path.length - 1] : null), rest = s.via ?? [];
     const to = rest.length ? rest[rest.length - 1] : leg;
     const only = s.order === "advance" ? s.only ?? null : null;
-    if (to === null && only === null) continue;
+    if (to === null && only === null && s.standing !== "fallback") continue;
     const row = { id: s.id, to, only };
+    if (s.standing === "fallback") row.standing = "fallback";
     if (rest.length) row.via = [...(leg === null ? [] : [leg]), ...rest.slice(0, -1)];
     out.push(row);
   }

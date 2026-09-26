@@ -12,9 +12,10 @@
   "cbd": { "radius": 14, "maxBonus": 0.5, "attackShare": 0.6 },
   "research": { "base": 0.2, "perPerson": 0.002, "bankCap": 500, "maxQueue": 40, "speed": 1, "starterQueue": ["fire_keeping", "stone_tools", "foraging", "barter", "farming"] },
   "seasons": { "dayLengthMinutes": 60, "daysPerSeason": 6 },
-  "offline": { "defenceMult": 0.95, "offlineOutputShare": 0.9, "maxCatchupSeconds": 259200 },
+  "offline": { "defenceMult": 0.95, "offlineOutputShare": 0.9, "maxCatchupSeconds": 259200, "threatRadius": 6, "fallbackRatio": 1.5, "standingEvery": 2 },
   "landing": { "penalty": 0.15, "beachPenalty": 0.05, "dropPenalty": 0.1 },
   "world": { "botsPerMillionLand": 200, "maxBots": 400, "minMapSide": 64, "maxTestSide": 2000, "maxPlots": 5184000, "baseWidth": 3600, "messagesPerSecond": 20, "messageBurst": 40, "botTroopShare": 0.01, "botStateEvery": 5 },
+  "troops": { "xpLevels": [0, 0.3, 1, 3], "xpBonus": [0, 0.1, 0.2, 0.35], "trainEvery": 5, "keepMax": 1000000 },
   "admin": { "maxGive": 1000000, "maxSpeed": 8, "logShown": 30, "nameLength": 40 },
   "detail": {
     "fineDir": "map/fine",

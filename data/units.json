@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "units": [
+    {"id":"levy","num":1,"name":"Levies","kind":"troop","era":"T","description":"Ordinary troops raised from your people. Every nation has them, and they fill out any stack.","attack":1,"defence":1,"speed":1,"capture":1,"cost":{},"builtAt":[],"sprite":"hunter"},
+    {"id":"club_warrior","num":2,"name":"Club warriors","kind":"troop","era":"T","description":"Tribal fighters with heavy clubs, stronger than levies when attacking.","attack":1.4,"defence":1.2,"speed":1,"capture":1,"cost":{"money":0.4},"builtAt":["war_camp","barracks"],"sprite":"club_warrior"},
+    {"id":"spear_thrower","num":3,"name":"Spear throwers","kind":"troop","era":"T","description":"Throw spears from cover, best when holding ground.","attack":1.2,"defence":1.5,"speed":1,"capture":1,"cost":{"money":0.4,"wood":0.1},"builtAt":["war_camp","barracks"],"sprite":"spear_thrower"},
+    {"id":"horse_archer","num":4,"name":"Horse archers","kind":"troop","era":"T","description":"Mounted archers: fast, and quick to take land.","attack":1.5,"defence":1.1,"speed":1.4,"capture":1.4,"cost":{"money":1,"food":0.3},"builtAt":["war_camp","barracks"],"sprite":"horse_archer"},
+    {"id":"spearman","num":5,"name":"Spearmen","kind":"troop","era":"M","description":"Medieval foot soldiers with long spears, solid in attack and defence.","attack":1.7,"defence":2,"speed":1,"capture":1,"cost":{"money":0.8,"wood":0.2},"builtAt":["barracks"],"sprite":"spearman"},
+    {"id":"swordsman","num":6,"name":"Swordsmen","kind":"troop","era":"M","description":"Armoured swordsmen who hit hard.","attack":2.3,"defence":1.7,"speed":1,"capture":1,"cost":{"money":1.2,"iron":0.2},"builtAt":["barracks"],"sprite":"swordsman"},
+    {"id":"archer","num":7,"name":"Archers","kind":"troop","era":"M","description":"Longbowmen, the best defenders of their era.","attack":1.8,"defence":2.3,"speed":1,"capture":1,"cost":{"money":1,"wood":0.3},"builtAt":["barracks"],"sprite":"archer"},
+    {"id":"pikeman","num":8,"name":"Pikemen","kind":"troop","era":"M","description":"A wall of pikes that is very hard to push back, though a little slow.","attack":1.6,"defence":2.6,"speed":0.9,"capture":1,"cost":{"money":1,"wood":0.3},"builtAt":["barracks"],"sprite":"pikeman"},
+    {"id":"knight","num":9,"name":"Knights","kind":"troop","era":"M","description":"Heavy cavalry with the strongest attack, the fastest to take land, and costly.","attack":3,"defence":2.2,"speed":1.5,"capture":1.5,"cost":{"money":3,"iron":0.4,"food":0.5},"builtAt":["barracks"],"sprite":"knight"}
+  ]
+}

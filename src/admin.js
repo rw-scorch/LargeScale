@@ -1,9 +1,10 @@
 import { complete, knownOf } from "./sim/research.js";
+import { addUnits } from "./sim/troops.js";
 import { nextResearch, researchError } from "./shared/research.js";
 import rules from "../data/rules.json" with { type: "json" };
 
 export const ADMIN_RULES = rules.admin;
-export const GIVE = ["money", "food", "wood", "stone", "clay", "troops"];
+export const GIVE = ["money", "food", "wood", "stone", "clay", "troops", "unit"];
 
 const fail = error => ({ ok: false, error });
 
@@ -31,6 +32,10 @@ export const ADMIN_OPS = {
     if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > most) return fail(`the amount is a whole number from -${most} to ${most}, and not 0`);
     const done = now => ({ ok: true, nation: n.id, name: n.name, what: m.what, amount, now: Math.floor(now) });
     if (m.what === "troops") return done((n.troops = Math.max(0, n.troops + amount)));
+    if (m.what === "unit") {
+      const now = addUnits(sim, n.id, m.unit, amount);
+      return now === null ? fail("pick a troop type") : { ...done(now), unit: m.unit };
+    }
     if (n.money === undefined) return fail(`${n.name} has no economy`);
     if (m.what === "money") return done((n.money = Math.max(0, n.money + amount)));
     return done((n.stock[m.what] = Math.max(0, (n.stock[m.what] ?? 0) + amount)));

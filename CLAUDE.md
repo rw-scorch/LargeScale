@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-2.md`. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-3.md`: troop types, then machine units, then a new interface. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (120)
+npm test                  # unit tests (136)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -47,7 +47,7 @@ src/index.js       Worker: routes, static files, websocket handover
 src/directory.js   Directory object: accounts, sessions, worlds, members
 src/world.js       World object: one per world. Sockets, tick loop, saving, catch-up
 src/worldconfig.js map choice (test, earth, europe, lat/long box) and bot count validation
-src/sim/           the simulation, 21 modules, plain JavaScript
+src/sim/           the simulation, 25 modules, plain JavaScript
 src/shared/        the only code both server and client import: protocol, codec, maps, pathfinding, terrain
 public/            the client: index.html, js/app.js, js/net.js, js/input.js, js/render/, js/ui/ (one file per panel);
                    test.html is the old server test page. public/map holds the gzipped maps and public/assets the art kit, both committed
@@ -101,7 +101,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
 - **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
-- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, D draw a path (then drag), S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, Y upgrade menu, R deposits at mid zoom, backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once, and a right-drag draws the way it goes. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, D draw a path (then drag), S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, Y upgrade menu, K army panel, R deposits at mid zoom, backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -). Right-click sends the selected stack at once, and a right-drag draws the way it goes. Stacks form on any owned plot. A settings panel to rebind keys is wanted later.
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
@@ -153,14 +153,25 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 
   Protocol stays 5.
 
+## Milestone three progress
+
+Ryan chose unit types inside stacks (26 September 2026) over drawn soldiers only, individual soldiers, or machine units first; machine units come next, then a new interface. His decisions: one training building line, no counters, everyone sees the full mix, troop types before milestone two's step 7. Branch `m3-troop-types`, stacked on `m2-orders-descriptions`.
+
+- **A1, types and power.** `data/units.json` is the unit registry (`kind` troop now, machine later; append-only `num`). `src/sim/troops.js` (`installTroops`) keeps a `mix` of trained types on every stack and reserve (`n.mix`); levies are the rest of `troops`. It wraps stack forming, splits, merges and disbands, and supplies hooks the territory and combat modules call: `powerOf` (each type's attack, or defence while holding, times experience), `stackAttack` (capture cost is divided by it), `advanceMultOf` (capture rate), `speedOf` (slowest type), `reserveStrength` (defenders' density), `loseTroops` and `loseReserve` (proportional losses), `gainXp` (players' stacks only). Stacks with no mix, every bot stack among them, get exactly the old numbers. State rows add the mix and experience level only when present. Battles stay Lanchester's square law, so a knight with three times a levy's attack is worth about 1.7 levies in a straight fight but pays a third as much to take land.
+- **A2, training.** A war camp (Tribal, research Clubs, 1 a second) upgrades to the barracks (2 a second): the `trains` field in `data/buildings.json`. The `army` order sets how many of each type to keep at home (`setKeep`); every `trainEvery` seconds `trainTick` turns levies into the missing types and charges `cost` from the unit data, and records why it is held up. The purse's `army` has the reserve, targets, rate and reason. The Army panel is `public/js/ui/army.js` (K). The world config's `trainSpeed` speeds training up for tests.
+- **Ryan's notes (26 September 2026).** Standing orders (the kit's, in `src/sim/offline.js`) now run every 2 s for players who are away: stacks hold by default, which stops an absent player's advance, or fall back when outnumbered (the `standing` order, and a choice in the stack panel). Land-loss events are keyed by loser and attacker, and closing a pocket reports the land it takes. A `presence` message and `hello.online` give the nations list a green light for players online.
+- **A3, showing them.** The stack panel lists the mix and rank. At close zoom stacks are drawn as one to five figures of their main type from the kit's `units` sheet, walking, facing and fighting; levies use the `hunter` figure. Flags rise above the figures, and one to three gold chevrons show experience. The client's unit table is `world.unitTypes`; `state.units` belongs to the renderer's machine units.
+
 Open items as of 26 September 2026, in order:
 
-1. Ryan reviews and merges step 6 (PR 12), then the orders and descriptions branch, then redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
-2. Ryan asked for real units (individual soldiers with power levels). That conflicts with "troops are a count" and needs a plan he agrees to first. The options went to him on 26 September 2026; he picks one.
-3. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
-4. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
-5. Later: a settings panel to rebind keys; players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
-6. Each session's record goes in `devpack/` (see `devpack/README.md`).
+1. Ryan reviews and merges the milestone three PR (`m3-troop-types`), then redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+2. Ryan's check of troop types (milestone three, A4).
+3. Part B, machine units: the draft plan is in `plans/milestone-3.md` and waits on Ryan's two decisions (Medieval machines now or later eras first; ships carrying stacks).
+4. Part C, the new interface: study openfront.io and frontwars.io, then plan.
+5. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
+6. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
+7. Later: a settings panel to rebind keys; players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
+8. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 

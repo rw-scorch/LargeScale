@@ -3,6 +3,7 @@ import { keyOf } from "../keys.js";
 import { isLand } from "../shared/terrain.js";
 import { simplifyPath } from "../shared/pathfind.js";
 import { MAX_WAYPOINTS } from "../shared/protocol.js";
+import { XP_NAMES } from "../shared/units.js";
 
 const ORDER_TEXT = { hold: "holding", move: "moving", advance: "advancing" };
 
@@ -11,9 +12,13 @@ export const keyTag = action => el("kbd", { class: "key", text: keyOf(action) })
 export function createStackPanel(root, game) {
   const title = el("b", { id: "stack-title" });
   const info = el("span", { id: "stack-info", class: "muted" });
+  const mixLine = el("span", { id: "stack-mix", class: "muted" });
   const hint = el("span", { id: "stack-hint" });
   const actions = el("div", { class: "row wrap" });
-  const box = el("section", { id: "stack-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), hint, actions);
+  const standing = el("select", { id: "stack-standing", class: "small" }, el("option", { value: "hold", text: "holds its ground" }), el("option", { value: "fallback", text: "falls back to the capital when outnumbered" }));
+  const away = el("div", { class: "row wrap", id: "stack-away" }, el("span", { class: "muted", text: "While you are away, this stack" }), standing,
+    el("button", { class: "ghost", id: "stack-standing-all", text: "Same for all my stacks", onclick: () => order({ t: "standing", mode: standing.value, all: true }, r => game.toast(`All ${r.stacks} of your stacks, and new ones, now ${r.mode === "fallback" ? "fall back when outnumbered" : "hold their ground"} while you are away.`)) }));
+  const box = el("section", { id: "stack-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), mixLine, away, hint, actions);
   root.append(box);
   let mode = null, preview = null, key = "", trip = null, asking = false, drawn = null, disbandAt = -Infinity;
   const confirming = () => performance.now() - disbandAt < 4000;
@@ -34,6 +39,7 @@ export function createStackPanel(root, game) {
   };
   const adjacent = s => game.world.myStacks().filter(o => o.id !== s.id && Math.max(Math.abs((o.pos % game.world.w) - (s.pos % game.world.w)), Math.abs(((o.pos / game.world.w) | 0) - ((s.pos / game.world.w) | 0))) <= 1);
   const orderOf = s => game.world.purse?.orders?.find(o => o.id === s.id) ?? null;
+  standing.addEventListener("change", () => { const s = mine(); if (s) order({ t: "standing", stack: s.id, mode: standing.value }); });
 
   const act = {
     advance() { const s = mine(); if (s) order({ t: "advance", stack: s.id }); },
@@ -188,7 +194,13 @@ export function createStackPanel(root, game) {
       box.hidden = false;
       drawRoute(s, w);
       const owner = w.nations.get(s.owner), yours = s.owner === w.you;
-      title.textContent = yours ? `Your stack, ${fmt(s.troops)} troops` : `${owner?.name ?? "Unknown"}'s stack, ${fmt(s.troops)} troops`;
+      const rank = s.xp ? `, ${XP_NAMES[s.xp] ?? "Veteran"}` : "";
+      title.textContent = yours ? `Your stack, ${fmt(s.troops)} troops${rank}` : `${owner?.name ?? "Unknown"}'s stack, ${fmt(s.troops)} troops${rank}`;
+      const parts = w.mixOf(s);
+      mixLine.textContent = parts.length > 1 || parts[0]?.id !== "levy" ? parts.map(p => `${fmt(p.count)} ${p.name.toLowerCase()}`).join(", ") : "";
+      mixLine.hidden = !mixLine.textContent;
+      away.hidden = !yours || w.frozen;
+      if (yours && document.activeElement !== standing) standing.value = orderOf(s)?.standing ?? "hold";
       info.textContent = ` ${statusOf(s, w)}`;
       hint.textContent = preview ? `About ${preview.plots} plots and ${preview.seconds} s. Stacks take neutral and enemy land on the way.`
         : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."

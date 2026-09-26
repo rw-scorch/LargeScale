@@ -134,7 +134,7 @@ check(denied.status === 403 && denied.body.error === "only the host can create w
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
-const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200, researchSpeed: 100 } } }, ta);
+const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200, researchSpeed: 100, trainSpeed: 5 } } }, ta);
 check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
@@ -241,12 +241,13 @@ check(aSpawn >= 0, "player spawns on land");
   check((await zr("mall", cx, cy, 2, 2))?.error === "unknown zone" && (await zr("res", 0, 0, 65, 1))?.error === "zone at most 64 by 64 plots at a time", "bad zone orders are refused with a reason");
   const zoneFrames = () => B.binary.filter(f => f[0] === MSG.ZONE_DIFF).length;
   check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
+  const townClock = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
   const town = await until(() => {
     view.pump();
     const huts = [...cw.buildings.values()].filter(b => b.owner === you && b.type === "hut_grass" && b.state === "active");
     return huts.length >= 2 && cw.purse?.town?.pop > 0 ? huts.length : 0;
   }, 25000);
-  check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [wood ${cw.purse?.stock?.wood}, food ${cw.purse?.stock?.food}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}]`}`);
+  check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [wood ${cw.purse?.stock?.wood}, food ${cw.purse?.stock?.food}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}; the world clock moved ${((await api(`/api/worlds/${wid}/status`, null, ta)).body.time - townClock.world).toFixed(1)} s in ${Math.round((Date.now() - townClock.wall) / 1000)} s]`}`);
   view.pump();
   const zonedBefore = cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0);
   const erased = await zr("none", cx - 4, cy + 1, 9, 3);
@@ -302,6 +303,17 @@ check(aSpawn >= 0, "player spawns on land");
     `three wooden watchtowers upgrade at once: ${up?.done} done for ${up?.spent} gold (the client's plan said ${expected.spent}), and the friend sees stone towers`);
   const wait = await until(() => { view.pump(); return towers.every(i => cw.buildingAt(i)?.type === "tower_stone") && cw.purse.money < purse0.money ? cw.purse : null; }, 5000);
   check(wait && towers.every(i => cw.buildingAt(i).state === "active"), `the host's own client shows them finished at once, with gold down from ${purse0.money} to ${wait?.money}`);
+  A.ws.send(JSON.stringify({ t: "research", id: "clubs", mode: "first" }));
+  await nextResult(A, "research");
+  const clubs = await until(() => { view.pump(); return cw.purse?.research?.known.includes("clubs"); }, 20000);
+  const campAt = near.find(i => !cw.placeError("war_camp", i));
+  A.ws.send(JSON.stringify({ t: "build", type: "war_camp", at: campAt }));
+  const campBuilt = await nextResult(A, "build");
+  const campUp = await until(() => { view.pump(); return cw.buildingAt(campAt)?.state === "active"; }, 15000);
+  A.ws.send(JSON.stringify({ t: "army", keep: { club_warrior: 20 } }));
+  const kept = await nextResult(A, "army");
+  const drilled = await until(() => { view.pump(); return cw.purse?.army?.reserve?.club_warrior >= 20 ? cw.purse.army : null; }, 20000);
+  check(clubs && campBuilt?.ok && campUp && kept?.ok && drilled && drilled.rate > 0, `a war camp trains the 20 club warriors the host asked to keep, from levies at home (${drilled?.reserve?.club_warrior} now, ${drilled?.rate} a second)`);
 }
 B.ws.send(JSON.stringify({ t: "chat", text: "hello from friend" }));
 check(!!(await waitFor(A, m => m.t === "chat" && m.text === "hello from friend")), "chat reaches the other player");
@@ -365,6 +377,8 @@ check(wet?.error === "every point of a drawn path must be on land", `a drawn pat
 
 const bHello = await waitFor(B, m => m.t === "hello");
 const bNation = bHello.you;
+const toldOnline = await until(() => A.json.some(m => m.t === "presence" && m.online?.includes(bNation)), 3000);
+check(toldOnline && bHello.online?.includes(you) && bHello.online.includes(bNation), `the host is told the friend is online, and the friend's hello lists who is on (${bHello.online?.join(", ")})`);
 const dist = i => Math.hypot((i % M.w) - (aSpawn % M.w), Math.floor(i / M.w) - Math.floor(aSpawn / M.w));
 let bSpawn = -1;
 for (const i of land.filter(i => dist(i) >= 22 * K && dist(i) <= 45 * K).sort((p, q) => dist(p) - dist(q)).filter((_, k) => k % 5 === 0)) {
@@ -481,6 +495,13 @@ await until(() => H.json.some(m => m.t === "purse"), 5000);
 const gift = await adminOp(H, { op: "give", nation: hh.you, what: "money", amount: 5000 });
 const rich = await until(() => H.json.filter(m => m.t === "purse").at(-1)?.money >= 5000 ? H.json.filter(m => m.t === "purse").at(-1).money : 0, 5000);
 check(gift?.ok && gift.now >= 5000 && rich, `the host gives themself 5000 gold: ${gift?.now} now, and the purse shows ${rich}`);
+const knights = await adminOp(H, { op: "give", nation: hh.you, what: "unit", unit: "knight", amount: 200 });
+H.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
+const ks = await nextResult(H, "stack");
+const knightNum = hh.units?.find(u => u.id === "knight")?.num;
+const mixSeen = sock => until(() => sock.json.some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === ks?.stack && r[5]?.[0] === knightNum && r[5][1] >= 90 && r[5][1] <= 110)), 5000);
+const hostMix = await mixSeen(H), friendMix = await mixSeen(P);
+check(knights?.ok && knights.now === 200 && ks?.ok && knightNum && hostMix && friendMix, `200 knights given to the host; a half-share stack takes about 100 of them, and both players see its mix`);
 const done = await adminOp(H, { op: "finish", nation: hh.you });
 check(done?.ok && done.done.join() === "fire_keeping,stone_tools,foraging,barter,farming", `finishing the research queue completes ${done?.done?.join(", ")}`);
 const t0 = (await api(`/api/worlds/${awid}/status`, null, ta)).body.time;
@@ -505,7 +526,11 @@ const heardReopen = await waitFor(P, m => m.t === "reopened", 2000);
 P.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
 const acceptedOrder = await nextResult(P, "stack");
 check(ended?.ok && heardEnd && refusedOrder?.error === "the world has ended" && reopened?.ok && heardReopen && acceptedOrder?.ok, `ending freezes the world for everyone ("${refusedOrder?.error}"), and reopening lets orders through again`);
+P.ws.send(JSON.stringify({ t: "advance", stack: acceptedOrder?.stack }));
+const pAdvance = await nextResult(P, "advance");
+const pGoing = await until(() => H.json.some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === acceptedOrder?.stack && r[4] === 2)), 5000);
 const selfKick = await adminOp(H, { op: "kick", nation: hh.you });
+const beforeKick = H.json.length;
 const kick = await adminOp(H, { op: "kick", nation: ph.you });
 const told = await waitFor(P, m => m.t === "removed", 2000);
 for (let k = 0; k < 40 && !P.closed; k++) await sleep(50);
@@ -515,6 +540,9 @@ const stays = await adminOp(H, { op: "give", nation: ph.you, what: "troops", amo
 const palList = (await api("/api/worlds", null, tp)).body.find(w => w.id === awid);
 check(selfKick?.error === "you cannot remove yourself" && kick?.ok && told && P.closed?.code === CLOSE.REMOVED && rejoin.body.error === "the host removed you from this world" && !back && stays?.ok && palList?.removed === 1,
   `removing the friend closes their game with "${told?.text}", they cannot rejoin ("${rejoin.body.error}") or reconnect, their nation stays, and their list marks the world`);
+const heldAway = await until(() => H.json.slice(beforeKick).some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === acceptedOrder?.stack && r[4] === 0)), 8000);
+const heardAway = H.json.filter(m => m.t === "presence").at(-1)?.online.includes(ph.you) === false;
+check(pAdvance?.ok && pGoing && heldAway && heardAway, `the removed friend shows as away, and their advancing stack holds its ground while they are gone${pAdvance?.ok && pGoing && heldAway && heardAway ? "" : ` (advance ${pAdvance?.ok ?? pAdvance?.error}, seen advancing ${!!pGoing}, held ${!!heldAway}, away ${heardAway})`}`);
 const accounts = (await api("/api/admin/accounts", null, ta)).body;
 const palRow = accounts.find(a => a.id === palId);
 check(Array.isArray(accounts) && palRow?.name === "pal" + suffix && palRow.lastLogin > 0 && accounts.some(a => a.admin), `the host lists ${accounts.length} accounts with worlds and last login`);

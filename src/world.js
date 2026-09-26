@@ -7,8 +7,10 @@ import { PROTOCOL, MSG, CLOSE, frame, partFrames } from "./shared/protocol.js";
 import { encodeRuns, decodeRuns, splitParts, joinParts, gzip, gunzip, hashBytes, hashRuns } from "./shared/codec.js";
 import { parseWorldConfig, defaultBots, scaledRules, MIN_MAP_SIDE, MAX_PLOTS, BASE_WIDTH } from "./worldconfig.js";
 import rules from "../data/rules.json" with { type: "json" };
-import { planCatchUp, runCatchUp } from "./sim/offline.js";
+import { planCatchUp, runCatchUp, standingOrders, OFFLINE } from "./sim/offline.js";
 import { installCombat } from "./sim/combat.js";
+import { installTroops, TROOP_RULES, armyView } from "./sim/troops.js";
+import unitData from "../data/units.json" with { type: "json" };
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
 import { installConstruction } from "./sim/construction.js";
@@ -144,6 +146,7 @@ export class World extends DurableObject {
       for (const [nid, acc] of saved.accounts ?? []) this.accounts.set(nid, acc);
     }
     installCombat(this.sim, scaled.combat);
+    installTroops(this.sim, { speed: info.rules?.trainSpeed ?? 1 });
     installConstruction(this.sim, { speed: info.rules?.buildSpeed ?? 1 });
     installEconomy(this.sim);
     installCivilians(this.sim, makeRng(((info.seed ?? 1) + 7919 + Math.floor(this.sim.time)) >>> 0));
@@ -244,8 +247,17 @@ export class World extends DurableObject {
 
   updatePresence(leaving = null) {
     if (!this.sim) return;
-    const online = new Set(this.sockets().filter(ws => ws !== leaving).map(ws => ws.deserializeAttachment()?.nation));
+    const online = new Set(this.sockets().filter(ws => ws !== leaving).map(ws => ws.deserializeAttachment()?.nation).filter(n => n !== undefined && n !== null));
     applyPresence(this.sim, online, rules.offline.defenceMult);
+    const list = [...online].sort((a, b) => a - b), key = list.join(",");
+    if (key === this.presenceKey) return;
+    this.presenceKey = key;
+    const msg = JSON.stringify({ v: PROTOCOL, t: "presence", online: list });
+    for (const ws of this.sockets()) if (ws !== leaving) try { ws.send(msg); } catch {}
+  }
+
+  onlineList() {
+    return [...new Set(this.sockets().map(ws => ws.deserializeAttachment()?.nation).filter(n => n !== undefined && n !== null))].sort((a, b) => a - b);
   }
 
   notify(nation, kind, text) {
@@ -362,7 +374,8 @@ export class World extends DurableObject {
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss,
-      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
+      units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus },
+      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));
     for (const f of terrainFrames) server.send(f);
@@ -429,7 +442,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [] });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n) });
   }
 
   sendState() {
@@ -449,6 +462,12 @@ export class World extends DurableObject {
   step(dt) {
     if (this.frozen) return;
     for (let left = dt * this.speed; left > 1e-9; left -= 1) this.sim.tick(Math.min(1, left));
+    this.standingClock = (this.standingClock ?? 0) + dt * this.speed;
+    if (this.standingClock >= rules.offline.standingEvery) {
+      this.standingClock = 0;
+      const online = new Set(this.onlineList());
+      standingOrders(this.sim, { isOnline: nid => online.has(nid) }, { ...OFFLINE, ...rules.offline, threatRadius: rules.offline.threatRadius * (this.info.map.scale ?? 1) });
+    }
     this.flushDiffs();
     if (++this.tickCount % 4 === 0) this.sendState();
     const events = this.sim.events.splice(0);

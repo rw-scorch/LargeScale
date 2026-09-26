@@ -6,7 +6,7 @@
     { "id": "fire_keeping", "name": "Fire keeping", "branch": "civic", "era": "T", "cost": 20, "requires": [], "icon": "effects/fire_0", "unlocks": { "buildings": ["hut_grass", "firewood_pile"] } },
     { "id": "stone_tools", "name": "Stone tools", "branch": "economy", "era": "T", "cost": 30, "requires": [], "icon": "res_tools", "unlocks": { "buildings": ["woodcutter_camp", "quarry"], "effects": { "wood_rate": 0.1 } } },
     { "id": "foraging", "name": "Foraging", "branch": "economy", "era": "T", "cost": 25, "requires": [], "icon": "res_food", "unlocks": { "buildings": ["fishing_hut"], "effects": { "food_rate": 0.1 } } },
-    { "id": "clubs", "name": "Clubs and spears", "branch": "military", "era": "T", "cost": 25, "requires": [], "icon": "res_weapons", "unlocks": { "units": ["club_warrior", "spear_thrower"] } },
+    { "id": "clubs", "name": "Clubs and spears", "branch": "military", "era": "T", "cost": 25, "requires": [], "icon": "res_weapons", "unlocks": { "buildings": ["war_camp"], "units": ["club_warrior", "spear_thrower"] } },
     { "id": "palisades", "name": "Palisades", "branch": "military", "era": "T", "cost": 45, "requires": ["clubs", "stone_tools"], "icon": "build_hammer", "unlocks": { "buildings": ["wall_palisade", "watchtower_wood"] } },
     { "id": "herding", "name": "Herding", "branch": "economy", "era": "T", "cost": 50, "requires": ["foraging"], "unlocks": { "buildings": ["pasture_sheep", "pasture_cattle", "pasture_pigs"] } },
     { "id": "farming", "name": "Farming", "branch": "economy", "era": "T", "cost": 60, "requires": ["foraging", "stone_tools"], "unlocks": { "buildings": ["crop_wheat", "crop_rice"], "zones": ["farm"] } },

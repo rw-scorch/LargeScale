@@ -73,7 +73,12 @@ export function standingOrders(world, presence, rules = OFFLINE) {
     if (presence.isOnline(s.owner) || !world.nations.get(s.owner)?.human) continue;
     const mode = s.standing ?? "hold";
     if (mode === "hold") {
-      if (s.order === "advance") s.order = "hold";
+      if (s.order === "advance") {
+        s.order = "hold";
+        s.path = [];
+        s.route = null;
+        s.via = null;
+      }
       continue;
     }
     if (s.retreating && s.path.length) continue;
@@ -102,7 +107,7 @@ export function collectAlerts(world, presence, inbox, since, rules = OFFLINE) {
 export function summarise(events) {
   const out = { plotsLost: 0, byAttacker: {}, stacksLost: 0, convoysLost: 0, wars: [], built: 0, other: 0 };
   for (const e of events) {
-    if (e.type === "plot_lost") { out.plotsLost++; out.byAttacker[e.by] = (out.byAttacker[e.by] ?? 0) + 1; }
+    if (e.type === "plot_lost") { const k = e.count ?? 1; out.plotsLost += k; out.byAttacker[e.by] = (out.byAttacker[e.by] ?? 0) + k; }
     else if (e.type === "stack_destroyed") out.stacksLost++;
     else if (e.type === "convoy_lost") out.convoysLost++;
     else if (e.type === "war_declared") out.wars.push(e.a);

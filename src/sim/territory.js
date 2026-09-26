@@ -93,10 +93,10 @@ export class World {
   }
 
   plotLost(o, by, at) {
-    const e = this.lost.get(o);
+    const key = o * 65536 + by, e = this.lost.get(key);
     if (e) { e.count++; return; }
     this.emit("plot_lost", { nation: o, by, at, count: 1 });
-    this.lost.set(o, this.events[this.events.length - 1]);
+    this.lost.set(key, this.events[this.events.length - 1]);
   }
 
   canSpawnAt(x, y) {
@@ -134,6 +134,14 @@ export class World {
     }
   }
 
+  loseTroops(s, n) { s.troops -= n; }
+  loseReserve(nation, n) { nation.troops = Math.max(0, nation.troops - n); }
+  reserveStrength(nation) { return nation.troops; }
+  stackAttack() { return 1; }
+  speedOf(s) { return s.speedMult ?? 1; }
+  advanceMultOf(s) { return s.speedMult ?? 1; }
+  gainXp() {}
+
   moveCost(from, to) {
     const t = TERRAIN[this.terrain[to]];
     return t.land ? t.move : Infinity;
@@ -144,7 +152,7 @@ export class World {
     const o = this.owner[i];
     if (!o) return this.rules.unownedCost * t.capture;
     const d = this.nations.get(o);
-    const density = d.troops / Math.max(1, d.plots);
+    const density = this.reserveStrength(d) / Math.max(1, d.plots);
     return Math.max(1, density * this.rules.enemyCostFactor * t.defence * (d.defenceMult ?? 1) * (1 + (d.effects?.defence ?? 0)));
   }
 
@@ -320,17 +328,17 @@ export class World {
     if (o === s.owner || (o && this.passable(s.owner, o))) { s.pos = next; return true; }
     if (o && !this.hostile(s.owner, o)) return false;
     if (s.order === "advance" && !this.wants(s, o) && !this.crosses(s, o)) return false;
-    const cost = this.captureCost(next, s.owner);
+    const raw = this.captureCost(next, s.owner), cost = raw / this.stackAttack(s);
     if (s.troops <= cost) {
       this.emit("stalled", { stack: s.id, at: next });
       if (s.order === "advance") s.order = "hold";
       return false;
     }
-    s.troops -= cost;
+    this.loseTroops(s, cost);
     if (o) {
-      const d = this.nations.get(o);
-      d.troops = Math.max(0, d.troops - cost * this.rules.defenderLossShare);
+      this.loseReserve(this.nations.get(o), raw * this.rules.defenderLossShare);
       this.plotLost(o, s.owner, next);
+      this.gainXp(s, raw);
     }
     this.claim(next, s.owner);
     s.pos = next;
@@ -348,7 +356,7 @@ export class World {
       if (!s.path.length && s.order === "move") s.order = "hold";
     }
     if (s.path.length) {
-      s.progress += (this.rules.stackSpeed * (s.speedMult ?? 1) * dt) / this.moveCost(s.pos, s.path[0]);
+      s.progress += (this.rules.stackSpeed * this.speedOf(s) * dt) / this.moveCost(s.pos, s.path[0]);
       while (s.progress >= 1 && s.path.length) {
         s.progress -= 1;
         if (!this.enter(s, s.path[0])) { s.path = []; s.route = null; s.via = null; s.progress = 0; if (s.order === "move") s.order = "hold"; break; }
@@ -394,7 +402,7 @@ export class World {
   }
 
   advance(s, dt) {
-    s.carry = (s.carry ?? 0) + this.rules.advanceRate * (s.speedMult ?? 1) * dt;
+    s.carry = (s.carry ?? 0) + this.rules.advanceRate * this.advanceMultOf(s) * dt;
     let budget = Math.floor(s.carry);
     s.carry -= budget;
     if (!budget) return;
@@ -405,16 +413,17 @@ export class World {
       this.emit("advance_done", s.seek ? { stack: s.id, only: s.only ?? null, sought: true } : { stack: s.id });
       return;
     }
+    const attack = this.stackAttack(s);
     for (const i of f) {
       if (budget-- <= 0) break;
       const o = this.owner[i];
-      const cost = this.captureCost(i, s.owner);
+      const raw = this.captureCost(i, s.owner), cost = raw / attack;
       if (s.troops <= cost + this.rules.minStack) { s.order = "hold"; this.emit("stalled", { stack: s.id, at: i }); break; }
-      s.troops -= cost;
+      this.loseTroops(s, cost);
       if (o) {
-        const d = this.nations.get(o);
-        d.troops = Math.max(0, d.troops - cost * this.rules.defenderLossShare);
+        this.loseReserve(this.nations.get(o), raw * this.rules.defenderLossShare);
         this.plotLost(o, s.owner, i);
+        this.gainXp(s, raw);
       }
       this.claim(i, s.owner);
       this.fillEnclaves(i, s.owner);
@@ -445,7 +454,10 @@ export class World {
       let land = 0;
       for (const c of seen) if (isLand(this.terrain[c])) land++;
       if (!land) continue;
-      for (const c of seen) if (isLand(this.terrain[c])) this.claim(c, nid);
+      for (const c of seen) if (isLand(this.terrain[c])) {
+        if (ow[c]) this.plotLost(ow[c], nid, c);
+        this.claim(c, nid);
+      }
       this.emit("enclave", { nation: nid, plots: land });
     }
   }
