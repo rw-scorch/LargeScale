@@ -1,3 +1,4 @@
+import { effectOf } from "./effects.js";
 import { TERRAIN } from "../shared/terrain.js";
 import { ERA_ORDER, ZONES, BUILDINGS, installBuildings, footprint, addBuilding, setPlots, nationBuildings, touched } from "./buildings.js";
 import rules from "../../data/rules.json" with { type: "json" };
@@ -27,7 +28,7 @@ export function installCivilians(world, rng, cfg = CIV_RULES) {
     if (nid) zonedOf(civ, nid)[z].add(i);
   };
   const baseMax = world.maxTroops.bind(world);
-  world.maxTroops = n => (baseMax(n) + (n.pop ?? 0) * (n.conscription ?? r.conscriptShare)) * (1 + (n.effects?.troop_cap ?? 0));
+  world.maxTroops = n => (baseMax(n) + (n.pop ?? 0) * (n.conscription ?? r.conscriptShare)) * (1 + effectOf(world, n, "troop_cap"));
   world.hooks.postTick.push((w, dt) => {
     civ.clock += dt;
     while (civ.clock >= r.econEvery) {
@@ -198,7 +199,7 @@ export function econTick(world, dt, rng) {
       const cap = table[b.type].housing;
       if (!cap || b.state !== "active") { pop += b.residents; continue; }
       const target = cap * needs * foodCap;
-      b.residents += (target - b.residents) * Math.min(1, r.growth * (1 + (n.effects?.pop_growth ?? 0)) * dt);
+      b.residents += (target - b.residents) * Math.min(1, r.growth * (1 + effectOf(world, n, "pop_growth")) * dt);
       if (foodSat < 1) b.residents *= 1 - (1 - foodSat) * r.starveLoss * dt;
       b.residents = Math.max(0, Math.min(cap, b.residents));
       pop += b.residents;

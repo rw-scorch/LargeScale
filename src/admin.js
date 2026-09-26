@@ -5,7 +5,7 @@ import { nextResearch, researchError } from "./shared/research.js";
 import rules from "../data/rules.json" with { type: "json" };
 
 export const ADMIN_RULES = rules.admin;
-export const GIVE = ["money", "food", "wood", "stone", "clay", "troops", "unit", "machine"];
+export const GIVE = ["money", "food", "wood", "stone", "clay", "iron", "troops", "unit", "machine"];
 
 const fail = error => ({ ok: false, error });
 

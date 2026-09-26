@@ -21,7 +21,7 @@ export function createResearchPanel(root, game) {
     el("div", { class: "row spread" }, title, el("button", { class: "ghost", text: "Close", onclick: () => game.toggleResearch(false) })),
     status, queue, grid, detail);
   root.append(box);
-  let picked = null, key = "";
+  let picked = null, key = "", scrollTo = false;
 
   const order = async (id, mode) => {
     const r = await game.conn.request({ t: "research", id, mode });
@@ -55,7 +55,7 @@ export function createResearchPanel(root, game) {
 
   return {
     get open() { return !box.hidden; },
-    show(on) { box.hidden = !on; key = ""; },
+    show(on) { box.hidden = !on; key = ""; scrollTo = on; },
     pick(id) { picked = id; key = ""; this.update(); },
     update() {
       const w = game.world, r = w?.purse?.research;
@@ -87,8 +87,11 @@ export function createResearchPanel(root, game) {
           return el("button", { class: `tech era ${st}${picked === n.id ? " picked" : ""}`, "data-node": n.id, onclick: () => this.pick(n.id) },
             el("b", { text: n.name }), el("span", { text: st === "known" ? "done" : `${n.cost} points, needs ${n.need.nodes} upgrades across ${n.need.branches} branches (${p.nodes} across ${p.branches} so far)` }));
         });
-        return el("div", { class: "tech-era" }, el("b", { text: `${ERA_NAMES[e]} era` }), el("div", { class: "tech-grid" }, ...cols), ...ages);
+        return el("div", { class: "tech-era", "data-era": e }, el("b", { text: `${ERA_NAMES[e]} era` }), el("div", { class: "tech-grid" }, ...cols), ...ages);
       }));
+      const here = scrollTo && grid.querySelector(`.tech-era[data-era="${era}"]`);
+      if (here) box.scrollTop = here.offsetTop - 8;
+      scrollTo = false;
       const node = picked && w.locks.nodes.get(picked);
       if (!node) { detail.replaceChildren(el("p", { class: "muted", text: "Pick a node to see what it gives. Research queues what it needs first." })); return; }
       const why = w.researchError(node.id), st = stateOf(w, r, known, node.id);

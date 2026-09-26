@@ -1,3 +1,4 @@
+import { effectOf } from "./effects.js";
 import { validateTree } from "./techtree.js";
 import { lockMap, lockReason, researchError, planPath, dependents, nextResearch } from "../shared/research.js";
 import { ERA_NAMES } from "../shared/buildings.js";
@@ -62,11 +63,15 @@ export function knownOf(n) {
 export function researchRate(world, n) {
   const r = world.research.rules;
   let points = r.base + (n.pop ?? 0) * r.perPerson;
+  const count = new Map();
   for (const b of world.bld?.mine.get(n.id) ?? []) {
     const def = world.bld.table[world.bld.list.get(b)?.type];
-    if (def?.research && world.bld.list.get(b).state === "active") points += def.research;
+    if (!def?.research || world.bld.list.get(b).state !== "active") continue;
+    const k = (count.get(def.id) ?? 0) + 1;
+    count.set(def.id, k);
+    if (!def.cap || k <= def.cap) points += def.research;
   }
-  return points * (1 + (n.effects?.research ?? 0)) * (r.speed ?? 1);
+  return points * (1 + effectOf(world, n, "research")) * (r.speed ?? 1);
 }
 
 export function researchStep(world, n, points) {

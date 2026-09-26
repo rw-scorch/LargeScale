@@ -42,6 +42,8 @@ export class World {
     this.border = new Map();
     this.lost = new Map();
     this.hostile = (a, b) => a !== b;
+    this.effectOf = (n, key) => n?.effects?.[key] ?? 0;
+    this.fortAt = () => 1;
     this.passable = (a, b) => a === b;
     this.hooks = { preTick: [], postMove: [], postTick: [] };
   }
@@ -154,7 +156,7 @@ export class World {
     if (!o) return this.rules.unownedCost * t.capture;
     const d = this.nations.get(o);
     const density = this.reserveStrength(d) / Math.max(1, d.plots);
-    return Math.max(1, density * this.rules.enemyCostFactor * t.defence * (d.defenceMult ?? 1) * (1 + (d.effects?.defence ?? 0)));
+    return Math.max(1, density * this.rules.enemyCostFactor * t.defence * (d.defenceMult ?? 1) * (1 + this.effectOf(d, "defence")) * this.fortAt(o, i));
   }
 
   createStack(nid, i, amount) {

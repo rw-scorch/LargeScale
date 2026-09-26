@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-3.md`: troop types, then machine units, then a new interface. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-4.md`: the Gunpowder era, the first slice of the kit's later eras. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (155)
+npm test                  # unit tests (160)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -180,12 +180,21 @@ Ryan chose unit types inside stacks (26 September 2026) over drawn soldiers only
   - A second click on a stack standing on a machine selects the machine.
 - **A3, showing them.** The stack panel lists the mix and rank. At close zoom stacks are drawn as one to five figures of their main type from the kit's `units` sheet, walking, facing and fighting; levies use the `hunter` figure. Flags rise above the figures, and one to three gold chevrons show experience. The client's unit table is `world.unitTypes`; `state.units` belongs to the renderer's machine units.
 
+## Milestone four progress
+
+Ryan's decisions (26 September 2026): towers and forts change combat; stop at the end of Gunpowder, with Age of Industry coming with the Industrial slice; Gunpowder before milestone two's step 7. Branch `m4-gunpowder`, stacked on `m3-controls`.
+
+- **Data.** 14 Gunpowder research nodes, 4 troops and 4 machines (unit numbers 14 to 21), 8 buildings (numbers 48 to 55): bank, library, school, theatre, courthouse, star fort, cannon foundry and shipyard.
+- **Effects.** `src/sim/effects.js` (`installEffects`) adds up building `effects` with each type's `cap` every two seconds, into `n.bfx`. `world.effectOf(n, key)` reads research and building effects together; use it, not `n.effects` directly. Libraries and schools use the `research` field with a `cap`.
+- **Forts.** A `fort` block (`radius`, `defence`) on the three towers and the star fort. `world.fortAt(owner, plot)` gives the strongest covering fort, used in capture cost and for stacks holding their own land. The client has its own `fortAt` for the tip and the reach ring.
+- Details and evidence are in `plans/milestone-4.md`.
+
 Open items as of 26 September 2026, in order:
 
-1. PRs 14, 16 and 17 are merged. `m3-controls` (upgrades, placing, crosshair) waits for Ryan's word to push and open its PR; then he redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14, 16 and 17 are merged. PR 18 (`m3-controls`: upgrades, placing, crosshair) waits for Ryan's merge; `m4-gunpowder` is stacked on it and gets its own PR after that. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A "guard" standing order that sends a stack out to meet enemies inside your land, if that is what Ryan meant by autodefend (asked 26 September 2026).
-4. The research tree ends where the Gunpowder era starts (13 Tribal and 15 Medieval nodes, from the kit). Gunpowder, Industrial and Modern research and troops still need writing.
+4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. After it: the Industrial slice with Age of Industry and a steel mill, then Modern and Future. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
 5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
 6. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
 7. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).

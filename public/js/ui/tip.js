@@ -37,7 +37,8 @@ export function createTip(root, game) {
 
   const describe = plot => {
     const w = game.world, t = TERRAIN[w.terrain[plot]], o = w.owner[plot], n = o ? w.nations.get(o) : null;
-    const b = w.buildingAt(plot), ore = oreText(w, plot, b), extra = [pretty(t.name), b?.def?.name, ore].filter(Boolean).join(", ");
+    const b = w.buildingAt(plot), ore = oreText(w, plot, b), fort = o ? w.fortAt(o, plot) : 1;
+    const extra = [pretty(t.name), b?.def?.name, ore, fort > 1 ? `fortified, defends at ${fort} times` : null].filter(Boolean).join(", ");
     if (!t.land) return { colour: null, title: "Water", extra: [pretty(t.name), ore].filter(Boolean).join(", ") };
     if (!n) return { colour: null, title: "Unclaimed", extra };
     return { colour: n.colour, title: o === w.you ? "Your land" : `${n.name}${n.bot ? " (bot)" : ""}`, extra };

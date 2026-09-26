@@ -47,6 +47,11 @@ export function nextStep(w) {
   const saw = nodeFor(w, "woodcutter_camp");
   if (!mine("woodcutter_camp") && !mine("sawmill")) return saw ? `Wood is slow. Woodcutter camps need ${saw.name}: ${researching(saw.id)}.` : "Wood is slow: build a Woodcutter camp near forest (Resources tab).";
   if (!com && !w.lockOf("com", "zones")) return "Zone shops (Commercial) so your people have jobs. Jobs raise how many move in.";
+  if (p.era !== "T" && (t.goodsSat ?? 1) < 0.9) {
+    const play = nodeFor(w, "theatre");
+    if (!play && !mine("theatre")) return "Your people lack goods, which holds back home upgrades: a Theatre (Build, Civic) supplies them.";
+    if (play && p.era === "G") return `Your people lack goods, which holds back home upgrades. Theatres supply them: ${researching(play.id)}.`;
+  }
   if (r && !r.queue.length) return "Your research queue is empty: pick what to research next (U).";
   return "Your town is growing. Zone more homes when Homes demand is up, and keep food ahead of it.";
 }
