@@ -1,3 +1,4 @@
+import { effectOf } from "./effects.js";
 import { TERRAIN, TID } from "../shared/terrain.js";
 import { depositIndex, emptyDeposits } from "../shared/deposits.js";
 import { areaAround } from "../shared/buildings.js";
@@ -112,7 +113,7 @@ function gather(world, b, rates, k, out) {
   const o = out.get(b.owner);
   let got = 0;
   for (const [kind, rate] of Object.entries(rates)) {
-    const v = rate * k * (1 + (n?.effects?.[`${kind}_rate`] ?? 0));
+    const v = rate * k * (1 + effectOf(world, n, `${kind}_rate`));
     o[kind] = (o[kind] ?? 0) + v;
     got += v;
   }
@@ -168,7 +169,7 @@ export function produce(world, dt) {
     } else if (p.kind === "pasture") {
       got = want * (res.seasonOf(b.anchor) === "winter" ? r.winterPasture : 1);
     }
-    got *= 1 + (n?.effects?.[`${kind}_rate`] ?? 0);
+    got *= 1 + effectOf(world, n, `${kind}_rate`);
     b.idle = got <= 1e-9;
     b.made = (b.made ?? 0) + got;
     if (got > 0 && kind) {

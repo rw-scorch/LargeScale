@@ -19,6 +19,7 @@ import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS, DEPOSIT_TABLE } from "./sim/resources.js";
 import { installResearch, researchView, TREE } from "./sim/research.js";
 import { installMachines, saveMachines, machineOrdersOf } from "./sim/units.js";
+import { installEffects } from "./sim/effects.js";
 import { decodeDeposits, cropDeposits, encodeDeposits, emptyDeposits, latitudeOf, seasonAt } from "./shared/deposits.js";
 import { encodeRows } from "./shared/buildings.js";
 import buildingData from "../data/buildings.json" with { type: "json" };
@@ -158,6 +159,7 @@ export class World extends DurableObject {
     });
     this.landLoaded = restoreLand(this.sim, this.readRows("land"));
     installResearch(this.sim, { speed: info.rules?.researchSpeed ?? 1 });
+    installEffects(this.sim);
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));

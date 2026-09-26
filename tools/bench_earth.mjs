@@ -14,6 +14,7 @@ import { installCivilians } from "../src/sim/civilians.js";
 import { installResources } from "../src/sim/resources.js";
 import { installResearch, orderResearch } from "../src/sim/research.js";
 import { installMachines, giveMachine, orderUnit, UNIT_TYPES } from "../src/sim/units.js";
+import { installEffects } from "../src/sim/effects.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -104,6 +105,20 @@ for (const id of players) {
   for (let k = 0; k < 6; k++) giveMachine(w, id, "catapult");
   for (let k = 0; k < 3; k++) giveMachine(w, id, "cog");
 }
+let forts = 0;
+for (const id of players) {
+  const want = [["star_fort", 3], ["tower_stone", 20], ["bank", 5], ["courthouse", 5]];
+  for (let k = 0; k < w.grid.size && want.some(([, n]) => n > 0); k += 97) {
+    const pick = want.find(([, n]) => n > 0), def = bld.table[pick[0]];
+    const plots = footprint(w, k, def.fp);
+    if (!plots || plots.some(i => w.owner[i] !== id || bld.at.has(i))) continue;
+    addBuilding(w, { type: pick[0], owner: id, anchor: k, plots, state: "active", progress: 1 });
+    pick[1]--;
+    forts++;
+  }
+}
+installEffects(w);
+const fortProbe = (() => { const t0 = performance.now(); let s = 0; for (let k = 0; k < 200000; k++) s += w.fortAt(players[k % players.length], (k * 7919) % w.grid.size); return { lookups: 200000, ms: +(performance.now() - t0).toFixed(1), sum: Math.round(s) }; })();
 let mines = 0;
 for (const id of players) {
   let here = 0;
@@ -240,6 +255,7 @@ const report = {
   saveEncodeMs: { worst: +Math.max(...saveTimes).toFixed(1), count: saveTimes.length },
   moveOrders: { issued: moves.length, ok: okMoves.length, noLandRoute: moves.filter(m => m.noRoute).length, plannerFailed: moves.filter(m => !m.ok && !m.noRoute).length, worstMs: +Math.max(0, ...moves.map(m => m.ms)).toFixed(1), longestPlots: Math.round(Math.max(0, ...okMoves.map(m => m.dist))), blockedOnTheWay: blocked },
   stacks: w.stacks.size,
+  effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
   ownedPlots: owned,
   ownerRuns: countRuns(w.owner),

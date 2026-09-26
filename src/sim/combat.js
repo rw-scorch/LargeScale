@@ -12,7 +12,7 @@ export function stackPower(world, s, rules = COMBAT) {
   const holding = s.order === "hold" && !s.path.length;
   let p = ((world.powerOf ? world.powerOf(s, holding) : s.troops) + (world.supportOf ? world.supportOf(s, holding) : 0)) * (s.attackMult ?? 1) * (s.supplyMult ?? 1);
   if (world.owner[s.pos] === s.owner) p *= rules.ownLandBonus * TERRAIN[world.terrain[s.pos]].defence;
-  if (holding) p *= rules.holdBonus;
+  if (holding) p *= rules.holdBonus * (world.fortAt && world.owner[s.pos] === s.owner ? world.fortAt(s.owner, s.pos) : 1);
   return p;
 }
 

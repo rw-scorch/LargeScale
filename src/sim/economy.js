@@ -1,3 +1,4 @@
+import { effectOf } from "./effects.js";
 import { installBuildings, addBuilding, footprint } from "./buildings.js";
 import { placeView } from "./construction.js";
 import { placeError } from "../shared/buildings.js";
@@ -13,7 +14,7 @@ export function installEconomy(world, cfg = {}) {
     for (const n of w.nations.values()) {
       if (!n.human || !n.spawned || !n.alive) continue;
       if (n.money === undefined) grantKit(w, n, r);
-      n.money += ((n.income ?? r.baseIncome) + (n.pop ?? 0) * (n.tax ?? r.taxPerResident)) * dt;
+      n.money += ((n.income ?? r.baseIncome) + (n.pop ?? 0) * (n.tax ?? r.taxPerResident)) * (1 + effectOf(w, n, "income")) * dt;
     }
   });
   return world.econ;
