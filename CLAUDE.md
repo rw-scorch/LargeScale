@@ -174,7 +174,7 @@ Open items as of 26 September 2026, in order:
 1. Ryan reviews and merges PR 14 (`m3-troop-types`), then PR 15 (`m3-machines`, machine units), then redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types and machines (milestone three, A4 and B5).
 3. A "guard" standing order that sends a stack out to meet enemies inside your land, if that is what Ryan meant by autodefend (asked 26 September 2026).
-4. Part C, the new interface: study openfront.io and frontwars.io, then plan.
+4. Part C, the new interface: the study and the plan are in `plans/milestone-3.md` and wait on Ryan's three decisions (click to attack; right-click with a selection; the guided start now or later).
 5. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
 6. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
 7. Later: a settings panel to rebind keys; players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.

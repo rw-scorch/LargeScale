@@ -96,7 +96,89 @@ The kit's piece 15 (`src/sim/units.js`) is the base. Machines are individual obj
 
 ## Part C: the new interface
 
-Study how openfront.io and frontwars.io lay out their screens, then plan a rework of every panel. Its own plan after part B.
+Draft, for Ryan to agree before it is built (26 September 2026).
+
+### What the two games do
+FrontWars.io was played through its tutorial in a browser. openfront.io blocks automated browsers, so its open-source interface code was read instead (github.com/openfrontio/OpenFrontIO, `src/client/hud/layers`). FrontWars follows the same design.
+
+- **Few, fixed places, and the map stays clear.**
+  - Top left: a leaderboard of the top nations (share of land, gold, troops), with Show all and Hide.
+  - Top right: a small cluster with time, pause, settings and exit.
+  - Bottom left: a control panel with troops against the cap and their growth, gold, and one "attack ratio" slider. FrontWars adds sliders for donating troops and gold.
+  - Bottom middle (OpenFront): a hotbar of ten build slots on the number keys, with counts, and cost and hotkey on hover.
+  - Bottom right: an events feed that can be hidden. Events that need an answer carry buttons, such as accept an alliance, or focus the camera on it.
+- **The map carries the information.** Each nation's name and troop count are written across its territory, sized to the territory. A red frame flashes around the screen when you are attacked, and a list shows attacks in and out, with retreat.
+- **One gesture for most orders.**
+  - A left-click on another nation's land attacks it with the ratio's share of your troops; clicking water sends a boat.
+  - A right-click opens a small ring menu at the pointer with what makes sense there. Info is always there. On your land it offers Build, a submenu with costs. On other land it offers Attack, Boat and Alliance. The centre button does the main action.
+- **Cards.** Hovering over a nation shows its name, relation, troops, gold and buildings. Clicking it opens its actions: alliance, trade, donate, emoji.
+- **A guided first game.** FrontWars steps through goals such as "Claim 300 tiles 52/300" and "Found your first City": a pill at the top, one sentence of instruction and a pulsing target on the map ("Left-click here").
+- **Rebindable keys** in OpenFront's settings.
+
+### Where Large Scale's screen falls short
+- **Two crowded rows of controls along the top**, with resources as one line of text.
+- **Panels that are always open:**
+  - the nations list, bots included;
+  - the chat, even when it is empty;
+  - a wide bottom panel for the selected stack, building or machine, with up to ten buttons.
+- **Notices pile up** in the bottom-left corner and then vanish; there is no list to look back at.
+- **Every attack takes three steps:** form a stack (F), select it, then advance (A, C or N).
+- **Nations are told apart by colour alone** until you hover over their land.
+
+### Where the game differs from them
+- **Stacks are pieces you move.** A click to attack can still form a stack: from the border nearest the click, with the slider's share, advancing into that nation's land.
+- **Building is bigger.** Towns, resources, research and machines need a build menu grouped by kind, not a ten-slot hotbar.
+- **Games last days.** Players come and go, so the events list and what happened while you were away matter more than in a 20-minute round.
+
+### C1. Layout and style
+- **Top left:** a leaderboard that can be folded. It shows the top nations and you, with the online light and era; bots are hidden unless you ask.
+- **Top middle:** a status pill with the world, time, season and speed. It also carries messages such as "Choose where to start".
+- **Top right:** icons for settings, full screen, admin and exit.
+- **Bottom left:** the control panel.
+  - Troops at home against the cap, with growth.
+  - Gold and every material with its rate.
+  - The share slider, which is today's stack share.
+- **Bottom middle:** an action bar of icon buttons with their keys: Build, Town, Research, Upgrade, Army, Deposits.
+- **Bottom right:** an events feed that can be folded. It replaces the pile of notices, keeps the last hundred events and jumps to where each happened. Chat becomes a tab of it, with an unread count.
+- **Right edge:** a card for whatever is selected (stack, machine, building or nation) instead of the wide bottom panel.
+- **Style:**
+  - one dark, see-through panel style;
+  - icons from the kit's `ui` sheet;
+  - numbers written short (12.4k);
+  - bigger touch targets in landscape on phones.
+
+### C2. Click to attack, and the ring menu
+- **Left-click on another nation's land** (with no stack selected) forms a stack from the slider's share at your border nearest the click. The stack advances into that nation only. On unclaimed land it takes unclaimed land only.
+- **Right-click opens a ring menu at the pointer:**
+  - on your land: form a stack here, build here, zone here, info;
+  - on others' land: attack, info;
+  - on water: sail here, or land troops here, for a selected ship.
+  - The centre does the main action, and a long press opens the ring on touch.
+- A selected stack or machine keeps right-click to move and right-drag to draw a path (decision 2 below).
+
+### C3. The map as the display
+- **Names and troop counts on territory**, sized to it and placed where the land is widest. They are refreshed every few seconds from the owner layer.
+- **A red frame** at the screen edge when someone is taking your land. **An attacks list** above the events feed shows who is taking land from whom, with Stop for your own stacks.
+
+### C4. A guided start
+Steps shown as a pill with a pulsing target, following the Town panel's next step:
+1. spawn;
+2. take land;
+3. zone homes;
+4. a woodcutter;
+5. research;
+6. a war camp;
+7. an attack.
+
+### C5. Settings
+Rebinding keys (wanted since milestone one). Toggles for names on the map, bots on the leaderboard and sounds.
+
+### C6. Ryan's check
+
+### Decisions for Ryan
+1. **Click to attack:** a left-click on another nation's land sends the slider's share straight away (OpenFront's way), or it only selects and shows info, as now.
+2. **Right-click with a stack or machine selected:** it keeps moving it at once, as now, with the ring only when nothing is selected. Or it always opens the ring, with Move in the centre.
+3. **The guided start (C4):** in this milestone, or after milestone two's step 7.
 
 ## Budgets
 
