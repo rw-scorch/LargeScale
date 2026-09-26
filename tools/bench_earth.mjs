@@ -15,6 +15,7 @@ import { installResources } from "../src/sim/resources.js";
 import { installResearch, orderResearch } from "../src/sim/research.js";
 import { installMachines, giveMachine, orderUnit, UNIT_TYPES } from "../src/sim/units.js";
 import { installEffects } from "../src/sim/effects.js";
+import { installGuard, guardTick } from "../src/sim/guard.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -121,6 +122,9 @@ for (const id of players) {
   }
 }
 installEffects(w);
+const guard = installGuard(w, { scale });
+for (const id of players) w.nations.get(id).guard = true;
+const guardProbe = () => { const t0 = performance.now(); guardTick(w, guard.rules); return performance.now() - t0; };
 const fortProbe = (() => { const t0 = performance.now(); let s = 0; for (let k = 0; k < 200000; k++) s += w.fortAt(players[k % players.length], (k * 7919) % w.grid.size); return { lookups: 200000, ms: +(performance.now() - t0).toFixed(1), sum: Math.round(s) }; })();
 let mines = 0;
 for (const id of players) {
@@ -275,6 +279,7 @@ const report = {
   saveEncodeMs: { worst: +Math.max(...saveTimes).toFixed(1), count: saveTimes.length },
   moveOrders: { issued: moves.length, ok: okMoves.length, noLandRoute: moves.filter(m => m.noRoute).length, plannerFailed: moves.filter(m => !m.ok && !m.noRoute).length, worstMs: +Math.max(0, ...moves.map(m => m.ms)).toFixed(1), longestPlots: Math.round(Math.max(0, ...okMoves.map(m => m.dist))), blockedOnTheWay: blocked },
   stacks: w.stacks.size,
+  guard: { tickMs: +guardProbe().toFixed(1), formed: [...w.stacks.values()].filter(s => s.guard?.formed).length, sent: [...w.stacks.values()].filter(s => s.guard?.threat !== undefined).length },
   catchUp,
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },

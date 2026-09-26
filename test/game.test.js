@@ -499,7 +499,7 @@ test("while a player is away, advancing stacks hold, and fall-back stacks retrea
 test("the standing order checks its mode, can set every stack and new ones, and the purse shows fall-back stacks", () => {
   const { w, g, a, order } = field(40, 30);
   const s1 = order({ t: "stack", share: 0.2, at: g.idx(5, 5) }).stack;
-  assert.equal(order({ t: "standing", stack: s1, mode: "flee" }).error, "mode is hold or fallback");
+  assert.equal(order({ t: "standing", stack: s1, mode: "flee" }).error, "mode is hold, fallback or guard");
   assert.equal(order({ t: "standing", stack: 999, mode: "hold" }).error, "not your stack");
   assert.deepEqual(order({ t: "standing", mode: "fallback", all: true }), { t: "result", of: "standing", ok: true, mode: "fallback", stacks: 1 });
   const s2 = order({ t: "stack", share: 0.2, at: g.idx(6, 6) }).stack;

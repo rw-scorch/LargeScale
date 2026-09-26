@@ -658,6 +658,41 @@ writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ ...JSON
 check(zAway && zAway.gold > 0 && zAway.pop[1] > zAway.pop[0] && zAway.town > 0 && zAway.share === 0.9,
   `the "while you were away" summary shows the economy moved on: ${zAway?.gold} gold, people ${zAway?.pop?.join(" to ")}, ${zAway?.town} town buildings, research ${zAway?.researched?.length}, output at ${zAway?.share}`);
 Z.ws.close();
+const gw = await api("/api/worlds", { name: "Guard test", config: { w: 120, h: 90, seed: 5, bots: 0, rules: { stackSpeed: 6 } } }, ta);
+const gwid = gw.body.id;
+await api(`/api/worlds/${gwid}/join`, {}, tb);
+const GA = await connect(gwid, ta), GB = await connect(gwid, tb);
+const gah = await waitFor(GA, m => m.t === "hello"), gbh = await waitFor(GB, m => m.t === "hello");
+const gTerrain = new Mirror(GA, gah);
+await gTerrain.load();
+const gLand = (x, y) => x >= 0 && y >= 0 && x < 120 && y < 90 && isLand(gTerrain.terrain[y * 120 + x]);
+let gSpots = null;
+for (let y = 20; y < 70 && !gSpots; y += 3) for (let x = 20; x < 90 && !gSpots; x += 3) {
+  if (!gLand(x, y) || !gLand(x + 17, y)) continue;
+  let joined = true;
+  for (let k = 0; k <= 17; k++) if (!gLand(x + k, y)) joined = false;
+  if (joined) gSpots = [x, y];
+}
+let gOk = false;
+if (gSpots) {
+  const [gx, gy] = gSpots;
+  GA.ws.send(JSON.stringify({ t: "spawn", x: gx, y: gy }));
+  const sa = await nextResult(GA, "spawn");
+  GB.ws.send(JSON.stringify({ t: "spawn", x: gx + 17, y: gy }));
+  const sb = await nextResult(GB, "spawn");
+  GA.ws.send(JSON.stringify({ t: "guard", home: true }));
+  const guardOn = await nextResult(GA, "guard");
+  await sleep(1500);
+  GB.ws.send(JSON.stringify({ t: "attack", at: gy * 120 + gx }));
+  const attack = await nextResult(GB, "attack");
+  const sent = await waitFor(GA, m => m.t === "events" && m.events.some(e => e.type === "guard_sent" && e.nation === gah.you), 8000);
+  const ev = sent?.events.find(e => e.type === "guard_sent");
+  const mine = await until(() => GA.json.filter(m => m.t === "state").some(m => (m.s ?? []).some(r => r[1] === gah.you)), 3000);
+  gOk = sa?.ok && sb?.ok && guardOn?.ok && attack?.ok && ev && ev.enemy === gbh.you && ev.troops > 0 && mine;
+  check(gOk, `with Guard on, the host's home troops form a stack of ${ev?.troops} to meet the friend's attack (spawn ${sa?.ok}/${sb?.ok}, guard ${guardOn?.ok}, attack ${attack?.ok ?? attack?.error})`);
+} else check(false, "the guard test map has two spots joined by land");
+GA.ws.close();
+GB.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);
 console.log(failures ? `${failures} checks failed` : "all checks passed");
