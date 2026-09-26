@@ -357,6 +357,7 @@ export class MapRenderer {
     this.drawGhost();
     this.drawEffects();
     this.drawRoute();
+    this.drawFortRing();
     this.drawGuide();
     if (this.night) this.drawNight();
   }
@@ -389,6 +390,26 @@ export class MapRenderer {
       ctx.fillText(short(n.troops ?? 0), x, y + size * 0.55);
     }
     ctx.restore();
+  }
+
+  drawFortRing() {
+    const s = this.state, b = this.selectedBuilding !== null ? s.buildings.get(this.selectedBuilding) : null;
+    const def = this.ghost?.def?.fort ? this.ghost.def : b?.def?.fort && b.state === "active" ? b.def : null;
+    if (!def) return;
+    const at = this.ghost?.def?.fort ? this.ghost.anchor : b.anchor, R = this.ratio ?? 1, ctx = this.ctx;
+    const [x, y] = this.plotToScreen((at % s.w) + def.fp[0] / 2, Math.floor(at / s.w) + def.fp[1] / 2);
+    const r = def.fort.radius * this.cam.scale;
+    ctx.save();
+    ctx.strokeStyle = "rgba(232,200,74,.85)";
+    ctx.fillStyle = "rgba(232,200,74,.08)";
+    ctx.lineWidth = 2 * R;
+    ctx.setLineDash([6 * R, 5 * R]);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    this.label(`defends at ${def.fort.defence} times`, x, y + r + 4 * R, 12 * R, "#e8c84a");
   }
 
   drawGuide() {

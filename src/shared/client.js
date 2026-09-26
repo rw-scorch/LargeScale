@@ -111,6 +111,7 @@ export class ClientWorld {
   setBuilding([id, num, owner, anchor, state, pct]) {
     const def = this.defs.byNum[num];
     if (!def) return;
+    this.forts = null;
     const old = this.buildings.get(id);
     if (old) this.dropBuilding(old);
     const b = { id, type: def.id, def, owner, anchor, state: STATES[state] ?? "active", progress: pct / 100 };
@@ -123,6 +124,7 @@ export class ClientWorld {
   dropBuilding(b) {
     for (const i of b.plots) if (this.at.get(i) === b.id) this.at.delete(i);
     this.buildings.delete(b.id);
+    this.forts = null;
   }
 
   removeBuilding(id) {
@@ -130,6 +132,22 @@ export class ClientWorld {
     if (!b) return;
     this.dropBuilding(b);
     this.changed.push({ added: null, removed: b });
+  }
+
+  fortAt(owner, i) {
+    if (!owner) return 1;
+    if (!this.forts) {
+      this.forts = new Map();
+      for (const b of this.buildings.values()) {
+        if (!b.def.fort || b.state !== "active") continue;
+        if (!this.forts.has(b.owner)) this.forts.set(b.owner, []);
+        this.forts.get(b.owner).push({ x: (b.anchor % this.w) + b.def.fp[0] / 2, y: Math.floor(b.anchor / this.w) + b.def.fp[1] / 2, r: b.def.fort.radius, m: b.def.fort.defence });
+      }
+    }
+    const x = (i % this.w) + 0.5, y = Math.floor(i / this.w) + 0.5;
+    let best = 1;
+    for (const f of this.forts.get(owner) ?? []) if (f.m > best && (f.x - x) ** 2 + (f.y - y) ** 2 <= f.r * f.r) best = f.m;
+    return best;
   }
 
   buildingAt(i) {

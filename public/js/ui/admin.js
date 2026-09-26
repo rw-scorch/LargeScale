@@ -1,6 +1,6 @@
 import { el, fmt, armed } from "./dom.js";
 
-const GIVE = [["money", "Gold"], ["food", "Food"], ["wood", "Wood"], ["stone", "Stone"], ["clay", "Clay"], ["troops", "Troops"]];
+const GIVE = [["money", "Gold"], ["food", "Food"], ["wood", "Wood"], ["stone", "Stone"], ["clay", "Clay"], ["iron", "Iron"], ["troops", "Troops"]];
 const SPEEDS = [1, 2, 4, 8];
 const when = t => new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const WHAT = {

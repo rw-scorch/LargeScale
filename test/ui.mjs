@@ -160,7 +160,7 @@ await page.click("#build-menu .tabs button:has-text('Military')");
 const locked = await page.textContent("#build-menu [data-type=barracks]");
 check(await page.isDisabled("#build-menu [data-type=barracks]") && /Needs the Medieval era/.test(locked), `a locked building is greyed out with its reason: "${locked.match(/Needs.*/)?.[0]}"`);
 const towerDesc = await page.textContent("#build-menu [data-type=watchtower_wood] .desc").catch(() => "");
-check(/lookout/.test(towerDesc) && /no effect on combat yet/.test(towerDesc), `each building in the menu says what it does: "${towerDesc}"`);
+check(/lookout/.test(towerDesc) && /defends at 1.15 times/.test(towerDesc), `each building in the menu says what it does: "${towerDesc}"`);
 await page.screenshot({ path: `${OUT}/2b-build-menu-${MAP}.png` });
 await page.click("#build-menu [data-type=watchtower_wood]");
 const spots = await page.evaluate(() => {
@@ -1047,6 +1047,76 @@ const sure = await fix.textContent(`[data-delete="${doomed}"]`);
 await fix.click(`[data-delete="${doomed}"]`);
 const vanished = await fix.waitForSelector(`[data-delete="${doomed}"]`, { state: "detached", timeout: 5000 }).then(() => true, () => false);
 check(sure === "Really delete?" && vanished && /Deleted UI delete me/.test(await fix.textContent(".msg")), `Delete asks once more ("${sure}"), then the world is gone from the list`);
+
+const gp = await openPage({ viewport: { width: 1280, height: 720 } });
+await login(gp, "rw_scorch", "correct horse");
+const gpId = await newWorld(gp, "UI gunpowder", { map: "test", w: 240, h: 160, seed: 21, bots: 0, rules: { buildSpeed: 60, produceSpeed: 50, researchSpeed: 400, trainSpeed: 20 } });
+await gp.goto(`${BASE}/#w=${gpId}`);
+await gp.reload();
+await ready(gp);
+const gpEra = await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world;
+  for (let i = 0; i < w.terrain.length; i += 17) { const x = i % w.w, y = (i / w.w) | 0; if (w.terrain[i] >= 12 && w.terrain[i] <= 14 && (await g.conn.request({ t: "spawn", x, y })).ok) break; }
+  await new Promise(r => setTimeout(r, 1200));
+  const me = w.you, nodes = w.tech.nodes, done = [];
+  for (const eras of [["T", "M"], ["G"]]) {
+    for (const node of nodes.filter(n => eras.includes(n.era))) { await g.conn.request({ t: "research", id: node.id }); await new Promise(r => setTimeout(r, 70)); }
+    const r = await g.conn.request({ t: "admin", op: "finish", nation: me });
+    done.push(...(r.done ?? []));
+  }
+  await new Promise(r => setTimeout(r, 1000));
+  for (const [what, amount] of [["money", 30000], ["wood", 3000], ["stone", 3000], ["iron", 800], ["clay", 500]]) await g.conn.request({ t: "admin", op: "give", nation: me, what, amount });
+  return { era: w.purse?.era, gunpowder: nodes.filter(n => n.era === "G").every(n => done.includes(n.id)) };
+});
+await gp.waitForFunction(() => window.__ls.game.world.purse?.era === "G", null, { timeout: 5000 }).catch(() => {});
+await gp.keyboard.press("u");
+const gpNode = await gp.waitForSelector("#research-panel [data-node=banking].known", { timeout: 5000 }).then(() => true, () => false);
+await gp.screenshot({ path: `${OUT}/30-gunpowder-research.png` });
+await gp.keyboard.press("u");
+check(gpEra.gunpowder && gpNode, `a nation researches through to the Gunpowder era and all 14 of its nodes, shown in the research panel`);
+const placeNear = (type, from = null) => gp.evaluate(async ([type, from]) => {
+  const g = window.__ls.game, w = g.world, cap = from ?? w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  for (let r = 2; r < 20; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = (cy + dy) * w.w + cx + dx;
+    if (w.placeError(type, i)) continue;
+    const res = await g.conn.request({ t: "build", type, at: i });
+    if (res.ok) return { id: res.building, at: i };
+  }
+  return null;
+}, [type, from]);
+const active = b => gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", b?.id, { timeout: 15000 }).then(() => true, () => false);
+const income0 = await gp.evaluate(() => window.__ls.game.world.purse?.vitals?.income);
+const bank = await placeNear("bank");
+const bankUp = bank && await active(bank);
+const income1 = await gp.waitForFunction(i0 => { const i = window.__ls.game.world.purse?.vitals?.income; return i > i0 * 1.07 ? i : null; }, income0, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+check(bankUp && income1 && Math.abs(income1 / income0 - 1.08) < 0.02, `a bank raises gold income by 8%: ${income0} to ${income1} a second`);
+await gp.keyboard.press("k");
+const armyText = await gp.waitForSelector("#army-panel:not([hidden])", { timeout: 5000 }).then(() => gp.textContent("#army-panel"), () => "");
+check(["Musketeers", "Line infantry", "Grenadiers", "Light cavalry"].every(t => armyText.includes(t)), "the Army panel offers musketeers, line infantry, grenadiers and light cavalry");
+await gp.keyboard.press("Escape");
+const foundry = await placeNear("cannon_foundry");
+const foundryUp = foundry && await active(foundry);
+await gp.evaluate(id => { const g = window.__ls.game; g.selectBuilding(id); g.focus(g.world.buildings.get(id).anchor, 16); }, foundry?.id);
+await gp.waitForSelector("#building-make [data-make=cannon]:not([disabled])", { timeout: 5000 }).catch(() => {});
+await gp.click("#building-make [data-make=cannon]").catch(() => {});
+const cannon = await gp.waitForFunction(() => { const w = window.__ls.game.world; return [...w.machines.values()].find(u => u.owner === w.you && u.type === "cannon")?.id ?? null; }, null, { timeout: 15000 }).then(h => h.jsonValue(), () => null);
+check(foundryUp && cannon !== null, "a cannon foundry casts a cannon from its panel");
+const fort = await placeNear("star_fort");
+const fortUp = fort && await active(fort);
+await gp.evaluate(id => { const g = window.__ls.game; g.selectBuilding(id); g.focus(g.world.buildings.get(id).anchor + 1 + g.world.w, 12); }, fort?.id);
+await gp.waitForTimeout(400);
+const fortSpot = await gp.evaluate(id => {
+  const g = window.__ls.game, w = g.world, v = g.view, b = w.buildings.get(id), cx = (b.anchor % w.w) + 1, cy = Math.floor(b.anchor / w.w) + 1;
+  for (let r = 2; r <= 5; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = (cy + dy) * w.w + cx + dx, [px, py] = v.plotToScreen(cx + dx + 0.5, cy + dy + 0.5);
+    if (w.owner[i] === w.you && !w.buildingAt(i) && document.elementFromPoint(px / v.ratio, py / v.ratio)?.id === "map") return { x: px / v.ratio, y: py / v.ratio };
+  }
+  return null;
+}, fort?.id);
+if (fortSpot) await gp.mouse.move(fortSpot.x, fortSpot.y);
+const fortTip = await gp.waitForFunction(() => /fortified/.test(document.querySelector(".tip")?.textContent ?? "") ? document.querySelector(".tip").textContent : null, null, { timeout: 3000 }).then(h => h.jsonValue(), () => "");
+await gp.screenshot({ path: `${OUT}/31-star-fort.png` });
+check(fortUp && /defends at 1.5 times/.test(fortTip), `a star fort draws its reach, and your land inside it says so: "${fortTip}"`);
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
