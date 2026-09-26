@@ -30,6 +30,20 @@
     { "id": "halls", "name": "Great halls", "branch": "government", "era": "M", "cost": 180, "requires": ["guilds"], "unlocks": { "buildings": ["great_hall", "guardhouse"], "effects": { "troop_cap": 0.05 } } },
     { "id": "scribes", "name": "Scribes", "branch": "civic", "era": "M", "cost": 140, "requires": ["age_medieval"], "unlocks": { "buildings": ["shrine", "temple"], "effects": { "research": 0.15 } } },
     { "id": "harbours", "name": "Harbours", "branch": "economy", "era": "M", "cost": 170, "requires": ["carpentry"], "unlocks": { "buildings": ["fishing_dock", "harbour", "lighthouse"], "units": ["fishing_boat", "galley", "cog"] } },
-    { "id": "age_gunpowder", "name": "Age of Gunpowder", "branch": "era", "era": "M", "cost": 900, "requires": ["castles", "halls", "scribes"], "advances": "G", "need": { "nodes": 10, "branches": 4 }, "icon": "era_badge_G" }
+    { "id": "age_gunpowder", "name": "Age of Gunpowder", "branch": "era", "era": "M", "cost": 900, "requires": ["castles", "halls", "scribes"], "advances": "G", "need": { "nodes": 10, "branches": 4 }, "icon": "era_badge_G" },
+    { "id": "gunpowder", "name": "Gunpowder", "branch": "military", "era": "G", "cost": 240, "requires": ["age_gunpowder"], "unlocks": {"buildings":["cannon_foundry"]} },
+    { "id": "matchlocks", "name": "Matchlocks", "branch": "military", "era": "G", "cost": 260, "requires": ["gunpowder"], "unlocks": {"units":["musketeer"]} },
+    { "id": "bayonets", "name": "Bayonets", "branch": "military", "era": "G", "cost": 300, "requires": ["matchlocks"], "unlocks": {"units":["line_infantry"],"effects":{"defence":0.05}} },
+    { "id": "grenades", "name": "Grenades", "branch": "military", "era": "G", "cost": 320, "requires": ["gunpowder"], "unlocks": {"units":["grenadier"]} },
+    { "id": "light_horse", "name": "Light cavalry", "branch": "military", "era": "G", "cost": 300, "requires": ["matchlocks","stirrups"], "unlocks": {"units":["light_cavalry"]} },
+    { "id": "artillery", "name": "Artillery", "branch": "military", "era": "G", "cost": 360, "requires": ["gunpowder","siegecraft"], "unlocks": {"units":["cannon"]} },
+    { "id": "star_forts", "name": "Star forts", "branch": "military", "era": "G", "cost": 420, "requires": ["gunpowder","castles"], "unlocks": {"buildings":["star_fort"]} },
+    { "id": "banking", "name": "Banking", "branch": "economy", "era": "G", "cost": 280, "requires": ["age_gunpowder"], "unlocks": {"buildings":["bank"]} },
+    { "id": "shipbuilding", "name": "Shipbuilding", "branch": "economy", "era": "G", "cost": 300, "requires": ["harbours","age_gunpowder"], "unlocks": {"buildings":["shipyard"],"units":["galleon","frigate"]} },
+    { "id": "navigation", "name": "Navigation", "branch": "economy", "era": "G", "cost": 380, "requires": ["shipbuilding"], "unlocks": {"units":["ship_of_the_line"]} },
+    { "id": "printing", "name": "Printing", "branch": "civic", "era": "G", "cost": 260, "requires": ["age_gunpowder"], "unlocks": {"buildings":["library"],"effects":{"research":0.1}} },
+    { "id": "schools", "name": "Schools", "branch": "civic", "era": "G", "cost": 280, "requires": ["printing"], "unlocks": {"buildings":["school"]} },
+    { "id": "playhouses", "name": "Playhouses", "branch": "civic", "era": "G", "cost": 300, "requires": ["printing"], "unlocks": {"buildings":["theatre"]} },
+    { "id": "courts", "name": "Courts", "branch": "government", "era": "G", "cost": 300, "requires": ["age_gunpowder"], "unlocks": {"buildings":["courthouse"],"effects":{"troop_cap":0.05}} }
   ]
 }

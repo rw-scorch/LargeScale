@@ -47,12 +47,15 @@ function field() {
 
 const until = (w, done, most = 2000) => { for (let k = 0; k < most; k++) { if (done()) return k; w.tick(1); } return -1; };
 
-test("the Medieval machines come from the unit registry, and research unlocks them", () => {
-  assert.deepEqual(Object.keys(UNIT_TYPES), ["catapult", "trebuchet", "galley", "cog"]);
-  assert.ok(UNITS.troops.every(d => d.kind === "troop") && UNITS.troops.length === 9, "the troop list leaves machines out");
+test("the Medieval and Gunpowder machines come from the unit registry, and research unlocks them", () => {
+  const all = ["catapult", "trebuchet", "galley", "cog", "cannon", "galleon", "frigate", "ship_of_the_line"];
+  assert.deepEqual(Object.keys(UNIT_TYPES), all);
+  assert.ok(UNITS.troops.every(d => d.kind === "troop") && UNITS.troops.length === 13, "the troop list leaves machines out");
   const locks = lockMap(TREE);
-  assert.deepEqual(["catapult", "trebuchet", "galley", "cog"].map(id => locks.units.get(id)), ["siegecraft", "siegecraft", "harbours", "harbours"]);
+  assert.deepEqual(all.map(id => locks.units.get(id)), ["siegecraft", "siegecraft", "harbours", "harbours", "artillery", "shipbuilding", "shipbuilding", "navigation"]);
   assert.equal(locks.buildings.get("siege_workshop"), "siegecraft");
+  assert.equal(locks.buildings.get("cannon_foundry"), "gunpowder");
+  assert.equal(locks.buildings.get("shipyard"), "shipbuilding");
   const { w } = field();
   for (const d of Object.values(UNIT_TYPES)) for (const b of d.builtAt) assert.ok(w.bld.table[b].builds.includes(d.id), `${b} builds ${d.id}`);
 });

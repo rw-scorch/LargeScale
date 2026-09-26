@@ -187,7 +187,7 @@ test("every building type says in a sentence or two what it does, and the idle o
     assert.ok(d.description.length >= 20 && d.description.length <= 160, `${d.id}: ${d.description.length} characters`);
     assert.match(d.description, /^[A-Z].*\.$/, `${d.id} reads as a sentence`);
   }
-  const idle = defs.filter(d => !d.gathers && !d.producer && !d.housing && !d.jobs && !d.makes && !d.trains && !d.builds && !d.port);
+  const idle = defs.filter(d => !d.gathers && !d.producer && !d.housing && !d.jobs && !d.makes && !d.trains && !d.builds && !d.port && !d.fort && !d.effects && !d.research);
   assert.ok(idle.length > 0);
   for (const d of idle) assert.match(d.description, /no effect/, `${d.id} does nothing yet and says so`);
 });
