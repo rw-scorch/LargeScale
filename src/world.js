@@ -18,6 +18,7 @@ import { installEconomy } from "./sim/economy.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS, DEPOSIT_TABLE } from "./sim/resources.js";
 import { installResearch, researchView, TREE } from "./sim/research.js";
+import { installMachines, saveMachines, machineOrdersOf } from "./sim/units.js";
 import { decodeDeposits, cropDeposits, encodeDeposits, emptyDeposits, latitudeOf, seasonAt } from "./shared/deposits.js";
 import { encodeRows } from "./shared/buildings.js";
 import buildingData from "../data/buildings.json" with { type: "json" };
@@ -157,6 +158,7 @@ export class World extends DurableObject {
     });
     this.landLoaded = restoreLand(this.sim, this.readRows("land"));
     installResearch(this.sim, { speed: info.rules?.researchSpeed ?? 1 });
+    installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.speed = this.meta("speed") ?? 1;
@@ -231,7 +233,7 @@ export class World extends DurableObject {
     rows += detail.state = this.meta("state", {
       time: this.sim.time, nextNation: this.sim.nextNation, nextStack: this.sim.nextStack,
       nations: [...this.sim.nations.values()], stacks: [...this.sim.stacks.values()], accounts: [...this.accounts],
-      savedAt: Date.now(), hashes: this.currentHashes(),
+      machines: saveMachines(this.sim), savedAt: Date.now(), hashes: this.currentHashes(),
     });
     this.lastSave = Date.now();
     const prev = this.saveStats ?? { saves: 0, totalRows: 0, maxRows: 0 };
@@ -375,7 +377,7 @@ export class World extends DurableObject {
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss,
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus },
-      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
+      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));
     for (const f of terrainFrames) server.send(f);
@@ -442,7 +444,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n) });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), machines: n ? machineOrdersOf(this.sim, n.id) : null });
   }
 
   sendState() {

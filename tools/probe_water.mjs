@@ -1,0 +1,33 @@
+import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
+import { World } from "../src/sim/territory.js";
+import { installMachines, waterGraph, bodiesOf, spawnUnit, orderUnit } from "../src/sim/units.js";
+import { scaledRules } from "../src/worldconfig.js";
+import { CROPS, cropRect, cropLayer } from "../src/shared/maps.js";
+import { makeRng } from "../src/shared/rng.js";
+import { isLand } from "../src/shared/terrain.js";
+const dir = process.argv[2] ?? "public/map", crop = process.argv[3];
+const src = JSON.parse(readFileSync(`${dir}/meta.json`, "utf8")), raw = new Uint8Array(gunzipSync(readFileSync(`${dir}/terrain.bin.gz`)));
+const rect = crop ? cropRect(src, CROPS[crop]) : null, meta = rect ? rect : src, terrain = rect ? cropLayer(raw, src.w, rect) : raw;
+const w = new World({ w: meta.w, h: meta.h, terrain }, scaledRules(src.w / 3600).territory);
+installMachines(w);
+let t = performance.now();
+const co = waterGraph(w);
+const build = performance.now() - t;
+t = performance.now();
+const bodies = bodiesOf(co);
+const label = performance.now() - t;
+const rng = makeRng(5), times = [];
+let ok = 0;
+for (let k = 0; k < 400; k++) {
+  const a = rng.int(0, w.grid.size - 1), b = rng.int(0, w.grid.size - 1);
+  if (isLand(terrain[a]) || isLand(terrain[b])) continue;
+  const u = spawnUnit(w, 1, "cog", a);
+  if (!u) continue;
+  const t0 = performance.now(), e = orderUnit(w, u.id, b);
+  times.push(performance.now() - t0);
+  if (!e) ok++;
+  w.units.list.delete(u.id);
+}
+times.sort((x, y) => x - y);
+console.log(JSON.stringify({ map: `${meta.w}x${meta.h}`, regions: co.regions, bodies: Math.max(...bodies) + 1, buildMs: +build.toFixed(1), labelMs: +label.toFixed(1), orders: times.length, ok, p50: +times[times.length >> 1].toFixed(2), p99: +times[Math.floor(times.length * 0.99)].toFixed(2), worst: +times.at(-1).toFixed(2) }));

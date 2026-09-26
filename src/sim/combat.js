@@ -10,7 +10,7 @@ export const COMBAT = {
 
 export function stackPower(world, s, rules = COMBAT) {
   const holding = s.order === "hold" && !s.path.length;
-  let p = (world.powerOf ? world.powerOf(s, holding) : s.troops) * (s.attackMult ?? 1) * (s.supplyMult ?? 1);
+  let p = ((world.powerOf ? world.powerOf(s, holding) : s.troops) + (world.supportOf ? world.supportOf(s, holding) : 0)) * (s.attackMult ?? 1) * (s.supplyMult ?? 1);
   if (world.owner[s.pos] === s.owner) p *= rules.ownLandBonus * TERRAIN[world.terrain[s.pos]].defence;
   if (holding) p *= rules.holdBonus;
   return p;
@@ -58,8 +58,8 @@ export function resolveBattles(world, dt, rules = COMBAT) {
     dealt.set(a.id, (dealt.get(a.id) ?? 0) + rules.lethality * pa * dt);
     dealt.set(b.id, (dealt.get(b.id) ?? 0) + rules.lethality * pb * dt);
   }
-  for (const [id, l] of loss) {
-    const s = world.stacks.get(id);
+  for (const [id, l0] of loss) {
+    const s = world.stacks.get(id), l = world.battleLoss ? world.battleLoss(s, l0) : l0;
     if (world.loseTroops) world.loseTroops(s, l);
     else s.troops -= l;
     if (s.troops <= 0.5) {

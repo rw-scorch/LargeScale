@@ -13,6 +13,7 @@ import { installEconomy } from "../src/sim/economy.js";
 import { installCivilians } from "../src/sim/civilians.js";
 import { installResources } from "../src/sim/resources.js";
 import { installResearch, orderResearch } from "../src/sim/research.js";
+import { installMachines, giveMachine, orderUnit, UNIT_TYPES } from "../src/sim/units.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -98,6 +99,11 @@ if (!process.env.NOCIV) installCivilians(w, makeRng(Number(a.seed) + 7));
 installResources(w, deposits, { rng: makeRng(Number(a.seed) + 9) });
 installResearch(w, { speed: 20 });
 for (const id of players) for (const node of ["palisades", "farming", "chieftains", "age_medieval", "carpentry", "masonry"]) orderResearch(w, id, node);
+installMachines(w, { scale });
+for (const id of players) {
+  for (let k = 0; k < 6; k++) giveMachine(w, id, "catapult");
+  for (let k = 0; k < 3; k++) giveMachine(w, id, "cog");
+}
 let mines = 0;
 for (const id of players) {
   let here = 0;
@@ -122,7 +128,7 @@ w.events.length = 0;
 const setup = performance.now() - t;
 for (const n of w.nations.values()) n.troops = w.maxTroops(n);
 
-const moves = [];
+const moves = [], sails = [];
 function farLand(from) {
   for (let tries = 0; tries < 200; tries++) {
     const x = w.grid.x(from) + rng.int(-600, 600), y = w.grid.y(from) + rng.int(-300, 300);
@@ -141,6 +147,21 @@ function playerOrders() {
       const s = w.createStack(id, n.capital, n.troops * 0.4);
       if (s && mine.length === 0) w.orderAdvance(s.id);
       else if (s) mine.push(s);
+    }
+    for (const u of w.units.list.values()) {
+      if (u.owner !== id || u.wreck) continue;
+      if (UNIT_TYPES[u.type].domain === "land") {
+        if (u.follow === null && mine.length) u.follow = mine[u.id % mine.length].id;
+        continue;
+      }
+      if (u.path.length || u.route) continue;
+      for (let tries = 0; tries < 50; tries++) {
+        const x = w.grid.x(u.at) + rng.int(-300, 300), y = w.grid.y(u.at) + rng.int(-150, 150);
+        if (!w.grid.inside(x, y) || isLand(terrain[w.grid.idx(x, y)])) continue;
+        const m0 = performance.now(), err = orderUnit(w, u.id, w.grid.idx(x, y));
+        sails.push({ ms: performance.now() - m0, ok: !err });
+        break;
+      }
     }
     for (const s of mine) {
       if (s.order !== "hold" || s.path.length) continue;
@@ -219,6 +240,7 @@ const report = {
   saveEncodeMs: { worst: +Math.max(...saveTimes).toFixed(1), count: saveTimes.length },
   moveOrders: { issued: moves.length, ok: okMoves.length, noLandRoute: moves.filter(m => m.noRoute).length, plannerFailed: moves.filter(m => !m.ok && !m.noRoute).length, worstMs: +Math.max(0, ...moves.map(m => m.ms)).toFixed(1), longestPlots: Math.round(Math.max(0, ...okMoves.map(m => m.dist))), blockedOnTheWay: blocked },
   stacks: w.stacks.size,
+  machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
   ownedPlots: owned,
   ownerRuns: countRuns(w.owner),
   borderPlots,

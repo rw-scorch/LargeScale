@@ -11,6 +11,13 @@ const LEVY_ONLY = [{ id: "levy", num: 1, name: "Levies", kind: "troop", era: "T"
 
 const stackFromRow = ([id, owner, pos, troops, order, mix, xp], units) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold", mix: mixFromRow(units, mix), xp: xp ?? 0 });
 
+const MACHINE_STATES = ["idle", "moving", "wreck"];
+
+const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face], units) => {
+  const def = units.byNum[num];
+  return def ? { id, owner, type: def.id, def, at, hp, state: MACHINE_STATES[state] ?? "idle", cargo, follow: follow || null, face: face ?? 1 } : null;
+};
+
 export class ClientWorld {
   constructor(hello) {
     this.w = hello.w;
@@ -29,6 +36,8 @@ export class ClientWorld {
     this.troopRules = { xpLevels: [0, 0.3, 1, 3], xpBonus: [0, 0.1, 0.2, 0.35], ...hello.troopRules };
     this.stacks = new Map((hello.stacks ?? []).map(r => [r[0], stackFromRow(r, this.unitTypes)]));
     this.online = new Set(hello.online ?? []);
+    this.machines = new Map();
+    for (const r of hello.machines ?? []) this.setMachine(r);
     this.chat = [...(hello.chat ?? [])];
     this.owner = new Uint16Array(this.w * this.h);
     this.zone = new Uint8Array(this.w * this.h);
@@ -66,6 +75,13 @@ export class ClientWorld {
   lockOf(id, kind = "buildings") { return lockReason(this.locks, this.known(), id, kind); }
 
   mixOf(s) { return mixParts(this.unitTypes, s.troops, s.mix); }
+
+  setMachine(r) {
+    const u = machineFromRow(r, this.unitTypes);
+    if (u) this.machines.set(u.id, u);
+  }
+
+  myMachines() { return [...this.machines.values()].filter(u => u.owner === this.you); }
 
   powerOf(s, holding = false) { return powerOf(this.unitTypes, s.troops, s.mix, holding ? "defence" : "attack", this.troopRules.xpBonus[s.xp] ?? 0); }
 
@@ -192,10 +208,12 @@ export class ClientWorld {
       }
       for (const r of m.s) this.stacks.set(r[0], stackFromRow(r, this.unitTypes));
       for (const id of m.gone) this.stacks.delete(id);
+      for (const r of m.m ?? []) this.setMachine(r);
+      for (const id of m.mg ?? []) this.machines.delete(id);
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, machines: m.machines ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "joined") {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };

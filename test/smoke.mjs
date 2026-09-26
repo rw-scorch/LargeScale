@@ -17,6 +17,7 @@ import { PROTOCOL, MSG, CLOSE } from "../src/shared/protocol.js";
 import { hashBytes, hashRuns } from "../src/shared/codec.js";
 import { ClientWorld } from "../src/shared/client.js";
 import { planBatch } from "../src/shared/buildings.js";
+import { makeTestMap } from "../src/shared/testmap.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
@@ -502,6 +503,45 @@ const knightNum = hh.units?.find(u => u.id === "knight")?.num;
 const mixSeen = sock => until(() => sock.json.some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === ks?.stack && r[5]?.[0] === knightNum && r[5][1] >= 90 && r[5][1] <= 110)), 5000);
 const hostMix = await mixSeen(H), friendMix = await mixSeen(P);
 check(knights?.ok && knights.now === 200 && ks?.ok && knightNum && hostMix && friendMix, `200 knights given to the host; a half-share stack takes about 100 of them, and both players see its mix`);
+const amap = makeTestMap(120, 90, 3), AW = 120, axy = i => `${i % AW},${Math.floor(i / AW)}`;
+await adminOp(H, { op: "speed", factor: 4 });
+const gCat = await adminOp(H, { op: "give", nation: hh.you, what: "machine", unit: "catapult", amount: 1 });
+const gCog = await adminOp(H, { op: "give", nation: hh.you, what: "machine", unit: "cog", amount: 1 });
+const catId = gCat?.machines?.[0], cogId = gCog?.machines?.[0];
+const mrow = (sock, id) => { let row = null; for (const m of sock.json) if (m.t === "state") for (const r of m.m ?? []) if (r[0] === id) row = r; return row; };
+const seenMachines = await until(() => mrow(H, catId) && mrow(H, cogId) && mrow(P, catId) && mrow(P, cogId), 5000);
+const cogAt = mrow(H, cogId)?.[3];
+check(gCat?.ok && gCog?.ok && seenMachines && !isLand(amap.terrain[cogAt]) && mrow(P, catId)?.[2] === hh.units.find(u => u.id === "catapult")?.num,
+  `the host is given a catapult and a cog, and both players see them (the cog floats at ${cogAt === undefined ? "?" : axy(cogAt)})`);
+H.ws.send(JSON.stringify({ t: "produce", building: 999999, type: "catapult" }));
+const noShop = await nextResult(H, "produce");
+H.ws.send(JSON.stringify({ t: "machine", machine: catId, do: "follow", stack: ks?.stack }));
+const fol = await nextResult(H, "machine");
+const folPurse = await until(() => H.json.filter(m => m.t === "purse").at(-1)?.machines?.orders?.some(o => o.id === catId && o.follow === ks?.stack), 5000);
+check(noShop?.error === "not your building" && fol?.ok && folPurse, `machine orders reach the server: a queue at a missing building is refused ("${noShop?.error}"), and the catapult follows the knights, as the purse shows`);
+H.ws.send(JSON.stringify({ t: "board", stack: ks?.stack, ship: cogId }));
+const brd = await nextResult(H, "board");
+const aboard = await until(() => { const r = mrow(H, cogId); return r && r[6] > 0 ? r[6] : 0; }, 30000);
+const emb = H.json.some(m => m.t === "events" && m.events.some(e => e.type === "embarked" && e.machine === cogId));
+check(brd?.ok && aboard > 0 && emb, `the knights march to the shore and board the cog: ${aboard} troops aboard${brd?.ok ? "" : ` (${brd?.error})`}`);
+const shore = [];
+for (let i = 0; i < amap.terrain.length && cogAt !== undefined; i++) {
+  const d = Math.max(Math.abs((i % AW) - (cogAt % AW)), Math.abs(Math.floor(i / AW) - Math.floor(cogAt / AW)));
+  if (d < 12 || d > 40 || !isLand(amap.terrain[i])) continue;
+  if ([i - 1, i + 1, i - AW, i + AW].some(j => amap.terrain[j] !== undefined && !isLand(amap.terrain[j]))) shore.push([d, i]);
+}
+shore.sort((p, q) => p[0] - q[0]);
+let landAt = null, landOrder = null;
+for (const [, i] of shore.slice(0, 25)) {
+  H.ws.send(JSON.stringify({ t: "machine", machine: cogId, do: "land", at: i }));
+  landOrder = await nextResult(H, "machine");
+  if (landOrder?.ok) { landAt = i; break; }
+}
+const landed = await until(() => H.json.flatMap(m => (m.t === "events" ? m.events : [])).find(e => e.type === "landed" && e.machine === cogId), 30000);
+const ashore = landed && await until(() => H.json.some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === landed.stack && r[2] === landAt)), 5000);
+check(landOrder?.ok && landed && ashore && landed.troops > aboard * 0.8 && landed.troops <= aboard * 0.85 + 1e-6,
+  `the cog sails off and lands them on the coast at ${landAt === null ? "?" : axy(landAt)}: ${Math.round(landed?.troops ?? 0)} of ${aboard} ashore after the 15% landing loss${landOrder?.ok ? "" : ` (${landOrder?.error})`}`);
+await adminOp(H, { op: "speed", factor: 1 });
 const done = await adminOp(H, { op: "finish", nation: hh.you });
 check(done?.ok && done.done.join() === "fire_keeping,stone_tools,foraging,barter,farming", `finishing the research queue completes ${done?.done?.join(", ")}`);
 const t0 = (await api(`/api/worlds/${awid}/status`, null, ta)).body.time;

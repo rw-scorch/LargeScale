@@ -21,6 +21,7 @@ import { createTip } from "./ui/tip.js";
 import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
+import { createMachinePanel } from "./ui/machine.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -31,7 +32,7 @@ const canvas = document.getElementById("map");
 
 let assets = null;
 const loadAssets = async () => (assets ??= await Promise.all([
-  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects", "people", "units"]),
+  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects", "people", "units", "vehicles", "ships"]),
   fetch("/assets/terrain/palettes.json").then(r => r.json()),
 ]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
 const gzCache = new Map(), depCache = new Map();
@@ -65,6 +66,7 @@ class Game {
     this.zoning = null;
     this.ghostAt = null;
     this.selectedBuilding = null;
+    this.selectedMachine = null;
     this.hover = null;
     this.keys = keyMap();
     this.frameTimes = [];
@@ -83,6 +85,7 @@ class Game {
     this.research = createResearchPanel(overlay, this);
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
+    this.machinePanel = createMachinePanel(overlay, this);
     this.tip = createTip(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     const self = this;
@@ -167,6 +170,7 @@ class Game {
     world.takeChanged();
     this.view.selected = this.selected;
     this.view.selectedBuilding = this.selectedBuilding;
+    this.view.selectedMachine = this.selectedMachine;
     this.resize();
     if (cam) Object.assign(this.view.cam, cam);
     else if (world.nations.get(world.you)?.capital != null) this.home();
@@ -224,9 +228,19 @@ class Game {
     if (e.type === "deposit_depleted" && e.nation === you) say(`dep${e.at}`, `A ${e.kind} deposit has run dry.`);
     if (e.type === "era_up") say(`era${e.nation}${e.era}`, e.nation === you ? `Your nation enters the ${e.name} era.` : `${name(e.nation)} has reached the ${e.name} era.`, 0);
     if (e.type === "researched" && e.nation === you) {
-      const node = w.locks.nodes.get(e.node), builds = (node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name).filter(Boolean);
-      say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build: ${builds.join(", ")}.` : ""}`, 0);
+      const node = w.locks.nodes.get(e.node), builds = [...(node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name), ...(node?.unlocks?.units ?? []).map(u => w.unitTypes.table[u]?.name)].filter(Boolean);
+      say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build or train: ${builds.join(", ")}.` : ""}`, 0);
     }
+    const machine = e.kind && w.unitTypes.table[e.kind]?.name.toLowerCase();
+    if (e.type === "machine_built" && e.nation === you) say(`mb${e.machine}`, `A ${machine} is ready.`, 0);
+    if (e.type === "machine_destroyed" && e.nation === you) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0);
+    if (e.type === "machine_captured" && e.nation === you) say(`mc${e.machine}`, `${name(e.by)} captured your ${machine}. Keep a stack beside your machines.`, 0);
+    if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0);
+    if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0);
+    if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0);
+    if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0);
+    if (e.type === "landing_failed" && e.nation === you) say(`lf${e.machine}`, e.why ? `The landing did not happen: ${e.why}.` : `The landing failed: all ${Math.round(e.lost)} troops were lost against the defenders.`, 0);
+    if (e.type === "machine_blocked" && e.nation === you) say(`mbk${e.machine}`, "A machine's way is blocked. Give it a new order.");
     if (e.type === "kit" && e.nation === you) {
       say("kit", "Your chieftain hut stands at the capital. The Town panel says what to do next.", 0);
       if (w.purse) this.toggleTown(true);
@@ -243,6 +257,7 @@ class Game {
 
   key(action) {
     const act = this.stack.act, w = this.world;
+    if (this.selectedMachine !== null && this.machinePanel.key(action)) return this.updatePanels();
     if (action === "form") {
       const plot = this.hover && this.plotAt(...this.hover);
       if (plot !== null && w.owner[plot] === w.you) this.formAt(plot);
@@ -271,7 +286,8 @@ class Game {
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
       else if (this.stack.choosing) this.stack.cancel();
-      else this.select(null);
+      else if (this.machinePanel.choosing) this.machinePanel.cancel();
+      else { this.select(null); this.selectMachine(null); }
     }
   }
 
@@ -419,6 +435,7 @@ class Game {
   }
 
   selectBuilding(id) {
+    if (id !== null && this.selectedMachine !== null) { this.selectedMachine = null; if (this.view) this.view.selectedMachine = null; }
     this.selectedBuilding = id;
     if (this.view) this.view.selectedBuilding = id;
     if (id !== null && this.selected !== null) this.select(null);
@@ -462,8 +479,12 @@ class Game {
     if (plot === null) return;
     if (this.placing) return this.togglePlacing(false);
     if (this.building || this.zoning) return this.stopBuild();
+    const u = this.world.machines.get(this.selectedMachine);
+    if (u && u.owner === this.world.you) return this.machinePanel.secondary(plot, sx, sy);
     const s = this.world.stacks.get(this.selected);
-    if (!s || s.owner !== this.world.you) return this.toast("Select one of your stacks first, then right-click where it should go.");
+    if (!s || s.owner !== this.world.you) return this.toast("Select one of your stacks or machines first, then right-click where it should go.");
+    const ship = this.world.machines.get(this.view.machineAt(sx, sy));
+    if (ship && ship.owner === this.world.you && ship.def.capacity && ship.state !== "wreck") return this.stack.act.boardNow(ship.id);
     await this.stack.act.moveNow(plot);
   }
 
@@ -478,9 +499,12 @@ class Game {
       if (w.owner[plot] !== w.you) return this.toast("Pick a plot of your own land.");
       return this.formAt(plot);
     }
-    if (this.stack.choosing) return this.stack.pickTarget(plot);
+    if (this.stack.choosing) return this.stack.pickTarget(plot, sx, sy);
+    if (this.machinePanel.choosing) return this.machinePanel.pick(plot, sx, sy);
     const hit = v.stackAt(sx, sy);
     if (hit !== null) return this.select(hit);
+    const mh = v.machineAt(sx, sy);
+    if (mh !== null) return this.selectMachine(mh);
     const me = w.nations.get(w.you);
     if (me && !me.spawned && !w.frozen) return this.spawn.tryAt(x, y);
     const b = w.buildingAt(plot);
@@ -490,7 +514,21 @@ class Game {
     this.tip.pin(sx, sy);
   }
 
+  selectMachine(id) {
+    this.selectedMachine = id;
+    if (this.view) this.view.selectedMachine = id;
+    if (id !== null) {
+      if (this.selected !== null) this.select(null);
+      if (this.selectedBuilding !== null) this.selectBuilding(null);
+      this.selectedMachine = id;
+      if (this.view) { this.view.selectedMachine = id; this.view.route = null; }
+    }
+    this.machinePanel?.cancel();
+    this.updatePanels();
+  }
+
   select(id) {
+    if (id !== null && this.selectedMachine !== null) { this.selectedMachine = null; if (this.view) this.view.selectedMachine = null; }
     if (id !== null && this.selectedBuilding !== null) { this.selectedBuilding = null; if (this.view) this.view.selectedBuilding = null; }
     this.selected = id;
     this.selectedAt = performance.now();
@@ -523,7 +561,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {
