@@ -93,10 +93,10 @@ export class World {
   }
 
   plotLost(o, by, at) {
-    const e = this.lost.get(o);
+    const key = o * 65536 + by, e = this.lost.get(key);
     if (e) { e.count++; return; }
     this.emit("plot_lost", { nation: o, by, at, count: 1 });
-    this.lost.set(o, this.events[this.events.length - 1]);
+    this.lost.set(key, this.events[this.events.length - 1]);
   }
 
   canSpawnAt(x, y) {
@@ -454,7 +454,10 @@ export class World {
       let land = 0;
       for (const c of seen) if (isLand(this.terrain[c])) land++;
       if (!land) continue;
-      for (const c of seen) if (isLand(this.terrain[c])) this.claim(c, nid);
+      for (const c of seen) if (isLand(this.terrain[c])) {
+        if (ow[c]) this.plotLost(ow[c], nid, c);
+        this.claim(c, nid);
+      }
       this.emit("enclave", { nation: nid, plots: land });
     }
   }

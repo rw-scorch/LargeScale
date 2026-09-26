@@ -216,8 +216,8 @@ class Game {
     if (e.type === "eliminated") say(`elim${e.nation}`, e.nation === you ? "Your nation has been eliminated." : `${name(e.nation)} has been eliminated.`, 0);
     if (e.type === "stalled" && w.stacks.get(e.stack)?.owner === you) say(`stall${e.stack}`, "A stack stopped: not enough troops to go on.");
     if (e.type === "advance_done" && w.stacks.get(e.stack)?.owner === you) {
-      const what = e.only === 0 ? "no unclaimed land" : e.only ? `none of ${name(e.only)}'s land` : "no land to take";
-      say(`done${e.stack}`, e.sought ? `A stack stopped: there is ${what} it can reach${e.only !== null ? " without going through another nation" : ""}.` : "A stack stopped advancing: nothing left to take within its reach.");
+      const what = e.only === 0 ? "unclaimed land" : e.only ? `${name(e.only)}'s land` : "land to take";
+      say(`done${e.stack}`, e.sought ? `A stack stopped: it found no ${what} it can reach by land${e.only !== null ? " without going through another nation's land" : ""}.` : "A stack stopped advancing: nothing left to take within its reach.");
     }
     if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0);
     if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0);

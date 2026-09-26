@@ -8,7 +8,7 @@ import { makeTestMap } from "../src/shared/testmap.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand, TID } from "../src/shared/terrain.js";
 import { simplifyPath } from "../src/shared/pathfind.js";
-import { standingOrders } from "../src/sim/offline.js";
+import { standingOrders, summarise } from "../src/sim/offline.js";
 
 function setup() {
   const w = new World(makeTestMap(160, 100, 7));
@@ -459,4 +459,33 @@ test("the standing order checks its mode, can set every stack and new ones, and 
   assert.deepEqual(ordersOf(w, a).map(o => [o.id, o.standing]), [[s1, "fallback"], [s2, "fallback"]]);
   order({ t: "standing", stack: s1, mode: "hold" });
   assert.deepEqual(ordersOf(w, a).map(o => o.id), [s2], "holding is the default and not listed");
+});
+
+test("land-loss events name every attacker, even two in the same tick", () => {
+  const { w, g, nation, fill } = strip(60, 20);
+  const a = nation("A", 3, 10), b = nation("B", 30, 10), c = nation("C", 55, 10);
+  fill(a, 0, 20, 0, 20);
+  fill(b, 20, 40, 0, 20);
+  fill(c, 40, 60, 0, 20);
+  const sa = w.createStack(a, g.idx(19, 10), 2000), sc = w.createStack(c, g.idx(40, 10), 2000);
+  w.orderAdvance(sa.id);
+  w.orderAdvance(sc.id);
+  w.events.length = 0;
+  w.tick(0.5);
+  const lost = w.events.filter(e => e.type === "plot_lost" && e.nation === b);
+  assert.deepEqual(lost.map(e => e.by).sort(), [a, c].sort(), "one event for each attacker");
+  assert.ok(lost.every(e => e.count > 1));
+  const taken = by => lost.find(e => e.by === by).count;
+  assert.deepEqual(summarise(lost), { plotsLost: taken(a) + taken(c), byAttacker: { [a]: taken(a), [c]: taken(c) }, stacksLost: 0, convoysLost: 0, wars: [], built: 0, other: 0 }, "the away summary counts plots, not events");
+});
+
+test("land taken by closing a pocket is reported to the nation that loses it", () => {
+  const { w, g, nation, fill } = strip(60, 20);
+  const a = nation("A", 3, 10), b = nation("B", 50, 10);
+  fill(a, 0, 30, 0, 20);
+  fill(b, 10, 12, 10, 12);
+  w.events.length = 0;
+  w.fillEnclaves(g.idx(12, 10), a);
+  assert.deepEqual(w.events.filter(e => e.type === "plot_lost").map(e => [e.nation, e.by, e.count]), [[b, a, 4]]);
+  assert.equal(w.owner[g.idx(10, 10)], a);
 });
