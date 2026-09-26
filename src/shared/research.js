@@ -37,12 +37,41 @@ export function researchError(tree, locks, known, era, id) {
 
 export function planPath(locks, known, id) {
   const out = [], seen = new Set();
+  const missing = v => {
+    const acc = new Set();
+    const walk = u => {
+      if (acc.has(u) || known.has(u) || seen.has(u)) return;
+      acc.add(u);
+      for (const r of locks.nodes.get(u)?.requires ?? []) walk(r);
+    };
+    walk(v);
+    return acc;
+  };
+  const meet = age => {
+    const later = dependents(locks, age.id);
+    const pool = [...locks.nodes.values()].filter(x => x.era === age.era && x.branch !== "era" && !later.has(x.id));
+    for (;;) {
+      const have = pool.filter(x => known.has(x.id) || seen.has(x.id)), branches = new Set(have.map(x => x.branch));
+      if (have.length >= age.need.nodes && branches.size >= age.need.branches) return;
+      const short = branches.size < age.need.branches;
+      let best = null, bestCost = Infinity;
+      for (const x of pool) {
+        if (known.has(x.id) || seen.has(x.id) || (short && branches.has(x.branch))) continue;
+        let cost = 0;
+        for (const u of missing(x.id)) cost += locks.nodes.get(u)?.cost ?? 0;
+        if (cost < bestCost) { best = x; bestCost = cost; }
+      }
+      if (!best) return;
+      visit(best.id);
+    }
+  };
   const visit = v => {
     if (seen.has(v) || known.has(v)) return;
     seen.add(v);
     const n = locks.nodes.get(v);
     if (!n) return;
     for (const r of n.requires) visit(r);
+    if (n.need) meet(n);
     out.push(v);
   };
   visit(id);

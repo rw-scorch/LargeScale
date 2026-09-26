@@ -101,6 +101,22 @@ test("queueing a node adds its missing prerequisites, and points carry over", ()
   assert.ok(v.progress > 0 && v.progress < 30);
 });
 
+test("queueing any node, however far ahead, queues everything it needs, eras included", () => {
+  for (const target of ["masonry", "banking", ...TREE.nodes.filter(x => x.era === "G").map(x => x.id)]) {
+    const { w, a, n } = setup();
+    research(w, a, null, "clear");
+    const r = research(w, a, target);
+    assert.equal(r.ok, true, `${target}: ${r.error}`);
+    const known = new Set();
+    for (const id of r.queue) {
+      const why = researchError(TREE, w.research.locks, known, [...known].some(k => k === "age_gunpowder") ? "G" : known.has("age_medieval") ? "M" : "T", id);
+      assert.equal(why, null, `${target}: ${id} would wait: ${why}`);
+      known.add(id);
+    }
+    assert.ok(known.has(target) && r.queue.length <= w.research.rules.maxQueue, `${target}: ${r.queue.length} nodes`);
+  }
+});
+
 test("with nothing queued, points bank up to the cap and pay into the next node", () => {
   const { w, a, n } = setup({ speed: 100 });
   research(w, a, null, "clear");
@@ -114,14 +130,12 @@ test("with nothing queued, points bank up to the cap and pay into the next node"
 
 test("a new nation researches through Tribal into Medieval, and everyone hears", () => {
   const { w, a, n } = setup({ speed: 20 });
+  research(w, a, null, "clear");
   const r = research(w, a, "age_medieval");
   assert.equal(r.ok, true);
-  for (let t = 0; t < 120; t++) w.tick(1);
-  const wait = researchView(w, n);
-  assert.equal(n.era, "T");
-  assert.match(wait.waiting, /needs 8 Tribal upgrades across 3 branches \(you have \d across \d\)/);
-  for (const id of ["fire_keeping", "clubs", "palisades", "barter"]) research(w, a, id, "first");
-  for (let t = 0; t < 120 && n.era === "T"; t++) w.tick(1);
+  const tribal = r.queue.filter(id => id !== "age_medieval").map(id => TREE.nodes.find(x => x.id === id));
+  assert.ok(tribal.length >= 8 && new Set(tribal.map(x => x.branch)).size >= 3, `queueing the age also queues enough Tribal upgrades: ${r.queue.join(", ")}`);
+  for (let t = 0; t < 400 && n.era === "T"; t++) { w.tick(1); assert.equal(researchView(w, n).waiting, null, "it never waits"); }
   assert.equal(n.era, "M");
   const era = w.events.find(e => e.type === "era_up");
   assert.deepEqual({ nation: era.nation, era: era.era, name: era.name }, { nation: a, era: "M", name: "Medieval" });
