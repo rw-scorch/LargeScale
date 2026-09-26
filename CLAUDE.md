@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (170)
+npm test                  # unit tests (177)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -202,18 +202,24 @@ Ryan's decisions (26 September 2026): towers and forts change combat; stop at th
 - **Effects.** `src/sim/effects.js` (`installEffects`) adds up building `effects` with each type's `cap` every two seconds, into `n.bfx`. `world.effectOf(n, key)` reads research and building effects together; use it, not `n.effects` directly. Libraries and schools use the `research` field with a `cap`.
 - **Forts.** A `fort` block (`radius`, `defence`) on the three towers and the star fort. `world.fortAt(owner, plot)` gives the strongest covering fort, used in capture cost and for stacks holding their own land. The client has its own `fortAt` for the tip and the reach ring.
 - Details and evidence are in `plans/milestone-4.md`.
+- **Ryan's asks after PR 19 (27 September 2026, branch `m4-asks`, stacked on `m2-policies`).** Details in `plans/milestone-4.md`.
+  - Research queues fill era requirements (`planPath` in `src/shared/research.js`).
+  - An advance skips plots that became its own.
+  - The town hall and parliament gather.
+  - **Guard** (`src/sim/guard.js`, `installGuard`, a `live` hook): the Guard standing order, and the `guard` order for troops at home (`n.guard`). `s.guard` marks a stack on guard duty, and any order through `ownStack` clears it.
+  - The research panel is a tree (`layoutTree`).
+  - Settings can arrange panels (`public/js/ui/layout.js`, `ls_layout`, elements get the `placed` class).
 
 Open items as of 27 September 2026, in order:
 
-1. PRs 14 to 19 are merged (27 September 2026). PR 20 (`m2-step7-away`, economy while away) waits for Ryan's merge. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14 to 19 are merged (27 September 2026). PR 20 (`m2-step7-away`, economy while away), PR 21 (`m2-policies`) and `m4-asks` (stacked on them) wait for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
-3. A "guard" standing order that sends a stack out to meet enemies inside your land, if that is what Ryan meant by autodefend (asked 26 September 2026).
-4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. After it: the Industrial slice with Age of Industry and a steel mill, then Modern and Future. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
+3. A new main menu (the world list and login), which Ryan finds bland. Later, at his word.
+4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. After it, as Ryan agreed: the Industrial slice with Age of Industry and a steel mill, then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
 5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
-6. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
-7. Milestone two, step 7 (economy while away) is built on `m2-step7-away`; step 8 is Ryan's check.
-8. Later: the stat-editing dev panel of piece 14. Tax and army share sliders and self-service passwords are built on `m2-policies`.
-9. Each session's record goes in `devpack/` (see `devpack/README.md`).
+6. Milestone two, step 7 (economy while away) is built on `m2-step7-away`; step 8 is Ryan's check.
+7. Later: the stat-editing dev panel of piece 14. Tax and army share sliders and self-service passwords are built on `m2-policies`.
+8. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 
