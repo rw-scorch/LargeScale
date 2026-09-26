@@ -107,6 +107,40 @@ test("an advance can keep to unclaimed land or to one nation's land, and players
   assert.deepEqual(ordersOf(w, b), [], "nobody sees another nation's orders");
 });
 
+test("attack forms a stack at your land nearest the click and advances into that nation only", () => {
+  const W = 60, H = 20, terrain = new Uint8Array(W * H).fill(TID.grassland);
+  for (let y = 0; y < H; y++) terrain[y * W + 59] = TID.ocean;
+  const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2, advanceRate: 40 });
+  const a = w.addNation({ name: "A" }), b = w.addNation({ name: "B" }), c = w.addNation({ name: "C" }), g = w.grid;
+  w.spawn(a, 3, 10); w.spawn(b, 30, 3); w.spawn(c, 30, 16);
+  for (let y = 0; y < H; y++) for (let x = 0; x < 20; x++) w.claim(g.idx(x, y), a);
+  for (let y = 0; y < 8; y++) for (let x = 25; x < 40; x++) w.claim(g.idx(x, y), b);
+  for (let y = 12; y < H; y++) for (let x = 25; x < 40; x++) w.claim(g.idx(x, y), c);
+  w.nations.get(a).troops = 5000;
+  const order = m => runOrder(w, a, m);
+  const r = order({ t: "attack", at: g.idx(30, 4), share: 0.4 });
+  assert.equal(r.ok, true);
+  assert.equal(r.only, b);
+  const s = w.stacks.get(r.stack);
+  assert.equal(s.pos, g.idx(19, 4), "the stack forms on the owned plot nearest the click");
+  assert.equal(Math.round(s.troops), 2000, "with the slider's share");
+  assert.equal(s.order, "advance");
+  const bPlots = w.nations.get(b).plots, cPlots = w.nations.get(c).plots;
+  for (let k = 0; k < 40 && w.nations.get(b).plots === bPlots; k++) w.tick(0.5);
+  assert.ok(w.nations.get(b).plots < bPlots, "B's land is taken");
+  assert.equal(w.nations.get(c).plots, cPlots, "C's land is left alone");
+  const free = order({ t: "attack", at: g.idx(45, 10), share: 0.2 });
+  assert.equal(free.ok, true);
+  assert.equal(free.only, 0, "unclaimed land means unclaimed land only");
+  assert.equal(order({ t: "attack", at: g.idx(5, 5) }).error, "that is your own land");
+  assert.equal(order({ t: "attack", at: g.idx(59, 5) }).error, "pick land, not water");
+  assert.equal(order({ t: "attack", at: -1 }).error, "that plot is off the map");
+  w.hostile = (p, q) => p !== q && !(p === a && q === c);
+  assert.equal(order({ t: "attack", at: g.idx(30, 16) }).error, "you are at peace with C");
+  w.nations.get(a).troops = 1;
+  assert.equal(order({ t: "attack", at: g.idx(30, 4) }).error, "not enough troops");
+});
+
 function strip(W, H) {
   const terrain = new Uint8Array(W * H).fill(TID.grassland);
   const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2, advanceRate: 40 });
