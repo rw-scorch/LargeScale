@@ -525,7 +525,11 @@ const heardReopen = await waitFor(P, m => m.t === "reopened", 2000);
 P.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
 const acceptedOrder = await nextResult(P, "stack");
 check(ended?.ok && heardEnd && refusedOrder?.error === "the world has ended" && reopened?.ok && heardReopen && acceptedOrder?.ok, `ending freezes the world for everyone ("${refusedOrder?.error}"), and reopening lets orders through again`);
+P.ws.send(JSON.stringify({ t: "advance", stack: acceptedOrder?.stack }));
+const pAdvance = await nextResult(P, "advance");
+const pGoing = await until(() => H.json.some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === acceptedOrder?.stack && r[4] === 2)), 5000);
 const selfKick = await adminOp(H, { op: "kick", nation: hh.you });
+const beforeKick = H.json.length;
 const kick = await adminOp(H, { op: "kick", nation: ph.you });
 const told = await waitFor(P, m => m.t === "removed", 2000);
 for (let k = 0; k < 40 && !P.closed; k++) await sleep(50);
@@ -535,6 +539,9 @@ const stays = await adminOp(H, { op: "give", nation: ph.you, what: "troops", amo
 const palList = (await api("/api/worlds", null, tp)).body.find(w => w.id === awid);
 check(selfKick?.error === "you cannot remove yourself" && kick?.ok && told && P.closed?.code === CLOSE.REMOVED && rejoin.body.error === "the host removed you from this world" && !back && stays?.ok && palList?.removed === 1,
   `removing the friend closes their game with "${told?.text}", they cannot rejoin ("${rejoin.body.error}") or reconnect, their nation stays, and their list marks the world`);
+const heldAway = await until(() => H.json.slice(beforeKick).some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === acceptedOrder?.stack && r[4] === 0)), 8000);
+const heardAway = H.json.filter(m => m.t === "presence").at(-1)?.online.includes(ph.you) === false;
+check(pAdvance?.ok && pGoing && heldAway && heardAway, `the removed friend shows as away, and their advancing stack holds its ground while they are gone${pAdvance?.ok && pGoing && heldAway && heardAway ? "" : ` (advance ${pAdvance?.ok ?? pAdvance?.error}, seen advancing ${!!pGoing}, held ${!!heldAway}, away ${heardAway})`}`);
 const accounts = (await api("/api/admin/accounts", null, ta)).body;
 const palRow = accounts.find(a => a.id === palId);
 check(Array.isArray(accounts) && palRow?.name === "pal" + suffix && palRow.lastLogin > 0 && accounts.some(a => a.admin), `the host lists ${accounts.length} accounts with worlds and last login`);

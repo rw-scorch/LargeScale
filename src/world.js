@@ -7,7 +7,7 @@ import { PROTOCOL, MSG, CLOSE, frame, partFrames } from "./shared/protocol.js";
 import { encodeRuns, decodeRuns, splitParts, joinParts, gzip, gunzip, hashBytes, hashRuns } from "./shared/codec.js";
 import { parseWorldConfig, defaultBots, scaledRules, MIN_MAP_SIDE, MAX_PLOTS, BASE_WIDTH } from "./worldconfig.js";
 import rules from "../data/rules.json" with { type: "json" };
-import { planCatchUp, runCatchUp } from "./sim/offline.js";
+import { planCatchUp, runCatchUp, standingOrders, OFFLINE } from "./sim/offline.js";
 import { installCombat } from "./sim/combat.js";
 import { installTroops, TROOP_RULES, armyView } from "./sim/troops.js";
 import unitData from "../data/units.json" with { type: "json" };
@@ -462,6 +462,12 @@ export class World extends DurableObject {
   step(dt) {
     if (this.frozen) return;
     for (let left = dt * this.speed; left > 1e-9; left -= 1) this.sim.tick(Math.min(1, left));
+    this.standingClock = (this.standingClock ?? 0) + dt * this.speed;
+    if (this.standingClock >= rules.offline.standingEvery) {
+      this.standingClock = 0;
+      const online = new Set(this.onlineList());
+      standingOrders(this.sim, { isOnline: nid => online.has(nid) }, { ...OFFLINE, ...rules.offline, threatRadius: rules.offline.threatRadius * (this.info.map.scale ?? 1) });
+    }
     this.flushDiffs();
     if (++this.tickCount % 4 === 0) this.sendState();
     const events = this.sim.events.splice(0);

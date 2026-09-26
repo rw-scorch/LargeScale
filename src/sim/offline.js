@@ -73,7 +73,12 @@ export function standingOrders(world, presence, rules = OFFLINE) {
     if (presence.isOnline(s.owner) || !world.nations.get(s.owner)?.human) continue;
     const mode = s.standing ?? "hold";
     if (mode === "hold") {
-      if (s.order === "advance") s.order = "hold";
+      if (s.order === "advance") {
+        s.order = "hold";
+        s.path = [];
+        s.route = null;
+        s.via = null;
+      }
       continue;
     }
     if (s.retreating && s.path.length) continue;

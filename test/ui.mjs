@@ -540,6 +540,18 @@ if (drawn) await drawWith([...drawn].reverse(), "right", `${OUT}/19b-right-drag.
 const again = drawn ? await followed(trip?.stack, drawn[0].i) : null;
 const line = await fix.evaluate(() => window.__ls.game.view.route?.points.length ?? 0);
 check(/following your path/.test(again ?? "") && line >= 3, `with a mouse, a right-drag draws a path without the button: "${again?.trim()}", drawn through ${line} points`);
+const awayBox = await fix.evaluate(async id => {
+  const g = window.__ls.game;
+  g.select(id);
+  await new Promise(r => setTimeout(r, 400));
+  const box = document.querySelector("#stack-standing");
+  if (!box || document.querySelector("#stack-away").hidden) return null;
+  box.value = "fallback";
+  box.dispatchEvent(new Event("change"));
+  return true;
+}, trip?.stack);
+const fallsBack = await fix.waitForFunction(id => window.__ls.game.world.purse?.orders?.some(o => o.id === id && o.standing === "fallback"), trip?.stack, { timeout: 5000 }).then(() => true, () => false);
+check(awayBox && fallsBack, "a stack can be set to fall back when outnumbered while you are away, and the purse remembers it");
 const extra = await fix.evaluate(async () => {
   const g = window.__ls.game, w = g.world, r = await g.conn.request({ t: "stack", share: 0.2, at: w.nations.get(w.you).capital });
   if (r.ok) g.select(r.stack);

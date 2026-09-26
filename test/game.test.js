@@ -8,6 +8,7 @@ import { makeTestMap } from "../src/shared/testmap.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand, TID } from "../src/shared/terrain.js";
 import { simplifyPath } from "../src/shared/pathfind.js";
+import { standingOrders } from "../src/sim/offline.js";
 
 function setup() {
   const w = new World(makeTestMap(160, 100, 7));
@@ -422,4 +423,40 @@ test("a short route inside one block of the route graph still has a length and a
   const straight = Math.abs(w.grid.x(near) - w.grid.x(s.pos)) + Math.abs(w.grid.y(near) - w.grid.y(s.pos));
   assert.equal(r.plots, straight);
   assert.ok(r.seconds >= 1);
+});
+
+test("while a player is away, advancing stacks hold, and fall-back stacks retreat when outnumbered", () => {
+  const { w, g, nation, fill } = strip(60, 20);
+  const a = nation("A", 3, 10), b = nation("B", 50, 10);
+  fill(a, 0, 30, 0, 20);
+  fill(b, 40, 60, 0, 20);
+  const s = w.createStack(a, g.idx(2, 10), 1000);
+  runOrder(w, a, { t: "advance", stack: s.id, only: "free" });
+  w.tick(0.5);
+  assert.ok(s.path.length > 0, "it is walking to unclaimed land");
+  const online = new Set([a]), presence = { isOnline: n => online.has(n) };
+  standingOrders(w, presence);
+  assert.equal(s.order, "advance", "while its owner is online it keeps going");
+  online.delete(a);
+  standingOrders(w, presence);
+  assert.deepEqual({ order: s.order, path: s.path.length }, { order: "hold", path: 0 }, "with its owner away it holds, and drops the path it was on");
+  const f = w.createStack(a, g.idx(28, 10), 200);
+  assert.equal(runOrder(w, a, { t: "standing", stack: f.id, mode: "fallback" }).ok, true);
+  const enemy = w.createStack(b, g.idx(41, 10), 500);
+  enemy.pos = g.idx(31, 10);
+  standingOrders(w, presence);
+  assert.deepEqual({ order: f.order, retreating: f.retreating, goal: f.route?.goal ?? f.path.at(-1) }, { order: "move", retreating: true, goal: w.nations.get(a).capital }, "outnumbered 2.5 to 1, it falls back to the capital");
+});
+
+test("the standing order checks its mode, can set every stack and new ones, and the purse shows fall-back stacks", () => {
+  const { w, g, a, order } = field(40, 30);
+  const s1 = order({ t: "stack", share: 0.2, at: g.idx(5, 5) }).stack;
+  assert.equal(order({ t: "standing", stack: s1, mode: "flee" }).error, "mode is hold or fallback");
+  assert.equal(order({ t: "standing", stack: 999, mode: "hold" }).error, "not your stack");
+  assert.deepEqual(order({ t: "standing", mode: "fallback", all: true }), { t: "result", of: "standing", ok: true, mode: "fallback", stacks: 1 });
+  const s2 = order({ t: "stack", share: 0.2, at: g.idx(6, 6) }).stack;
+  assert.equal(w.stacks.get(s2).standing, "fallback", "new stacks take the default");
+  assert.deepEqual(ordersOf(w, a).map(o => [o.id, o.standing]), [[s1, "fallback"], [s2, "fallback"]]);
+  order({ t: "standing", stack: s1, mode: "hold" });
+  assert.deepEqual(ordersOf(w, a).map(o => o.id), [s2], "holding is the default and not listed");
 });

@@ -58,6 +58,7 @@ export const ORDERS = {
     const at = m.at === undefined ? home : m.at;
     if (!isPlot(sim, at) || sim.owner[at] !== nation) return fail("stacks form on your own land");
     const s = sim.createStack(nation, at, n.troops * share);
+    if (s && n.standing) s.standing = n.standing;
     return s ? { ok: true, stack: s.id } : fail("not enough troops");
   },
   move(sim, nation, m) {
@@ -164,6 +165,20 @@ export const ORDERS = {
     if (mode !== "clear" && typeof m.id !== "string") return fail("pick a research node");
     const r = orderResearch(sim, nation, m.id, mode);
     return r.error ? { ok: false, ...r } : { ok: true, ...r };
+  },
+  standing(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!["hold", "fallback"].includes(m.mode)) return fail("mode is hold or fallback");
+    if (m.all === true) {
+      sim.nations.get(nation).standing = m.mode;
+      let stacks = 0;
+      for (const s of sim.stacks.values()) if (s.owner === nation) { s.standing = m.mode; stacks++; }
+      return { ok: true, mode: m.mode, stacks };
+    }
+    const s = ownStack(sim, nation, m.stack);
+    if (!s) return fail("not your stack");
+    s.standing = m.mode;
+    return { ok: true, mode: m.mode, stacks: 1 };
   },
   army(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
@@ -292,8 +307,9 @@ export function ordersOf(sim, nid) {
     const leg = s.route?.goal ?? (s.path.length ? s.path[s.path.length - 1] : null), rest = s.via ?? [];
     const to = rest.length ? rest[rest.length - 1] : leg;
     const only = s.order === "advance" ? s.only ?? null : null;
-    if (to === null && only === null) continue;
+    if (to === null && only === null && s.standing !== "fallback") continue;
     const row = { id: s.id, to, only };
+    if (s.standing === "fallback") row.standing = "fallback";
     if (rest.length) row.via = [...(leg === null ? [] : [leg]), ...rest.slice(0, -1)];
     out.push(row);
   }
