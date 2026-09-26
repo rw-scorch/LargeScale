@@ -311,14 +311,30 @@ class Game {
   centre() { return [canvas.width / 2, canvas.height / 2]; }
 
   aimDown() {
-    if (this.aimHeld || !this.prefs.crosshair || !this.view) return;
+    if (!this.prefs.crosshair || !this.view) return;
     const c = this.centre();
+    if (this.zoning || this.painting()) {
+      if (this.aimHeld?.sticky) return this.aimFinish();
+      this.aimHeld = { start: this.view.screenToPlot(...c), sticky: true };
+      if (this.zoning) this.dragZone(c, c);
+      else { this.stroke = null; this.paintAt(c); }
+      return this.updatePanels();
+    }
+    if (this.aimHeld) return;
     this.aimHeld = { start: this.view.screenToPlot(...c) };
-    if (this.zoning) return;
-    if (this.painting()) { this.stroke = null; return this.paintAt(c); }
     this.aimTap = true;
     this.tap(...c);
     this.aimTap = false;
+  }
+
+  aimFinish() {
+    const h = this.aimHeld;
+    this.aimHeld = null;
+    this.updatePanels();
+    if (!h || !this.view) return;
+    const c = this.centre();
+    if (this.zoning) return this.paintZone(this.view.plotToScreen(...h.start), c);
+    if (this.painting()) this.paintAt(c, true);
   }
 
   aimMove() {
@@ -328,12 +344,8 @@ class Game {
   }
 
   aimUp() {
-    const h = this.aimHeld;
-    if (!h) return;
+    if (!this.aimHeld || this.aimHeld.sticky) return;
     this.aimHeld = null;
-    const c = this.centre();
-    if (this.zoning && this.view) return this.paintZone(this.view.plotToScreen(...h.start), c);
-    if (this.painting()) this.paintAt(c, true);
   }
 
   aimOrders() {
@@ -370,7 +382,8 @@ class Game {
     this.updatePanels();
     if (action === "confirm" && this.pinned !== null) return this.confirmBuild();
     if (action === "cancel") {
-      if (this.pinned !== null) this.unpin();
+      if (this.aimHeld?.sticky) { this.aimHeld = null; if (this.view) this.view.zoneRect = null; this.stroke = null; this.updatePanels(); }
+      else if (this.pinned !== null) this.unpin();
       else if (this.building || this.zoning) this.stopBuild();
       else if (this.layout.editing) this.layout.stop(true);
       else if (this.away.open) this.away.show(false);
@@ -479,6 +492,7 @@ class Game {
 
   startBuild(type) {
     this.togglePlacing(false);
+    if (this.aimHeld?.sticky) this.aimHeld = null;
     this.stack.cancel();
     this.select(null);
     this.zoning = null;
@@ -493,6 +507,7 @@ class Game {
 
   stopBuild() {
     this.building = null;
+    if (this.aimHeld?.sticky) this.aimHeld = null;
     this.pinned = null;
     this.stroke = null;
     this.zoning = null;

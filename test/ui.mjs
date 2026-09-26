@@ -1223,6 +1223,37 @@ check(guardOn && guardStack !== null && standingGuard, "on a phone, Guard my lan
 check(armyBox && armySet && /usual workers/.test(armyWords), `a tap on a phone moves the army share to ${armySet}: "${armyWords}"`);
 
 const rectIn = (p, sel) => p.$eval(sel, e => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; }).catch(() => null);
+const zonesOf = (p, code) => p.evaluate(c => { let n = 0; for (const z of window.__ls.game.world.zone) if (z === c) n++; return n; }, code);
+await gp.bringToFront();
+await gp.evaluate(() => { const g = window.__ls.game, w = g.world; g.setPref("crosshair", true); g.focus(w.nations.get(w.you).capital, 12); g.startZone("com"); });
+const com0 = await zonesOf(gp, 2);
+const hintStart = await gp.textContent("#aim-hint");
+await gp.keyboard.press(" ");
+const hintHeld = await gp.textContent("#aim-hint");
+await gp.keyboard.down("ArrowRight"); await gp.waitForTimeout(300); await gp.keyboard.up("ArrowRight");
+await gp.keyboard.down("ArrowDown"); await gp.waitForTimeout(250); await gp.keyboard.up("ArrowDown");
+await gp.keyboard.press(" ");
+const com1 = await gp.waitForFunction(c0 => { let n = 0; for (const z of window.__ls.game.world.zone) if (z === 2) n++; return n > c0 ? n : null; }, com0, { timeout: 5000 }).then(h => h.jsonValue(), () => com0);
+check(/mark one corner/.test(hintStart) && /size the area/.test(hintHeld) && com1 > com0, `with the crosshair on, Space marks a corner, the arrow keys size the zone and Space again zones ${com1 - com0} plots`);
+await gp.evaluate(() => { const g = window.__ls.game; g.stopBuild(); g.setPref("crosshair", false); });
+await mp.bringToFront();
+await mp.evaluate(() => { const g = window.__ls.game, w = g.world; g.setPref("crosshair", true); g.focus(w.nations.get(w.you).capital, 12); g.startZone("com"); });
+const pc0 = await zonesOf(mp, 2);
+await mp.tap("#aim-select");
+const mapBox = await rectIn(mp, "#map");
+await mp.evaluate(([x, y]) => {
+  const c = document.getElementById("map"), keep = c.setPointerCapture;
+  c.setPointerCapture = () => {};
+  const at = (type, px, py) => c.dispatchEvent(new PointerEvent(type, { pointerId: 21, pointerType: "touch", clientX: px, clientY: py, bubbles: true, isPrimary: true }));
+  at("pointerdown", x, y);
+  for (let k = 1; k <= 6; k++) at("pointermove", x - k * 12, y - k * 8);
+  at("pointerup", x - 72, y - 48);
+  c.setPointerCapture = keep;
+}, [mapBox.x + mapBox.w * 0.6, mapBox.y + mapBox.h * 0.6]);
+await mp.tap("#aim-select");
+const pc1 = await mp.waitForFunction(c0 => { let n = 0; for (const z of window.__ls.game.world.zone) if (z === 2) n++; return n > c0 ? n : null; }, pc0, { timeout: 5000 }).then(h => h.jsonValue(), () => pc0);
+check(pc1 > pc0, `on a phone with the crosshair, Select, a one-finger drag of the view, and Select again zones ${pc1 - pc0} plots`);
+await mp.evaluate(() => { const g = window.__ls.game; g.stopBuild(); g.setPref("crosshair", false); });
 await gp.bringToFront();
 await gp.evaluate(() => { localStorage.removeItem("ls_layout"); window.__ls.game.layout.reset(); window.__ls.game.toggleSettings(true); });
 const nations0 = await rectIn(gp, "#nations");
