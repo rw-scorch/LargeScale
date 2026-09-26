@@ -29,6 +29,12 @@ export function createTip(root, game) {
     return by ? `${d.name}, for a ${by.name}` : d.name;
   };
 
+  const machineTip = (w, u) => {
+    const n = w.nations.get(u.owner), whose = u.owner === w.you ? "Your" : `${n?.name ?? "Someone"}'s`;
+    const bits = u.state === "wreck" ? ["wreck"] : [`${Math.ceil(u.hp)} of ${u.def.hp} health`, ...(u.def.capacity ? [`${u.cargo} of ${u.def.capacity} troops aboard`] : [])];
+    return { colour: n?.colour ?? null, title: `${whose} ${u.def.name.toLowerCase()}`, extra: bits.join(", ") };
+  };
+
   const describe = plot => {
     const w = game.world, t = TERRAIN[w.terrain[plot]], o = w.owner[plot], n = o ? w.nations.get(o) : null;
     const b = w.buildingAt(plot), ore = oreText(w, plot, b), extra = [pretty(t.name), b?.def?.name, ore].filter(Boolean).join(", ");
@@ -44,7 +50,8 @@ export function createTip(root, game) {
       const at = game.hover ?? (performance.now() < pinnedUntil ? pinnedAt : null);
       const plot = at && !game.building && !game.zoning && !game.placing && !game.stack.choosing ? game.plotAt(...at) : null;
       if (plot === null || !w?.ready || !v) { box.hidden = true; return; }
-      const d = describe(plot);
+      const mid = v.machineAt?.(...at), u = mid === null || mid === undefined ? null : w.machines.get(mid);
+      const d = u ? machineTip(w, u) : describe(plot);
       swatch.hidden = !d.colour;
       if (d.colour) swatch.style.background = d.colour;
       name.textContent = d.title;
