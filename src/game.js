@@ -166,6 +166,18 @@ export const ORDERS = {
   upgrade(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
     if (!sim.cons) return fail("building is not running in this world");
+    const finish = (picks, missing) => {
+      const r = bulkUpgrade(sim, nation, picks), skipped = {};
+      for (const [, why] of r.skipped) skipped[why] = (skipped[why] ?? 0) + 1;
+      if (r.done.length) sim.emit("upgraded", { nation, count: r.done.length, spent: Math.round(r.spent) });
+      return { ok: true, done: r.done.length, spent: Math.round(r.spent * 100) / 100, skipped, missing };
+    };
+    if (m.ids !== undefined) {
+      if (!Array.isArray(m.ids) || !m.ids.length || m.ids.length > 60 || !m.ids.every(Number.isInteger)) return fail("pick 1 to 60 buildings");
+      const mine = new Map(listUpgradable(sim, nation).map(r => [r.id, r]));
+      const picks = [...new Set(m.ids)].filter(id => mine.has(id)).map(id => ({ id, civilian: mine.get(id).civilian }));
+      return picks.length ? finish(picks, m.ids.length - picks.length) : fail("none of those can be upgraded now");
+    }
     const filter = m.filter ?? "all";
     if (!["all", "civilian", "player"].includes(filter)) return fail("filter is all, civilian or player");
     if (!Array.isArray(m.picks) || !m.picks.length || m.picks.length > 60) return fail("pick 1 to 60 groups");
@@ -180,10 +192,7 @@ export const ORDERS = {
       if (left > 0) { picks.push({ id: r.id, civilian: r.civilian }); want.set(r.type, left - 1); }
     }
     if (!picks.length) return fail("none of those can be upgraded now");
-    const r = bulkUpgrade(sim, nation, picks), skipped = {};
-    for (const [, why] of r.skipped) skipped[why] = (skipped[why] ?? 0) + 1;
-    if (r.done.length) sim.emit("upgraded", { nation, count: r.done.length, spent: Math.round(r.spent) });
-    return { ok: true, done: r.done.length, spent: Math.round(r.spent * 100) / 100, skipped, missing: [...want.values()].reduce((s, v) => s + v, 0) };
+    return finish(picks, [...want.values()].reduce((s, v) => s + v, 0));
   },
   zone(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");

@@ -136,6 +136,21 @@ test("the upgrade order checks its picks, the filter, research and the era", () 
   assert.equal(t.type, "watchtower_wood");
 });
 
+test("the upgrade order can name the buildings to upgrade, for the building card", () => {
+  const { w, a, g, n } = setup();
+  Object.assign(n, { era: "M", money: 1e6, stock: { wood: 1e6, stone: 1e6 } });
+  const towers = [0, 1, 2].map(k => place(w, a, "watchtower_wood", g.idx(20 + 2 * k, 10)));
+  for (let t = 0; t < 31; t++) w.tick(1);
+  const up = m => runOrder(w, a, { t: "upgrade", ...m });
+  const r = up({ ids: [towers[1].id] });
+  assert.deepEqual({ ok: r.ok, done: r.done, missing: r.missing }, { ok: true, done: 1, missing: 0 });
+  assert.deepEqual(towers.map(t => t.type), ["watchtower_wood", "tower_stone", "watchtower_wood"], "only the named one");
+  assert.equal(up({ ids: [towers[1].id + 999] }).error, "none of those can be upgraded now");
+  for (const ids of [[], "x", [1.5], Array(61).fill(1)]) assert.equal(up({ ids }).error, "pick 1 to 60 buildings");
+  const b = w.addNation({ name: "B" });
+  assert.equal(runOrder(w, b, { t: "upgrade", ids: [towers[0].id] }).error, "spawn first");
+});
+
 test("the build order pays up front, and the site finishes over its build time", () => {
   const { w, a, g, n } = setup();
   w.tick(1);
