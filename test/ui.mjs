@@ -712,6 +712,75 @@ const knightFigures = await fix.waitForFunction(id => {
 await fix.waitForTimeout(600);
 await fix.screenshot({ path: `${OUT}/27-soldiers.png` });
 check(knightFigures?.length >= 3 && knightFigures.every(s => s.startsWith("knight_")), `at close zoom a stack of mostly knights is drawn as ${knightFigures?.length} knight figures (${knightFigures?.[0]})`);
+const shop = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, me = w.you;
+  await g.conn.request({ t: "research", id: "siegecraft" });
+  await g.conn.request({ t: "admin", op: "finish", nation: me });
+  for (const [what, amount] of [["money", 5000], ["wood", 1000], ["stone", 200]]) await g.conn.request({ t: "admin", op: "give", nation: me, what, amount });
+  const cap = w.nations.get(me).capital, cx = cap % w.w, cy = (cap / w.w) | 0, free = i => w.owner[i] === me && !w.buildingAt(i);
+  for (let r = 3; r < 12; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = (cy + dy) * w.w + cx + dx;
+    if (![i, i + 1, i + w.w, i + w.w + 1].every(free)) continue;
+    const b = await g.conn.request({ t: "build", type: "siege_workshop", at: i });
+    if (b.ok) return b.building;
+  }
+  return null;
+});
+const shopUp = await fix.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", shop, { timeout: 15000 }).then(() => true, () => false);
+await fix.evaluate(id => { const g = window.__ls.game; g.selectBuilding(id); g.focus(g.world.buildings.get(id).anchor, 24); }, shop);
+await fix.waitForSelector("#building-make [data-make=catapult]:not([disabled])", { timeout: 5000 }).catch(() => null);
+await fix.click("#building-make [data-make=catapult]").catch(() => null);
+const makingText = await fix.waitForFunction(() => /catapult/.test(document.querySelector("#building-queue")?.textContent ?? ""), null, { timeout: 5000 }).then(() => fix.textContent("#building-queue"), () => "");
+const cat = await fix.waitForFunction(() => { const w = window.__ls.game.world; return [...w.machines.values()].find(u => u.owner === w.you && u.type === "catapult")?.id ?? null; }, null, { timeout: 15000 }).then(h => h.jsonValue(), () => null);
+check(shop && shopUp && /Building a catapult|Waiting to start a catapult/.test(makingText) && cat, `a siege workshop, after Siegecraft, builds a catapult from its panel ("${makingText.trim()}")`);
+const cog = await fix.evaluate(async () => {
+  const g = window.__ls.game, w = g.world;
+  const r = await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit: "cog", amount: 1 });
+  return r.machines?.[0] ?? null;
+});
+const screenAt = (page, pick) => page.evaluate(pick => {
+  const g = window.__ls.game, w = g.world, v = g.view, at = pick.machine ? w.machines.get(pick.machine)?.at : w.stacks.get(pick.stack)?.pos;
+  if (at === undefined) return null;
+  const [x, y] = v.plotToScreen((at % w.w) + 0.5, ((at / w.w) | 0) + 0.5);
+  return { x: x / v.ratio, y: y / v.ratio };
+}, pick);
+const between = async (a, b) => fix.evaluate(([a, b]) => {
+  const g = window.__ls.game, w = g.world, p = w.machines.get(a)?.at ?? a, q = w.stacks.get(b)?.pos ?? w.machines.get(b)?.at ?? b;
+  const x = Math.round(((p % w.w) + (q % w.w)) / 2), y = Math.round((((p / w.w) | 0) + ((q / w.w) | 0)) / 2);
+  g.focus(y * w.w + x, 20);
+}, [a, b]);
+await fix.waitForFunction(id => window.__ls.game.world.machines.has(id), cog, { timeout: 5000 }).catch(() => null);
+await between(cat, knightStack);
+await fix.waitForTimeout(300);
+const catSpot = await screenAt(fix, { machine: cat });
+if (catSpot) await fix.mouse.click(catSpot.x, catSpot.y);
+const catTitle = await fix.waitForSelector("#machine-panel:not([hidden])", { timeout: 3000 }).then(() => fix.textContent("#machine-title"), () => "");
+const stackSpot = await screenAt(fix, { stack: knightStack });
+if (stackSpot) await fix.mouse.click(stackSpot.x, stackSpot.y, { button: "right" });
+const following = await fix.waitForFunction(([c, s]) => window.__ls.game.world.purse?.machines?.orders?.some(o => o.id === c && o.follow === s), [cat, knightStack], { timeout: 5000 }).then(() => true, () => false);
+check(catTitle === "Your catapult" && following, `clicking the catapult opens its panel ("${catTitle}"), and a right-click on your stack makes it follow`);
+await fix.evaluate(id => window.__ls.game.select(id), knightStack);
+await between(cog, knightStack);
+await fix.waitForTimeout(300);
+const cogSpot = await screenAt(fix, { machine: cog });
+if (cogSpot) await fix.mouse.click(cogSpot.x, cogSpot.y, { button: "right" });
+const boarded = await fix.waitForFunction(id => window.__ls.game.world.machines.get(id)?.cargo || null, cog, { timeout: 20000 }).then(h => h.jsonValue(), () => 0);
+await fix.evaluate(id => { const g = window.__ls.game; g.select(null); g.selectMachine(id); g.focus(g.world.machines.get(id).at, 24); }, cog);
+await fix.waitForTimeout(600);
+await fix.screenshot({ path: `${OUT}/28-machines.png` });
+const cargoLine = await fix.textContent("#machine-cargo").catch(() => "");
+check(boarded > 0 && new RegExp(`^${boarded} of 200 troops aboard`).test(cargoLine), `with the stack selected, a right-click on the cog boards it; the cog's panel says "${cargoLine}"`);
+await fix.keyboard.press("k");
+const fleet = await fix.waitForSelector("#army-machines [data-machines=cog]", { timeout: 3000 }).then(() => fix.textContent("#army-machines"), () => "");
+check(/1 catapult/.test(fleet) && /1 cog(, 1 idle)?, \d+ troops aboard/.test(fleet), `the Army panel lists your machines: "${fleet}"`);
+await fix.keyboard.press("Escape");
+await fix.evaluate(id => { const g = window.__ls.game; g.focus(g.world.machines.get(id).at, 48); }, cog);
+await fix.waitForTimeout(400);
+await fix.screenshot({ path: `${OUT}/28b-cog-close.png` });
+await fix.evaluate(id => { const g = window.__ls.game; g.selectMachine(id); g.focus(g.world.machines.get(id).at, 48); }, cat);
+await fix.waitForTimeout(400);
+await fix.screenshot({ path: `${OUT}/28c-catapult-close.png` });
+await fix.keyboard.press("Escape");
 await fix.click("#leave-world");
 await fix.waitForSelector("#open-accounts", { timeout: 5000 });
 await fix.click("#open-accounts");
