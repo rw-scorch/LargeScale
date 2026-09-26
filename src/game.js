@@ -450,7 +450,7 @@ export function vitalsOf(sim, n) {
   if (!n?.spawned) return null;
   const r = sim.rules, cap = sim.maxTroops(n), e = sim.econ?.rules;
   const grow = n.alive && n.troops < cap ? r.growthFloor + r.growthRate * n.troops * (1 - n.troops / cap) : 0;
-  const income = e && n.money !== undefined ? ((n.income ?? e.baseIncome) + (n.pop ?? 0) * (n.tax ?? e.taxPerResident)) * (1 + (sim.effectOf?.(n, "income") ?? 0)) : 0;
+  const income = e && n.money !== undefined ? ((n.income ?? e.baseIncome) + (n.pop ?? 0) * (n.tax ?? e.taxPerResident)) * (1 + (sim.effectOf?.(n, "income") ?? 0)) * (n.outputMult ?? 1) : 0;
   return { troops: Math.floor(n.troops), cap: Math.floor(cap), grow: r2(grow), income: r2(income) };
 }
 

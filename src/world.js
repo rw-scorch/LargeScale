@@ -7,7 +7,7 @@ import { PROTOCOL, MSG, CLOSE, frame, partFrames } from "./shared/protocol.js";
 import { encodeRuns, decodeRuns, splitParts, joinParts, gzip, gunzip, hashBytes, hashRuns } from "./shared/codec.js";
 import { parseWorldConfig, defaultBots, scaledRules, MIN_MAP_SIDE, MAX_PLOTS, BASE_WIDTH } from "./worldconfig.js";
 import rules from "../data/rules.json" with { type: "json" };
-import { planCatchUp, runCatchUp, standingOrders, OFFLINE } from "./sim/offline.js";
+import { planCatchUp, runCatchUp, standingOrders, startAway, endAway, recordAway, awaySummary, OFFLINE } from "./sim/offline.js";
 import { installCombat } from "./sim/combat.js";
 import { installTroops, TROOP_RULES, armyView } from "./sim/troops.js";
 import unitData from "../data/units.json" with { type: "json" };
@@ -167,12 +167,12 @@ export class World extends DurableObject {
     this.updatePresence();
     this.hashes = this.layerHashes(terrain);
     this.loadCheck = { saved: saved?.hashes ?? null, loaded: { ...this.hashes } };
-    const elapsed = (Date.now() - (saved?.savedAt ?? Date.now())) / 1000;
-    if (elapsed > 5) {
-      const job = planCatchUp(elapsed, { catchupStep: 60, maxCatchupSeconds: (info.maxCatchupHours ?? 72) * 3600 });
-      runCatchUp(job, dt => { this.sim.growTroops(dt); this.sim.time += dt; }, 2000, () => Date.now());
-      this.caughtUp = job.capped;
+    this.sleptAt = this.frozen ? null : saved?.savedAt ?? null;
+    for (const nid of this.accounts.keys()) {
+      const n = this.sim.nations.get(nid);
+      if (n && !n.away) startAway(this.sim, n, saved?.savedAt ?? Date.now(), rules.offline.offlineOutputShare);
     }
+    this.present = new Set();
     this.sim.dirty.clear();
     this.loadMs = Date.now() - t0;
     this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, ...this.landLoaded };
@@ -253,6 +253,8 @@ export class World extends DurableObject {
     if (!this.sim) return;
     const online = new Set(this.sockets().filter(ws => ws !== leaving).map(ws => ws.deserializeAttachment()?.nation).filter(n => n !== undefined && n !== null));
     applyPresence(this.sim, online, rules.offline.defenceMult);
+    for (const nid of this.present ?? []) if (!online.has(nid) && !this.sim.nations.get(nid)?.away) startAway(this.sim, this.sim.nations.get(nid), Date.now(), rules.offline.offlineOutputShare);
+    this.present = online;
     const list = [...online].sort((a, b) => a - b), key = list.join(",");
     if (key === this.presenceKey) return;
     this.presenceKey = key;
@@ -390,6 +392,8 @@ export class World extends DurableObject {
     const n = this.sim.nations.get(nation);
     this.broadcast({ t: "joined", nation, name: n.name, colour: n.colour });
     if (!this.frozen) this.startLoop();
+    if (this.catching) server.send(JSON.stringify({ v: PROTOCOL, t: "catchup", left: Math.round(this.catching.job.steps * this.catching.job.step + this.catching.job.rest), of: Math.round(this.catching.of) }));
+    else this.sendAway(nation);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -406,8 +410,47 @@ export class World extends DurableObject {
     for (const ws of this.sockets()) { try { ws.send(s); } catch {} }
   }
 
+  wake() {
+    const since = this.sleptAt;
+    this.sleptAt = null;
+    if (since == null || this.frozen || this.catching) return;
+    const elapsed = ((Date.now() - since) / 1000) * (this.info.rules?.sleepSpeed ?? 1);
+    if (elapsed <= 5) return;
+    const job = planCatchUp(elapsed, { ...OFFLINE, ...rules.offline, maxCatchupSeconds: (this.info.maxCatchupHours ?? 72) * 3600 });
+    this.catching = { job, of: job.capped, started: Date.now(), told: 0 };
+    this.caughtUp = job.capped;
+    for (const n of this.sim.nations.values()) if (n.away) { n.away.caught += job.capped; n.away.dropped += job.dropped; }
+  }
+
+  catchUpSlice() {
+    const c = this.catching;
+    const done = runCatchUp(c.job, dt => this.sim.catchUp(dt), rules.offline.catchupBudgetMs, () => Date.now());
+    recordAway(this.sim, this.sim.events.splice(0));
+    if (!done) {
+      if (Date.now() - c.told > 500) { c.told = Date.now(); this.broadcast({ t: "catchup", left: Math.round(c.job.steps * c.job.step + c.job.rest), of: Math.round(c.of) }); }
+      return;
+    }
+    this.catching = null;
+    this.catchStats = { seconds: Math.round(c.of), dropped: Math.round(c.job.dropped), ms: Date.now() - c.started, at: Date.now() };
+    this.flushDiffs();
+    this.sendState();
+    this.broadcast({ t: "catchup", left: 0, of: Math.round(c.of), ms: this.catchStats.ms });
+    for (const nid of this.onlineList()) this.sendAway(nid);
+  }
+
+  sendAway(nid) {
+    const n = this.sim.nations.get(nid);
+    if (!n?.away) return;
+    const s = awaySummary(this.sim, n, Date.now(), rules.offline);
+    endAway(n);
+    if (!s) return;
+    const msg = JSON.stringify({ v: PROTOCOL, t: "away", ...s });
+    for (const ws of this.sockets()) if (ws.deserializeAttachment()?.nation === nid) try { ws.send(msg); } catch {}
+  }
+
   startLoop() {
     if (this.loop) return;
+    this.wake();
     const ms = Number(this.env.TICK_MS ?? 250);
     let last = Date.now();
     this.loop = setInterval(() => {
@@ -415,8 +458,9 @@ export class World extends DurableObject {
       const dt = Math.min(1, (now - last) / 1000);
       last = now;
       try {
-        this.step(dt);
-        if (now - this.lastSave > SAVE_EVERY_MS) this.save();
+        if (this.catching) this.catchUpSlice();
+        else this.step(dt);
+        if (!this.catching && now - this.lastSave > SAVE_EVERY_MS) this.save();
       } catch (e) {
         this.errors = (this.errors ?? 0) + 1;
         if (this.lastError?.message !== e.message) console.error(`world tick failed: ${e.stack}`);
@@ -429,7 +473,13 @@ export class World extends DurableObject {
     if (!this.loop) return;
     clearInterval(this.loop);
     this.loop = null;
+    if (this.catching) {
+      while (!runCatchUp(this.catching.job, dt => this.sim.catchUp(dt), Infinity)) {}
+      recordAway(this.sim, this.sim.events.splice(0));
+      this.catching = null;
+    }
     this.save();
+    this.sleptAt = this.frozen ? null : Date.now();
   }
 
   flushDiffs() {
@@ -476,6 +526,7 @@ export class World extends DurableObject {
     if (++this.tickCount % 4 === 0) this.sendState();
     const events = this.sim.events.splice(0);
     if (events.length) {
+      recordAway(this.sim, events);
       const shown = publicEvents(this.sim, events);
       if (shown.length) this.broadcast({ t: "events", events: shown });
       for (const e of events) {
@@ -572,6 +623,7 @@ export class World extends DurableObject {
         this.logAdmin(me, "end");
         this.broadcast({ t: "ended", by: me.name });
         this.stopLoop();
+        this.sleptAt = null;
         return { ok: true };
       }
       case "reopen": {
@@ -665,7 +717,7 @@ export class World extends DurableObject {
       initialised: !!this.sim, players: this.accounts.size, online: this.sockets().length, looping: !!this.loop, time: this.sim?.time ?? 0,
       map: info?.map ?? null, w: info?.w, h: info?.h, landPlots: info?.landPlots, bots: info?.bots,
       hashes: this.sim ? this.currentHashes() : null, loadCheck: this.loadCheck ?? null, loaded: this.loaded ?? null, lastSave: this.saveStats ?? null, loadMs: this.loadMs ?? null,
-      frozen: !!this.frozen, victory: this.meta("victory"), tickErrors: this.errors ?? 0, lastError: this.lastError ?? null,
+      frozen: !!this.frozen, victory: this.meta("victory"), tickErrors: this.errors ?? 0, lastError: this.lastError ?? null, catchingUp: !!this.catching, lastCatchUp: this.catchStats ?? null,
     };
   }
 }

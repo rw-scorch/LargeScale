@@ -10,13 +10,15 @@ export function installEconomy(world, cfg = {}) {
   installBuildings(world);
   const r = { ...ECON_RULES, ...cfg };
   world.econ = { rules: r };
-  world.hooks.postTick.push((w, dt) => {
+  const pay = (w, dt) => {
     for (const n of w.nations.values()) {
       if (!n.human || !n.spawned || !n.alive) continue;
       if (n.money === undefined) grantKit(w, n, r);
-      n.money += ((n.income ?? r.baseIncome) + (n.pop ?? 0) * (n.tax ?? r.taxPerResident)) * (1 + effectOf(w, n, "income")) * dt;
+      n.money += ((n.income ?? r.baseIncome) + (n.pop ?? 0) * (n.tax ?? r.taxPerResident)) * (1 + effectOf(w, n, "income")) * (n.outputMult ?? 1) * dt;
     }
-  });
+  };
+  pay.rank = 1;
+  world.hooks.postTick.push(pay);
   return world.econ;
 }
 

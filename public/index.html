@@ -142,6 +142,11 @@ button.act .alert{position:absolute;top:4px;left:6px;width:8px;height:8px;border
 .demand .fill.down{background:var(--bad)}
 .panel.center{left:50%;transform:translateX(-50%);top:calc(var(--hud,48px) + 16px);width:min(980px,calc(100% - 16px));max-height:calc(100% - var(--hud,48px) - 32px);overflow:auto;display:flex;flex-direction:column;gap:8px;z-index:2}
 .army-list{display:flex;flex-direction:column;gap:6px}
+#away-panel{width:min(560px,calc(100% - 16px));z-index:6;background:var(--ink)}
+.away-list{display:flex;flex-direction:column;gap:4px}
+.away-line{display:flex;align-items:center;gap:8px;margin:0;font-size:14px}
+.away-line.good span{color:var(--good)}
+.away-line.bad span{color:var(--bad)}
 .army-row{display:flex;flex-direction:column;gap:3px;border:2px solid var(--line);border-radius:3px;padding:6px 8px}
 .army-row.locked{opacity:.65}
 .upgrade-list{display:flex;flex-direction:column;gap:4px;max-height:calc(100vh - var(--hud,48px) - 260px);overflow:auto}

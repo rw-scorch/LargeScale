@@ -58,10 +58,13 @@ export function installResources(world, deposits = emptyDeposits(), opts = {}) {
   (bld.extra ??= {}).land = () => encodeLand(world);
   if (opts.hook !== false) {
     const every = opts.every ?? rules.civilians.econEvery;
-    world.hooks.postTick.push((w, dt) => {
+    const tick = (w, dt) => {
       res.clock += dt;
       while (res.clock >= every) { res.clock -= every; productionTick(w, every); }
-    });
+    };
+    tick.whole = (w, dt) => productionTick(w, dt);
+    tick.rank = -1;
+    world.hooks.postTick.push(tick);
   }
   return res;
 }
@@ -101,9 +104,15 @@ export function addProducer(world, nid, type, at) {
   return addBuilding(world, { type, owner: nid, anchor: at, plots: footprint(world, at, world.bld.table[type].fp), state: "active", progress: 1 });
 }
 
+const nearCache = new WeakMap();
+
 function nearestFirst(world, b, radius) {
+  const hit = nearCache.get(b);
+  if (hit && hit.plots === b.plots && hit.radius === radius) return hit.list;
   const g = world.grid, ax = g.x(b.anchor), ay = g.y(b.anchor);
-  return areaAround({ w: g.w, h: g.h }, b.plots, radius).map(i => [(g.x(i) - ax) ** 2 + (g.y(i) - ay) ** 2, i]).sort((p, q) => p[0] - q[0] || p[1] - q[1]).map(v => v[1]);
+  const list = areaAround({ w: g.w, h: g.h }, b.plots, radius).map(i => [(g.x(i) - ax) ** 2 + (g.y(i) - ay) ** 2, i]).sort((p, q) => p[0] - q[0] || p[1] - q[1]).map(v => v[1]);
+  nearCache.set(b, { plots: b.plots, radius, list });
+  return list;
 }
 
 function gather(world, b, rates, k, out) {
@@ -113,7 +122,7 @@ function gather(world, b, rates, k, out) {
   const o = out.get(b.owner);
   let got = 0;
   for (const [kind, rate] of Object.entries(rates)) {
-    const v = rate * k * (1 + effectOf(world, n, `${kind}_rate`));
+    const v = rate * k * (1 + effectOf(world, n, `${kind}_rate`)) * (n?.outputMult ?? 1);
     o[kind] = (o[kind] ?? 0) + v;
     got += v;
   }
@@ -128,7 +137,7 @@ export function produce(world, dt) {
     if (!p || b.state !== "active" || world.owner[b.anchor] !== b.owner) continue;
     const n = world.nations.get(b.owner);
     const staffed = Math.max(r.minWorkforce, n?.stats?.worked ?? 1);
-    let want = p.rate * dt * staffed * (r.speed ?? 1), got = 0, kind = p.out;
+    let want = p.rate * dt * staffed * (r.speed ?? 1) * (n?.outputMult ?? 1), got = 0, kind = p.out;
     if (p.kind === "deposit") {
       for (const i of nearestFirst(world, b, p.radius ?? 0)) {
         if (want <= 0) break;
@@ -189,6 +198,7 @@ export function productionTick(world, dt) {
     n.stock ??= {};
     for (const [k, v] of Object.entries(made)) n.stock[k] = (n.stock[k] ?? 0) + v;
     n.made = made;
+    n.madeEvery = dt;
   }
   regrowForests(world, dt);
 }

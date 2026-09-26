@@ -21,6 +21,8 @@ import { isLand } from "../src/shared/terrain.js";
 import { encodeRuns, countRuns } from "../src/shared/codec.js";
 import { MSG, partFrames } from "../src/shared/protocol.js";
 import { StateFeed, BuildingFeed, publicEvents } from "../src/game.js";
+import { planCatchUp, runCatchUp } from "../src/sim/offline.js";
+import allRules from "../data/rules.json" with { type: "json" };
 import { encodeRows } from "../src/shared/buildings.js";
 
 const { values: a } = parseArgs({ options: {
@@ -32,6 +34,7 @@ const { values: a } = parseArgs({ options: {
   map: { type: "string", default: "public/map" },
   crop: { type: "string" },
   seed: { type: "string", default: "1" },
+  catchup: { type: "string", default: "12" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -223,6 +226,23 @@ for (let i = 0; i < Number(a.ticks); i++) {
   if (i % 40 === 0) peakIsolate = Math.max(peakIsolate, isolateMB());
 }
 
+const catchUp = (() => {
+  const hours = Number(a.catchup), before = players.map(id => ({ money: w.nations.get(id).money, pop: w.nations.get(id).pop, known: w.nations.get(id).research.known.length }));
+  const job = planCatchUp(hours * 3600, allRules.offline), steps = job.steps, step = job.step;
+  let worstStep = 0, k = 0;
+  const t0 = performance.now();
+  runCatchUp(job, dt => {
+    if (k++ % Math.max(1, Math.round(1800 / step)) === 0) feed0();
+    const s0 = performance.now();
+    w.catchUp(dt);
+    worstStep = Math.max(worstStep, performance.now() - s0);
+  }, Infinity);
+  w.events.length = 0;
+  w.takeDirty();
+  const after = players.map(id => w.nations.get(id));
+  return { hours, steps, step, ms: Math.round(performance.now() - t0), worstStepMs: +worstStep.toFixed(1), moneyGained: Math.round(after.reduce((t, n, k) => t + n.money - before[k].money, 0) / after.length), popBefore: Math.round(before.reduce((t, b) => t + b.pop, 0)), popAfter: Math.round(after.reduce((t, n) => t + n.pop, 0)), researched: after.reduce((t, n, k) => t + n.research.known.length - before[k].known, 0) };
+})();
+
 let borderOk = true;
 for (let i = 0; i < w.owner.length && borderOk; i++) {
   const o = w.owner[i];
@@ -255,6 +275,7 @@ const report = {
   saveEncodeMs: { worst: +Math.max(...saveTimes).toFixed(1), count: saveTimes.length },
   moveOrders: { issued: moves.length, ok: okMoves.length, noLandRoute: moves.filter(m => m.noRoute).length, plannerFailed: moves.filter(m => !m.ok && !m.noRoute).length, worstMs: +Math.max(0, ...moves.map(m => m.ms)).toFixed(1), longestPlots: Math.round(Math.max(0, ...okMoves.map(m => m.dist))), blockedOnTheWay: blocked },
   stacks: w.stacks.size,
+  catchUp,
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
   ownedPlots: owned,

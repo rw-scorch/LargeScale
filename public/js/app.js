@@ -29,6 +29,7 @@ import { createNationCard } from "./ui/nation.js";
 import { createSettings, loadPrefs, savePrefs } from "./ui/settings.js";
 import { createPlaceConfirm } from "./ui/place.js";
 import { createAim } from "./ui/aim.js";
+import { createAwayPanel, span } from "./ui/away.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -110,6 +111,7 @@ class Game {
     this.ring = createRing(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     this.settings = createSettings(overlay, this);
+    this.away = createAwayPanel(overlay, this);
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -234,6 +236,9 @@ class Game {
     if (m.t === "reopened") note(`${m.by} reopened this world.`);
     if (m.t === "speed") note(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
     if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
+    if (m.t === "catchup") this.feed.push({ key: "catchup", text: m.left ? `The world is catching up on ${span(m.of)} while nobody played: ${span(m.left)} to go.` : `The world caught up ${span(m.of)} in ${((m.ms ?? 0) / 1000).toFixed(1)} s.`, tone: "info" });
+    if (m.t === "away") this.away.summary(m);
+    if (m.t === "catchup" || m.t === "away") this.updatePanels();
   }
 
   onFrame(data) {
@@ -362,6 +367,7 @@ class Game {
     if (action === "cancel") {
       if (this.pinned !== null) this.unpin();
       else if (this.building || this.zoning) this.stopBuild();
+      else if (this.away.open) this.away.show(false);
       else if (this.settings.open) this.toggleSettings(false);
       else if (this.adminPanel?.open) this.toggleAdmin(false);
       else if (this.upgrade.open) this.toggleUpgrade(false);
@@ -384,33 +390,33 @@ class Game {
   }
 
   toggleSettings(on = !this.settings.open) {
-    if (on) { this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); }
+    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); }
     this.settings.show(on);
     this.updatePanels();
   }
 
   toggleResearch(on = !this.research.open) {
-    if (on) { this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     this.research.show(on && !!this.world?.purse?.research);
     this.updatePanels();
   }
 
   toggleAdmin(on = !this.adminPanel?.open) {
     if (!this.adminPanel) return;
-    if (on) { this.research.show(false); this.upgrade.show(false); this.army.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.settings.show(false); }
     this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
   toggleUpgrade(on = !this.upgrade.open) {
-    if (on) { this.research.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.research.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.upgrade.show(on && !!this.world?.purse && !!me?.spawned);
     this.updatePanels();
   }
 
   toggleArmy(on = !this.army.open) {
-    if (on) { this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.army.show(on && !!this.world?.purse?.army && !!me?.spawned);
     this.updatePanels();

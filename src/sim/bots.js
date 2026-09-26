@@ -65,7 +65,7 @@ export function installBots(world, rng, rules = BOT) {
     };
   }
   let order = [], cursor = 0, carry = 0;
-  world.hooks.postTick.push((w, dt) => {
+  const think = (w, dt) => {
     if (cursor >= order.length) {
       order = [...w.nations.values()].filter(n => n.bot && n.alive).map(n => n.id);
       cursor = 0;
@@ -74,7 +74,9 @@ export function installBots(world, rng, rules = BOT) {
     let k = Math.floor(carry);
     carry -= k;
     while (k-- > 0 && cursor < order.length) botThink(w, order[cursor++], rng, rules);
-  });
+  };
+  think.live = true;
+  world.hooks.postTick.push(think);
 }
 
 export function checkVictory(world, factionOf = id => id) {
