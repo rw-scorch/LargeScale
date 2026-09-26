@@ -1,10 +1,11 @@
 import { complete, knownOf } from "./sim/research.js";
 import { addUnits } from "./sim/troops.js";
+import { giveMachine, UNIT_TYPES } from "./sim/units.js";
 import { nextResearch, researchError } from "./shared/research.js";
 import rules from "../data/rules.json" with { type: "json" };
 
 export const ADMIN_RULES = rules.admin;
-export const GIVE = ["money", "food", "wood", "stone", "clay", "troops", "unit"];
+export const GIVE = ["money", "food", "wood", "stone", "clay", "troops", "unit", "machine"];
 
 const fail = error => ({ ok: false, error });
 
@@ -32,6 +33,13 @@ export const ADMIN_OPS = {
     if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > most) return fail(`the amount is a whole number from -${most} to ${most}, and not 0`);
     const done = now => ({ ok: true, nation: n.id, name: n.name, what: m.what, amount, now: Math.floor(now) });
     if (m.what === "troops") return done((n.troops = Math.max(0, n.troops + amount)));
+    if (m.what === "machine") {
+      if (!sim.units || typeof m.unit !== "string" || !Object.hasOwn(UNIT_TYPES, m.unit)) return fail("pick a machine");
+      if (amount < 1 || amount > 10) return fail("give 1 to 10 machines at a time");
+      const made = [];
+      for (let k = 0; k < amount; k++) { const u = giveMachine(sim, n.id, m.unit); if (u) made.push(u.id); }
+      return made.length ? { ...done(made.length), unit: m.unit, machines: made } : fail(`no room for a ${UNIT_TYPES[m.unit].name.toLowerCase()} near ${n.name}'s capital`);
+    }
     if (m.what === "unit") {
       const now = addUnits(sim, n.id, m.unit, amount);
       return now === null ? fail("pick a troop type") : { ...done(now), unit: m.unit };
