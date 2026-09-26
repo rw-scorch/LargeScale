@@ -2,6 +2,7 @@ import { TERRAIN } from "../shared/terrain.js";
 import { hash2 } from "../shared/rng.js";
 import { areaAround } from "../shared/buildings.js";
 import { People } from "./people.js";
+import { placeLabels } from "./labels.js";
 
 export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
@@ -42,6 +43,9 @@ export class MapRenderer {
     this.zoneRect = null;
     this.showZones = false;
     this.showDeposits = false;
+    this.showNames = true;
+    this.names = null;
+    this.namesAt = -Infinity;
     this.selectedBuilding = null;
     this.selectedMachine = null;
     this.terrainCanvas = document.createElement("canvas");
@@ -343,6 +347,7 @@ export class MapRenderer {
       for (const k of this.chunks) if (k && k.x <= r.x1 && k.y <= r.y1 && k.x + CHUNK >= r.x0 && k.y + CHUNK >= r.y0) ctx.drawImage(k.canvas, k.x, k.y);
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (this.showNames && c.scale < ZOOM.sprites * R) this.drawNames();
     if (c.scale >= ZOOM.sprites * R) this.drawSprites();
     else if (c.scale >= ZOOM.icons * R) this.drawIcons();
     else this.drawDots();
@@ -353,6 +358,36 @@ export class MapRenderer {
     this.drawEffects();
     this.drawRoute();
     if (this.night) this.drawNight();
+  }
+
+  drawNames() {
+    const s = this.state, c = this.cam, ctx = this.ctx, R = this.ratio ?? 1, W = this.canvas.width, H = this.canvas.height, now = performance.now();
+    if (!s.ownerReady) return;
+    if (now - this.namesAt > 2000) { this.names = placeLabels(s); this.namesAt = now; }
+    const short = n => (n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : String(Math.round(n)));
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.globalAlpha = c.scale < ZOOM.icons * R ? 0.95 : 0.75;
+    for (const L of this.names) {
+      const n = s.nations.get(L.id);
+      if (!n?.spawned || n.alive === false) continue;
+      const r = L.r * c.scale, size = Math.min(r * 0.6, (1.8 * r) / (0.6 * Math.max(4, n.name.length)), 40 * R);
+      if (size < 9 * R) continue;
+      const [x, y] = this.plotToScreen(L.x, L.y);
+      if (x + r < 0 || y + r < 0 || x - r > W || y - r > H) continue;
+      ctx.lineWidth = Math.max(2, size / 5);
+      ctx.strokeStyle = "rgba(10,22,34,.7)";
+      ctx.fillStyle = L.id === s.you ? "#ffe9a0" : "#ffffff";
+      ctx.font = `700 ${Math.round(size)}px "Atkinson Hyperlegible", system-ui, sans-serif`;
+      ctx.strokeText(n.name, x, y - size * 0.35);
+      ctx.fillText(n.name, x, y - size * 0.35);
+      ctx.font = `600 ${Math.round(size * 0.75)}px "Atkinson Hyperlegible", system-ui, sans-serif`;
+      ctx.strokeText(short(n.troops ?? 0), x, y + size * 0.55);
+      ctx.fillText(short(n.troops ?? 0), x, y + size * 0.55);
+    }
+    ctx.restore();
   }
 
   drawEffects() {

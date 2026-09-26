@@ -23,6 +23,7 @@ import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createRing, ownerItems } from "./ui/ring.js";
+import { createAttacks } from "./ui/attacks.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -80,6 +81,7 @@ class Game {
     this.spawn = createSpawnHint(top, this);
     this.nations = createNations(left, this);
     this.feed = createFeed(side, this);
+    this.attacks = createAttacks(overlay, side, this);
     this.stack = createStackPanel(side, this);
     this.notices = createNotices(overlay, this, top);
     this.buildMenu = createBuildMenu(side, this);
@@ -188,7 +190,7 @@ class Game {
     if (!this.world) return;
     this.world.message(m);
     if (this.view && this.world.changed.length) this.view.updateBuildings(this.world.takeChanged());
-    if (m.t === "events") for (const e of m.events) this.announce(e);
+    if (m.t === "events") for (const e of m.events) { this.announce(e); this.attacks.event(e); }
     if (m.t === "state" && this.view) this.view.colours.clear();
     if (m.t === "purse" && this.view && m.season && m.season !== this.view.season) this.view.setSeason(m.season);
     if (m.t === "purse" && this.townOnPurse) { this.townOnPurse = false; this.toggleTown(true); }
@@ -589,7 +591,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.feed, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.feed, this.attacks, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {
