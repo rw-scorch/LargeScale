@@ -1,9 +1,10 @@
 import { el } from "./dom.js";
 
-export function createNotices(root, game) {
+export function createNotices(root, game, top = root) {
   const toasts = el("div", { id: "toasts" });
   const banner = el("div", { id: "notice", class: "banner big", hidden: true });
-  root.append(toasts, banner);
+  top.append(toasts);
+  root.append(banner);
   return {
     toast(text) {
       const t = el("p", { class: "toast", text });

@@ -7,7 +7,7 @@ import { XP_NAMES } from "../shared/units.js";
 
 const ORDER_TEXT = { hold: "holding", move: "moving", advance: "advancing" };
 
-export const keyTag = action => el("kbd", { class: "key", text: keyOf(action) });
+export const keyTag = action => el("kbd", { class: "key", "data-action": action, text: keyOf(action) });
 
 export function createStackPanel(root, game) {
   const title = el("b", { id: "stack-title" });
@@ -18,7 +18,7 @@ export function createStackPanel(root, game) {
   const standing = el("select", { id: "stack-standing", class: "small" }, el("option", { value: "hold", text: "holds its ground" }), el("option", { value: "fallback", text: "falls back to the capital when outnumbered" }));
   const away = el("div", { class: "row wrap", id: "stack-away" }, el("span", { class: "muted", text: "While you are away, this stack" }), standing,
     el("button", { class: "ghost", id: "stack-standing-all", text: "Same for all my stacks", onclick: () => order({ t: "standing", mode: standing.value, all: true }, r => game.toast(`All ${r.stacks} of your stacks, and new ones, now ${r.mode === "fallback" ? "fall back when outnumbered" : "hold their ground"} while you are away.`)) }));
-  const box = el("section", { id: "stack-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), mixLine, away, hint, actions);
+  const box = el("section", { id: "stack-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), mixLine, away, hint, actions);
   root.append(box);
   let mode = null, preview = null, key = "", trip = null, asking = false, drawn = null, disbandAt = -Infinity;
   const confirming = () => performance.now() - disbandAt < 4000;
@@ -177,6 +177,17 @@ export function createStackPanel(root, game) {
     },
     cancel,
     act,
+    ringFor(plot, sx, sy) {
+      const s = mine(), w = game.world;
+      if (!s) return [];
+      const o = w.owner[plot], onLand = isLand(w.terrain[plot]), items = [];
+      const ship = w.machines.get(game.view?.machineAt(sx, sy));
+      if (ship && ship.owner === w.you && ship.def.capacity && ship.state !== "wreck") items.push({ id: "board", label: "Board ship", note: `${fmt(ship.cargo)} of ${ship.def.capacity}`, icon: "ui_map_supply", run: () => act.boardNow(ship.id) });
+      if (onLand) items.push({ id: "move", label: "Move here", icon: "cursor_move", run: () => act.moveNow(plot) });
+      if (onLand && o && o !== w.you) items.push({ id: "attack", label: `Attack ${w.nations.get(o)?.name ?? "them"}`, icon: "dip_war", run: () => order({ t: "advance", stack: s.id, only: o }) });
+      if (onLand && !o) items.push({ id: "take", label: "Take unclaimed", icon: "ui_flag", run: () => order({ t: "advance", stack: s.id, only: "free" }) });
+      return items;
+    },
     async pickTarget(plot, sx, sy) {
       const w = game.world, s = w.stacks.get(game.selected);
       if (!s) return cancel();
@@ -218,7 +229,7 @@ export function createStackPanel(root, game) {
       info.textContent = ` ${statusOf(s, w)}`;
       hint.textContent = preview ? `About ${preview.plots} plots and ${preview.seconds} s. Stacks take neutral and enemy land on the way.`
         : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "board" ? "Click one of your ships." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."
-        : yours && !w.frozen ? "Right-click the map to send it straight there, or right-drag to draw its way." : "";
+        : yours && !w.frozen ? "Right-click the map for its orders, or right-drag to draw its way." : "";
       hint.classList.toggle("fine-only", !preview && !mode);
       const k = `${s.id}:${yours}:${mode}:${!!preview}:${w.frozen}:${adjacent(s).length}:${confirming()}:${ships().length > 0}`;
       if (k === key) return;

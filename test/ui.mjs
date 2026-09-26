@@ -34,6 +34,17 @@ async function login(page, name, password) {
   }
 }
 
+const overlaps = p => p.evaluate(() => {
+  const boxes = ["#nations", "#control", "#status-pill", "#corner", "#action-bar", "#feed"].map(s => { const r = document.querySelector(s)?.getBoundingClientRect(); return r && r.width ? { s, r } : null; }).filter(Boolean);
+  const hit = [];
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i].r, b = boxes[j].r;
+    if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) hit.push(`${boxes[i].s} and ${boxes[j].s}`);
+  }
+  const off = boxes.filter(({ r }) => r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight).map(b => b.s);
+  return { boxes: boxes.length, hit, off };
+});
+
 const ready = page => page.waitForFunction(() => window.__ls?.game?.view && window.__ls.game.world?.ownerReady, null, { timeout: 30000 });
 
 async function frames(page, setup, ms = 2000) {
@@ -82,6 +93,22 @@ const spawned = await page.evaluate(async () => {
 await page.waitForTimeout(1500);
 check(spawned && !(await page.isVisible("#spawn-hint")), `spawned at ${spawned?.x}, ${spawned?.y}; the hint goes away`);
 await page.screenshot({ path: `${OUT}/2-spawned-${MAP}.png` });
+const vit = await page.waitForFunction(() => { const v = window.__ls.game.world.purse?.vitals, t = document.querySelector("#my-troops")?.textContent ?? ""; return v && t.includes("/") && document.querySelector("#purse [data-res=gold]") ? { v, t, gold: document.querySelector("#purse [data-res=gold]").title } : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+check(vit?.v.cap > 0, `the control panel shows troops at home against the cap (${vit?.t}, growing ${vit?.v.grow} a second) and gold with its rate ("${vit?.gold}")`);
+const guideStep = await page.waitForSelector("#guide:not([hidden])", { timeout: 5000 }).then(() => page.textContent("#guide-step"), () => "");
+const guideMark = await page.evaluate(() => { const g = window.__ls.game, m = g.view.guide; return m && { plot: m.plot, free: !g.world.owner[m.plot], label: m.label }; });
+check(/^2 of 7: Take land, \d+ of \d+/.test(guideStep) && guideMark?.free, `after the start the guide gives the first goal ("${guideStep}") and marks open land beside yours ("${guideMark?.label}")`);
+const lay = await overlaps(page);
+check(lay.boxes === 6 && !lay.hit.length && !lay.off.length, `at 1280 by 720 the leaderboard, control panel, status pill, corner icons, action bar and events feed sit apart on screen (${JSON.stringify(lay)})`);
+const kitItem = page.locator("#feed-list .item", { hasText: "chieftain hut stands" });
+const kitSeen = await kitItem.waitFor({ timeout: 5000 }).then(() => true, () => false);
+await page.evaluate(() => window.__ls.game.fit());
+if (kitSeen) await kitItem.click();
+const jumped = await page.evaluate(() => { const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital; return Math.hypot(g.view.cam.x - (cap % w.w) - 0.5, g.view.cam.y - Math.floor(cap / w.w) - 0.5) < 1 && g.view.cam.scale / g.view.ratio >= 6; });
+check(kitSeen && jumped, "the events feed lists the starting hut, and clicking the line jumps to the capital");
+const clock = await page.textContent("#world-clock");
+const worldTime = await page.evaluate(() => window.__ls.game.world.time);
+check(/^Day \d+, \d\d:00$/.test(clock), `the status pill shows the world clock ("${clock}" at ${worldTime} game seconds)`);
 
 await page.keyboard.press("u");
 check(await page.isVisible("#research-panel"), "U opens the research panel");
@@ -102,7 +129,7 @@ check(learned, "the queue researches through to Palisades, Fire keeping and Bart
 await page.screenshot({ path: `${OUT}/2s-researched-${MAP}.png` });
 await page.keyboard.press("u");
 const kit = await page.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].some(b => b.owner === w.you && b.type === "chieftain_hut" && b.state === "active"); }, null, { timeout: 5000 }).then(() => true, () => false);
-const purseText = await page.textContent("#purse");
+const purseText = await page.evaluate(() => [...document.querySelectorAll("#purse .res")].map(r => r.title).join("; "));
 check(kit && /gold/.test(purseText), `the starting chieftain hut stands at the capital; the bar shows "${purseText}"`);
 await page.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 22 * g.view.ratio; g.view.clampCamera(); });
 await page.keyboard.press("b");
@@ -187,6 +214,7 @@ await page.screenshot({ path: `${OUT}/2g-rubble-${MAP}.png` });
 await page.keyboard.press("Escape");
 await page.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 6));
 
+const ringItems = p => p.waitForSelector("#ring:not([hidden]) .ring-item", { timeout: 2000 }).then(() => p.evaluate(() => [...document.querySelectorAll("#ring .ring-item")].map(b => b.dataset.ring)), () => []);
 const toScreen = (page, plot) => page.evaluate(p => {
   const g = window.__ls.game, w = g.world, v = g.view;
   const [px, py] = v.plotToScreen((p % w.w) + 0.5, ((p / w.w) | 0) + 0.5);
@@ -213,6 +241,8 @@ await page.keyboard.press("a");
 await page.waitForTimeout(3500);
 const grew = await page.evaluate(() => { const w = window.__ls.game.world; return w.nations.get(w.you).plots; });
 check(grew > 40, `advancing takes land: ${grew} plots`);
+const guideNow = await page.textContent("#guide-step").catch(() => "");
+check(guideNow !== guideStep && /of 7/.test(guideNow), `the guide follows along: "${guideNow}"`);
 await page.screenshot({ path: `${OUT}/3-advance-${MAP}.png` });
 
 await page.fill("#stack-share", "40");
@@ -260,17 +290,86 @@ await page.keyboard.press("Tab");
 const rc = await reachable(page);
 const rcFrom = rc && await page.evaluate(id => window.__ls.game.world.stacks.get(id)?.pos, rc.id);
 if (rc) await page.mouse.click(rc.x, rc.y, { button: "right" });
+const rcRing = await ringItems(page);
+await page.screenshot({ path: `${OUT}/5a-ring-stack-${MAP}.png` });
+if (rcRing[0] === "move") await page.click("#ring [data-ring=move]");
 await page.waitForTimeout(1500);
 const rcNow = rc && await page.evaluate(id => { const s = window.__ls.game.world.stacks.get(id); return s && { order: s.order, pos: s.pos }; }, rc.id);
-check(rcNow && (rcNow.order === "move" || rcNow.pos !== rcFrom), `right-click sends the selected stack with no Go step (now ${rcNow?.order}, moved ${rcNow?.pos !== rcFrom})`);
+check(rcRing[0] === "move" && rcNow && (rcNow.order === "move" || rcNow.pos !== rcFrom), `with a stack selected, a right-click opens the ring with Move here in the centre (${rcRing.join(", ")}), and it sends the stack with no Go step (now ${rcNow?.order}, moved ${rcNow?.pos !== rcFrom})`);
 check(!(await page.isVisible("#move-go")), "no route preview is left open after a right-click");
 await page.keyboard.press("Escape");
 check(await page.evaluate(() => window.__ls.game.selected) === null, "Esc clears the selection");
+const ringAt = async (p, plot) => {
+  await p.evaluate(i => window.__ls.game.focus(i, 8), plot);
+  await p.waitForTimeout(150);
+  const at = await toScreen(p, plot);
+  await p.mouse.click(at.x, at.y, { button: "right" });
+  return ringItems(p);
+};
+const ownRing = await ringAt(page, capital);
+await page.screenshot({ path: `${OUT}/5b-ring-own-${MAP}.png` });
+check(ownRing.join() === "form,build,zone,info", `with nothing selected, a right-click on your land opens the ring: ${ownRing.join(", ")}, with Form stack in the centre`);
+await page.keyboard.press("Escape");
+check(await page.evaluate(() => document.querySelector("#ring").hidden), "Esc closes the ring");
+const ringSpots = await page.evaluate(() => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  let free = null, foe = null;
+  for (let r = 3; r < 400 && (free === null || foe === null); r++) for (let a = 0; a < 64; a++) {
+    const x = Math.round(cx + r * Math.cos(a * Math.PI / 32)), y = Math.round(cy + r * Math.sin(a * Math.PI / 32)), i = y * w.w + x;
+    if (x < 0 || y < 0 || x >= w.w || y >= w.h || !(w.terrain[i] >= 7 && w.terrain[i] <= 26)) continue;
+    if (free === null && !w.owner[i]) free = i;
+    if (foe === null && w.owner[i] && w.owner[i] !== w.you) foe = i;
+  }
+  return { free, foe, foeId: foe === null ? null : w.owner[foe], foeName: foe === null ? null : w.nations.get(w.owner[foe]).name };
+});
+const freeRing = ringSpots.free === null ? [] : await ringAt(page, ringSpots.free);
+if (freeRing[0] === "take") await page.click("#ring [data-ring=take]");
+const took = await page.waitForFunction(() => (window.__ls.game.world.purse?.orders ?? []).some(o => o.only === 0), null, { timeout: 5000 }).then(() => true, () => false);
+check(freeRing.join() === "take,info" && took, `on unclaimed land the ring offers ${freeRing.join(", ")}; Take land forms a stack that takes unclaimed land only`);
+const foeRing = ringSpots.foe === null ? [] : await ringAt(page, ringSpots.foe);
+const attackLabel = await page.textContent("#ring [data-ring=attack] .label").catch(() => "");
+await page.screenshot({ path: `${OUT}/5c-ring-attack-${MAP}.png` });
+if (foeRing[0] === "attack") await page.click("#ring [data-ring=attack]");
+const attacking = await page.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).some(o => o.only === id), ringSpots.foeId, { timeout: 5000 }).then(() => true, () => false);
+check(foeRing.join() === "attack,info" && attackLabel === `Attack ${ringSpots.foeName}` && attacking, `on ${ringSpots.foeName}'s land the ring offers "${attackLabel}", which forms a stack at your nearest land that advances into that nation only`);
+await page.keyboard.press("Escape");
+const cardSpot = await page.evaluate(([foe, id]) => {
+  const g = window.__ls.game, w = g.world, v = g.view;
+  g.focus(foe, 8);
+  const fx = foe % w.w, fy = (foe / w.w) | 0;
+  for (let r = 0; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = (fy + dy) * w.w + fx + dx;
+    if (w.owner[i] !== id || w.buildingAt(i)) continue;
+    const [px, py] = v.plotToScreen(fx + dx + 0.5, fy + dy + 0.5);
+    if (v.stackAt(px, py) === null && v.machineAt(px, py) === null) return { x: px / v.ratio, y: py / v.ratio };
+  }
+  return null;
+}, [ringSpots.foe, ringSpots.foeId]);
+if (cardSpot) await page.mouse.click(cardSpot.x, cardSpot.y);
+const cardTitle = await page.waitForSelector("#nation-card:not([hidden])", { timeout: 3000 }).then(() => page.textContent("#nation-title"), () => "");
+const cardFacts = await page.textContent("#nation-facts").catch(() => "");
+await page.screenshot({ path: `${OUT}/5e-nation-card-${MAP}.png` });
+const stacksBefore = await page.evaluate(() => window.__ls.game.world.myStacks().length);
+if (cardTitle) await page.click("#nation-attack");
+const cardSent = await page.waitForFunction(n => window.__ls.game.world.myStacks().length > n, stacksBefore, { timeout: 5000 }).then(() => true, () => false);
+check(cardTitle === ringSpots.foeName && /Rank \d+ of \d+/.test(cardFacts) && cardSent, `a click on ${ringSpots.foeName}'s land opens its card ("${cardFacts}"), and its Attack button sends a stack`);
+await page.keyboard.press("Escape");
+check(await page.evaluate(() => document.querySelector("#nation-card").hidden), "Esc closes the nation card");
+const attackRow = await page.waitForSelector("#attacks [data-halt]", { timeout: 5000 }).then(() => page.textContent("#attacks .attack.out"), () => "");
+const haltId = await page.evaluate(() => Number(document.querySelector("#attacks [data-halt]")?.dataset.halt));
+if (attackRow) await page.click(`#attacks [data-halt="${haltId}"]`);
+const halted = await page.waitForFunction(id => window.__ls.game.world.stacks.get(id)?.order === "hold", haltId, { timeout: 5000 }).then(() => true, () => false);
+check(!!attackRow && halted, `the attacks list shows your advancing stacks ("${attackRow.trim()}"), and Stop halts one`);
+await page.evaluate(() => { const g = window.__ls.game, w = g.world, foe = [...w.nations.values()].find(n => n.id !== w.you && n.spawned); g.attacks.event({ type: "plot_lost", nation: w.you, by: foe.id, at: w.nations.get(w.you).capital, count: 3 }); g.updatePanels(); });
+const framed = await page.isVisible("#alert-frame");
+const inRow = await page.textContent("#attacks .attack.in").catch(() => "");
+await page.screenshot({ path: `${OUT}/5d-attacked-${MAP}.png` });
+check(framed && /took 3 of your plots/.test(inRow), `losing land lights a red frame round the screen and lists the attacker: "${inRow}"`);
 const light = await page.evaluate(() => { const row = document.querySelector("#nations tr.me .dot"); return row ? { on: row.classList.contains("on"), colour: getComputedStyle(row).backgroundColor } : null; });
 const botLights = await page.evaluate(() => [...document.querySelectorAll("#nations tr")].filter(tr => /Bot/.test(tr.textContent) && tr.querySelector(".dot")).length);
 check(light?.on && botLights === 0, `the nations list shows a green light for you while you are online (${light?.colour}), and none for bots`);
 
-await page.click("#chat .title");
+await page.click("#feed-chat");
 await page.fill("#chat-input", "hello from the real client");
 await page.click("#chat-send");
 const chatted = await page.waitForFunction(() => document.querySelector("#chat .lines")?.textContent.includes("hello from the real client"), null, { timeout: 5000 }).then(() => true, () => false);
@@ -278,6 +377,42 @@ check(chatted, "chat goes out and comes back");
 await page.screenshot({ path: `${OUT}/6-chat-${MAP}.png` });
 
 const world = await frames(page, () => window.__ls.game.fit());
+const named = await page.evaluate(() => { const g = window.__ls.game, w = g.world, me = (g.view.names ?? []).find(l => l.id === w.you); return { count: g.view.names?.length ?? 0, me: me && { r: me.r, inside: w.owner[Math.floor(me.y) * w.w + Math.floor(me.x)] === w.you } }; });
+await page.screenshot({ path: `${OUT}/6b-names-${MAP}.png` });
+check(named.count > 1 && named.me?.inside, `nations' names and troops are written on their land (${named.count} labels; yours sits inside your land, ${named.me?.r} plots from its edge)`);
+await page.click("#open-settings");
+const setOpen = await page.isVisible("#settings-panel");
+await page.uncheck("#set-names");
+const namesOff = await page.evaluate(() => window.__ls.game.view.showNames === false && JSON.parse(localStorage.getItem("ls_prefs")).names === false);
+await page.check("#set-names");
+check(setOpen && namesOff && await page.evaluate(() => window.__ls.game.view.showNames), "Settings opens from the corner, and names on the map turn off and on, remembered in this browser");
+await page.click("#settings-panel [data-bind=build]");
+await page.keyboard.press("j");
+const jLabel = await page.textContent("#open-build kbd");
+await page.click("#settings-panel [data-bind=build]");
+await page.keyboard.press("t");
+const swapNote = await page.textContent("#settings-note");
+const townKey = await page.textContent("#settings-panel [data-bind=town]");
+await page.screenshot({ path: `${OUT}/10-settings-${MAP}.png` });
+await page.keyboard.press("Escape");
+await page.keyboard.press("t");
+const tOpensBuild = await page.isVisible("#build-menu");
+await page.keyboard.press("Escape");
+const stored = await page.evaluate(() => localStorage.getItem("ls_keys"));
+check(jLabel === "J" && townKey === "J" && tOpensBuild && /Town.*moved to J/i.test(swapNote), `keys can be rebound: Build took J, then T, and Town swapped to J ("${swapNote}"; saved ${stored})`);
+await page.click("#open-settings");
+await page.click("#keys-reset");
+const resetKey = await page.textContent("#settings-panel [data-bind=build]");
+await page.keyboard.press("Escape");
+check(resetKey === "B" && await page.textContent("#open-build kbd") === "B", "one button puts every key back");
+const guideShown = await page.isVisible("#guide");
+if (guideShown) await page.click("#guide-hide");
+const guideHidden = !(await page.isVisible("#guide"));
+await page.click("#open-settings");
+await page.check("#set-guide");
+await page.keyboard.press("Escape");
+const guideBack = await page.isVisible("#guide");
+check(guideShown && guideHidden && guideBack, "the guide can be hidden, and Settings brings it back");
 const close = await frames(page, () => { const g = window.__ls.game; g.home(); g.view.cam.scale = 16 * g.view.ratio; g.view.clampCamera(); });
 console.log(`frame times at whole-map view: ${JSON.stringify(world)}`);
 console.log(`frame times at 16 px per plot: ${JSON.stringify(close)}`);
@@ -310,7 +445,21 @@ check(/another tab/.test(replaced), `the desktop tab is told the game opened els
 const phoneFrames = await frames(phone, () => window.__ls.game.home());
 console.log(`phone frame times near home: ${JSON.stringify(phoneFrames)}`);
 await phone.screenshot({ path: `${OUT}/8-phone-landscape-${MAP}.png` });
-const hudBox = await phone.locator(".hud").boundingBox();
+const phoneLay = await overlaps(phone);
+check(!phoneLay.hit.length && !phoneLay.off.length, `on a phone held sideways (844 by 390) the panels sit apart too (${JSON.stringify(phoneLay)})`);
+const phoneCap = await phone.evaluate(() => { const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital; g.focus(cap, 8); const [x, y] = g.view.plotToScreen((cap % w.w) + 0.5, ((cap / w.w) | 0) + 0.5); return { x: x / g.view.ratio, y: y / g.view.ratio }; });
+await phone.waitForTimeout(200);
+const cdp = await phone.context().newCDPSession(phone);
+await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: phoneCap.x, y: phoneCap.y }] });
+await phone.waitForTimeout(800);
+await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+const heldRing = await ringItems(phone);
+await phone.screenshot({ path: `${OUT}/8b-phone-ring-${MAP}.png` });
+check(heldRing[0] === "form" && heldRing.includes("info"), `on a phone, holding a finger on your land opens the ring (${heldRing.join(", ")})`);
+await phone.touchscreen.tap(150, 150);
+await phone.waitForTimeout(200);
+check(await phone.evaluate(() => document.querySelector("#ring").hidden), "a tap outside the ring closes it");
+const hudBox = await phone.locator("#status-pill").boundingBox();
 for (let k = 0; k < 2; k++) { await phone.touchscreen.tap(hudBox.x + hudBox.width / 2, hudBox.y + hudBox.height / 2); await phone.waitForTimeout(80); }
 await phone.waitForTimeout(500);
 const pageZoom = await phone.evaluate(() => window.visualViewport?.scale ?? 1);
@@ -499,7 +648,7 @@ const neighbour = await fix.evaluate(async id => {
 await fix.keyboard.press("n");
 const asked = await fix.textContent("#stack-hint");
 if (neighbour) await fix.mouse.click(neighbour.x, neighbour.y);
-const told = await fix.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).find(o => o.only === id) ? document.querySelector("#stack-info").textContent : /A stack stopped/.test(document.querySelector("#toasts")?.textContent ?? "") ? "done at once" : null, neighbour?.id, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+const told = await fix.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).find(o => o.only === id) ? document.querySelector("#stack-info").textContent : /A stack stopped/.test(document.querySelector("#feed")?.textContent ?? "") ? "done at once" : null, neighbour?.id, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
 check(/Click the land of the nation/.test(asked) && told, `N asks which nation, and clicking ${neighbour?.name}'s land sets the advance: "${told?.trim()}"`);
 const drawSpots = id => fix.evaluate(id => {
   const g = window.__ls.game, w = g.world, v = g.view, s = w.stacks.get(id), land = t => t >= 7 && t <= 26;
@@ -614,13 +763,13 @@ const gold1 = await fix.waitForFunction(g => (window.__ls.game.world.purse?.mone
 check(gold1 !== null, `+ Gold gives 2500: ${gold0} to ${gold1}`);
 await fix.click("#admin-panel [data-speed='2']");
 const badge = await fix.waitForSelector("#world-speed:not([hidden])", { timeout: 5000 }).then(() => fix.textContent("#world-speed"), () => "");
-check(badge === "2x speed", `the speed buttons set the world speed, shown in the bar: "${badge}"`);
+check(badge === "2x", `the speed buttons set the world speed, shown in the bar: "${badge}"`);
 await fix.click("#admin-end");
 const armedText = await fix.textContent("#admin-end");
 await fix.click("#admin-end");
 const endNote = await fix.waitForSelector("#notice-text", { timeout: 5000 }).then(() => fix.textContent("#notice-text"), () => "");
 const friendNote = await friend.waitForSelector("#notice-text", { timeout: 5000 }).then(() => friend.textContent("#notice-text"), () => "");
-check(armedText === "Really end it?" && /ended this world/.test(endNote) && /ended this world/.test(friendNote), `End world asks once more ("${armedText}"), then everyone sees: "${friendNote}"`);
+check(armedText === "Really end it?" && /ended this world/.test(endNote) && /ended this world/.test(friendNote), `End world asks once more ("${armedText}"), then everyone sees: "${friendNote}" (host: "${endNote}")`);
 await fix.screenshot({ path: `${OUT}/21-admin-panel.png` });
 await fix.click("#admin-reopen");
 const reopenedUi = await fix.waitForFunction(() => !window.__ls.game.world.frozen && document.querySelector("#notice")?.hidden, null, { timeout: 5000 }).then(() => true, () => false);
@@ -753,23 +902,29 @@ await fix.waitForFunction(id => window.__ls.game.world.machines.has(id), cog, { 
 await between(cat, knightStack);
 await fix.waitForTimeout(300);
 const catSpot = await screenAt(fix, { machine: cat });
+const catUnder = catSpot && await fix.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e?.id || e?.closest("[id]")?.id || e?.tagName; }, [catSpot.x, catSpot.y]);
 if (catSpot) await fix.mouse.click(catSpot.x, catSpot.y);
 const catTitle = await fix.waitForSelector("#machine-panel:not([hidden])", { timeout: 3000 }).then(() => fix.textContent("#machine-title"), () => "");
+const catPicked = await fix.evaluate(() => { const g = window.__ls.game, p = document.querySelector("#machine-panel"); return { stack: g.selected, machine: g.selectedMachine, building: g.selectedBuilding, shown: !p.hidden, h: p.getBoundingClientRect().height }; });
 const stackSpot = await screenAt(fix, { stack: knightStack });
 if (stackSpot) await fix.mouse.click(stackSpot.x, stackSpot.y, { button: "right" });
+const catRing = await ringItems(fix);
+if (catRing[0] === "follow") await fix.click("#ring [data-ring=follow]");
 const following = await fix.waitForFunction(([c, s]) => window.__ls.game.world.purse?.machines?.orders?.some(o => o.id === c && o.follow === s), [cat, knightStack], { timeout: 5000 }).then(() => true, () => false);
-check(catTitle === "Your catapult" && following, `clicking the catapult opens its panel ("${catTitle}"), and a right-click on your stack makes it follow`);
+check(catTitle === "Your catapult" && following, `clicking the catapult at ${JSON.stringify(catSpot)} over ${catUnder} opens its panel ("${catTitle}", ${JSON.stringify(catPicked)}), and a right-click on your stack offers ${catRing.join(", ")}; Follow stack makes it follow`);
 await fix.evaluate(id => window.__ls.game.select(id), knightStack);
 await between(cog, knightStack);
 await fix.waitForTimeout(300);
 const cogSpot = await screenAt(fix, { machine: cog });
 if (cogSpot) await fix.mouse.click(cogSpot.x, cogSpot.y, { button: "right" });
+const cogRing = await ringItems(fix);
+if (cogRing[0] === "board") await fix.click("#ring [data-ring=board]");
 const boarded = await fix.waitForFunction(id => window.__ls.game.world.machines.get(id)?.cargo || null, cog, { timeout: 20000 }).then(h => h.jsonValue(), () => 0);
 await fix.evaluate(id => { const g = window.__ls.game; g.select(null); g.selectMachine(id); g.focus(g.world.machines.get(id).at, 24); }, cog);
 await fix.waitForTimeout(600);
 await fix.screenshot({ path: `${OUT}/28-machines.png` });
 const cargoLine = await fix.textContent("#machine-cargo").catch(() => "");
-check(boarded > 0 && new RegExp(`^${boarded} of 200 troops aboard`).test(cargoLine), `with the stack selected, a right-click on the cog boards it; the cog's panel says "${cargoLine}"`);
+check(boarded > 0 && new RegExp(`^${boarded} of 200 troops aboard`).test(cargoLine), `with the stack selected, a right-click on the cog offers ${cogRing.join(", ")}; Board ship boards it, and the cog's panel says "${cargoLine}"`);
 await fix.keyboard.press("k");
 const fleet = await fix.waitForSelector("#army-machines [data-machines=cog]", { timeout: 3000 }).then(() => fix.textContent("#army-machines"), () => "");
 check(/1 catapult/.test(fleet) && /1 cog(, 1 idle)?, \d+ troops aboard/.test(fleet), `the Army panel lists your machines: "${fleet}"`);

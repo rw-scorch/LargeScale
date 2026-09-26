@@ -67,6 +67,27 @@ export const ORDERS = {
     if (s && n.standing) s.standing = n.standing;
     return s ? { ok: true, stack: s.id } : fail("not enough troops");
   },
+  attack(sim, nation, m) {
+    const n = living(sim, nation);
+    if (!n) return fail("spawn first");
+    if (!isPlot(sim, m.at)) return fail("that plot is off the map");
+    if (!isLand(sim.terrain[m.at])) return fail("pick land, not water");
+    const o = sim.owner[m.at];
+    if (o === nation) return fail("that is your own land");
+    if (o) {
+      const t = sim.nations.get(o);
+      if (!t?.alive) return fail("that nation is gone");
+      if (!sim.hostile(nation, o)) return fail(`you are at peace with ${t.name}`);
+    }
+    const from = sim.nearestOwned(nation, m.at);
+    if (from === null) return fail("you hold no land");
+    const share = Number.isFinite(m.share) ? Math.min(1, Math.max(0.05, m.share)) : 0.3;
+    const s = sim.createStack(nation, from, n.troops * share);
+    if (!s) return fail("not enough troops");
+    if (n.standing) s.standing = n.standing;
+    sim.orderAdvance(s.id, o || 0, true);
+    return { ok: true, stack: s.id, only: o || 0 };
+  },
   move(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
@@ -93,6 +114,16 @@ export const ORDERS = {
     if (!sim.orderAdvance(s.id, only, true)) return fail("cannot advance");
     s.board = null;
     return { ok: true, only };
+  },
+  halt(sim, nation, m) {
+    const s = ownStack(sim, nation, m.stack);
+    if (!s) return fail("not your stack");
+    s.order = "hold";
+    s.path = [];
+    s.route = null;
+    s.via = null;
+    s.board = null;
+    return { ok: true };
   },
   split(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
@@ -405,6 +436,14 @@ export function ordersOf(sim, nid) {
 }
 
 const r2 = v => Math.round((v ?? 0) * 100) / 100;
+
+export function vitalsOf(sim, n) {
+  if (!n?.spawned) return null;
+  const r = sim.rules, cap = sim.maxTroops(n), e = sim.econ?.rules;
+  const grow = n.alive && n.troops < cap ? r.growthFloor + r.growthRate * n.troops * (1 - n.troops / cap) : 0;
+  const income = e && n.money !== undefined ? (n.income ?? e.baseIncome) + (n.pop ?? 0) * (n.tax ?? e.taxPerResident) : 0;
+  return { troops: Math.floor(n.troops), cap: Math.floor(cap), grow: r2(grow), income: r2(income) };
+}
 
 export function purseOf(n, extra = {}) {
   if (!n || n.money === undefined) return null;

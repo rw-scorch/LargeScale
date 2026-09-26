@@ -31,7 +31,7 @@ export function createBuildingPanel(root, game) {
   const actions = el("div", { class: "row wrap" });
   const queue = el("span", { id: "building-queue", class: "muted" });
   const make = el("div", { id: "building-make", class: "row wrap" });
-  const box = el("section", { id: "building-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), desc, work, queue, make, actions);
+  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, work, queue, make, actions);
   root.append(box);
   let key = "";
 
