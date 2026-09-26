@@ -53,9 +53,39 @@ Troops stay a count, so "troops are a count" still holds. What changes is that e
 
 ### A4. Ryan's check
 
+### Ryan's notes while part A was built (26 September 2026)
+
+- **Autodefend.** The design's standing orders were kit code in `src/sim/offline.js` that was never installed. The world now runs them every `standingEvery` (2) seconds for human nations with no open game. Hold is the default: an advancing stack stops and drops its path, so an absent player's stacks no longer go on seeking land. Fall back retreats to the nearest safe plot when enemies within `threatRadius` (6 plots, scaled on fine maps) outnumber the stack `fallbackRatio` (1.5) to 1. The `standing` order sets one stack, or every stack and new ones; the stack panel has the choice under "While you are away, this stack". Absent players still defend at 0.95.
+- **Land-taking notices.** `plot_lost` was keyed by the losing nation per tick, so a second attacker in the same tick was folded into the first: the victim saw the wrong name and the second attacker got no notice. It is keyed by loser and attacker now. Closing a pocket (`fillEnclaves`) took the enclosed land with no event; it reports it now. The away summary (`summarise`) counts plots rather than events. A seeking stack that stops says it found nothing it can reach by land. Which wrong notice Ryan saw is not known; if one still shows, its exact text is needed.
+- **Online light.** The world broadcasts `presence` (the nations online) when it changes, and `hello` carries `online`. The nations list shows a green dot for players online and a grey one for those away; bots have none.
+
 ## Part B: machine units
 
-The kit's piece 15, with its example code and tests: land vehicles, ships and aircraft as individual units built at buildings (siege workshop, tank depot, naval yard, airfield), naval invasions, paratroopers and mines. It gets its own detailed plan when part A is done. Ships lean on ports (piece 7).
+Draft, for Ryan to agree before it is built (26 September 2026).
+
+The kit's piece 15 (`src/sim/units.js`, copied in with its tests but not installed) has 17 machines, from catapults and galleys to battleships, tanks and fighter planes: individual units with hit points, and `embark` and `disembark` for ships carrying stacks. The research tree only reaches the Medieval era, where Siegecraft unlocks the siege workshop, the catapult and the trebuchet, and Harbours the harbour, the fishing boat, the galley and the cog. The art for all five is in the kit, wrecks included; the trebuchet and the fishing boat need adding to the machine list. Tanks, destroyers and aircraft come with the later eras (piece 16), as data in the same registry.
+
+### B1. Machines in the simulation
+- The machine list moves into `data/units.json` as `kind: "machine"` entries with a cost, a build time and `builtAt`.
+- Each machine is one object with hit points, outside the troop count. Land machines pay terrain move costs; ships sail water only.
+- A machine on the same plot as a friendly stack adds its attack and defence to that stack's power, so a catapult helps an advance without touching the troop count. Siege machines also make capture cheaper next to them.
+- Battles damage machines. At 0 hit points a machine becomes a wreck for a while.
+
+### B2. Building them
+- The siege workshop builds catapults and trebuchets; the harbour builds galleys and cogs. One at a time or a batch, for gold and materials, over time like construction.
+
+### B3. Ships carry stacks
+- A stack next to its own galley (120) or cog (200) embarks up to the ship's capacity. The ship sails, and the stack lands on a coast next to it, losing 15% (`rules.json` `landing`), or nothing into its own port. Landing on enemy or unclaimed land pays the normal capture cost.
+- This is the first way across water.
+
+### B4. Showing and ordering them
+- Machines are selected and moved like stacks: click, right-click or a drawn path. Ships show their cargo. Counts stay small, tens rather than hundreds.
+
+### B5. Ryan's check
+
+### Decisions for Ryan
+1. Medieval machines now (catapult, trebuchet, galley, cog) and the rest with the later eras, or the later eras first.
+2. Whether ships carrying stacks across the sea is in. It changes the map: islands and other continents become reachable.
 
 ## Part C: the new interface
 
