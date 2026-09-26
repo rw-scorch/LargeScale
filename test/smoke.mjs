@@ -241,12 +241,13 @@ check(aSpawn >= 0, "player spawns on land");
   check((await zr("mall", cx, cy, 2, 2))?.error === "unknown zone" && (await zr("res", 0, 0, 65, 1))?.error === "zone at most 64 by 64 plots at a time", "bad zone orders are refused with a reason");
   const zoneFrames = () => B.binary.filter(f => f[0] === MSG.ZONE_DIFF).length;
   check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
+  const townClock = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
   const town = await until(() => {
     view.pump();
     const huts = [...cw.buildings.values()].filter(b => b.owner === you && b.type === "hut_grass" && b.state === "active");
     return huts.length >= 2 && cw.purse?.town?.pop > 0 ? huts.length : 0;
   }, 25000);
-  check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [wood ${cw.purse?.stock?.wood}, food ${cw.purse?.stock?.food}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}]`}`);
+  check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [wood ${cw.purse?.stock?.wood}, food ${cw.purse?.stock?.food}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}; the world clock moved ${((await api(`/api/worlds/${wid}/status`, null, ta)).body.time - townClock.world).toFixed(1)} s in ${Math.round((Date.now() - townClock.wall) / 1000)} s]`}`);
   view.pump();
   const zonedBefore = cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0);
   const erased = await zr("none", cx - 4, cy + 1, 9, 3);
