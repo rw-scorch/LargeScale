@@ -185,19 +185,36 @@ button.act .alert{position:absolute;top:4px;left:6px;width:8px;height:8px;border
 .admin-log p{margin:1px 0}
 .admin-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 input.small{width:110px}
-.tech-era{display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--line);padding-top:6px}
-.tech-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:6px}
-.tech-col{display:flex;flex-direction:column;gap:4px}
-button.tech{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:1px;font-size:13px;padding:4px 8px}
-button.tech span{font-size:12px;color:var(--mute)}
+#research-panel{height:calc(100% - var(--hud,48px) - 32px)}
+.tech-body{display:flex;gap:10px;flex:1;min-height:0}
+.tech-tree{flex:1;min-width:0;overflow:auto;border:1px solid var(--line);border-radius:6px;background:#0c1c2b;cursor:grab;touch-action:pan-x pan-y}
+@media (max-height:500px){#research-panel{gap:4px}#research-status{margin:0;font-size:12px}#research-queue .chip{font-size:12px;padding:2px 6px;min-height:0}}
+.tech-tree.dragging{cursor:grabbing;user-select:none}
+.tech-canvas{position:relative}
+.tech-band{position:absolute;top:0;background:rgba(255,255,255,.015);border-left:1px solid var(--line)}
+.tech-band.alt{background:rgba(255,255,255,.04)}
+.tech-band.here{background:rgba(232,200,74,.06)}
+.band-title{position:absolute;top:6px;left:10px;display:flex;align-items:center;gap:4px;font-weight:600;font-size:13px;white-space:nowrap}
+.tech-lane{position:absolute;left:10px;font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;pointer-events:none}
+.tech-lines{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.tech-lines path{fill:none;stroke:#35607f;stroke-width:2}
+.tech-lines path.open{stroke:#7fa6c4}
+.tech-lines path.done{stroke:#4f9a5f}
+.tech-lines path.plan{stroke:var(--signal);stroke-width:3}
+button.tech{position:absolute;display:flex;flex-direction:row;align-items:center;text-align:left;gap:6px;font-size:13px;padding:3px 6px;min-height:0;overflow:hidden}
+.tech-text{display:flex;flex-direction:column;min-width:0}
+.tech-text b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tech-text span{font-size:11px;color:var(--mute);white-space:nowrap}
+button.tech.side{border-style:dashed}
+button.tech.plan{box-shadow:0 0 0 2px var(--signal)}
 button.tech.known{background:#24452c;border-color:#3f7f4c}
 button.tech.current{border-color:var(--signal);background:#3a3a1c}
-button.tech.queued{border-color:#8fa8c0;border-style:dashed}
+button.tech.queued{border-color:#8fa8c0;background:#1c3148}
 button.tech.ready{border-color:var(--good)}
 button.tech.locked{opacity:.6}
 button.tech.picked{outline:2px solid var(--parch)}
-button.tech.era{align-items:center;text-align:center}
-.tech-detail{border-top:2px solid var(--line);padding:6px 0 2px;position:sticky;bottom:-8px;background:#0f2233}
+button.tech.era{border-width:2px}
+.tech-detail{width:clamp(220px,34%,320px);flex:none;overflow:auto;border-left:2px solid var(--line);padding:0 0 0 10px;font-size:13px}
 .tech-detail p{margin:2px 0}
 button.chip{min-height:28px;padding:2px 8px;font-size:12px}
 #chat{display:flex;flex-direction:column;gap:6px}
