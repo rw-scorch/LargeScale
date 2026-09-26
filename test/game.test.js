@@ -141,6 +141,20 @@ test("attack forms a stack at your land nearest the click and advances into that
   assert.equal(order({ t: "attack", at: g.idx(30, 4) }).error, "not enough troops");
 });
 
+test("halt stops an advancing or moving stack where it stands", () => {
+  const { w, g, a, order } = field(40, 30);
+  const s = order({ t: "stack", share: 0.5, at: g.idx(2, 2) }).stack, st = w.stacks.get(s);
+  assert.equal(order({ t: "move", stack: s, to: g.idx(30, 20) }).ok, true);
+  w.tick(0.5);
+  assert.equal(order({ t: "halt", stack: s }).ok, true);
+  const at = st.pos;
+  for (let k = 0; k < 10; k++) w.tick(0.5);
+  assert.equal(st.order, "hold");
+  assert.equal(st.pos, at, "it stays where it was stopped");
+  assert.deepEqual(ordersOf(w, a), []);
+  assert.equal(runOrder(w, 999, { t: "halt", stack: s }).error, "not your stack");
+});
+
 function strip(W, H) {
   const terrain = new Uint8Array(W * H).fill(TID.grassland);
   const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2, advanceRate: 40 });

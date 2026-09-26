@@ -115,6 +115,16 @@ export const ORDERS = {
     s.board = null;
     return { ok: true, only };
   },
+  halt(sim, nation, m) {
+    const s = ownStack(sim, nation, m.stack);
+    if (!s) return fail("not your stack");
+    s.order = "hold";
+    s.path = [];
+    s.route = null;
+    s.via = null;
+    s.board = null;
+    return { ok: true };
+  },
   split(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
