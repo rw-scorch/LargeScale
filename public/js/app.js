@@ -3,7 +3,7 @@ import { loadAtlas } from "./render/atlas.js";
 import { MapRenderer } from "./render/renderer.js";
 import { attachInput } from "./input.js";
 import { Connection } from "./net.js";
-import { keyMap, actionFor } from "./keys.js";
+import { keyMap, actionFor, loadKeys } from "./keys.js";
 import { api, session } from "./api.js";
 import { showLogin } from "./ui/login.js";
 import { showWorlds } from "./ui/worlds.js";
@@ -24,6 +24,8 @@ import { createArmyPanel } from "./ui/army.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createRing, ownerItems } from "./ui/ring.js";
 import { createAttacks } from "./ui/attacks.js";
+import { createGuide } from "./ui/guide.js";
+import { createSettings, loadPrefs } from "./ui/settings.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -71,7 +73,8 @@ class Game {
     this.selectedBuilding = null;
     this.selectedMachine = null;
     this.hover = null;
-    this.keys = keyMap();
+    this.keys = keyMap(loadKeys());
+    this.prefs = loadPrefs();
     this.frameTimes = [];
     this.lastToast = new Map();
     overlay.replaceChildren();
@@ -79,6 +82,7 @@ class Game {
     this.hud = createHud(overlay, this);
     const { left, side, top } = this.hud.cols;
     this.spawn = createSpawnHint(top, this);
+    this.guide = createGuide(top, this);
     this.nations = createNations(left, this);
     this.feed = createFeed(side, this);
     this.attacks = createAttacks(overlay, side, this);
@@ -94,6 +98,7 @@ class Game {
     this.tip = createTip(overlay, this);
     this.ring = createRing(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
+    this.settings = createSettings(overlay, this);
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -177,6 +182,7 @@ class Game {
     this.view.selected = this.selected;
     this.view.selectedBuilding = this.selectedBuilding;
     this.view.selectedMachine = this.selectedMachine;
+    this.view.showNames = this.prefs.names !== false;
     this.resize();
     if (cam) Object.assign(this.view.cam, cam);
     else if (world.nations.get(world.you)?.capital != null) this.home();
@@ -190,7 +196,7 @@ class Game {
     if (!this.world) return;
     this.world.message(m);
     if (this.view && this.world.changed.length) this.view.updateBuildings(this.world.takeChanged());
-    if (m.t === "events") for (const e of m.events) { this.announce(e); this.attacks.event(e); }
+    if (m.t === "events") for (const e of m.events) { this.announce(e); this.attacks.event(e); this.guide.event(e); }
     if (m.t === "state" && this.view) this.view.colours.clear();
     if (m.t === "purse" && this.view && m.season && m.season !== this.view.season) this.view.setSeason(m.season);
     if (m.t === "purse" && this.townOnPurse) { this.townOnPurse = false; this.toggleTown(true); }
@@ -287,6 +293,7 @@ class Game {
     this.updatePanels();
     if (action === "cancel") {
       if (this.building || this.zoning) this.stopBuild();
+      else if (this.settings.open) this.toggleSettings(false);
       else if (this.adminPanel?.open) this.toggleAdmin(false);
       else if (this.upgrade.open) this.toggleUpgrade(false);
       else if (this.army.open) this.toggleArmy(false);
@@ -307,28 +314,34 @@ class Game {
     this.updatePanels();
   }
 
+  toggleSettings(on = !this.settings.open) {
+    if (on) { this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); }
+    this.settings.show(on);
+    this.updatePanels();
+  }
+
   toggleResearch(on = !this.research.open) {
-    if (on) { this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); }
+    if (on) { this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     this.research.show(on && !!this.world?.purse?.research);
     this.updatePanels();
   }
 
   toggleAdmin(on = !this.adminPanel?.open) {
     if (!this.adminPanel) return;
-    if (on) { this.research.show(false); this.upgrade.show(false); this.army.show(false); }
+    if (on) { this.research.show(false); this.upgrade.show(false); this.army.show(false); this.settings.show(false); }
     this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
   toggleUpgrade(on = !this.upgrade.open) {
-    if (on) { this.research.show(false); this.army.show(false); this.adminPanel?.show(false); }
+    if (on) { this.research.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.upgrade.show(on && !!this.world?.purse && !!me?.spawned);
     this.updatePanels();
   }
 
   toggleArmy(on = !this.army.open) {
-    if (on) { this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); }
+    if (on) { this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.army.show(on && !!this.world?.purse?.army && !!me?.spawned);
     this.updatePanels();
@@ -591,13 +604,14 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.feed, this.attacks, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {
     this.left = true;
     this.conn.close();
     this.ring.destroy();
+    this.settings.destroy();
     clearInterval(this.ui);
     removeEventListener("resize", this.onResize);
     removeEventListener("keydown", this.onKey);

@@ -7,7 +7,7 @@ import { XP_NAMES } from "../shared/units.js";
 
 const ORDER_TEXT = { hold: "holding", move: "moving", advance: "advancing" };
 
-export const keyTag = action => el("kbd", { class: "key", text: keyOf(action) });
+export const keyTag = action => el("kbd", { class: "key", "data-action": action, text: keyOf(action) });
 
 export function createStackPanel(root, game) {
   const title = el("b", { id: "stack-title" });

@@ -39,7 +39,9 @@ export function createHud(root, game) {
     iconButton("go-map", "ui_map", "Whole map", () => game.fit()),
     iconButton("zoom-out", "ui_zoom_out", "Zoom out (-)", () => game.zoom(1 / 1.6)),
     iconButton("zoom-in", "ui_zoom_in", "Zoom in (+)", () => game.zoom(1.6)),
-    full, admin,
+    full,
+    iconButton("open-settings", "ui_settings", "Settings: keys and display", () => game.toggleSettings()),
+    admin,
     iconButton("leave-world", "ui_close", "Leave this world and go back to the world list", () => game.leave()));
 
   const swatch = el("i", { class: "swatch" });
@@ -93,6 +95,7 @@ export function createHud(root, game) {
       season.hidden = !p?.season;
       season.textContent = p?.season ? title(p.season) : "";
       admin?.classList.toggle("on", !!game.adminPanel?.open);
+      corner.querySelector("#open-settings").classList.toggle("on", !!game.settings?.open);
 
       const n = w?.nations.get(w.you), v = p?.vitals;
       swatch.style.background = n?.colour ?? "transparent";

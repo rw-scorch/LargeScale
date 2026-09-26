@@ -23,6 +23,33 @@ export const ACTIONS = {
 };
 
 const ALIASES = { "+": "=", "_": "-" };
+export const FIXED = new Set(["cancel"]);
+let bound = {};
+
+export function loadKeys() {
+  try { bound = JSON.parse(localStorage.getItem("ls_keys") ?? "{}") ?? {}; } catch { bound = {}; }
+  for (const k of Object.keys(bound)) if (!ACTIONS[k] || FIXED.has(k)) delete bound[k];
+  return bound;
+}
+
+export function saveKeys(next) {
+  bound = next;
+  try { localStorage.setItem("ls_keys", JSON.stringify(next)); } catch {}
+  for (const tag of document.querySelectorAll("kbd[data-action]")) tag.textContent = keyOf(tag.dataset.action);
+  return bound;
+}
+
+export const keyName = e => (e.key.length === 1 ? e.key.toLowerCase() : e.key);
+
+export function rebind(action, key) {
+  const next = { ...bound }, lower = key.toLowerCase();
+  const other = Object.keys(ACTIONS).find(a => a !== action && (next[a] ?? ACTIONS[a].key).toLowerCase() === lower);
+  if (other && FIXED.has(other)) return null;
+  if (other) next[other] = next[action] ?? ACTIONS[action].key;
+  next[action] = key;
+  for (const a of Object.keys(next)) if (next[a] === ACTIONS[a].key) delete next[a];
+  return { keys: saveKeys(next), swapped: other ?? null };
+}
 
 export function keyMap(overrides = {}) {
   const map = new Map();
@@ -37,6 +64,6 @@ export function actionFor(map, e) {
 }
 
 export const keyOf = action => {
-  const k = ACTIONS[action]?.key ?? "";
+  const k = bound[action] ?? ACTIONS[action]?.key ?? "";
   return k.length === 1 ? k.toUpperCase() : k === "Escape" ? "Esc" : k;
 };

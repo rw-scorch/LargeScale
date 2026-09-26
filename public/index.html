@@ -49,6 +49,13 @@ h2{font-size:16px;margin:18px 0 8px}
 .pill{display:flex;gap:10px;align-items:center;padding:5px 14px;border-radius:999px;background:var(--panel);border:1px solid var(--edge);white-space:nowrap;box-shadow:0 4px 18px rgba(0,0,0,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .pill .badge{margin:0}
 #world-clock,#world-season{color:var(--mute);font-size:13px}
+.guide{display:flex;flex-direction:column;gap:3px;width:min(460px,100%);padding:6px 12px 8px;background:var(--panel);border:1px solid var(--signal);border-radius:10px;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.guide .grow{flex:1}
+#guide-text{font-size:13px}
+.guide .meter{display:block;flex:none}
+.guide .meter .fill{background:var(--signal)}
+button.act.pulse{animation:beckon 1.4s ease-in-out infinite}
+@keyframes beckon{50%{box-shadow:0 0 0 3px rgba(232,200,74,.85),0 0 16px rgba(232,200,74,.6);background:rgba(232,200,74,.15)}}
 #corner{position:absolute;top:max(8px,env(safe-area-inset-top));right:8px;display:flex;gap:4px}
 .icon-btn{min-width:38px;min-height:38px;padding:4px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--edge);border-radius:8px}
 .fs-mark{display:block;width:14px;height:14px;border:2px dashed var(--parch);border-radius:2px}
@@ -99,13 +106,14 @@ button.act .alert{position:absolute;top:4px;left:6px;width:8px;height:8px;border
 .attack.out .what{cursor:pointer}
 #overlay>#alert-frame{position:absolute;inset:0;pointer-events:none;z-index:1;box-shadow:inset 0 0 0 3px rgba(224,70,60,.9),inset 0 0 70px rgba(224,70,60,.45);animation:alarm 1.2s ease-in-out infinite}
 @keyframes alarm{50%{box-shadow:inset 0 0 0 3px rgba(224,70,60,.5),inset 0 0 30px rgba(224,70,60,.2)}}
-#feed{order:9;margin-top:auto;flex:none;display:flex;flex-direction:column;gap:6px}
+#feed{order:9;margin-top:auto;flex:0 4 auto;min-height:92px;display:flex;flex-direction:column;gap:6px}
 #feed.folded{align-self:flex-end}
 #feed .tabs{gap:4px}
 #feed .grow{flex:1}
 #feed .tab{display:inline-flex;align-items:center;gap:4px}
 #feed .tab.on{border-color:var(--signal)}
-#feed .lines{height:180px;overflow:auto;font-size:13px}
+#feed .lines{flex:1 1 auto;height:180px;min-height:36px;overflow:auto;font-size:13px}
+#chat{flex:1 1 auto;min-height:0}
 #feed .item{display:flex;gap:6px;align-items:flex-start;margin:0;padding:3px 4px;border-radius:4px}
 #feed .item .icon{margin-top:1px}
 #feed .item.go{cursor:pointer}
@@ -142,6 +150,12 @@ button.act .alert{position:absolute;top:4px;left:6px;width:8px;height:8px;border
 .upgrade-row.on .tick::after{content:"";width:12px;height:12px;background:var(--signal)}
 .upgrade-row .thumb{width:32px;height:32px;image-rendering:pixelated}
 #upgrade-summary{margin:0;color:var(--signal)}
+.settings-toggles{display:flex;flex-direction:column;gap:6px}
+.settings-toggles label{gap:8px;cursor:pointer}
+.key-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 16px}
+.key-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;border-bottom:1px solid rgba(70,125,165,.25);padding:2px 0}
+.key-row button{min-width:64px;font-family:ui-monospace,monospace}
+#settings-note{margin:0;min-height:1.4em;color:var(--signal)}
 .admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .admin-grid section{display:flex;flex-direction:column;gap:6px;border-top:2px solid var(--line);padding-top:6px}
 .admin-list{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}

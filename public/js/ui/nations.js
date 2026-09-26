@@ -7,15 +7,17 @@ const SHOW = 8;
 export function createNations(root, game) {
   const rows = el("tbody");
   const small = matchMedia("(max-height: 500px)").matches;
-  let bots = false, land = 0;
-  const botButton = el("button", { id: "nations-bots", class: "chip", title: "show bots too", text: "Bots", onclick: () => { bots = !bots; botButton.classList.toggle("on", bots); last = ""; } });
+  let bots = !!game.prefs?.bots, land = 0;
+  const botButton = el("button", { id: "nations-bots", class: `chip${bots ? " on" : ""}`, title: "show bots too", text: "Bots", onclick: () => { api.bots = !bots; } });
   const fold = el("button", { class: "ghost title", onclick: () => { box.classList.toggle("shut"); last = ""; } }, icon("ui_trophy", 1), " Nations");
   const box = el("section", { id: "nations", class: `panel${small ? " shut" : ""}` },
     el("div", { class: "row spread title-row" }, fold, botButton),
     el("table", {}, el("thead", {}, el("tr", {}, el("th", { text: "#" }), el("th", { text: "Nation" }), el("th", { text: "" }), el("th", { text: "Land" }), el("th", { text: "Troops" }))), rows));
   root.append(box);
   let last = "";
-  return {
+  const api = {
+    get bots() { return bots; },
+    set bots(v) { bots = !!v; botButton.classList.toggle("on", bots); last = ""; },
     update() {
       const w = game.world;
       if (!w?.ready || box.classList.contains("shut")) return;
@@ -38,4 +40,5 @@ export function createNations(root, game) {
         el("td", { text: fmt(n.troops ?? 0) }))));
     },
   };
+  return api;
 }

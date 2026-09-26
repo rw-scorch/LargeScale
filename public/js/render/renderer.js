@@ -357,6 +357,7 @@ export class MapRenderer {
     this.drawGhost();
     this.drawEffects();
     this.drawRoute();
+    this.drawGuide();
     if (this.night) this.drawNight();
   }
 
@@ -388,6 +389,25 @@ export class MapRenderer {
       ctx.fillText(short(n.troops ?? 0), x, y + size * 0.55);
     }
     ctx.restore();
+  }
+
+  drawGuide() {
+    const g = this.guide;
+    if (!g) return;
+    const s = this.state, R = this.ratio ?? 1, ctx = this.ctx, t = (performance.now() % 1400) / 1400;
+    const [x, y] = this.plotToScreen((g.plot % s.w) + 0.5, ((g.plot / s.w) | 0) + 0.5);
+    ctx.save();
+    ctx.strokeStyle = `rgba(232,200,74,${(1 - t).toFixed(2)})`;
+    ctx.lineWidth = 3 * R;
+    ctx.beginPath();
+    ctx.arc(x, y, (8 + 16 * t) * R, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#e8c84a";
+    ctx.beginPath();
+    ctx.arc(x, y, 4 * R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    if (g.label) this.label(g.label, x, y + 14 * R, 13 * R, "#e8c84a");
   }
 
   drawEffects() {
