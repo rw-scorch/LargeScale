@@ -1118,6 +1118,51 @@ const fortTip = await gp.waitForFunction(() => /fortified/.test(document.querySe
 await gp.screenshot({ path: `${OUT}/31-star-fort.png` });
 check(fortUp && /defends at 1.5 times/.test(fortTip), `a star fort draws its reach, and your land inside it says so: "${fortTip}"`);
 
+const ap = await openPage({ viewport: { width: 1280, height: 720 } });
+await login(ap, "rw_scorch", "correct horse");
+const awayId = await newWorld(ap, "UI away", { map: "test", w: 160, h: 100, seed: 23, bots: 0, rules: { buildSpeed: 20, sleepSpeed: 3600 } });
+await ap.goto(`${BASE}/#w=${awayId}`);
+await ap.reload();
+await ready(ap);
+const awaySetup = await ap.evaluate(async () => {
+  const g = window.__ls.game, w = g.world;
+  let at = null;
+  for (let i = 0; i < w.terrain.length && at === null; i += 23) { const x = i % w.w, y = (i / w.w) | 0; if (x > 20 && y > 20 && x < w.w - 20 && y < w.h - 20 && w.terrain[i] >= 12 && w.terrain[i] <= 14 && (await g.conn.request({ t: "spawn", x, y })).ok) at = { x, y }; }
+  await new Promise(r => setTimeout(r, 800));
+  const zone = await g.conn.request({ t: "zone", zone: "res", x: at.x - 7, y: at.y - 7, w: 14, h: 5 });
+  for (const [what, amount] of [["wood", 800], ["food", 400]]) await g.conn.request({ t: "admin", op: "give", nation: w.you, what, amount });
+  return { at, zone: zone.ok };
+});
+await ap.goto(`${BASE}/`);
+let slept = false;
+for (let k = 0; k < 50 && !slept; k++) { slept = await ap.evaluate(async id => !(await (await fetch(`/api/worlds/${id}/status`, { headers: { authorization: `Bearer ${localStorage.getItem("ls_token")}` } })).json()).looping, awayId); if (!slept) await ap.waitForTimeout(100); }
+await ap.waitForTimeout(12000);
+const mp = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+await login(mp, "rw_scorch", "correct horse");
+await mp.goto(`${BASE}/#w=${awayId}`);
+await mp.reload();
+await ready(mp);
+const awayShown = await mp.waitForSelector("#away-panel:not([hidden])", { timeout: 20000 }).then(() => true, () => false);
+const awayText = awayShown ? await mp.textContent("#away-panel") : "";
+const awayFits = await mp.evaluate(() => { const r = document.querySelector("#away-panel").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth; });
+await mp.screenshot({ path: `${OUT}/32-away-phone.png` });
+check(awaySetup.zone && slept && awayShown && /While you were away/.test(awayText) && /caught up 1\d h/.test(awayText) && /Gold \+/.test(awayText) && /People \d+ to \d+/.test(awayText) && /90%/.test(awayText) && awayFits,
+  `back after 12 game hours, a phone shows "While you were away": "${awayText.replace(/\s+/g, " ").slice(0, 260)}"`);
+const summary = await mp.evaluate(() => window.__ls.game.away.last);
+await mp.click("#away-ok");
+const awayClosed = await mp.waitForSelector("#away-panel", { state: "hidden", timeout: 3000 }).then(() => true, () => false);
+const feedLine = await mp.evaluate(() => [...document.querySelectorAll("#feed-list .item .text")].map(e => e.textContent).find(t => /Welcome back/.test(t)) ?? "");
+check(awayClosed && /Welcome back/.test(feedLine), `the panel closes with its button, and the feed keeps "${feedLine}"`);
+await ap.goto(`${BASE}/#w=${awayId}`);
+await ap.reload();
+await ready(ap);
+await ap.evaluate(s => window.__ls.game.away.summary(s), summary);
+await ap.waitForSelector("#away-panel:not([hidden])", { timeout: 3000 }).catch(() => {});
+await ap.screenshot({ path: `${OUT}/33-away-desktop.png` });
+await ap.keyboard.press("Escape");
+const escClosed = await ap.waitForSelector("#away-panel", { state: "hidden", timeout: 3000 }).then(() => true, () => false);
+check(escClosed, "on a computer the same panel closes with Esc");
+
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
 console.log(failures ? `${failures} checks failed` : "all checks passed");
