@@ -103,6 +103,26 @@ The caps stop a nation from stacking a hundred banks.
 
 ### G7. Ryan's check
 
+### Progress (26 September 2026, branch `m4-gunpowder`, stacked on `m3-controls`)
+- **G1 to G3, data.**
+  - 14 research nodes, 4 troops and 4 machines (unit numbers 14 to 21), and 8 buildings (numbers 48 to 55).
+  - The barracks trains the new troops; the cannon foundry builds cannons, and the shipyard (a port) builds the three ships.
+  - All of it reads its numbers from `data/`; no machine or troop code changed.
+- **G4, effects and forts.**
+  - `src/sim/effects.js` adds up building effects every two seconds, with each type's cap, and readers now take research and building effects together (`effectOf`).
+  - Banks raise income, courthouses the troop cap, and libraries and schools add research points; theatres gather goods.
+  - Forts: land within a tower's or star fort's radius defends at its strength (the strongest covering fort counts), in capture cost and for stacks holding their own land. They are indexed on a 16-plot grid per nation, and a lookup takes about 45 ns.
+  - `rules.json` `effects` holds the timing and grid size.
+- **G5, on screen.**
+  - A selected or placed fort draws its reach, and the hover tip says when land is fortified.
+  - The research panel opens at your era, and the Town panel points to theatres when people lack goods.
+  - Admins can give iron.
+- **Evidence.**
+  - `npm test` 160 of 160, including 5 new effect tests.
+  - Reference 95 of 95; smoke 93 of 93.
+  - `npm run ui` 118 of 118 on the test map and on fine Europe. A new nation researches into the Gunpowder era; a bank takes income from 1 to 1.08 gold a second; the Army panel offers the four troops; a cannon foundry casts a cannon; and a star fort draws its reach and fortifies the tip.
+  - `npm run bench`, now with star forts, towers, banks and courthouses: Earth worst tick about 37 ms, fine Europe 37.5 ms.
+
 ## Decisions (answered by Ryan, 26 September 2026)
 
 1. **Yes**: towers and forts change combat.
