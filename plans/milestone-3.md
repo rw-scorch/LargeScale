@@ -147,14 +147,16 @@ FrontWars.io was played through its tutorial in a browser. openfront.io blocks a
   - numbers written short (12.4k);
   - bigger touch targets in landscape on phones.
 
-### C2. Click to attack, and the ring menu
-- **Left-click on another nation's land** (with no stack selected) forms a stack from the slider's share at your border nearest the click. The stack advances into that nation only. On unclaimed land it takes unclaimed land only.
-- **Right-click opens a ring menu at the pointer:**
-  - on your land: form a stack here, build here, zone here, info;
-  - on others' land: attack, info;
-  - on water: sail here, or land troops here, for a selected ship.
-  - The centre does the main action, and a long press opens the ring on touch.
-- A selected stack or machine keeps right-click to move and right-drag to draw a path (decision 2 below).
+### C2. The ring menu
+- **A left-click on another nation's land** selects and shows info, as now (decision 1).
+- **A right-click always opens a ring menu at the pointer**, and so does a long press on touch (decision 2). The centre does the main action.
+- **With nothing selected:**
+  - on your land: form a stack here (centre), build here, zone here, info;
+  - on another nation's land: attack that nation (centre), info. Attack forms a stack from the slider's share at your land nearest the click, and it advances into that nation only;
+  - on unclaimed land: take unclaimed land (centre), which does the same into unclaimed land only.
+- **With your stack selected:** move here (centre), attack the nation there, take unclaimed land, board the ship there, info.
+- **With your machine selected:** move here (centre), follow the stack there, land the troops there (a loaded ship), stop.
+- A right-drag with a stack selected still draws its path, because a drag is not a click.
 
 ### C3. The map as the display
 - **Names and troop counts on territory**, sized to it and placed where the land is widest. They are refreshed every few seconds from the owner layer.
@@ -175,10 +177,10 @@ Rebinding keys (wanted since milestone one). Toggles for names on the map, bots 
 
 ### C6. Ryan's check
 
-### Decisions for Ryan
-1. **Click to attack:** a left-click on another nation's land sends the slider's share straight away (OpenFront's way), or it only selects and shows info, as now.
-2. **Right-click with a stack or machine selected:** it keeps moving it at once, as now, with the ring only when nothing is selected. Or it always opens the ring, with Move in the centre.
-3. **The guided start (C4):** in this milestone, or after milestone two's step 7.
+### Decisions (answered by Ryan, 26 September 2026)
+1. **A click on another nation's land only shows info**, and attacking that nation goes in the ring menu.
+2. **A right-click always opens the ring**, with Move in the centre when a stack or machine is selected.
+3. **The guided start is in this milestone.**
 
 ## Budgets
 
