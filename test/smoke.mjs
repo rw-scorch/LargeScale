@@ -603,6 +603,20 @@ const oldPass = await api("/api/login", { name: "pal" + suffix, password: "pal p
 const newPass = await api("/api/login", { name: "pal" + suffix, password: "fresh password" });
 const short = await api(`/api/admin/accounts/${palId}/password`, { password: "short" }, ta);
 check(reset.body.ok && oldToken.status === 401 && oldPass.status === 401 && newPass.status === 200 && short.body.error === "password must be at least 8 characters", "a new password logs the friend out everywhere; the old one stops working, the new one works, short ones are refused");
+const pw = await api("/api/register", { name: "pw" + suffix, password: "first password", invite: INVITE });
+const pwOther = await api("/api/login", { name: "pw" + suffix, password: "first password" });
+const pt1 = pw.body.token, pt2 = pwOther.body.token;
+const pwWrong = await api("/api/password", { current: "not it at all", password: "second password" }, pt1);
+const pwShort = await api("/api/password", { current: "first password", password: "short" }, pt1);
+const pwSame = await api("/api/password", { current: "first password", password: "first password" }, pt1);
+const pwOk = await api("/api/password", { current: "first password", password: "second password" }, pt1);
+const pwAnon = await api("/api/password", { current: "second password", password: "third password" });
+const [meHere, meThere] = [await api("/api/me", null, pt1), await api("/api/me", null, pt2)];
+const [oldLogin, newLogin] = [await api("/api/login", { name: "pw" + suffix, password: "first password" }), await api("/api/login", { name: "pw" + suffix, password: "second password" })];
+check(pwWrong.body.error === "your current password is wrong" && pwShort.body.error === "password must be at least 8 characters" && pwSame.body.error === "the new password is the same as the old one" && pwAnon.status === 401,
+  "a player's password change needs their current password, 8 characters and a new one, and a login");
+check(pwOk.body.ok && pwOk.body.others === 1 && meHere.status === 200 && meThere.status === 401 && oldLogin.status === 401 && newLogin.status === 200,
+  `changing your own password keeps this session, logs out ${pwOk.body.others} other, and only the new password works`);
 const selfRemove = await api(`/api/admin/accounts/${alogin.body.account.id}/remove`, {}, ta);
 const gone = await api(`/api/admin/accounts/${palId}/remove`, {}, ta);
 const goneLogin = await api("/api/login", { name: "pal" + suffix, password: "fresh password" });

@@ -9,6 +9,7 @@ export const CIVIL = Object.fromEntries(Object.entries(BUILDINGS.table).filter((
 export const ZONE_NAMES = Object.keys(ZONES);
 
 export const CIV_RULES = rules.civilians;
+export const POLICY = rules.policy;
 
 const eraIdx = e => ERA_ORDER.indexOf(e);
 
@@ -180,25 +181,27 @@ export function econTick(world, dt, rng) {
     if (!n.alive || !n.human) continue;
     initNation(n, r);
     const s = totals.get(n.id);
-    const workers = s.pop * r.workerShare;
+    const workers = s.pop * r.workerShare, level = n.taxLevel ?? 1;
+    const mood = 1 - POLICY.taxUnrest * Math.max(0, level - 1);
+    const staff = workers * Math.max(0, 1 - POLICY.conscriptWorkLoss * ((n.conscription ?? r.conscriptShare) - r.conscriptShare));
     const foodNeed = s.pop * r.foodPerPerson * dt;
     const foodSat = foodNeed > 0 ? Math.min(1, n.stock.food / foodNeed) : 1;
     const batch = n.made?.food ?? 0;
     const fed = (batch / (n.madeEvery ?? r.econEvery) + Math.max(0, n.stock.food - batch) / Math.max(r.foodReserveSeconds, dt)) / r.foodPerPerson;
     n.stock.food = Math.max(0, n.stock.food - foodNeed);
     const jobSat = workers > 0 ? Math.min(1, s.jobs / workers) : 1;
-    const worked = workers > 0 ? Math.min(1, workers / Math.max(1, s.jobs)) : 0;
+    const worked = workers > 0 ? Math.min(1, staff / Math.max(1, s.jobs)) : 0;
     n.stock.goods += s.goodsMade * worked * dt;
     const goodsNeed = n.era === "T" ? 0 : s.pop * r.goodsPerPerson * dt;
     const goodsSat = goodsNeed > 0 ? Math.min(1, n.stock.goods / goodsNeed) : 1;
     n.stock.goods = Math.max(0, n.stock.goods - goodsNeed);
-    const needs = foodSat * (0.6 + 0.4 * jobSat) * (0.8 + 0.2 * goodsSat);
+    const needs = foodSat * (0.6 + 0.4 * jobSat) * (0.8 + 0.2 * goodsSat) * mood;
     const foodCap = s.housing * needs > fed ? fed / (s.housing * needs) : 1;
     const zoned = world.civ?.zoned.get(n.id)?.slice(1).map(set => set.size) ?? [0, 0, 0, 0];
-    n.stats = { ...s, workers, worked, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson, fed, foodCap, zoned };
+    n.stats = { ...s, workers, staff, mood, worked, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson, fed, foodCap, zoned };
     let pop = 0;
     const span = Math.min(dt, r.settleStep ?? dt);
-    const grow = 1 - Math.exp(-r.growth * (1 + effectOf(world, n, "pop_growth")) * span), starve = Math.exp(-(1 - foodSat) * r.starveLoss * span);
+    const grow = 1 - Math.exp(-r.growth * (1 + effectOf(world, n, "pop_growth")) * (1 + POLICY.taxGrowth * Math.max(0, 1 - level)) * span), starve = Math.exp(-(1 - foodSat) * r.starveLoss * span);
     const mine = bld.mine.get(n.id) ?? [];
     for (const id of mine) {
       const b = bld.list.get(id);

@@ -129,6 +129,24 @@ export class Directory extends DurableObject {
     return { ok: true, name: acc.name };
   }
 
+  async changePassword(me, token, current, password) {
+    const acc = this.ctx.storage.sql.exec("SELECT id, name, hash, salt FROM accounts WHERE id = ?", me.id).toArray()[0];
+    if (!acc) return { error: "no such account" };
+    if (typeof current !== "string" || typeof password !== "string") return { error: "bad request" };
+    if (this.throttled(acc.name)) return { error: "too many attempts, wait 15 minutes" };
+    const check = await hashPassword(current, acc.salt, this.env.PEPPER);
+    if (!sameText(check.hash, acc.hash)) { this.noteFailure(acc.name); return { error: "your current password is wrong" }; }
+    if (password.length < 8 || password.length > 200) return { error: "password must be at least 8 characters" };
+    if (password === current) return { error: "the new password is the same as the old one" };
+    const { hash, salt } = await hashPassword(password, null, this.env.PEPPER);
+    this.ctx.storage.sql.exec("UPDATE accounts SET hash = ?, salt = ? WHERE id = ?", hash, salt, acc.id);
+    const keep = await sha256(token);
+    const others = this.ctx.storage.sql.exec("SELECT COUNT(*) AS n FROM sessions WHERE account = ? AND token != ?", acc.id, keep).toArray()[0].n;
+    this.ctx.storage.sql.exec("DELETE FROM sessions WHERE account = ? AND token != ?", acc.id, keep);
+    this.ctx.storage.sql.exec("DELETE FROM attempts WHERE name = ?", acc.name.toLowerCase());
+    return { ok: true, others };
+  }
+
   removeAccount(id, who) {
     const acc = this.ctx.storage.sql.exec("SELECT id, name FROM accounts WHERE id = ?", id).toArray()[0];
     if (!acc) return { error: "no such account" };
