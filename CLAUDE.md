@@ -172,18 +172,18 @@ Ryan chose unit types inside stacks (26 September 2026) over drawn soldiers only
   - **Ring (C2).** `ring.js`, filled by `ownerItems` and the stack and machine panels' `ringFor`. The `attack` order forms a stack at your land nearest the click and advances into that owner only.
   - **Map (C3).** Names and troops on territory (`render/labels.js`, a distance transform, 7 ms on Earth every 2 s). The attacks panel (`attacks.js`) with Stop (the `halt` order) and a red frame while you lose land.
   - **Guide (C4)** in `guide.js`, and **Settings (C5)** in `settings.js`; key bindings and toggles are kept in the browser.
+  - **Nation card** in `nation.js`: a click on another nation's land or its leaderboard row.
 - **A3, showing them.** The stack panel lists the mix and rank. At close zoom stacks are drawn as one to five figures of their main type from the kit's `units` sheet, walking, facing and fighting; levies use the `hunter` figure. Flags rise above the figures, and one to three gold chevrons show experience. The client's unit table is `world.unitTypes`; `state.units` belongs to the renderer's machine units.
 
 Open items as of 26 September 2026, in order:
 
-1. PRs 14 and 16 are merged, so `main` has troop types and machines. Push `m3-interface` and open its PR when Ryan asks, then he redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14 and 16 are merged, so `main` has troop types and machines. PR 17 (`m3-interface`, the new interface) waits for Ryan's merge, then he redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A "guard" standing order that sends a stack out to meet enemies inside your land, if that is what Ryan meant by autodefend (asked 26 September 2026).
-4. A nation card when another nation's land is clicked (the plan's C1 lists one; a click still pins the hover tip).
-5. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
-6. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
-7. Later: players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
-8. Each session's record goes in `devpack/` (see `devpack/README.md`).
+4. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
+5. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
+6. Later: players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
+7. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 
