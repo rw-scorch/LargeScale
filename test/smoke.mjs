@@ -604,6 +604,34 @@ for (let k = 0; k < 40 && !H.closed; k++) await sleep(50);
 const afterDelete = await api("/api/worlds", null, ta);
 const statusGone = await api(`/api/worlds/${awid}/status`, null, ta);
 check(del.body.ok && toldDeleted && H.closed?.code === CLOSE.DELETED && !afterDelete.body.some(w => w.id === awid) && statusGone.status === 403, `deleting the world closes the host's game ("${toldDeleted?.text}") and it is gone from the list`);
+const sw = await api("/api/worlds", { name: "Away test", config: { w: 120, h: 90, seed: 5, bots: 0, rules: { buildSpeed: 20, sleepSpeed: 3600 } } }, ta);
+const swid = sw.body.id;
+let Z = await connect(swid, ta);
+const zh = await waitFor(Z, m => m.t === "hello");
+let zAt = null;
+for (let y = 20; y < 75 && !zAt; y += 9) for (const x of [30, 50, 70]) {
+  Z.ws.send(JSON.stringify({ t: "spawn", x, y }));
+  if ((await nextResult(Z, "spawn"))?.ok) { zAt = { x, y }; break; }
+}
+await until(() => Z.json.some(m => m.t === "purse"), 5000);
+Z.ws.send(JSON.stringify({ t: "zone", zone: "res", x: zAt.x - 7, y: zAt.y - 7, w: 14, h: 5 }));
+const zZone = await nextResult(Z, "zone");
+for (const [what, amount] of [["wood", 800], ["food", 400]]) await adminOp(Z, { op: "give", nation: zh.you, what, amount });
+const zBefore = Z.json.filter(m => m.t === "purse").at(-1);
+Z.ws.close();
+let asleep = false;
+for (let k = 0; k < 50 && !asleep; k++) { asleep = !(await api(`/api/worlds/${swid}/status`, null, ta)).body.looping; if (!asleep) await sleep(100); }
+await sleep(12000);
+Z = await connect(swid, ta);
+const zBack = await waitFor(Z, m => m.t === "hello");
+const zCaught = await waitFor(Z, m => m.t === "catchup" && m.left === 0, 20000);
+const zAway = await waitFor(Z, m => m.t === "away", 5000);
+const zStatus = (await api(`/api/worlds/${swid}/status`, null, ta)).body;
+check(zAt && zZone?.ok && asleep && zCaught && zAway && zAway.caught >= 11.9 * 3600 && zStatus.lastCatchUp?.ms < 2000,
+  `a world left for 12 game hours catches up ${zAway?.caught ? (zAway.caught / 3600).toFixed(1) : "?"} hours in ${zStatus.lastCatchUp?.ms} ms when its player returns`);
+check(zAway && zAway.gold > 0 && zAway.pop[1] > zAway.pop[0] && zAway.town > 0 && zAway.share === 0.9,
+  `the "while you were away" summary shows the economy moved on: ${zAway?.gold} gold, people ${zAway?.pop?.join(" to ")}, ${zAway?.town} town buildings, research ${zAway?.researched?.length}, output at ${zAway?.share}`);
+Z.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);
 console.log(failures ? `${failures} checks failed` : "all checks passed");

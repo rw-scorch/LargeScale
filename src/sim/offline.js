@@ -5,6 +5,7 @@ export const OFFLINE = {
   threatRadius: 6,
   fallbackRatio: 1.5,
   catchupStep: 60,
+  catchupSteps: Infinity,
   maxCatchupSeconds: 3 * 24 * 3600,
   alertKinds: ["plot_lost", "stack_destroyed", "convoy_lost", "war_declared", "eliminated", "built", "deposit_depleted"],
 };
@@ -117,11 +118,66 @@ export function summarise(events) {
   return out;
 }
 
+export function startAway(world, n, at, share = OFFLINE.offlineOutputShare) {
+  if (!n) return;
+  n.away = { at, time: world.time, money: n.money ?? 0, pop: n.pop ?? 0, plots: n.plots ?? 0, troops: n.troops ?? 0, era: n.era ?? "T", stock: { ...(n.stock ?? {}) }, caught: 0, dropped: 0, log: {} };
+  n.outputMult = share;
+}
+
+export function endAway(n) {
+  if (!n) return;
+  delete n.away;
+  n.outputMult = 1;
+}
+
+export function recordAway(world, events) {
+  for (const e of events) {
+    const log = world.nations.get(e.nation)?.away?.log;
+    if (!log) continue;
+    const add = (k, key, by = 1) => { log[k] ??= {}; log[k][key] = (log[k][key] ?? 0) + by; };
+    const bump = k => { log[k] = (log[k] ?? 0) + 1; };
+    if (e.type === "plot_lost") add("lost", e.by, e.count ?? 1);
+    else if (e.type === "built") add("built", e.kind);
+    else if (e.type === "civ_build") bump("town");
+    else if (e.type === "civ_upgrade") bump("upgraded");
+    else if (e.type === "researched") (log.researched ??= []).push(e.node);
+    else if (e.type === "machine_built") add("machines", e.kind);
+    else if (e.type === "stack_destroyed") bump("stacksLost");
+    else if (e.type === "machine_destroyed" || e.type === "machine_captured") add("machinesLost", e.kind);
+    else if (e.type === "deposit_depleted") bump("depleted");
+    else if (e.type === "capital_moved") log.capitalMoved = true;
+    else if (e.type === "eliminated") log.eliminated = true;
+  }
+}
+
+export function awaySummary(world, n, now, rules = OFFLINE) {
+  const a = n?.away;
+  if (!a || !n.spawned) return null;
+  const seconds = Math.max(0, (now - a.at) / 1000), log = a.log;
+  const lost = Object.values(log.lost ?? {}).reduce((s, v) => s + v, 0);
+  const hurt = lost || log.stacksLost || log.machinesLost || log.eliminated;
+  if (Math.max(seconds, a.caught) < (rules.awaySummarySeconds ?? 0) && !hurt) return null;
+  const stock = {};
+  for (const k of new Set([...Object.keys(a.stock), ...Object.keys(n.stock ?? {})])) {
+    const d = (n.stock?.[k] ?? 0) - (a.stock[k] ?? 0);
+    if (Math.abs(d) >= 1) stock[k] = Math.round(d);
+  }
+  return {
+    seconds: Math.round(seconds), gameSeconds: Math.round(world.time - a.time), caught: Math.round(a.caught), dropped: Math.round(a.dropped),
+    gold: Math.round((n.money ?? 0) - a.money), stock,
+    pop: [Math.round(a.pop), Math.round(n.pop ?? 0)], plots: [a.plots, n.plots ?? 0], troops: [Math.floor(a.troops), Math.floor(n.troops ?? 0)], era: [a.era, n.era ?? "T"],
+    lost: log.lost ?? {}, built: log.built ?? {}, town: log.town ?? 0, upgraded: log.upgraded ?? 0, researched: log.researched ?? [], machines: log.machines ?? {},
+    stacksLost: log.stacksLost ?? 0, machinesLost: log.machinesLost ?? {}, depleted: log.depleted ?? 0, capitalMoved: !!log.capitalMoved, eliminated: !!log.eliminated,
+    share: rules.offlineOutputShare, defence: rules.defenceMult,
+  };
+}
+
 export function planCatchUp(elapsed, rules = OFFLINE) {
   const capped = Math.min(Math.max(0, elapsed), rules.maxCatchupSeconds);
-  const steps = Math.floor(capped / rules.catchupStep);
-  const rest = capped - steps * rules.catchupStep;
-  return { capped, steps, step: rules.catchupStep, rest, dropped: Math.max(0, elapsed - capped) };
+  const step = Math.max(rules.catchupStep, Math.ceil(capped / (rules.catchupSteps ?? Infinity)));
+  const steps = Math.floor(capped / step);
+  const rest = capped - steps * step;
+  return { capped, steps, step, rest, dropped: Math.max(0, elapsed - capped) };
 }
 
 export function runCatchUp(job, econStep, budgetMs = 50, clock = () => performance.now()) {

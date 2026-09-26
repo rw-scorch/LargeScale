@@ -486,6 +486,13 @@ export class World {
     for (const f of this.hooks.postTick) f(this, dt);
   }
 
+  catchUp(dt) {
+    this.time += dt;
+    this.growTroops(dt);
+    const hooks = this.hooks.postTick.filter(f => !f.live).sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+    for (const f of hooks) (f.whole ?? f)(this, dt);
+  }
+
   checkCapitals() {
     for (const n of this.nations.values()) {
       if (!n.alive || !n.spawned || n.capital === undefined || this.owner[n.capital] === n.id) continue;

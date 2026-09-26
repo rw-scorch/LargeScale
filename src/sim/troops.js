@@ -37,14 +37,16 @@ export const xpLevelOf = (s, r = TROOP_RULES) => (s.xp ? levelOf(s.xp, r.xpLevel
 export function installTroops(world, { units = UNITS, rules: r = TROOP_RULES, speed = 1 } = {}) {
   if (world.troops) return world.troops;
   world.troops = { units, rules: r, speed, clock: 0 };
-  world.hooks.postTick.push((w, dt) => {
+  const tick = (w, dt) => {
     const t = w.troops;
     t.clock += dt;
     while (t.clock >= r.trainEvery) {
       t.clock -= r.trainEvery;
       trainTick(w, r.trainEvery);
     }
-  });
+  };
+  tick.whole = (w, dt) => trainTick(w, dt);
+  world.hooks.postTick.push(tick);
   const stat = (id, k) => units.table[id]?.[k] ?? 1;
   const human = nid => !!world.nations.get(nid)?.human;
 

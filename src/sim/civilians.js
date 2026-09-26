@@ -29,13 +29,15 @@ export function installCivilians(world, rng, cfg = CIV_RULES) {
   };
   const baseMax = world.maxTroops.bind(world);
   world.maxTroops = n => (baseMax(n) + (n.pop ?? 0) * (n.conscription ?? r.conscriptShare)) * (1 + effectOf(world, n, "troop_cap"));
-  world.hooks.postTick.push((w, dt) => {
+  const tick = (w, dt) => {
     civ.clock += dt;
     while (civ.clock >= r.econEvery) {
       civ.clock -= r.econEvery;
       econTick(w, r.econEvery, rng);
     }
-  });
+  };
+  tick.whole = (w, dt) => econTick(w, dt, rng);
+  world.hooks.postTick.push(tick);
   return civ;
 }
 
@@ -173,7 +175,7 @@ export function econTick(world, dt, rng) {
     }
   }
   if (bld.list.size) bld.changed.add("buildings");
-  const totals = nationTotals(world);
+  const totals = nationTotals(world), rounds = Math.max(1, Math.round(dt / r.econEvery));
   for (const n of world.nations.values()) {
     if (!n.alive || !n.human) continue;
     initNation(n, r);
@@ -181,7 +183,8 @@ export function econTick(world, dt, rng) {
     const workers = s.pop * r.workerShare;
     const foodNeed = s.pop * r.foodPerPerson * dt;
     const foodSat = foodNeed > 0 ? Math.min(1, n.stock.food / foodNeed) : 1;
-    const fed = ((n.made?.food ?? 0) / r.econEvery + n.stock.food / r.foodReserveSeconds) / r.foodPerPerson;
+    const batch = n.made?.food ?? 0;
+    const fed = (batch / (n.madeEvery ?? r.econEvery) + Math.max(0, n.stock.food - batch) / Math.max(r.foodReserveSeconds, dt)) / r.foodPerPerson;
     n.stock.food = Math.max(0, n.stock.food - foodNeed);
     const jobSat = workers > 0 ? Math.min(1, s.jobs / workers) : 1;
     const worked = workers > 0 ? Math.min(1, workers / Math.max(1, s.jobs)) : 0;
@@ -194,13 +197,17 @@ export function econTick(world, dt, rng) {
     const zoned = world.civ?.zoned.get(n.id)?.slice(1).map(set => set.size) ?? [0, 0, 0, 0];
     n.stats = { ...s, workers, worked, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson, fed, foodCap, zoned };
     let pop = 0;
-    for (const b of nationBuildings(world, n.id)) {
+    const span = Math.min(dt, r.settleStep ?? dt);
+    const grow = 1 - Math.exp(-r.growth * (1 + effectOf(world, n, "pop_growth")) * span), starve = Math.exp(-(1 - foodSat) * r.starveLoss * span);
+    const mine = bld.mine.get(n.id) ?? [];
+    for (const id of mine) {
+      const b = bld.list.get(id);
       if (!b.civilian) continue;
       const cap = table[b.type].housing;
       if (!cap || b.state !== "active") { pop += b.residents; continue; }
       const target = cap * needs * foodCap;
-      b.residents += (target - b.residents) * Math.min(1, r.growth * (1 + effectOf(world, n, "pop_growth")) * dt);
-      if (foodSat < 1) b.residents *= 1 - (1 - foodSat) * r.starveLoss * dt;
+      b.residents += (target - b.residents) * grow;
+      b.residents *= starve;
       b.residents = Math.max(0, Math.min(cap, b.residents));
       pop += b.residents;
     }
@@ -216,12 +223,13 @@ export function econTick(world, dt, rng) {
       const type = bestTypeFor(zone, n.era, table, id => world.unlocked?.(n.id, id) !== false);
       if (!type) continue;
       const candidates = freePlots(world, n.id, zone);
-      for (let k = 0; k < r.buildTriesPerTick && candidates.length; k++) {
+      for (let k = 0, started = 0; k < r.buildTriesPerTick * rounds && started < rounds && candidates.length; k++) {
         const at = candidates.splice(Math.floor(rng.next() * candidates.length), 1)[0];
-        if (startBuilding(world, n.id, at, type)) break;
+        if (startBuilding(world, n.id, at, type)) started++;
       }
     }
-    for (const b of [...nationBuildings(world, n.id)]) if (b.civilian && rng.chance(r.upgradeChance * dt / r.econEvery)) tryUpgrade(world, b);
+    const upChance = r.upgradeChance * dt / r.econEvery;
+    for (const id of mine) { const b = bld.list.get(id); if (b.civilian && rng.chance(upChance)) tryUpgrade(world, b); }
   }
 }
 

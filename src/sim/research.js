@@ -71,7 +71,7 @@ export function researchRate(world, n) {
     count.set(def.id, k);
     if (!def.cap || k <= def.cap) points += def.research;
   }
-  return points * (1 + effectOf(world, n, "research")) * (r.speed ?? 1);
+  return points * (1 + effectOf(world, n, "research")) * (n.outputMult ?? 1) * (r.speed ?? 1);
 }
 
 export function researchStep(world, n, points) {
