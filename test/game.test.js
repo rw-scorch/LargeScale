@@ -550,3 +550,30 @@ test("land taken by closing a pocket is reported to the nation that loses it", (
   assert.deepEqual(w.events.filter(e => e.type === "plot_lost").map(e => [e.nation, e.by, e.count]), [[b, a, 4]]);
   assert.equal(w.owner[g.idx(10, 10)], a);
 });
+
+test("the group order gives many stacks one order: advance, move in formation, gather, halt, standing", () => {
+  const { w, g, nation, fill } = strip(60, 20);
+  const a = nation("A", 3, 10), b = nation("B", 50, 10);
+  fill(a, 0, 30, 0, 20);
+  fill(b, 40, 60, 0, 20);
+  w.nations.get(a).troops = 9000;
+  const s1 = w.createStack(a, g.idx(5, 5), 1000), s2 = w.createStack(a, g.idx(7, 5), 2000), s3 = w.createStack(a, g.idx(5, 9), 500);
+  const foe = w.createStack(b, g.idx(45, 10), 500);
+  const ids = [s1.id, s2.id, s3.id, foe.id, 999];
+  assert.equal(runOrder(w, a, { t: "group", stacks: [], do: "halt" }).error, "pick 1 to 100 stacks");
+  assert.equal(runOrder(w, a, { t: "group", stacks: [foe.id], do: "halt" }).error, "none of those are your stacks");
+  assert.match(runOrder(w, a, { t: "group", stacks: ids, do: "dance" }).error, /^the group order is/);
+  const adv = runOrder(w, a, { t: "group", stacks: ids, do: "advance", only: "free" });
+  assert.deepEqual([adv.ok, adv.done], [true, 3], "another nation's stack and a missing one are left out");
+  assert.ok([s1, s2, s3].every(s => s.order === "advance" && s.only === 0) && foe.order === "hold");
+  const mv = runOrder(w, a, { t: "group", stacks: ids, do: "move", to: g.idx(20, 10) });
+  assert.equal(mv.done, 3);
+  const goal = s => s.route?.goal ?? s.path.at(-1);
+  assert.deepEqual([s1, s2, s3].map(s => [g.x(goal(s)), g.y(goal(s))]), [[19, 9], [21, 9], [19, 13]], "they keep their formation around the point");
+  runOrder(w, a, { t: "group", stacks: ids, do: "gather" });
+  assert.ok(goal(s1) === s2.pos && goal(s3) === s2.pos && s2.order !== "move", "gather walks the others to the biggest stack");
+  runOrder(w, a, { t: "group", stacks: ids, do: "halt" });
+  assert.ok([s1, s2, s3].every(s => s.order === "hold" && !s.path.length));
+  assert.equal(runOrder(w, a, { t: "group", stacks: ids, do: "standing", mode: "guard" }).done, 3);
+  assert.ok([s1, s2, s3].every(s => s.standing === "guard"));
+});
