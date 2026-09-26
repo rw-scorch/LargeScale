@@ -195,15 +195,15 @@ Ryan's decisions (26 September 2026): towers and forts change combat; stop at th
 - **Forts.** A `fort` block (`radius`, `defence`) on the three towers and the star fort. `world.fortAt(owner, plot)` gives the strongest covering fort, used in capture cost and for stacks holding their own land. The client has its own `fortAt` for the tip and the reach ring.
 - Details and evidence are in `plans/milestone-4.md`.
 
-Open items as of 26 September 2026, in order:
+Open items as of 27 September 2026, in order:
 
-1. PRs 14, 16 and 17 are merged. PR 18 (`m3-controls`: upgrades, placing, crosshair) waits for Ryan's merge; `m4-gunpowder` is stacked on it and gets its own PR after that. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14 to 19 are merged (27 September 2026). PR 20 (`m2-step7-away`, economy while away) waits for Ryan's merge. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A "guard" standing order that sends a stack out to meet enemies inside your land, if that is what Ryan meant by autodefend (asked 26 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. After it: the Industrial slice with Age of Industry and a steel mill, then Modern and Future. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
 5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
 6. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
-7. Milestone two, step 7 (economy while away) is built on `m2-step7-away`, stacked on `m4-gunpowder`; step 8 is Ryan's check.
+7. Milestone two, step 7 (economy while away) is built on `m2-step7-away`; step 8 is Ryan's check.
 8. Later: players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
 9. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
