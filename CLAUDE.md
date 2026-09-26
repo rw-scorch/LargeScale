@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (154)
+npm test                  # unit tests (155)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -101,7 +101,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
 - **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
-- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, D draw a path (then drag), S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, Y upgrade menu, K army panel, R deposits at mid zoom, backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -). Every key but Esc can be rebound in Settings (the gear, top right). A right-click, or a finger held on the map, opens the ring menu (milestone three, C2); a right-drag with a stack selected still draws the way it goes. Stacks form on any owned plot.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, D draw a path (then drag), S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, Y upgrade menu, K army panel, R deposits at mid zoom, backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -, Enter confirms a placed building, the arrow keys move the view, and with the crosshair on Space selects and E opens the orders ring). Every key but Esc can be rebound in Settings (the gear, top right). Every control has a mouse and a touch form (Ryan, 26 September 2026). A right-click, or a finger held on the map, opens the ring menu (milestone three, C2); a right-drag with a stack selected still draws the way it goes. Stacks form on any owned plot.
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
@@ -173,17 +173,24 @@ Ryan chose unit types inside stacks (26 September 2026) over drawn soldiers only
   - **Map (C3).** Names and troops on territory (`render/labels.js`, a distance transform, 7 ms on Earth every 2 s). The attacks panel (`attacks.js`) with Stop (the `halt` order) and a red frame while you lose land.
   - **Guide (C4)** in `guide.js`, and **Settings (C5)** in `settings.js`; key bindings and toggles are kept in the browser.
   - **Nation card** in `nation.js`: a click on another nation's land or its leaderboard row.
+- **Ryan's asks after PR 17 (26 September 2026, branch `m3-controls`).**
+  - **Upgrades.** The menu (`upgrade.js`) says what will happen ("Upgrade 1 of 3", or how much more gold is needed), lists what can be done now first and folds the rest under Not yet, and uses - and + per row; rows update in place. The building card has Upgrade, through the `upgrade` order's new `ids`.
+  - **Placing.** A click pins the outline with Build here and Cancel (`place.js`); Settings keeps one-click placing (`prefs.place`). Paint (`prefs.paint`, also in the building bar) places on every free spot a drag passes and stops when the money runs out.
+  - **Crosshair** (`aim.js`, Settings, Accessibility): the game acts at the middle of the screen, with Select and Orders buttons, Space and E on a keyboard. Map clicks are ignored while it is on.
+  - A second click on a stack standing on a machine selects the machine.
 - **A3, showing them.** The stack panel lists the mix and rank. At close zoom stacks are drawn as one to five figures of their main type from the kit's `units` sheet, walking, facing and fighting; levies use the `hunter` figure. Flags rise above the figures, and one to three gold chevrons show experience. The client's unit table is `world.unitTypes`; `state.units` belongs to the renderer's machine units.
 
 Open items as of 26 September 2026, in order:
 
-1. PRs 14 and 16 are merged, so `main` has troop types and machines. PR 17 (`m3-interface`, the new interface) waits for Ryan's merge, then he redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14, 16 and 17 are merged. `m3-controls` (upgrades, placing, crosshair) waits for Ryan's word to push and open its PR; then he redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A "guard" standing order that sends a stack out to meet enemies inside your land, if that is what Ryan meant by autodefend (asked 26 September 2026).
-4. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
-5. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
-6. Later: players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
-7. Each session's record goes in `devpack/` (see `devpack/README.md`).
+4. The research tree ends where the Gunpowder era starts (13 Tribal and 15 Medieval nodes, from the kit). Gunpowder, Industrial and Modern research and troops still need writing.
+5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
+6. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
+7. Milestone two, step 7 (economy while away), then step 8 (Ryan's check).
+8. Later: players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
+9. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 
