@@ -1204,6 +1204,22 @@ const pwDone = await pp.waitForFunction(() => /Password changed/.test(document.q
 await pp.screenshot({ path: `${OUT}/36-password.png` });
 const pwLogin = await pp.evaluate(async name => (await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, password: "new password" }) })).status, pwName);
 check(pwReg && /not the same/.test(pwMismatch) && pwDone && pwLogin === 200, `a player changes their own password from the world list on a phone ("${pwMismatch}" first), and the new one logs in`);
+await mp.tap("#open-army").catch(() => {});
+await mp.waitForSelector("#army-panel:not([hidden]) #army-guard", { timeout: 5000 }).catch(() => {});
+await mp.tap("#army-guard").catch(() => {});
+const guardOn = await mp.waitForFunction(() => window.__ls.game.world.purse?.guard === true, null, { timeout: 5000 }).then(() => true, () => false);
+await mp.screenshot({ path: `${OUT}/37-guard-army.png` });
+await mp.evaluate(() => window.__ls.game.toggleArmy(false));
+const guardStack = await mp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, r = await g.conn.request({ t: "stack", share: 0.2 });
+  if (!r.ok) return null;
+  g.select(r.stack);
+  return r.stack;
+});
+await mp.waitForSelector("#stack-panel:not([hidden]) #stack-standing", { timeout: 5000 }).catch(() => {});
+await mp.selectOption("#stack-standing", "guard").catch(() => {});
+const standingGuard = await mp.waitForFunction(id => window.__ls.game.world.purse?.orders?.find(o => o.id === id)?.standing === "guard", guardStack, { timeout: 5000 }).then(() => true, () => false);
+check(guardOn && guardStack !== null && standingGuard, "on a phone, Guard my land turns on in the Army panel, and a stack takes the Guard standing order");
 check(armyBox && armySet && /usual workers/.test(armyWords), `a tap on a phone moves the army share to ${armySet}: "${armyWords}"`);
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);

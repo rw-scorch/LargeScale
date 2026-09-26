@@ -6,11 +6,19 @@ const cap = t => t && t[0].toUpperCase() + t.slice(1);
 
 export function createArmyPanel(root, game) {
   const summary = el("p", { id: "army-summary", class: "muted" });
+  const guardBox = el("input", { id: "army-guard", type: "checkbox" });
+  guardBox.addEventListener("change", async () => {
+    const r = await game.conn.request({ t: "guard", home: guardBox.checked });
+    if (!r.ok) { guardBox.checked = !guardBox.checked; return game.toast(r.error ?? "could not set that"); }
+    game.toast(r.home ? "Guard is on: troops from home will form stacks to meet enemies inside your land, keeping a quarter of your cap at home." : "Guard is off: troops at home stay home.");
+  });
+  const guardRow = el("label", { class: "row guard-row", title: "stacks set to guard go too" }, guardBox,
+    el("span", {}, el("b", { text: "Guard my land" }), el("span", { class: "muted", text: " with troops from home: they form stacks to meet enemy stacks inside your land or heading into it, and come home after. Stacks with the Guard standing order go as well." })));
   const list = el("div", { id: "army-list", class: "army-list" });
   const machines = el("div", { id: "army-machines", class: "row wrap" });
   const box = el("section", { id: "army-panel", class: "panel center", hidden: true },
     el("div", { class: "row spread" }, el("b", { class: "title", text: "Army" }), el("button", { class: "ghost", text: "Close", onclick: () => game.toggleArmy(false) })),
-    summary, machines, list);
+    summary, guardRow, machines, list);
   root.append(box);
   let shape = "", fleet = "";
   const counts = new Map();
@@ -82,6 +90,7 @@ export function createArmyPanel(root, game) {
   const update = () => {
     const w = game.world, army = w?.purse?.army;
     if (box.hidden || !w?.unitTypes) return;
+    if (document.activeElement !== guardBox) guardBox.checked = !!w.purse?.guard;
     const types = w.unitTypes.troops;
     const next = JSON.stringify([w.purse?.era, types.map(d => why(w, d)), army?.keep]);
     if (next !== shape) {

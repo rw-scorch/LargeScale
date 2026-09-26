@@ -15,9 +15,13 @@ export function createStackPanel(root, game) {
   const mixLine = el("span", { id: "stack-mix", class: "muted" });
   const hint = el("span", { id: "stack-hint" });
   const actions = el("div", { class: "row wrap" });
-  const standing = el("select", { id: "stack-standing", class: "small" }, el("option", { value: "hold", text: "holds its ground" }), el("option", { value: "fallback", text: "falls back to the capital when outnumbered" }));
-  const away = el("div", { class: "row wrap", id: "stack-away" }, el("span", { class: "muted", text: "While you are away, this stack" }), standing,
-    el("button", { class: "ghost", id: "stack-standing-all", text: "Same for all my stacks", onclick: () => order({ t: "standing", mode: standing.value, all: true }, r => game.toast(`All ${r.stacks} of your stacks, and new ones, now ${r.mode === "fallback" ? "fall back when outnumbered" : "hold their ground"} while you are away.`)) }));
+  const STANDING = { hold: "hold their ground while you are away", fallback: "fall back when outnumbered while you are away", guard: "guard your land: they go to meet enemies inside it" };
+  const standing = el("select", { id: "stack-standing", class: "small" },
+    el("option", { value: "hold", text: "holds its ground while you are away" }),
+    el("option", { value: "fallback", text: "falls back when outnumbered while you are away" }),
+    el("option", { value: "guard", text: "guards your land: meets enemies inside it" }));
+  const away = el("div", { class: "row wrap", id: "stack-away" }, el("span", { class: "muted", text: "Standing order: this stack" }), standing,
+    el("button", { class: "ghost", id: "stack-standing-all", text: "Same for all my stacks", onclick: () => order({ t: "standing", mode: standing.value, all: true }, r => game.toast(`All ${r.stacks} of your stacks, and new ones, now ${STANDING[r.mode]}.`)) }));
   const box = el("section", { id: "stack-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), mixLine, away, hint, actions);
   root.append(box);
   let mode = null, preview = null, key = "", trip = null, asking = false, drawn = null, disbandAt = -Infinity;
@@ -126,6 +130,7 @@ export function createStackPanel(root, game) {
 
   const statusOf = (s, w) => {
     const o = s.owner === w.you ? orderOf(s) : null, aim = aimOf(o, w);
+    if (o?.guarding) return "guarding: on its way to meet an enemy stack";
     if (s.order === "advance" && o?.to !== null && o?.to !== undefined) return aim ? `heading for ${aim}` : "heading for the nearest land to take";
     if (s.order === "advance" && aim) return `advancing into ${aim}`;
     if (s.order === "move" && o?.via?.length) return trip?.id === s.id && trip.seconds ? `following your path, about ${trip.seconds} s to go` : "following your path";
