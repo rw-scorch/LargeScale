@@ -76,7 +76,7 @@ export function createResearchPanel(root, game) {
   tree.addEventListener("pointerdown", e => {
     if (e.pointerType !== "mouse" || e.button !== 0 || e.target.closest("button")) return;
     drag = { x: e.clientX, y: e.clientY, left: tree.scrollLeft, top: tree.scrollTop };
-    tree.setPointerCapture(e.pointerId);
+    try { tree.setPointerCapture(e.pointerId); } catch {}
     tree.classList.add("dragging");
   });
   tree.addEventListener("pointermove", e => {

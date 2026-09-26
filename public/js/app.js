@@ -31,6 +31,7 @@ import { createPlaceConfirm } from "./ui/place.js";
 import { createAim } from "./ui/aim.js";
 import { fmt } from "./ui/dom.js";
 import { createAwayPanel, span } from "./ui/away.js";
+import { createLayout } from "./ui/layout.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -113,6 +114,7 @@ class Game {
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     this.settings = createSettings(overlay, this);
     this.away = createAwayPanel(overlay, this);
+    this.layout = createLayout(overlay, this);
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -130,7 +132,7 @@ class Game {
       onTrace: line => this.trace(line),
       onTraceEnd: line => this.traced(line),
     });
-    this.onResize = () => this.resize();
+    this.onResize = () => { this.resize(); this.layout?.resized(); };
     addEventListener("resize", this.onResize);
     this.onKey = e => {
       const t = e.target;
@@ -370,6 +372,7 @@ class Game {
     if (action === "cancel") {
       if (this.pinned !== null) this.unpin();
       else if (this.building || this.zoning) this.stopBuild();
+      else if (this.layout.editing) this.layout.stop(true);
       else if (this.away.open) this.away.show(false);
       else if (this.settings.open) this.toggleSettings(false);
       else if (this.adminPanel?.open) this.toggleAdmin(false);

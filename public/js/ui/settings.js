@@ -25,6 +25,11 @@ export function createSettings(root, game) {
     el("h2", { text: "Display" }), boxes,
     el("h2", { text: "Building" }), building,
     el("h2", { text: "Accessibility" }), access,
+    el("h2", { text: "Layout" }),
+    el("p", { class: "muted", text: "Move and resize the panels: the leaderboard, your nation, the action bar, events and chat, the cards, the status line, and the Research, Army and Upgrade panels. The layout is kept in this browser." }),
+    el("div", { class: "row wrap" },
+      el("button", { id: "layout-arrange", class: "primary", text: "Arrange panels", onclick: () => { game.toggleSettings(false); game.layout.edit(); } }),
+      el("button", { id: "layout-reset", text: "Put every panel back", onclick: () => { game.layout.reset(); note = "Every panel is back in its usual place."; draw(); } })),
     el("div", { class: "row spread" }, el("h2", { text: "Keys" }), el("button", { id: "keys-reset", class: "chip", text: "Back to the usual keys", onclick: () => { game.keys = keyMap(saveKeys({})); note = "Every key is back to the usual one."; draw(); } })),
     el("p", { class: "muted", text: "Click a key, then press the new one. A key already in use swaps with it." }),
     said, keys);
