@@ -376,6 +376,8 @@ check(wet?.error === "every point of a drawn path must be on land", `a drawn pat
 
 const bHello = await waitFor(B, m => m.t === "hello");
 const bNation = bHello.you;
+const toldOnline = await until(() => A.json.some(m => m.t === "presence" && m.online?.includes(bNation)), 3000);
+check(toldOnline && bHello.online?.includes(you) && bHello.online.includes(bNation), `the host is told the friend is online, and the friend's hello lists who is on (${bHello.online?.join(", ")})`);
 const dist = i => Math.hypot((i % M.w) - (aSpawn % M.w), Math.floor(i / M.w) - Math.floor(aSpawn / M.w));
 let bSpawn = -1;
 for (const i of land.filter(i => dist(i) >= 22 * K && dist(i) <= 45 * K).sort((p, q) => dist(p) - dist(q)).filter((_, k) => k % 5 === 0)) {

@@ -17,7 +17,7 @@ export function createNations(root, game) {
       if (me && !top.includes(me)) top.push(me);
       rows.replaceChildren(...top.map(n => el("tr", { class: `${n.id === w.you ? "me" : ""} ${n.alive === false ? "dead" : ""}` },
         el("td", {}, el("i", { class: "swatch", style: `background:${n.colour}` })),
-        el("td", { text: `${n.name}${n.bot ? "" : " *"}` }),
+        el("td", {}, n.bot ? null : el("i", { class: `dot ${w.online?.has(n.id) ? "on" : "off"}`, title: w.online?.has(n.id) ? "online now" : "away" }), n.name),
         el("td", { text: fmt(n.plots ?? 0) }),
         el("td", { text: fmt(n.troops ?? 0) }))));
     },

@@ -28,6 +28,7 @@ export class ClientWorld {
     this.unitTypes = unitTable(hello.units?.length ? hello.units : LEVY_ONLY);
     this.troopRules = { xpLevels: [0, 0.3, 1, 3], xpBonus: [0, 0.1, 0.2, 0.35], ...hello.troopRules };
     this.stacks = new Map((hello.stacks ?? []).map(r => [r[0], stackFromRow(r, this.unitTypes)]));
+    this.online = new Set(hello.online ?? []);
     this.chat = [...(hello.chat ?? [])];
     this.owner = new Uint16Array(this.w * this.h);
     this.zone = new Uint8Array(this.w * this.h);
@@ -195,6 +196,7 @@ export class ClientWorld {
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
     if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null };
+    if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "joined") {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));

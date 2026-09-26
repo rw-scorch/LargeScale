@@ -247,8 +247,17 @@ export class World extends DurableObject {
 
   updatePresence(leaving = null) {
     if (!this.sim) return;
-    const online = new Set(this.sockets().filter(ws => ws !== leaving).map(ws => ws.deserializeAttachment()?.nation));
+    const online = new Set(this.sockets().filter(ws => ws !== leaving).map(ws => ws.deserializeAttachment()?.nation).filter(n => n !== undefined && n !== null));
     applyPresence(this.sim, online, rules.offline.defenceMult);
+    const list = [...online].sort((a, b) => a - b), key = list.join(",");
+    if (key === this.presenceKey) return;
+    this.presenceKey = key;
+    const msg = JSON.stringify({ v: PROTOCOL, t: "presence", online: list });
+    for (const ws of this.sockets()) if (ws !== leaving) try { ws.send(msg); } catch {}
+  }
+
+  onlineList() {
+    return [...new Set(this.sockets().map(ws => ws.deserializeAttachment()?.nation).filter(n => n !== undefined && n !== null))].sort((a, b) => a - b);
   }
 
   notify(nation, kind, text) {
@@ -366,7 +375,7 @@ export class World extends DurableObject {
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss,
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus },
-      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
+      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));
     for (const f of terrainFrames) server.send(f);

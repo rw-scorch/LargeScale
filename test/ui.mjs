@@ -266,6 +266,9 @@ check(rcNow && (rcNow.order === "move" || rcNow.pos !== rcFrom), `right-click se
 check(!(await page.isVisible("#move-go")), "no route preview is left open after a right-click");
 await page.keyboard.press("Escape");
 check(await page.evaluate(() => window.__ls.game.selected) === null, "Esc clears the selection");
+const light = await page.evaluate(() => { const row = document.querySelector("#nations tr.me .dot"); return row ? { on: row.classList.contains("on"), colour: getComputedStyle(row).backgroundColor } : null; });
+const botLights = await page.evaluate(() => [...document.querySelectorAll("#nations tr")].filter(tr => /Bot/.test(tr.textContent) && tr.querySelector(".dot")).length);
+check(light?.on && botLights === 0, `the nations list shows a green light for you while you are online (${light?.colour}), and none for bots`);
 
 await page.click("#chat .title");
 await page.fill("#chat-input", "hello from the real client");
