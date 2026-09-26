@@ -1163,6 +1163,32 @@ await ap.keyboard.press("Escape");
 const escClosed = await ap.waitForSelector("#away-panel", { state: "hidden", timeout: 3000 }).then(() => true, () => false);
 check(escClosed, "on a computer the same panel closes with Esc");
 
+await ap.keyboard.press("t");
+await ap.waitForSelector("#town-panel:not([hidden]) #policy-tax", { timeout: 5000 }).catch(() => {});
+const income0p = await ap.evaluate(() => window.__ls.game.world.purse?.vitals?.income);
+await ap.focus("#policy-tax");
+await ap.keyboard.press("ArrowRight");
+await ap.waitForTimeout(150);
+await ap.keyboard.press("ArrowRight");
+const taxSet = await ap.waitForFunction(() => window.__ls.game.world.purse?.policy?.tax === 4, null, { timeout: 5000 }).then(() => true, () => false);
+const income1p = await ap.waitForFunction(i0 => { const i = window.__ls.game.world.purse?.vitals?.income; return i > i0 ? i : null; }, income0p, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+const taxWords = [await ap.textContent("#policy-tax-name"), await ap.textContent("#policy-tax-effect")];
+const viewStill = await ap.evaluate(() => document.activeElement?.id === "policy-tax");
+await ap.screenshot({ path: `${OUT}/34-policies-desktop.png` });
+check(taxSet && income1p > income0p && taxWords[0] === "Very high" && /unhappy/.test(taxWords[1]) && viewStill,
+  `arrow keys on the tax slider set Very high: income ${income0p} to ${income1p} gold a second, "${taxWords[1]}"`);
+await ap.keyboard.press("Escape");
+
+await mp.reload();
+await ready(mp);
+await mp.tap("#open-town");
+const armyBox = await mp.waitForSelector("#town-panel:not([hidden]) #policy-army", { timeout: 5000 }).then(async h => { await h.scrollIntoViewIfNeeded(); return h.boundingBox(); }, () => null);
+if (armyBox) await mp.touchscreen.tap(armyBox.x + armyBox.width * 0.92, armyBox.y + armyBox.height / 2);
+const armySet = await mp.waitForFunction(() => { const c = window.__ls.game.world.purse?.policy?.conscription; return c > 0.5 ? c : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+const armyWords = await mp.textContent("#policy-army-effect");
+await mp.screenshot({ path: `${OUT}/35-policies-phone.png` });
+check(armyBox && armySet && /usual workers/.test(armyWords), `a tap on a phone moves the army share to ${armySet}: "${armyWords}"`);
+
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
 console.log(failures ? `${failures} checks failed` : "all checks passed");

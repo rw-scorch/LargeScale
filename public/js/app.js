@@ -134,6 +134,7 @@ class Game {
     this.onKey = e => {
       const t = e.target;
       if (t.tagName === "SELECT" || t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && !["range", "checkbox", "radio"].includes(t.type))) return;
+      if (t.tagName === "INPUT" && t.type === "range" && /^(Arrow|Home$|End$|Page)/.test(e.key)) return;
       const action = actionFor(this.keys, e);
       if (!action || !this.world?.ready) return;
       e.preventDefault();
