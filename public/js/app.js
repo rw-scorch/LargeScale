@@ -26,7 +26,9 @@ import { createRing, ownerItems } from "./ui/ring.js";
 import { createAttacks } from "./ui/attacks.js";
 import { createGuide } from "./ui/guide.js";
 import { createNationCard } from "./ui/nation.js";
-import { createSettings, loadPrefs } from "./ui/settings.js";
+import { createSettings, loadPrefs, savePrefs } from "./ui/settings.js";
+import { createPlaceConfirm } from "./ui/place.js";
+import { createAim } from "./ui/aim.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -73,6 +75,11 @@ class Game {
     this.ghostAt = null;
     this.selectedBuilding = null;
     this.selectedMachine = null;
+    this.pinned = null;
+    this.stroke = null;
+    this.aimHeld = null;
+    this.aimTap = false;
+    this.panKeys = new Set();
     this.hover = null;
     this.keys = keyMap(loadKeys());
     this.prefs = loadPrefs();
@@ -98,6 +105,8 @@ class Game {
     this.machinePanel = createMachinePanel(side, this);
     this.nationCard = createNationCard(side, this);
     this.tip = createTip(overlay, this);
+    this.place = createPlaceConfirm(overlay, this);
+    this.aim = createAim(overlay, this);
     this.ring = createRing(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     this.settings = createSettings(overlay, this);
@@ -109,10 +118,11 @@ class Game {
     }, {
       onTap: (x, y) => this.tap(x, y),
       onSecondary: (x, y) => this.secondary(x, y),
-      onHover: (x, y) => { this.hover = x === null ? null : [x, y]; this.tip.update(); },
-      dragging: () => !!this.zoning,
-      onDrag: (a, b) => this.dragZone(a, b),
-      onDragEnd: (a, b) => this.paintZone(a, b),
+      onHover: (x, y) => { if (this.prefs.crosshair) return; this.hover = x === null ? null : [x, y]; this.tip.update(); },
+      dragging: () => !this.prefs.crosshair && (!!this.zoning || this.painting()),
+      rightPans: () => !this.prefs.crosshair && (!!this.zoning || this.painting()),
+      onDrag: (a, b) => (this.building ? this.paintAt(b) : this.dragZone(a, b)),
+      onDragEnd: (a, b) => (this.building ? this.paintAt(b, true) : this.paintZone(a, b)),
       tracing: () => this.stack.drawing,
       onTrace: line => this.trace(line),
       onTraceEnd: line => this.traced(line),
@@ -120,13 +130,23 @@ class Game {
     this.onResize = () => this.resize();
     addEventListener("resize", this.onResize);
     this.onKey = e => {
-      if (e.target.tagName === "INPUT" && e.target.type !== "range") return;
+      const t = e.target;
+      if (t.tagName === "SELECT" || t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && !["range", "checkbox", "radio"].includes(t.type))) return;
       const action = actionFor(this.keys, e);
       if (!action || !this.world?.ready) return;
       e.preventDefault();
+      if (e.repeat && !action.startsWith("pan")) return;
       this.key(action);
     };
     addEventListener("keydown", this.onKey);
+    this.onKeyUp = e => {
+      const action = actionFor(this.keys, e);
+      if (action?.startsWith("pan")) this.panKeys.delete(action);
+      if (action === "select") this.aimUp();
+    };
+    this.onBlur = () => { this.panKeys.clear(); this.aimUp(); };
+    addEventListener("keyup", this.onKeyUp);
+    addEventListener("blur", this.onBlur);
     this.onWheel = e => { if (e.ctrlKey) e.preventDefault(); };
     this.onGesture = e => e.preventDefault();
     addEventListener("wheel", this.onWheel, { passive: false });
@@ -138,9 +158,16 @@ class Game {
       const dt = now - last;
       last = now;
       if (this.view) {
+        if (this.panKeys.size) {
+          const s = 700 * (this.view.ratio ?? 1) * Math.min(dt, 100) / 1000, k = this.panKeys;
+          this.view.pan((k.has("panLeft") ? s : 0) - (k.has("panRight") ? s : 0), (k.has("panUp") ? s : 0) - (k.has("panDown") ? s : 0));
+        }
+        if (this.prefs.crosshair) this.hover = this.centre();
+        if (this.aimHeld) this.aimMove();
         this.updateGhost();
         const t = performance.now();
         this.view.render(dt / 1000);
+        this.place.position();
         this.frameTimes.push({ gap: dt, draw: performance.now() - t, scale: this.view.cam.scale });
         if (this.frameTimes.length > 600) this.frameTimes.splice(0, 300);
       }
@@ -271,7 +298,45 @@ class Game {
     return x < 0 || y < 0 || x >= w.w || y >= w.h ? null : y * w.w + x;
   }
 
+  centre() { return [canvas.width / 2, canvas.height / 2]; }
+
+  aimDown() {
+    if (this.aimHeld || !this.prefs.crosshair || !this.view) return;
+    const c = this.centre();
+    this.aimHeld = { start: this.view.screenToPlot(...c) };
+    if (this.zoning) return;
+    if (this.painting()) { this.stroke = null; return this.paintAt(c); }
+    this.aimTap = true;
+    this.tap(...c);
+    this.aimTap = false;
+  }
+
+  aimMove() {
+    const h = this.aimHeld, c = this.centre();
+    if (this.zoning) this.dragZone(this.view.plotToScreen(...h.start), c);
+    else if (this.painting()) this.paintAt(c);
+  }
+
+  aimUp() {
+    const h = this.aimHeld;
+    if (!h) return;
+    this.aimHeld = null;
+    const c = this.centre();
+    if (this.zoning && this.view) return this.paintZone(this.view.plotToScreen(...h.start), c);
+    if (this.painting()) this.paintAt(c, true);
+  }
+
+  aimOrders() {
+    if (!this.prefs.crosshair) return;
+    this.aimTap = true;
+    this.secondary(...this.centre());
+    this.aimTap = false;
+  }
+
   key(action) {
+    if (action.startsWith("pan")) { this.panKeys.add(action); return; }
+    if (action === "select") return this.aimDown();
+    if (action === "orders") return this.aimOrders();
     const act = this.stack.act, w = this.world;
     if (this.selectedMachine !== null && this.machinePanel.key(action)) return this.updatePanels();
     if (action === "form") {
@@ -293,8 +358,10 @@ class Game {
     if (action === "zoomIn") this.zoom(1.6);
     if (action === "zoomOut") this.zoom(1 / 1.6);
     this.updatePanels();
+    if (action === "confirm" && this.pinned !== null) return this.confirmBuild();
     if (action === "cancel") {
-      if (this.building || this.zoning) this.stopBuild();
+      if (this.pinned !== null) this.unpin();
+      else if (this.building || this.zoning) this.stopBuild();
       else if (this.settings.open) this.toggleSettings(false);
       else if (this.adminPanel?.open) this.toggleAdmin(false);
       else if (this.upgrade.open) this.toggleUpgrade(false);
@@ -407,12 +474,15 @@ class Game {
     this.building = type;
     const def = type && this.world?.defs.table[type];
     this.ghostAt = def && this.buildPlot != null ? this.placeAnchor(this.buildPlot, def) : null;
+    this.pinned = this.ghostAt !== null && this.placeMode() === "confirm" && !this.painting() ? this.ghostAt : null;
     this.buildPlot = null;
     this.updatePanels();
   }
 
   stopBuild() {
     this.building = null;
+    this.pinned = null;
+    this.stroke = null;
     this.zoning = null;
     if (this.view) { this.view.showZones = false; this.view.zoneRect = null; }
     this.ghostAt = null;
@@ -444,19 +514,92 @@ class Game {
     const def = this.building && this.world?.defs.table[this.building];
     if (!def) { this.view.ghost = null; return; }
     const plot = this.hover ? this.plotAt(...this.hover) : null;
-    const anchor = plot !== null ? this.placeAnchor(plot, def) : this.ghostAt;
+    const anchor = this.pinned ?? (plot !== null ? this.placeAnchor(plot, def) : this.ghostAt);
     this.view.ghost = anchor === null ? null : { def, anchor, reason: this.world.placeError(def.id, anchor) };
+  }
+
+  placeMode() { return this.prefs.place === "click" ? "click" : "confirm"; }
+  painting() { return !!this.building && !!this.prefs.paint; }
+
+  setPref(key, value) {
+    this.prefs[key] = value;
+    savePrefs(this.prefs);
+    if (key === "paint" || key === "place") this.pinned = null;
+    if (key === "crosshair") { this.hover = null; this.aimUp(); }
+    this.updatePanels();
   }
 
   async buildAt(plot) {
     const def = this.world.defs.table[this.building];
     const anchor = this.placeAnchor(plot, def);
+    if (this.placeMode() === "confirm") {
+      if (this.pinned === anchor) return this.confirmBuild();
+      this.pinned = anchor;
+      return this.updatePanels();
+    }
     if (!this.hover && this.ghostAt !== anchor) { this.ghostAt = anchor; return; }
+    await this.placeAt(anchor);
+  }
+
+  async placeAt(anchor) {
+    const def = this.world.defs.table[this.building];
     const why = this.world.placeError(def.id, anchor);
-    if (why) return this.toast(why);
+    if (why) { this.toast(why); return false; }
     const r = await this.conn.request({ t: "build", type: def.id, at: anchor });
-    if (!r.ok) return this.toast(r.error ?? "could not build there");
+    if (!r.ok) { this.toast(r.error ?? "could not build there"); return false; }
     this.ghostAt = null;
+    return true;
+  }
+
+  async confirmBuild() {
+    if (this.pinned === null || !this.building) return;
+    if (await this.placeAt(this.pinned)) this.pinned = null;
+    this.updatePanels();
+  }
+
+  unpin() {
+    this.pinned = null;
+    this.ghostAt = null;
+    this.updatePanels();
+  }
+
+  paintAt(pt, end = false) {
+    const w = this.world, def = this.building && w?.defs.table[this.building];
+    if (!def || !this.view) return;
+    const s = (this.stroke ??= { last: null, tried: new Set(), pending: new Set(), queue: [], stopped: false, sending: false, placed: 0 });
+    const to = pt ? this.view.screenToPlot(...pt) : null;
+    if (to) {
+      const from = s.last ?? to, steps = Math.max(1, Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) * 2));
+      for (let k = 0; k <= steps; k++) {
+        const x = Math.floor(from[0] + ((to[0] - from[0]) * k) / steps), y = Math.floor(from[1] + ((to[1] - from[1]) * k) / steps);
+        if (x >= 0 && y >= 0 && x < w.w && y < w.h) this.paintPlot(y * w.w + x, def, s);
+      }
+      s.last = to;
+    }
+    if (end) this.stroke = null;
+  }
+
+  paintPlot(plot, def, s) {
+    const w = this.world, anchor = this.placeAnchor(plot, def);
+    if (s.stopped || s.tried.has(anchor)) return;
+    s.tried.add(anchor);
+    const fp = [];
+    for (let dy = 0; dy < def.fp[1]; dy++) for (let dx = 0; dx < def.fp[0]; dx++) fp.push(anchor + dy * w.w + dx);
+    if (fp.some(i => s.pending.has(i)) || w.placeError(def.id, anchor)) return;
+    for (const i of fp) s.pending.add(i);
+    s.queue.push(anchor);
+    this.pump(s, def);
+  }
+
+  async pump(s, def) {
+    if (s.sending) return;
+    s.sending = true;
+    while (s.queue.length && !s.stopped && !this.left) {
+      const r = await this.conn.request({ t: "build", type: def.id, at: s.queue.shift() });
+      if (r.ok) s.placed++;
+      else if (/you have/.test(r.error ?? "")) { s.stopped = true; this.toast(`Painting stopped after ${s.placed}: ${r.error}.`); }
+    }
+    s.sending = false;
   }
 
   selectBuilding(id) {
@@ -501,9 +644,11 @@ class Game {
   }
 
   secondary(sx, sy) {
+    if (this.prefs.crosshair && !this.aimTap) return;
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
     if (this.placing) return this.togglePlacing(false);
+    if (this.pinned !== null) return this.unpin();
     if (this.building || this.zoning) return this.stopBuild();
     this.stack.cancel();
     this.machinePanel.cancel();
@@ -535,6 +680,7 @@ class Game {
   }
 
   tap(sx, sy) {
+    if (this.prefs.crosshair && !this.aimTap) return;
     const w = this.world, v = this.view;
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
@@ -547,10 +693,13 @@ class Game {
     }
     if (this.stack.choosing) return this.stack.pickTarget(plot, sx, sy);
     if (this.machinePanel.choosing) return this.machinePanel.pick(plot, sx, sy);
-    const hit = v.stackAt(sx, sy);
-    if (hit !== null) return this.select(hit);
-    const mh = v.machineAt(sx, sy);
-    if (mh !== null) return this.selectMachine(mh);
+    const hit = v.stackAt(sx, sy), mh = v.machineAt(sx, sy);
+    const under = [...(hit !== null ? [["stack", hit]] : []), ...(mh !== null ? [["machine", mh]] : [])];
+    if (under.length) {
+      const now = under.findIndex(([kind, id]) => (kind === "stack" ? this.selected : this.selectedMachine) === id);
+      const [kind, id] = under[(now + 1) % under.length];
+      return kind === "stack" ? this.select(id) : this.selectMachine(id);
+    }
     const me = w.nations.get(w.you);
     if (me && !me.spawned && !w.frozen) return this.spawn.tryAt(x, y);
     const b = w.buildingAt(plot);
@@ -620,7 +769,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {
@@ -631,6 +780,8 @@ class Game {
     clearInterval(this.ui);
     removeEventListener("resize", this.onResize);
     removeEventListener("keydown", this.onKey);
+    removeEventListener("keyup", this.onKeyUp);
+    removeEventListener("blur", this.onBlur);
     removeEventListener("wheel", this.onWheel);
     removeEventListener("gesturestart", this.onGesture);
     this.onLeave();
