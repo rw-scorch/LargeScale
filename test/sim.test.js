@@ -78,3 +78,25 @@ test("engineering, diplomacy and the market all work from src/sim", () => {
   assert.equal(depth(book, "stone")[0].qty, 30);
   assert.equal(checkVictory(wo), null);
 });
+
+test("closing a pocket mid-advance never makes a stack take its own land", () => {
+  const W = 40, H = 30, terrain = new Uint8Array(W * H).fill(TID.grassland);
+  const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2, advanceRate: 400, advanceRadius: 6 });
+  const g = w.grid, a = w.addNation({ name: "A" }), b = w.addNation({ name: "B" });
+  w.spawn(a, 5, 5);
+  w.spawn(b, 30, 20);
+  for (let y = 10; y <= 16; y++) for (let x = 10; x <= 16; x++) w.claim(g.idx(x, y), a);
+  for (let y = 12; y <= 14; y++) for (let x = 12; x <= 14; x++) w.claim(g.idx(x, y), b);
+  w.claim(g.idx(13, 11), b);
+  w.nations.get(a).troops = 5000;
+  const s = w.createStack(a, g.idx(13, 10), 2000);
+  w.orderAdvance(s.id);
+  w.events.length = 0;
+  const before = s.troops;
+  w.tick(1);
+  const lost = w.events.filter(e => e.type === "plot_lost");
+  assert.ok(lost.every(e => e.nation !== e.by), `no self-capture: ${JSON.stringify(lost.map(e => [e.nation, e.by, e.count]))}`);
+  assert.equal(lost.filter(e => e.nation === b).reduce((t, e) => t + e.count, 0), 10, "all ten of B's plots change hands once");
+  for (let y = 11; y <= 14; y++) for (let x = 12; x <= 14; x++) if (y > 11 || x === 13) assert.equal(w.owner[g.idx(x, y)], a);
+  assert.ok(s.troops < before);
+});

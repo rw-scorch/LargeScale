@@ -418,6 +418,7 @@ export class World {
     }
     const attack = this.stackAttack(s);
     for (const i of f) {
+      if (this.owner[i] === s.owner) continue;
       if (budget-- <= 0) break;
       const o = this.owner[i];
       const raw = this.captureCost(i, s.owner), cost = raw / (attack * (o ? this.siegeAt(s.owner, i) : 1));
