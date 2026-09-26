@@ -16,7 +16,7 @@
   "landing": { "penalty": 0.15, "beachPenalty": 0.05, "dropPenalty": 0.1 },
   "world": { "botsPerMillionLand": 200, "maxBots": 400, "minMapSide": 64, "maxTestSide": 2000, "maxPlots": 5184000, "baseWidth": 3600, "messagesPerSecond": 20, "messageBurst": 40, "botTroopShare": 0.01, "botStateEvery": 5 },
   "troops": { "xpLevels": [0, 0.3, 1, 3], "xpBonus": [0, 0.1, 0.2, 0.35], "trainEvery": 5, "keepMax": 1000000 },
-  "machines": { "wreckSeconds": 300, "queueMax": 10, "hpPerLoss": 1, "portRadius": 2, "followEvery": 1 },
+  "machines": { "wreckSeconds": 300, "queueMax": 10, "hpPerLoss": 1, "supportScale": 1, "portRadius": 2, "followEvery": 1 },
   "admin": { "maxGive": 1000000, "maxSpeed": 8, "logShown": 30, "nameLength": 40 },
   "detail": {
     "fineDir": "map/fine",

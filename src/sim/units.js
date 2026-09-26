@@ -9,7 +9,7 @@ export const UNIT_TYPES = Object.fromEntries(unitData.units.filter(d => d.kind =
 
 export const LANDING = { penalty: 0.15, beachPenalty: 0.05, portPenalty: 0, dropPenalty: 0.1, samLoss: 0.35, ...rules.landing };
 export const MINES = { stackShare: 0.25, stackMax: 200, vehicleDamage: 60 };
-export const MACHINE_RULES = { wreckSeconds: 300, queueMax: 10, hpPerLoss: 2, portRadius: 2, followEvery: 1, lethality: rules.combat?.lethality ?? 0.08, ...rules.machines };
+export const MACHINE_RULES = { wreckSeconds: 300, queueMax: 10, hpPerLoss: 1, supportScale: 1, portRadius: 2, followEvery: 1, lethality: rules.combat?.lethality ?? 0.08, ...rules.machines };
 
 const waterOk = t => !TERRAIN[t].land && TERRAIN[t].water !== "ice";
 const WATER_MOVE = Float32Array.from({ length: 256 }, (_, t) => (TERRAIN[t] && waterOk(t) ? 1 : Infinity));
@@ -316,13 +316,13 @@ export function installMachines(world, { speed = 1, scale = 1, rules: r = MACHIN
   };
   world.supportOf = (s, holding) => {
     let p = 0;
-    for (const u of supportMap(world).get(s.id) ?? []) p += UNIT_TYPES[u.type][holding ? "defence" : "attack"];
+    for (const u of supportMap(world).get(s.id) ?? []) p += UNIT_TYPES[u.type][holding ? "defence" : "attack"] * r.supportScale;
     return p;
   };
   world.battleLoss = (s, loss) => {
     const list = supportMap(world).get(s.id);
     if (!list?.length || !(loss > 0)) return loss;
-    const holding = s.order === "hold" && !s.path.length, stat = u => UNIT_TYPES[u.type][holding ? "defence" : "attack"];
+    const holding = s.order === "hold" && !s.path.length, stat = u => UNIT_TYPES[u.type][holding ? "defence" : "attack"] * r.supportScale;
     const mp = list.reduce((a, u) => a + stat(u), 0), tp = world.powerOf ? world.powerOf(s, holding) : s.troops;
     if (!(mp > 0)) return loss;
     const taken = (loss * mp) / (mp + tp);
