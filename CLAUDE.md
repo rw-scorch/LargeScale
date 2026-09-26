@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (166)
+npm test                  # unit tests (170)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -159,6 +159,14 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
   - Away players make 90% (`n.outputMult`) and keep an away record (`n.away`), sent as an `away` message on return and shown by `public/js/ui/away.js`.
   - Details and evidence are in `plans/milestone-2.md`.
 
+- **Policies and passwords (27 September 2026, branch `m2-policies`, stacked on `m2-step7-away`).** Two items from the later list, both settled in the handover.
+  - **Tax and army share.** The `policy` order sets `n.taxLevel` (a step of `rules.json` `policy.taxSteps`, None to Very high, 0 to 2 times `taxPerResident`) and `n.conscription` (10% to 60%, 5% steps).
+    - Tax above Normal multiplies needs by `1 - taxUnrest` per step above, so fewer people stay and fewer homes upgrade. Below Normal, towns grow up to `taxGrowth` faster.
+    - Army share above the old 35% takes producer staff (`conscriptWorkLoss`), and below it adds staff; the stats carry `staff` and `mood`.
+    - The sliders are under Policies in the Town panel. Arrow keys on a focused slider now move the slider, not the map.
+  - **Password.** `POST /api/password` takes the current password and a new one. A wrong current password counts toward the login lockout. It keeps the session that made the change and logs out the others. The form is `public/js/ui/password.js`, opened by Password on the world list.
+  - Evidence: `npm test` 170 of 170 (`test/policy.test.js`), smoke 97 of 97, `npm run ui` 124 of 124 on the test map.
+
 ## Milestone three progress
 
 Ryan chose unit types inside stacks (26 September 2026) over drawn soldiers only, individual soldiers, or machine units first; machine units come next, then a new interface. His decisions: one training building line, no counters, everyone sees the full mix, troop types before milestone two's step 7. Branch `m3-troop-types`, stacked on `m2-orders-descriptions`.
@@ -204,7 +212,7 @@ Open items as of 27 September 2026, in order:
 5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
 6. The town hall and the parliament gather nothing, so upgrading a great hall loses its food and wood. Their descriptions say so; whether they should gather is Ryan's call.
 7. Milestone two, step 7 (economy while away) is built on `m2-step7-away`; step 8 is Ryan's check.
-8. Later: players changing their own password (only the admin can set one now); tax and conscription sliders; the stat-editing dev panel of piece 14.
+8. Later: the stat-editing dev panel of piece 14. Tax and army share sliders and self-service passwords are built on `m2-policies`.
 9. Each session's record goes in `devpack/` (see `devpack/README.md`).
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
