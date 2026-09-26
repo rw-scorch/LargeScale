@@ -406,6 +406,14 @@ export function ordersOf(sim, nid) {
 
 const r2 = v => Math.round((v ?? 0) * 100) / 100;
 
+export function vitalsOf(sim, n) {
+  if (!n?.spawned) return null;
+  const r = sim.rules, cap = sim.maxTroops(n), e = sim.econ?.rules;
+  const grow = n.alive && n.troops < cap ? r.growthFloor + r.growthRate * n.troops * (1 - n.troops / cap) : 0;
+  const income = e && n.money !== undefined ? (n.income ?? e.baseIncome) + (n.pop ?? 0) * (n.tax ?? e.taxPerResident) : 0;
+  return { troops: Math.floor(n.troops), cap: Math.floor(cap), grow: r2(grow), income: r2(income) };
+}
+
 export function purseOf(n, extra = {}) {
   if (!n || n.money === undefined) return null;
   const stock = {};
