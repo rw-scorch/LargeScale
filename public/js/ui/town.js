@@ -55,7 +55,7 @@ export function createTownPanel(root, game) {
   const lines = el("div", { class: "town-lines" });
   const next = el("p", { id: "town-next", class: "next-step" });
   const bars = { res: bar("Homes"), com: bar("Shops"), ind: bar("Industry") };
-  const box = el("section", { id: "town-panel", class: "panel topright", hidden: true },
+  const box = el("section", { id: "town-panel", class: "panel card", hidden: true },
     el("div", { class: "row spread" }, el("b", { class: "title", text: "Town" }), el("button", { class: "ghost", text: "Close", onclick: () => game.toggleTown(false) })),
     next, lines, el("b", { text: "Demand" }), ...Object.values(bars).map(b => b.row));
   root.append(box);

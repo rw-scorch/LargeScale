@@ -18,7 +18,7 @@ export function createStackPanel(root, game) {
   const standing = el("select", { id: "stack-standing", class: "small" }, el("option", { value: "hold", text: "holds its ground" }), el("option", { value: "fallback", text: "falls back to the capital when outnumbered" }));
   const away = el("div", { class: "row wrap", id: "stack-away" }, el("span", { class: "muted", text: "While you are away, this stack" }), standing,
     el("button", { class: "ghost", id: "stack-standing-all", text: "Same for all my stacks", onclick: () => order({ t: "standing", mode: standing.value, all: true }, r => game.toast(`All ${r.stacks} of your stacks, and new ones, now ${r.mode === "fallback" ? "fall back when outnumbered" : "hold their ground"} while you are away.`)) }));
-  const box = el("section", { id: "stack-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), mixLine, away, hint, actions);
+  const box = el("section", { id: "stack-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), mixLine, away, hint, actions);
   root.append(box);
   let mode = null, preview = null, key = "", trip = null, asking = false, drawn = null, disbandAt = -Infinity;
   const confirming = () => performance.now() - disbandAt < 4000;

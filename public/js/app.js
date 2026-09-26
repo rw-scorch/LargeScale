@@ -10,7 +10,7 @@ import { showWorlds } from "./ui/worlds.js";
 import { createHud } from "./ui/hud.js";
 import { createSpawnHint } from "./ui/spawn.js";
 import { createNations } from "./ui/nations.js";
-import { createChat } from "./ui/chat.js";
+import { createFeed } from "./ui/feed.js";
 import { createStackPanel } from "./ui/stack.js";
 import { createNotices } from "./ui/notice.js";
 import { createBuildMenu } from "./ui/build.js";
@@ -74,18 +74,19 @@ class Game {
     overlay.replaceChildren();
     this.connect();
     this.hud = createHud(overlay, this);
-    this.spawn = createSpawnHint(overlay, this);
-    this.nations = createNations(overlay, this);
-    this.chat = createChat(overlay, this);
-    this.stack = createStackPanel(overlay, this);
-    this.notices = createNotices(overlay, this);
-    this.buildMenu = createBuildMenu(overlay, this);
-    this.buildingPanel = createBuildingPanel(overlay, this);
-    this.town = createTownPanel(overlay, this);
+    const { left, side, top } = this.hud.cols;
+    this.spawn = createSpawnHint(top, this);
+    this.nations = createNations(left, this);
+    this.feed = createFeed(side, this);
+    this.stack = createStackPanel(side, this);
+    this.notices = createNotices(overlay, this, top);
+    this.buildMenu = createBuildMenu(side, this);
+    this.buildingPanel = createBuildingPanel(side, this);
+    this.town = createTownPanel(side, this);
     this.research = createResearchPanel(overlay, this);
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
-    this.machinePanel = createMachinePanel(overlay, this);
+    this.machinePanel = createMachinePanel(side, this);
     this.tip = createTip(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     const self = this;
@@ -188,10 +189,11 @@ class Game {
     if (m.t === "state" && this.view) this.view.colours.clear();
     if (m.t === "purse" && this.view && m.season && m.season !== this.view.season) this.view.setSeason(m.season);
     if (m.t === "purse" && this.townOnPurse) { this.townOnPurse = false; this.toggleTown(true); }
-    if (m.t === "ended") this.toast(`${m.by} ended this world. Orders are off, but you can still look around.`);
-    if (m.t === "reopened") this.toast(`${m.by} reopened this world.`);
-    if (m.t === "speed") this.toast(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
-    if (m.t === "renamed") { this.name = m.name; this.toast(`${m.by} renamed the world ${m.name}.`); }
+    const note = text => this.feed.push({ text, tone: "warn" });
+    if (m.t === "ended") note(`${m.by} ended this world. Orders are off, but you can still look around.`);
+    if (m.t === "reopened") note(`${m.by} reopened this world.`);
+    if (m.t === "speed") note(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
+    if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
   }
 
   onFrame(data) {
@@ -208,41 +210,42 @@ class Game {
 
   announce(e) {
     const w = this.world, you = w.you, name = id => w.nations.get(id)?.name ?? "someone";
-    const say = (key, text, every = 5000) => {
+    const capital = id => w.nations.get(id)?.capital ?? null, stackAt = id => w.stacks.get(id)?.pos ?? e.at ?? null, machineAt = id => e.at ?? w.machines.get(id)?.at ?? null;
+    const say = (key, text, every = 5000, tone = "info", at = e.at ?? null) => {
       if (performance.now() - (this.lastToast.get(key) ?? -1e9) < every) return;
       this.lastToast.set(key, performance.now());
-      this.toast(text);
+      this.feed.push({ key, text, tone, at });
     };
-    if (e.type === "plot_lost" && e.nation === you) say(`lost${e.by}`, `${name(e.by)} is taking your land.`);
-    if (e.type === "plot_lost" && e.by === you && !w.nations.get(e.nation)?.bot) say(`took${e.nation}`, `You are taking land from ${name(e.nation)}.`);
-    if (e.type === "stack_destroyed" && e.nation === you) say(`gone${e.stack}`, "One of your stacks was destroyed.", 0);
-    if (e.type === "stack_destroyed" && e.nation !== you) say(`kill${e.stack}`, `A stack of ${name(e.nation)} was destroyed.`, 0);
-    if (e.type === "eliminated") say(`elim${e.nation}`, e.nation === you ? "Your nation has been eliminated." : `${name(e.nation)} has been eliminated.`, 0);
-    if (e.type === "stalled" && w.stacks.get(e.stack)?.owner === you) say(`stall${e.stack}`, "A stack stopped: not enough troops to go on.");
+    if (e.type === "plot_lost" && e.nation === you) say(`lost${e.by}`, `${name(e.by)} is taking your land.`, 5000, "danger");
+    if (e.type === "plot_lost" && e.by === you && !w.nations.get(e.nation)?.bot) say(`took${e.nation}`, `You are taking land from ${name(e.nation)}.`, 5000, "good");
+    if (e.type === "stack_destroyed" && e.nation === you) say(`gone${e.stack}`, "One of your stacks was destroyed.", 0, "danger");
+    if (e.type === "stack_destroyed" && e.nation !== you) say(`kill${e.stack}`, `A stack of ${name(e.nation)} was destroyed.`, 0, "good");
+    if (e.type === "eliminated") say(`elim${e.nation}`, e.nation === you ? "Your nation has been eliminated." : `${name(e.nation)} has been eliminated.`, 0, e.nation === you ? "danger" : "warn", null);
+    if (e.type === "stalled" && w.stacks.get(e.stack)?.owner === you) say(`stall${e.stack}`, "A stack stopped: not enough troops to go on.", 5000, "warn");
     if (e.type === "advance_done" && w.stacks.get(e.stack)?.owner === you) {
       const what = e.only === 0 ? "unclaimed land" : e.only ? `${name(e.only)}'s land` : "land to take";
-      say(`done${e.stack}`, e.sought ? `A stack stopped: it found no ${what} it can reach by land${e.only !== null ? " without going through another nation's land" : ""}.` : "A stack stopped advancing: nothing left to take within its reach.");
+      say(`done${e.stack}`, e.sought ? `A stack stopped: it found no ${what} it can reach by land${e.only !== null ? " without going through another nation's land" : ""}.` : "A stack stopped advancing: nothing left to take within its reach.", 5000, "warn", stackAt(e.stack));
     }
-    if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0);
-    if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0);
-    if (e.type === "deposit_depleted" && e.nation === you) say(`dep${e.at}`, `A ${e.kind} deposit has run dry.`);
-    if (e.type === "era_up") say(`era${e.nation}${e.era}`, e.nation === you ? `Your nation enters the ${e.name} era.` : `${name(e.nation)} has reached the ${e.name} era.`, 0);
+    if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0, "danger", e.to);
+    if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0, "built", w.buildings.get(e.building)?.anchor ?? null);
+    if (e.type === "deposit_depleted" && e.nation === you) say(`dep${e.at}`, `A ${e.kind} deposit has run dry.`, 5000, "warn");
+    if (e.type === "era_up") say(`era${e.nation}${e.era}`, e.nation === you ? `Your nation enters the ${e.name} era.` : `${name(e.nation)} has reached the ${e.name} era.`, 0, "era", capital(e.nation));
     if (e.type === "researched" && e.nation === you) {
       const node = w.locks.nodes.get(e.node), builds = [...(node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name), ...(node?.unlocks?.units ?? []).map(u => w.unitTypes.table[u]?.name)].filter(Boolean);
-      say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build or train: ${builds.join(", ")}.` : ""}`, 0);
+      say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build or train: ${builds.join(", ")}.` : ""}`, 0, "research");
     }
     const machine = e.kind && w.unitTypes.table[e.kind]?.name.toLowerCase();
-    if (e.type === "machine_built" && e.nation === you) say(`mb${e.machine}`, `A ${machine} is ready.`, 0);
-    if (e.type === "machine_destroyed" && e.nation === you) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0);
-    if (e.type === "machine_captured" && e.nation === you) say(`mc${e.machine}`, `${name(e.by)} captured your ${machine}. Keep a stack beside your machines.`, 0);
-    if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0);
-    if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0);
-    if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0);
-    if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0);
-    if (e.type === "landing_failed" && e.nation === you) say(`lf${e.machine}`, e.why ? `The landing did not happen: ${e.why}.` : `The landing failed: all ${Math.round(e.lost)} troops were lost against the defenders.`, 0);
-    if (e.type === "machine_blocked" && e.nation === you) say(`mbk${e.machine}`, "A machine's way is blocked. Give it a new order.");
+    if (e.type === "machine_built" && e.nation === you) say(`mb${e.machine}`, `A ${machine} is ready.`, 0, "built", machineAt(e.machine));
+    if (e.type === "machine_destroyed" && e.nation === you) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
+    if (e.type === "machine_captured" && e.nation === you) say(`mc${e.machine}`, `${name(e.by)} captured your ${machine}. Keep a stack beside your machines.`, 0, "danger");
+    if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0, "good");
+    if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
+    if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0, "warn", stackAt(e.stack));
+    if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0, "good");
+    if (e.type === "landing_failed" && e.nation === you) say(`lf${e.machine}`, e.why ? `The landing did not happen: ${e.why}.` : `The landing failed: all ${Math.round(e.lost)} troops were lost against the defenders.`, 0, "danger");
+    if (e.type === "machine_blocked" && e.nation === you) say(`mbk${e.machine}`, "A machine's way is blocked. Give it a new order.", 5000, "warn", machineAt(e.machine));
     if (e.type === "kit" && e.nation === you) {
-      say("kit", "Your chieftain hut stands at the capital. The Town panel says what to do next.", 0);
+      say("kit", "Your chieftain hut stands at the capital. The Town panel says what to do next.", 0, "built", capital(you));
       if (w.purse) this.toggleTown(true);
       else this.townOnPurse = true;
     }
@@ -561,7 +564,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.nations, this.chat, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.nations, this.feed, this.stack, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.tip, this.adminPanel]) p?.update();
   }
 
   leave() {

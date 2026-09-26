@@ -18,7 +18,7 @@ function laterNote(w, z) {
 export function createBuildMenu(root, game) {
   const tabs = el("div", { class: "row wrap tabs" });
   const list = el("div", { class: "build-list" });
-  const box = el("section", { id: "build-menu", class: "panel topright", hidden: true },
+  const box = el("section", { id: "build-menu", class: "panel card", hidden: true },
     el("div", { class: "row spread" }, el("b", { class: "title", text: "Build" }), el("button", { class: "ghost", text: "Close", onclick: () => game.toggleBuildMenu(false) })),
     tabs, list);
   root.append(box);

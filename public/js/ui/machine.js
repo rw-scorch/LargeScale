@@ -11,7 +11,7 @@ export function createMachinePanel(root, game) {
   const desc = el("span", { id: "machine-desc", class: "desc" });
   const hint = el("span", { id: "machine-hint" });
   const actions = el("div", { class: "row wrap" });
-  const box = el("section", { id: "machine-panel", class: "panel bottom", hidden: true }, el("div", { class: "row" }, title, info), cargo, desc, hint, actions);
+  const box = el("section", { id: "machine-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), cargo, desc, hint, actions);
   root.append(box);
   let mode = null, key = "";
 

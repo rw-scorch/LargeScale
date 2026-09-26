@@ -34,6 +34,17 @@ async function login(page, name, password) {
   }
 }
 
+const overlaps = p => p.evaluate(() => {
+  const boxes = ["#nations", "#control", "#status-pill", "#corner", "#action-bar", "#feed"].map(s => { const r = document.querySelector(s)?.getBoundingClientRect(); return r && r.width ? { s, r } : null; }).filter(Boolean);
+  const hit = [];
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i].r, b = boxes[j].r;
+    if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) hit.push(`${boxes[i].s} and ${boxes[j].s}`);
+  }
+  const off = boxes.filter(({ r }) => r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight).map(b => b.s);
+  return { boxes: boxes.length, hit, off };
+});
+
 const ready = page => page.waitForFunction(() => window.__ls?.game?.view && window.__ls.game.world?.ownerReady, null, { timeout: 30000 });
 
 async function frames(page, setup, ms = 2000) {
@@ -82,6 +93,19 @@ const spawned = await page.evaluate(async () => {
 await page.waitForTimeout(1500);
 check(spawned && !(await page.isVisible("#spawn-hint")), `spawned at ${spawned?.x}, ${spawned?.y}; the hint goes away`);
 await page.screenshot({ path: `${OUT}/2-spawned-${MAP}.png` });
+const vit = await page.waitForFunction(() => { const v = window.__ls.game.world.purse?.vitals, t = document.querySelector("#my-troops")?.textContent ?? ""; return v && t.includes("/") && document.querySelector("#purse [data-res=gold]") ? { v, t, gold: document.querySelector("#purse [data-res=gold]").title } : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+check(vit?.v.cap > 0, `the control panel shows troops at home against the cap (${vit?.t}, growing ${vit?.v.grow} a second) and gold with its rate ("${vit?.gold}")`);
+const lay = await overlaps(page);
+check(lay.boxes === 6 && !lay.hit.length && !lay.off.length, `at 1280 by 720 the leaderboard, control panel, status pill, corner icons, action bar and events feed sit apart on screen (${JSON.stringify(lay)})`);
+const kitItem = page.locator("#feed-list .item", { hasText: "chieftain hut stands" });
+const kitSeen = await kitItem.waitFor({ timeout: 5000 }).then(() => true, () => false);
+await page.evaluate(() => window.__ls.game.fit());
+if (kitSeen) await kitItem.click();
+const jumped = await page.evaluate(() => { const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital; return Math.hypot(g.view.cam.x - (cap % w.w) - 0.5, g.view.cam.y - Math.floor(cap / w.w) - 0.5) < 1 && g.view.cam.scale / g.view.ratio >= 6; });
+check(kitSeen && jumped, "the events feed lists the starting hut, and clicking the line jumps to the capital");
+const clock = await page.textContent("#world-clock");
+const worldTime = await page.evaluate(() => window.__ls.game.world.time);
+check(/^Day \d+, \d\d:00$/.test(clock), `the status pill shows the world clock ("${clock}" at ${worldTime} game seconds)`);
 
 await page.keyboard.press("u");
 check(await page.isVisible("#research-panel"), "U opens the research panel");
@@ -102,7 +126,7 @@ check(learned, "the queue researches through to Palisades, Fire keeping and Bart
 await page.screenshot({ path: `${OUT}/2s-researched-${MAP}.png` });
 await page.keyboard.press("u");
 const kit = await page.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].some(b => b.owner === w.you && b.type === "chieftain_hut" && b.state === "active"); }, null, { timeout: 5000 }).then(() => true, () => false);
-const purseText = await page.textContent("#purse");
+const purseText = await page.evaluate(() => [...document.querySelectorAll("#purse .res")].map(r => r.title).join("; "));
 check(kit && /gold/.test(purseText), `the starting chieftain hut stands at the capital; the bar shows "${purseText}"`);
 await page.evaluate(() => { const g = window.__ls.game; g.home(); g.view.cam.scale = 22 * g.view.ratio; g.view.clampCamera(); });
 await page.keyboard.press("b");
@@ -270,7 +294,7 @@ const light = await page.evaluate(() => { const row = document.querySelector("#n
 const botLights = await page.evaluate(() => [...document.querySelectorAll("#nations tr")].filter(tr => /Bot/.test(tr.textContent) && tr.querySelector(".dot")).length);
 check(light?.on && botLights === 0, `the nations list shows a green light for you while you are online (${light?.colour}), and none for bots`);
 
-await page.click("#chat .title");
+await page.click("#feed-chat");
 await page.fill("#chat-input", "hello from the real client");
 await page.click("#chat-send");
 const chatted = await page.waitForFunction(() => document.querySelector("#chat .lines")?.textContent.includes("hello from the real client"), null, { timeout: 5000 }).then(() => true, () => false);
@@ -310,7 +334,9 @@ check(/another tab/.test(replaced), `the desktop tab is told the game opened els
 const phoneFrames = await frames(phone, () => window.__ls.game.home());
 console.log(`phone frame times near home: ${JSON.stringify(phoneFrames)}`);
 await phone.screenshot({ path: `${OUT}/8-phone-landscape-${MAP}.png` });
-const hudBox = await phone.locator(".hud").boundingBox();
+const phoneLay = await overlaps(phone);
+check(!phoneLay.hit.length && !phoneLay.off.length, `on a phone held sideways (844 by 390) the panels sit apart too (${JSON.stringify(phoneLay)})`);
+const hudBox = await phone.locator("#status-pill").boundingBox();
 for (let k = 0; k < 2; k++) { await phone.touchscreen.tap(hudBox.x + hudBox.width / 2, hudBox.y + hudBox.height / 2); await phone.waitForTimeout(80); }
 await phone.waitForTimeout(500);
 const pageZoom = await phone.evaluate(() => window.visualViewport?.scale ?? 1);
@@ -499,7 +525,7 @@ const neighbour = await fix.evaluate(async id => {
 await fix.keyboard.press("n");
 const asked = await fix.textContent("#stack-hint");
 if (neighbour) await fix.mouse.click(neighbour.x, neighbour.y);
-const told = await fix.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).find(o => o.only === id) ? document.querySelector("#stack-info").textContent : /A stack stopped/.test(document.querySelector("#toasts")?.textContent ?? "") ? "done at once" : null, neighbour?.id, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+const told = await fix.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).find(o => o.only === id) ? document.querySelector("#stack-info").textContent : /A stack stopped/.test(document.querySelector("#feed")?.textContent ?? "") ? "done at once" : null, neighbour?.id, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
 check(/Click the land of the nation/.test(asked) && told, `N asks which nation, and clicking ${neighbour?.name}'s land sets the advance: "${told?.trim()}"`);
 const drawSpots = id => fix.evaluate(id => {
   const g = window.__ls.game, w = g.world, v = g.view, s = w.stacks.get(id), land = t => t >= 7 && t <= 26;
@@ -614,7 +640,7 @@ const gold1 = await fix.waitForFunction(g => (window.__ls.game.world.purse?.mone
 check(gold1 !== null, `+ Gold gives 2500: ${gold0} to ${gold1}`);
 await fix.click("#admin-panel [data-speed='2']");
 const badge = await fix.waitForSelector("#world-speed:not([hidden])", { timeout: 5000 }).then(() => fix.textContent("#world-speed"), () => "");
-check(badge === "2x speed", `the speed buttons set the world speed, shown in the bar: "${badge}"`);
+check(badge === "2x", `the speed buttons set the world speed, shown in the bar: "${badge}"`);
 await fix.click("#admin-end");
 const armedText = await fix.textContent("#admin-end");
 await fix.click("#admin-end");
@@ -753,12 +779,14 @@ await fix.waitForFunction(id => window.__ls.game.world.machines.has(id), cog, { 
 await between(cat, knightStack);
 await fix.waitForTimeout(300);
 const catSpot = await screenAt(fix, { machine: cat });
+const catUnder = catSpot && await fix.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e?.id || e?.closest("[id]")?.id || e?.tagName; }, [catSpot.x, catSpot.y]);
 if (catSpot) await fix.mouse.click(catSpot.x, catSpot.y);
 const catTitle = await fix.waitForSelector("#machine-panel:not([hidden])", { timeout: 3000 }).then(() => fix.textContent("#machine-title"), () => "");
+const catPicked = await fix.evaluate(() => { const g = window.__ls.game, p = document.querySelector("#machine-panel"); return { stack: g.selected, machine: g.selectedMachine, building: g.selectedBuilding, shown: !p.hidden, h: p.getBoundingClientRect().height }; });
 const stackSpot = await screenAt(fix, { stack: knightStack });
 if (stackSpot) await fix.mouse.click(stackSpot.x, stackSpot.y, { button: "right" });
 const following = await fix.waitForFunction(([c, s]) => window.__ls.game.world.purse?.machines?.orders?.some(o => o.id === c && o.follow === s), [cat, knightStack], { timeout: 5000 }).then(() => true, () => false);
-check(catTitle === "Your catapult" && following, `clicking the catapult opens its panel ("${catTitle}"), and a right-click on your stack makes it follow`);
+check(catTitle === "Your catapult" && following, `clicking the catapult at ${JSON.stringify(catSpot)} over ${catUnder} opens its panel ("${catTitle}", ${JSON.stringify(catPicked)}), and a right-click on your stack makes it follow`);
 await fix.evaluate(id => window.__ls.game.select(id), knightStack);
 await between(cog, knightStack);
 await fix.waitForTimeout(300);
