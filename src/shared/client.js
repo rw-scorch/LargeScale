@@ -57,6 +57,7 @@ export class ClientWorld {
     this.consRules = { demolishRefund: 0.5, refundOnCancel: 0.5, instantPremium: 1.5, moneyForMissing: 4, ...hello.consRules };
     this.disbandLoss = hello.disbandLoss ?? 0.25;
     this.seasonRules = { dayLengthMinutes: 60, daysPerSeason: 6, ...hello.seasonRules };
+    this.time = hello.time ?? 0;
     this.changed = [];
     this.depositIds = hello.depositIds ?? [];
     this.depositNames = hello.depositNames ?? [];
