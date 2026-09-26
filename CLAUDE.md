@@ -171,7 +171,7 @@ Ryan chose unit types inside stacks (26 September 2026) over drawn soldiers only
 
 Open items as of 26 September 2026, in order:
 
-1. Ryan reviews and merges PR 14 (`m3-troop-types`), then the machine units branch (`m3-machines`), then redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. Ryan reviews and merges PR 14 (`m3-troop-types`), then PR 15 (`m3-machines`, machine units), then redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types and machines (milestone three, A4 and B5).
 3. A "guard" standing order that sends a stack out to meet enemies inside your land, if that is what Ryan meant by autodefend (asked 26 September 2026).
 4. Part C, the new interface: study openfront.io and frontwars.io, then plan.
