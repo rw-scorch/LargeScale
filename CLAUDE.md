@@ -221,7 +221,7 @@ Ryan's decisions (26 September 2026): towers and forts change combat; stop at th
 
 Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roads, army supply, stores and convoys, sea routes. Ryan checks each part before the next.
 
-- **Part A, roads and bridges (27 September 2026, branch `m5-roads`, stacked on `devpack-2026-09-27`).**
+- **Part A, roads and bridges (27 September 2026, branch `m5-roads`, PR 24).**
   - `src/shared/roads.js` is shared by the server and the client's preview.
   - The kit's `src/sim/logistics.js` gains `installRoads`, `layRoad`, `setRoad`, `restoreRoads` and `takeRoadNews`. Roads change `world.moveCost`, which stacks, land machines and route planning all use. Use `world.pathMinStep()` as a search's `minStep`.
   - The layer is `world.log.road`, saved through `bld.extra` and sent as `MSG.ROAD` and `MSG.ROAD_DIFF`.
@@ -231,7 +231,7 @@ Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roa
 
 Open items as of 27 September 2026, in order:
 
-1. PRs 14 to 23 are merged (27 September 2026). Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14 to 23 are merged (27 September 2026). PR 24 (`m5-roads`: the dev pack, the milestone five and six plans, and roads) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads before Part B.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A new main menu (the world list and login), which Ryan finds bland. Later, at his word. Also later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
