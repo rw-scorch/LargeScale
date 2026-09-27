@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (182)
+npm test                  # unit tests (195)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -216,6 +216,18 @@ Ryan's decisions (26 September 2026): towers and forts change combat; stop at th
   - **Schedules.** `src/shared/schedule.js` checks the four times (start, peace ends, overtime begins, end) and gives the phase. The admin op `schedule` saves them in `meta` `schedule` and in the directory's world `config`, for the world list. Before the start only `spawn` is accepted; during peace a wrapper on `sim.hostile` stops humans attacking humans; at the end `endBySchedule` gives the win to the player with the most land. Each event is broadcast once as `phase`; `hello` carries `schedule`, `info` and `now`.
   - **Overtime** (`src/sim/overtime.js`, `installOvertime`, a `live` hook): every `shrinkEvery` seconds each nation's border ring except its capital turns unclaimed, spread over ticks (`rules.json` `overtime`, `schedule`). State carries `shrinkIn`.
   - **World info** (`public/js/ui/worldinfo.js`, I): the schedule with countdowns, how to win, the settings, and the host's editor. The status bar counts down to the next event; the feed reminds at an hour, ten minutes and a minute.
+
+## Milestone five progress
+
+Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roads, army supply, stores and convoys, sea routes. Ryan checks each part before the next.
+
+- **Part A, roads and bridges (27 September 2026, branch `m5-roads`, stacked on `devpack-2026-09-27`).**
+  - `src/shared/roads.js` is shared by the server and the client's preview.
+  - The kit's `src/sim/logistics.js` gains `installRoads`, `layRoad`, `setRoad`, `restoreRoads` and `takeRoadNews`. Roads change `world.moveCost`, which stacks, land machines and route planning all use. Use `world.pathMinStep()` as a search's `minStep`.
+  - The layer is `world.log.road`, saved through `bld.extra` and sent as `MSG.ROAD` and `MSG.ROAD_DIFF`.
+  - The `road` order lays dirt, or cobble after Paved roads; bridges over rivers cost 5 times and mountain roads 4 times (`rules.json` `roads`).
+  - Roads and buildings keep off each other's plots.
+  - The Roads tab is in the build menu (B).
 
 Open items as of 27 September 2026, in order:
 

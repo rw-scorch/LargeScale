@@ -28,7 +28,7 @@ Four parts, each tested and shown to Ryan before the next: roads first, because 
 ### Part A. Roads and bridges
 
 - **The road layer.** One byte a plot, the kit's road types: dirt, cobble, paved, highway and rail. Saved like zones: one row, written only when changed. Clients get it in a join frame and small diffs.
-- **Laying roads.** A Roads tab in the build menu. You drag along your own land, as when zoning, with a mouse or a finger, and see the cost before confirming.
+- **Laying roads.** A Roads tab in the build menu. You drag along your own land, as when zoning, with a mouse or a finger. The plots and the price show while you drag, and letting go lays the road.
   - Dirt roads from the start: 1 gold a plot.
   - Cobble with the Medieval Paved roads node (already in the tree): 3 gold and 1 stone a plot.
   - Mountains cost 4 times as much.
@@ -39,6 +39,25 @@ Four parts, each tested and shown to Ryan before the next: roads first, because 
 - **Removing.** A drag with Remove erases your own roads, with no refund.
 - **Drawn** with the kit's road and bridge sprites at close zoom, and as thin lines further out.
 - **The catch.** Cheaper roads weaken the path search's distance estimate, so long searches get slower. The bench must show long moves on Earth stay within budget. If they don't, roads join the coarse land-region graph that long moves already use.
+
+#### Part A progress (27 September 2026, branch `m5-roads`)
+
+Built and tested; waiting for Ryan's check before Part B.
+
+- **Server.** `src/shared/roads.js` holds the road types, the line between points, the price and the sprite choice, so the client's preview and the server agree. The kit's `src/sim/logistics.js` keeps its road layer and gains `installRoads`:
+  - `moveCost` multiplies by the road's travel cost, so stacks, land machines and route planning all use roads;
+  - `pathMinStep` lowers the search estimate only once a cheaper road type exists;
+  - the layer saves through `bld.extra` and is compared on reload;
+  - clients get `MSG.ROAD` at join and `MSG.ROAD_DIFF` after.
+- **The `road` order** takes `kind` (dirt, cobble or none) and `via`, up to 64 points and 400 plots. Rules are in `rules.json` `roads`; on fine maps a plot costs half.
+- **Found while building:** roads and buildings could share a plot. Now a road is refused where a building stands, a building is refused on a road, and towns skip road plots. Rubble blocks neither.
+- **Client.** The Roads tab, drawing by drag, one finger or the crosshair (Select twice), the live price in the bar, sprites above the territory tint at close zoom, edged lines further out, and the road's name in the tip.
+- **Evidence.**
+  - `npm test` 195 of 195: `test/roads.test.js` (8 tests), and the kit's five logistics tests in `test/kit/logistics.test.js`. A stack crosses 40 plots of grass in 26.75 s and the same distance on a dirt road in 16 s.
+  - Reference 95 of 95.
+  - Smoke 103 of 103: a road laid, seen by the friend, refused off your land and as cobble before research, and removed. After a restart the road layer loads identically.
+  - `npm run ui` 147 of 147 on the test map: the Roads tab, a drag with its price, Esc, the tip, and one finger on a phone.
+  - `npm run bench` on the Earth with 3,435 cobbled road plots: worst tick 29.4 ms (32.5 ms without roads), and the slowest long-move plan 9.5 ms (8.4 ms without). Fine Europe with 3,387: worst tick 30.4 ms, slowest move plan 9.7 ms.
 
 ### Part B. Army supply
 
