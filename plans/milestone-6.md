@@ -135,7 +135,7 @@ The early tank is the first machine that helps take land itself (siege 1.5 where
 ## Budgets
 
 - Rail lives in milestone five's road layer. Power poles are buildings; the grid is worked out from them, not saved.
-- New unit numbers start at 22 and building numbers at 56; nothing already saved changes number.
+- New unit numbers start at 23 (22 is the free transport boat) and building numbers at 56; nothing already saved changes number.
 
 ## Decisions (answered by Ryan, 27 September 2026)
 
