@@ -219,7 +219,7 @@ Ryan's decisions (26 September 2026): towers and forts change combat; stop at th
 
 Open items as of 27 September 2026, in order:
 
-1. PRs 14 to 19 are merged (27 September 2026). PR 20 (`m2-step7-away`, economy while away), PR 21 (`m2-policies`) and PR 22 (`m4-asks`, stacked on them) wait for Ryan; `m4-swipe` (swipe, schedules, overtime) is stacked on PR 22. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14 to 22 are merged (27 September 2026). PR 23 (`m4-swipe`: swipe, away advances, schedules, overtime) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A new main menu (the world list and login), which Ryan finds bland. Later, at his word. Also later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. After it, as Ryan agreed: the Industrial slice with Age of Industry and a steel mill, then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
