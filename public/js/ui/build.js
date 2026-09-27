@@ -1,5 +1,8 @@
 import { el } from "./dom.js";
 import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
+import { ROAD_NAMES } from "../shared/roads.js";
+
+const ROAD_TOOLS = [["dirt", "Tracks anyone can lay from the start. Troops, machines and carts cross them faster."], ["cobble", "Faster than dirt. Needs Paved roads research and stone."], ["none", "Takes up your roads. Nothing is refunded."]];
 
 const ZONE_TOOLS = [["res", "Residential", "Homes. Huts go up while people want them."], ["com", "Commercial", "Shops and stalls give jobs."], ["ind", "Industrial", "Workshops, from the Medieval era."], ["none", "Erase", "Removes zoning. Buildings stay."]];
 
@@ -45,13 +48,25 @@ export function createBuildMenu(root, game) {
       const w = game.world;
       if (box.hidden || !w?.defs) return;
       const defs = Object.values(w.defs.table).filter(d => !d.civilian);
-      const cats = ["zones", ...new Set(defs.map(d => d.category))];
+      const cats = ["zones", ...(w.roadRules ? ["roads"] : []), ...new Set(defs.map(d => d.category))];
       tab ??= "zones";
       const rows = defs.filter(d => d.category === tab).sort((a, b) => eraIdx(a.era) - eraIdx(b.era) || a.num - b.num);
-      const k = `${tab}:${game.building}:${game.zoning}:${rows.map(d => why(w, d)).join("|")}:${[...w.known()].join()}`;
+      const k = `${tab}:${game.building}:${game.zoning}:${game.roading}:${rows.map(d => why(w, d)).join("|")}:${[...w.known()].join()}`;
       if (k === key) return;
       key = k;
-      tabs.replaceChildren(...cats.map(c => el("button", { class: c === tab ? "on" : "", text: c === "zones" ? "Zones" : CATEGORY_NAMES[c] ?? c, onclick: () => { tab = c; key = ""; this.update(); } })));
+      tabs.replaceChildren(...cats.map(c => el("button", { class: c === tab ? "on" : "", text: c === "zones" ? "Zones" : c === "roads" ? "Roads" : CATEGORY_NAMES[c] ?? c, onclick: () => { tab = c; key = ""; this.update(); } })));
+      if (tab === "roads") {
+        const r = w.roadRules, scale = r.scale ?? 1;
+        list.replaceChildren(...ROAD_TOOLS.map(([kind, text]) => {
+          const t = r.types[kind], locked = t?.needs && cap(w.lockOf(t.needs));
+          const cost = t ? costText(Object.fromEntries(Object.entries(t.cost).map(([k, v]) => [k, +(v / scale).toFixed(2)]))) : null;
+          return el("button", { class: `build-item${game.roading === kind ? " on" : ""}`, "data-road": kind, disabled: !!locked, onclick: () => game.startRoad(kind) },
+            el("span", { class: "row spread" }, el("b", { text: kind === "none" ? "Remove road" : ROAD_NAMES[kind] }), cost ? el("span", { class: "muted", text: `${cost} a plot` }) : null),
+            el("span", { class: "desc", text }), locked ? el("span", { class: "why", text: locked }) : null);
+        }),
+          el("p", { class: "muted", text: `Drag along your own land; letting go lays the road. Bridges over rivers cost ${r.bridge} times as much, and roads on mountains ${r.rough} times. Roads stay when land changes hands.` }));
+        return;
+      }
       if (tab === "zones") {
         list.replaceChildren(...ZONE_TOOLS.map(([z, name, text]) => {
           const locked = z !== "none" && cap(w.lockOf(z, "zones"));

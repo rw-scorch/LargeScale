@@ -15,11 +15,11 @@ export function createAim(root, game) {
       const on = !!game.prefs.crosshair && !!game.world?.ready;
       cross.hidden = bar.hidden = !on;
       select.classList.toggle("on", !!game.aimHeld);
-      const shaping = game.zoning || game.painting();
+      const shaping = game.zoning || game.roading || game.painting();
       hint.hidden = !on || !shaping;
       hint.textContent = !shaping ? "" : game.aimHeld?.sticky
-        ? (game.zoning ? "Move the view to size the area, then press Select to zone it." : "Move the view to paint along, then press Select to stop.")
-        : (game.zoning ? "Press Select to mark one corner of the zone." : "Press Select to start painting buildings.");
+        ? (game.roading ? "Move the view along the way the road goes, then press Select to lay it." : game.zoning ? "Move the view to size the area, then press Select to zone it." : "Move the view to paint along, then press Select to stop.")
+        : (game.roading ? "Press Select where the road starts." : game.zoning ? "Press Select to mark one corner of the zone." : "Press Select to start painting buildings.");
     },
   };
 }

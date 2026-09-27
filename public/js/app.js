@@ -13,7 +13,9 @@ import { createNations } from "./ui/nations.js";
 import { createFeed } from "./ui/feed.js";
 import { createStackPanel } from "./ui/stack.js";
 import { createNotices } from "./ui/notice.js";
-import { createBuildMenu } from "./ui/build.js";
+import { createBuildMenu, costText } from "./ui/build.js";
+import { roadPlan, roadLine, ROAD_NAMES } from "./shared/roads.js";
+import { simplifyPath } from "./shared/pathfind.js";
 import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel, nodeFor } from "./ui/town.js";
 import { createResearchPanel } from "./ui/research.js";
@@ -77,6 +79,7 @@ class Game {
     this.placing = false;
     this.building = null;
     this.zoning = null;
+    this.roading = null;
     this.ghostAt = null;
     this.selectedBuilding = null;
     this.selectedMachine = null;
@@ -128,13 +131,13 @@ class Game {
       onTap: (x, y) => this.tap(x, y),
       onSecondary: (x, y) => this.secondary(x, y),
       onHover: (x, y) => { if (this.prefs.crosshair) return; this.hover = x === null ? null : [x, y]; this.tip.update(); },
-      dragging: () => !this.prefs.crosshair && (!!this.zoning || this.painting()),
-      rightPans: () => !this.prefs.crosshair && (!!this.zoning || this.painting()),
+      dragging: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting()),
+      rightPans: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting()),
       swipeStart: (x, y, e) => this.swipeStart(x, y, e),
       onSwipe: (kind, line) => this.swiping(kind, line),
       onSwipeEnd: (kind, line) => this.swiped(kind, line),
-      onDrag: (a, b) => (this.building ? this.paintAt(b) : this.dragZone(a, b)),
-      onDragEnd: (a, b) => (this.building ? this.paintAt(b, true) : this.paintZone(a, b)),
+      onDrag: (a, b) => (this.roading ? this.dragRoad(a, b) : this.building ? this.paintAt(b) : this.dragZone(a, b)),
+      onDragEnd: (a, b) => (this.roading ? (this.dragRoad(a, b), this.layRoad()) : this.building ? this.paintAt(b, true) : this.paintZone(a, b)),
       tracing: () => this.stack.drawing,
       onTrace: line => this.trace(line),
       onTraceEnd: line => this.traced(line),
@@ -258,6 +261,7 @@ class Game {
     if (!this.world) return;
     const r = this.world.frame(data);
     if (!r || !this.view) return;
+    if (r.layer === "road") return r.all ? this.view.indexRoads() : this.view.updateRoads(r.plots);
     if (r.layer === "zone" || r.layer === "deposits") return;
     if (r.layer === "terrain" && r.plots) return this.view.updateTerrain(r.plots);
     if (r.layer === "buildings") { this.world.takeChanged(); this.view.indexBuildings(); }
@@ -323,10 +327,11 @@ class Game {
   aimDown() {
     if (!this.prefs.crosshair || !this.view) return;
     const c = this.centre();
-    if (this.zoning || this.painting()) {
+    if (this.zoning || this.roading || this.painting()) {
       if (this.aimHeld?.sticky) return this.aimFinish();
       this.aimHeld = { start: this.view.screenToPlot(...c), sticky: true };
-      if (this.zoning) this.dragZone(c, c);
+      if (this.roading) { this.roadStroke = null; this.dragRoad(c, c); }
+      else if (this.zoning) this.dragZone(c, c);
       else { this.stroke = null; this.paintAt(c); }
       return this.updatePanels();
     }
@@ -343,13 +348,15 @@ class Game {
     this.updatePanels();
     if (!h || !this.view) return;
     const c = this.centre();
+    if (this.roading) { this.dragRoad(c, c); return this.layRoad(); }
     if (this.zoning) return this.paintZone(this.view.plotToScreen(...h.start), c);
     if (this.painting()) this.paintAt(c, true);
   }
 
   aimMove() {
     const h = this.aimHeld, c = this.centre();
-    if (this.zoning) this.dragZone(this.view.plotToScreen(...h.start), c);
+    if (this.roading) this.dragRoad(c, c);
+    else if (this.zoning) this.dragZone(this.view.plotToScreen(...h.start), c);
     else if (this.painting()) this.paintAt(c);
   }
 
@@ -396,7 +403,7 @@ class Game {
     if (action === "cancel") {
       if (this.aimHeld?.sticky) { this.aimHeld = null; if (this.view) this.view.zoneRect = null; this.stroke = null; this.updatePanels(); }
       else if (this.pinned !== null) this.unpin();
-      else if (this.building || this.zoning) this.stopBuild();
+      else if (this.building || this.zoning || this.roading) this.stopBuild();
       else if (this.layout.editing) this.layout.stop(true);
       else if (this.away.open) this.away.show(false);
       else if (this.settings.open) this.toggleSettings(false);
@@ -511,12 +518,53 @@ class Game {
     if (node) this.toast(`Homes zoned. Huts go up once you know ${node.name}; it is in your research (U).`);
   }
 
+  startRoad(kind) {
+    this.startBuild(null);
+    this.roading = kind;
+    this.updatePanels();
+  }
+
+  dragRoad(a, b) {
+    if (!this.view || !this.roading) return;
+    const p = this.plotAt(...b);
+    if (!this.roadStroke) { const s = this.plotAt(...a); this.roadStroke = s === null ? [] : [s]; }
+    if (p !== null && this.roadStroke[this.roadStroke.length - 1] !== p) this.roadStroke.push(p);
+    this.roadPreview = this.planRoad();
+    this.view.roadPlan = this.roadPreview && { line: this.roadPreview.line, ok: !this.roadPreview.error };
+  }
+
+  planRoad() {
+    const w = this.world, stroke = this.roadStroke;
+    if (!stroke?.length) return null;
+    const pts = simplifyPath(stroke.map(i => [i % w.w, (i / w.w) | 0]), w.roadRules?.maxPoints ?? 64).map(([x, y]) => y * w.w + x);
+    const blocked = i => { const b = w.buildingAt(i); return !!b && b.state !== "rubble"; };
+    const plan = roadPlan({ w: w.w, terrain: w.terrain, road: w.roads, owner: w.owner, blocked }, w.you, pts, this.roading, w.roadRules ?? undefined, w.roadRules?.scale ?? 1);
+    return { ...plan, pts, line: roadLine(w.w, pts) };
+  }
+
+  async layRoad() {
+    const plan = this.planRoad(), kind = this.roading;
+    this.roadStroke = null;
+    this.roadPreview = null;
+    if (this.view) this.view.roadPlan = null;
+    this.updatePanels();
+    if (!plan) return;
+    if (plan.error) return this.toast(plan.error[0].toUpperCase() + plan.error.slice(1) + ".");
+    if (!plan.plots.length) return this.toast(kind === "none" ? "There is no road of yours there." : "That road is already there.");
+    const r = await this.conn.request({ t: "road", kind, via: plan.pts });
+    if (!r.ok) return this.toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + "." : "Could not lay the road.");
+    this.toast(kind === "none" ? `Removed ${r.laid} plots of road.` : `Laid ${r.laid} plots of ${ROAD_NAMES[kind].toLowerCase()} for ${costText(r.cost)}${r.bridges ? `, ${r.bridges} of them bridges` : ""}.`);
+  }
+
   startBuild(type) {
     this.togglePlacing(false);
     if (this.aimHeld?.sticky) this.aimHeld = null;
     this.stack.cancel();
     this.select(null);
     this.zoning = null;
+    this.roading = null;
+    this.roadStroke = null;
+    if (this.view) this.view.roadPlan = null;
     if (this.view) { this.view.showZones = false; this.view.zoneRect = null; }
     this.building = type;
     const def = type && this.world?.defs.table[type];
@@ -532,7 +580,9 @@ class Game {
     this.pinned = null;
     this.stroke = null;
     this.zoning = null;
-    if (this.view) { this.view.showZones = false; this.view.zoneRect = null; }
+    this.roading = null;
+    this.roadStroke = null;
+    if (this.view) { this.view.showZones = false; this.view.zoneRect = null; this.view.roadPlan = null; }
     this.ghostAt = null;
     if (this.view) this.view.ghost = null;
     this.updatePanels();
@@ -682,12 +732,12 @@ class Game {
   }
 
   trace(line) {
-    if (!this.placing && !this.building && !this.zoning) this.stack.trace(line);
+    if (!this.placing && !this.building && !this.zoning && !this.roading) this.stack.trace(line);
   }
 
   traced(line) {
     if (line && this.placing) return this.togglePlacing(false);
-    if (line && (this.building || this.zoning)) return this.stopBuild();
+    if (line && (this.building || this.zoning || this.roading)) return this.stopBuild();
     return this.stack.traceEnd(line);
   }
 
@@ -697,7 +747,7 @@ class Game {
     if (plot === null) return;
     if (this.placing) return this.togglePlacing(false);
     if (this.pinned !== null) return this.unpin();
-    if (this.building || this.zoning) return this.stopBuild();
+    if (this.building || this.zoning || this.roading) return this.stopBuild();
     this.stack.cancel();
     this.machinePanel.cancel();
     const w = this.world, me = w.nations.get(w.you);
@@ -733,6 +783,7 @@ class Game {
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
     const x = plot % w.w, y = (plot / w.w) | 0;
+    if (this.roading) { this.roadStroke = null; this.dragRoad([sx, sy], [sx, sy]); return this.layRoad(); }
     if (this.zoning) return this.paintZone([sx, sy], [sx, sy]);
     if (this.building) return this.buildAt(plot);
     if (this.placing) {
@@ -785,7 +836,7 @@ class Game {
   }
 
   swipeStart(sx, sy, e) {
-    if (this.prefs.crosshair || this.building || this.zoning || this.placing || this.stack.choosing || this.machinePanel.choosing || this.groupPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
+    if (this.prefs.crosshair || this.building || this.zoning || this.roading || this.placing || this.stack.choosing || this.machinePanel.choosing || this.groupPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
     if (e.shiftKey && e.pointerType === "mouse") return "box";
     const id = this.view.stackAt(sx, sy);
     return id !== null && this.world.stacks.get(id)?.owner === this.world.you ? "swipe" : null;

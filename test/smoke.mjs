@@ -70,7 +70,7 @@ class Mirror {
       });
       this.baseHashOk = true;
     } catch { this.baseHashOk = false; return this; }
-    const need = this.hello.frames.terrain + this.hello.frames.owner + (this.hello.frames.buildings ?? 0) + (this.hello.frames.zone ?? 0) + (this.hello.frames.deposits ?? 0);
+    const need = this.hello.frames.terrain + this.hello.frames.owner + (this.hello.frames.buildings ?? 0) + (this.hello.frames.zone ?? 0) + (this.hello.frames.road ?? 0) + (this.hello.frames.deposits ?? 0);
     for (let k = 0; k < 200 && this.got.binary.length < this.bin + need; k++) await sleep(50);
     this.pump(this.bin + need);
     this.joinFrameBytes = this.frameBytes;
@@ -253,6 +253,27 @@ check(aSpawn >= 0, "player spawns on land");
   check((await zr("mall", cx, cy, 2, 2))?.error === "unknown zone" && (await zr("res", 0, 0, 65, 1))?.error === "zone at most 64 by 64 plots at a time", "bad zone orders are refused with a reason");
   const zoneFrames = () => B.binary.filter(f => f[0] === MSG.ZONE_DIFF).length;
   check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
+  const rr = async (kind, via) => { A.ws.send(JSON.stringify({ t: "road", kind, via })); return nextResult(A, "road"); };
+  const runNear = () => {
+    for (let dy = -7; dy <= 7; dy++) {
+      let run = [];
+      for (let dx = -9; dx <= 9; dx++) {
+        const i = (cy + dy) * M.w + cx + dx;
+        if (cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && !cw.zone[i]) { run.push(i); if (run.length >= 6) return run; } else run = [];
+      }
+    }
+    return null;
+  };
+  const run = runNear(), gold0 = cw.purse.money;
+  const laid = run && await rr("dirt", [run[0], run[5]]);
+  const roadSeen = laid?.ok && await until(() => { view.pump(); return run.every(i => cw.roads[i] === 1); }, 3000);
+  const friendRoad = await until(() => B.binary.some(f => f[0] === MSG.ROAD_DIFF), 3000);
+  const foreign = cw.owner.findIndex((o, i) => o !== you && isLand(cw.terrain[i]) && isLand(cw.terrain[i + 1]) && cw.owner[i + 1] !== you);
+  const offLand = await rr("dirt", [foreign, foreign + 1]), lockedCobble = run && await rr("cobble", [run[0], run[1]]);
+  const removed = run && await rr("none", [run[0], run[5]]);
+  const roadGone = removed?.ok && await until(() => { view.pump(); return run.every(i => !cw.roads[i]); }, 3000);
+  check(laid?.ok && laid.laid === 6 && roadSeen && friendRoad && offLand?.error === "roads go on your own land" && /Paved roads/.test(lockedCobble?.error ?? "") && removed?.laid === 6 && roadGone,
+    `a dirt road of ${laid?.laid} plots costs ${JSON.stringify(laid?.cost)} (gold ${gold0} before), reaches both clients, is refused off your land ("${offLand?.error}") and as cobble before research ("${lockedCobble?.error}"), and comes up again for free`);
   const townClock = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
   const town = await until(() => {
     view.pump();

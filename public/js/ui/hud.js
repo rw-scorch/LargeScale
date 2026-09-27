@@ -2,6 +2,8 @@ import { el, fmt } from "./dom.js";
 import { keyTag } from "./stack.js";
 import { icon } from "./icons.js";
 import { nextLine, when } from "./worldinfo.js";
+import { costText } from "./build.js";
+import { ROAD_NAMES } from "../shared/roads.js";
 
 const STATUS = { online: "Online", connecting: "Connecting", reconnecting: "Reconnecting", waiting: "Offline", replaced: "Opened elsewhere", outdated: "Needs reload", closed: "Closed", removed: "Removed", deleted: "Deleted" };
 const RES_ICON = { gold: "res_money", concrete: "res_stone" };
@@ -148,15 +150,19 @@ export function createHud(root, game) {
 
       placeHint.hidden = !game.placing;
       const def = game.building && w?.defs.table[game.building];
-      buildHint.hidden = !def && !game.zoning;
+      buildHint.hidden = !def && !game.zoning && !game.roading;
       paint.hidden = !def;
       paint.textContent = `Paint: ${game.prefs.paint ? "on" : "off"}`;
       paint.classList.toggle("on", !!game.prefs.paint);
-      const mode = !def ? "zone" : game.prefs.paint ? "paint" : game.placeMode() === "click" ? "click" : game.pinned !== null ? "pinned" : "confirm";
-      const k = `${mode}:${def?.id}:${game.zoning}`;
+      const mode = game.roading ? "road" : !def ? "zone" : game.prefs.paint ? "paint" : game.placeMode() === "click" ? "click" : game.pinned !== null ? "pinned" : "confirm";
+      const rp = game.roadPreview, rr = w?.roadRules;
+      const roadCost = mode !== "road" ? "" : rp?.error ? `${rp.error[0].toUpperCase()}${rp.error.slice(1)}.` : rp ? (rp.plots.length ? `${rp.plots.length} plots: ${costText(rp.cost)}.` : "Already there.") : "";
+      const k = `${mode}:${def?.id}:${game.zoning}:${game.roading}:${roadCost}`;
       if (k !== hintKey) {
         hintKey = k;
-        buildText.replaceChildren(...(mode === "zone" ? [`${game.zoning === "none" ? "Erasing zones" : "Zoning"}: drag over your land. `, ...both("Right-click or Esc stops.", "Two fingers move the map.")]
+        const price = c => `${costText(c.cost)} a plot`;
+        buildText.replaceChildren(...(mode === "road" ? (game.roading === "none" ? ["Removing roads: drag along the roads to take up. "] : [`Laying ${ROAD_NAMES[game.roading].toLowerCase()}: drag along your land. ${rr?.types[game.roading] ? `${price(rr.types[game.roading])}, ${rr.bridge} times over rivers, ${rr.rough} times on mountains. ` : ""}`]).concat(roadCost ? [el("b", { id: "road-cost", text: `${roadCost} ` })] : [], both("Right-click or Esc stops.", "Two fingers move the map."))
+          : mode === "zone" ? [`${game.zoning === "none" ? "Erasing zones" : "Zoning"}: drag over your land. `, ...both("Right-click or Esc stops.", "Two fingers move the map.")]
           : mode === "paint" ? [`Painting ${def.name}: drag across your land to put one on every free spot. `, ...both("Right-drag or the arrow keys move the map; Esc stops.", "Two fingers move the map.")]
           : mode === "click" ? [`Placing ${def.name}. `, ...both("Click to build. Right-click or Esc stops.", "Tap twice to build.")]
           : mode === "pinned" ? [`Placing ${def.name}: press Build here to confirm, or pick another spot. `, ...both("Enter confirms, Esc cancels.", "")]
