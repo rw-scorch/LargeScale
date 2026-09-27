@@ -109,8 +109,8 @@ if (process.env.RECHECK) {
   check(lc?.loaded.terrain === last.hashes.terrain && lc?.loaded.owner === last.hashes.owner, `after a restart the ${st.map?.kind} world loads terrain ${lc?.loaded.terrain} and owner ${lc?.loaded.owner}, the same as before (${last.hashes.terrain}, ${last.hashes.owner})`);
   check(lc?.saved?.owner === lc?.loaded.owner, `the owner hash stored with the save matches the decoded layer (load took ${st.loadMs} ms)`);
   check(st.loaded && (st.loaded.upgradedFrom === null || st.loaded.upgradedFrom === 2), st.loaded?.upgradedFrom ? `a format ${st.loaded.upgradedFrom} save loaded as format 3, with ${st.loaded.buildings} buildings` : `the format 3 save loaded with ${st.loaded?.buildings} buildings`);
-  const layers = ["zone", "wood", "buildings", "land"].filter(k => last.hashes[k]);
-  check(layers.every(k => lc?.loaded[k] === last.hashes[k]), layers.length ? `zone, wood, building and land layers load identically (${layers.map(k => `${k} ${lc?.loaded[k]}`).join(", ")})` : "the save had no zone, wood or building layers yet");
+  const layers = ["zone", "wood", "buildings", "land", "road"].filter(k => last.hashes[k]);
+  check(layers.every(k => lc?.loaded[k] === last.hashes[k]), layers.length ? `zone, wood, building, land and road layers load identically (${layers.map(k => `${k} ${lc?.loaded[k]}`).join(", ")})` : "the save had no zone, wood or building layers yet");
   const again = await connect(last.wid, last.token);
   const h = await waitFor(again, m => m.t === "hello");
   const n = h?.nations.find(x => x.id === last.you);
@@ -272,6 +272,7 @@ check(aSpawn >= 0, "player spawns on land");
   const offLand = await rr("dirt", [foreign, foreign + 1]), lockedCobble = run && await rr("cobble", [run[0], run[1]]);
   const removed = run && await rr("none", [run[0], run[5]]);
   const roadGone = removed?.ok && await until(() => { view.pump(); return run.every(i => !cw.roads[i]); }, 3000);
+  if (run) await rr("dirt", [run[0], run[2]]);
   check(laid?.ok && laid.laid === 6 && roadSeen && friendRoad && offLand?.error === "roads go on your own land" && /Paved roads/.test(lockedCobble?.error ?? "") && removed?.laid === 6 && roadGone,
     `a dirt road of ${laid?.laid} plots costs ${JSON.stringify(laid?.cost)} (gold ${gold0} before), reaches both clients, is refused off your land ("${offLand?.error}") and as cobble before research ("${lockedCobble?.error}"), and comes up again for free`);
   const townClock = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
