@@ -6,6 +6,7 @@ import { orderResearch } from "./sim/research.js";
 import { layRoad } from "./sim/logistics.js";
 import { sendByBoat, boatPlan, boatsAtSea } from "./sim/boats.js";
 import { formWagon, unloadWagon, isWagon } from "./sim/supply.js";
+import { convoyRow, setStore } from "./sim/stores.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -227,6 +228,13 @@ export const ORDERS = {
     if (typeof m.kind !== "string") return fail("pick a road type");
     const r = layRoad(sim, nation, m.via, m.kind);
     return r.error ? { ok: false, ...r } : { ok: true, ...r };
+  },
+  store(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.stores) return fail("stores are not running in this world");
+    if (!Number.isInteger(m.building)) return fail("pick a store");
+    const r = setStore(sim, nation, m.building, m.kind, m.keep, m.want);
+    return r.error ? fail(r.error) : { ok: true, ...r };
   },
   wagon(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
@@ -473,12 +481,15 @@ const sameTypes = (p, q) => {
 };
 
 export class StateFeed {
-  constructor(botShare = 0.01, botEvery = 5) { this.botShare = botShare; this.botEvery = botEvery; this.round = 0; this.nations = new Map(); this.stacks = new Map(); this.machines = new Map(); }
+  constructor(botShare = 0.01, botEvery = 5) { this.botShare = botShare; this.botEvery = botEvery; this.round = 0; this.nations = new Map(); this.stacks = new Map(); this.machines = new Map(); this.convoys = new Map(); }
   snapshot(sim) {
     return [...sim.stacks.values()].map(stackRow);
   }
   machineSnapshot(sim) {
     return sim.units ? [...sim.units.list.values()].map(machineRow) : [];
+  }
+  convoySnapshot(sim) {
+    return sim.stores ? [...sim.stores.convoys.values()].map(c => convoyRow(sim, c)) : [];
   }
   close(a, b) { return Math.abs(a - b) < Math.max(1, a * this.botShare); }
   delta(sim) {
@@ -510,8 +521,18 @@ export class StateFeed {
       m.push(row);
     }
     for (const id of this.machines.keys()) if (!sim.units?.list.has(id)) { mg.push(id); this.machines.delete(id); }
-    const out = n.length || s.length || gone.length ? { n, s, gone } : null;
-    return m.length || mg.length ? { n, s, gone, ...out, m, mg } : out;
+    const c = [], cg = [];
+    if (sim.stores?.news.size) {
+      for (const id of sim.stores.news) {
+        const cv = sim.stores.convoys.get(id);
+        if (cv) { const row = convoyRow(sim, cv), prev = this.convoys.get(id); if (!prev || row.some((v, k) => v !== prev[k])) { this.convoys.set(id, row); c.push(row); } }
+        else if (this.convoys.delete(id)) cg.push(id);
+      }
+      sim.stores.news.clear();
+    }
+    let out = n.length || s.length || gone.length ? { n, s, gone } : null;
+    if (m.length || mg.length) out = { n, s, gone, ...out, m, mg };
+    return c.length || cg.length ? { n, s, gone, ...out, c, cg } : out;
   }
 }
 

@@ -1,5 +1,6 @@
 import { placeError, costError, eraIdx, levelsOf, priceOf as sharedPrice } from "../shared/buildings.js";
 import { ERA_ORDER, BUILDINGS, installBuildings, footprint, addBuilding, removeBuilding, setPlots, buildingAt, touched } from "./buildings.js";
+import { sync, requestSite, siteDelivered, putNear, storeLeft, goodsNear, takeNear } from "./stores.js";
 import rules from "../../data/rules.json" with { type: "json" };
 
 export { ERA_ORDER, footprint, buildingAt };
@@ -55,15 +56,17 @@ function clearRubble(world, plots) {
 export function place(world, nid, type, anchor) {
   const why = canPlace(world, nid, type, anchor);
   if (why) return { error: why };
-  const def = world.bld.table[type], n = world.nations.get(nid);
+  const def = world.bld.table[type], n = world.nations.get(nid), located = !!world.stores && n.human;
+  if (located) sync(world, n);
   const short = costError(def, n);
   if (short) return { error: short };
   const use = Object.fromEntries(Object.entries(def.cost).filter(([k]) => k !== "money"));
-  charge(n, { money: def.cost.money ?? 0, use });
+  charge(n, { money: def.cost.money ?? 0, use: located ? {} : use });
   const plots = footprint(world, anchor, def.fp);
   clearRubble(world, plots);
   const b = addBuilding(world, { type, owner: nid, anchor, plots });
   world.cons?.timers.add(b.id);
+  if (located) requestSite(world, b, use);
   return b;
 }
 
@@ -71,17 +74,21 @@ export function demolish(world, nid, id) {
   const b = world.bld.list.get(id);
   if (!b || b.owner !== nid) return { error: "not your building" };
   if (b.state === "rubble") return { error: "that is already rubble" };
-  const n = world.nations.get(nid), r = world.cons?.rules ?? CONS_RULES;
+  const n = world.nations.get(nid), r = world.cons?.rules ?? CONS_RULES, located = !!world.stores && n.human;
   const share = b.state === "construction" ? r.refundOnCancel : r.demolishRefund;
+  const cost = world.bld.table[b.type].cost, got = located && b.need ? siteDelivered(b, cost) : null;
   const refund = {};
-  for (const [k, v] of Object.entries(world.bld.table[b.type].cost)) {
-    const back = Math.floor(v * share);
+  if (located) { sync(world, n); storeLeft(world, b); }
+  b.state = "rubble";
+  for (const [k, v] of Object.entries(cost)) {
+    const back = Math.floor((k !== "money" && got ? got[k] : v) * share);
     if (!back) continue;
     refund[k] = back;
     if (k === "money") n.money = (n.money ?? 0) + back;
+    else if (located) putNear(world, b, k, back);
     else { n.stock ??= {}; n.stock[k] = (n.stock[k] ?? 0) + back; }
   }
-  b.state = "rubble";
+  if (b.need) { delete b.need; world.stores?.sites.delete(b.id); }
   b.progress = 0;
   b.residents = 0;
   b.upgrading = false;
@@ -103,6 +110,7 @@ export function progressConstruction(world, dt) {
       else world.bld.changed.add("buildings");
       continue;
     }
+    if (b.need) continue;
     b.progress += (dt * speed) / table[b.type].time;
     touched(world, b);
     if (b.progress >= 1) {
@@ -141,7 +149,8 @@ export function selectRange(rows, fromIndex, toIndex) {
 }
 
 export function bulkUpgrade(world, nid, picks) {
-  const n = world.nations.get(nid), bld = world.bld, table = bld.table, view = placeView(world, nid);
+  const n = world.nations.get(nid), bld = world.bld, table = bld.table, view = placeView(world, nid), located = !!world.stores && n.human;
+  if (located) sync(world, n);
   const premium = world.cons?.rules.instantPremium ?? CONS_RULES.instantPremium;
   const done = [], skipped = [];
   let spent = 0;
@@ -159,8 +168,10 @@ export function bulkUpgrade(world, nid, picks) {
     if (!bad && b.civilian) bad = plots.some(i => { const o = view.occupant(i); return world.owner[i] !== nid || (o && o !== b.id) || bld.zone[i] !== bld.zone[b.anchor]; });
     if (!bad && !b.civilian) bad = !!canPlace(world, nid, next, b.anchor, b.id);
     if (bad) { skipped.push([p.id, "no room to grow"]); continue; }
-    const price = priceOf(nd.cost, n, premium, world.cons?.rules);
-    if (!charge(n, price)) { skipped.push([p.id, "not enough money"]); continue; }
+    const price = located ? sharedPrice(nd.cost, goodsNear(world, b), premium, (world.cons?.rules ?? CONS_RULES).moneyForMissing) : priceOf(nd.cost, n, premium, world.cons?.rules);
+    if ((n.money ?? 0) < price.money) { skipped.push([p.id, "not enough money"]); continue; }
+    if (located) { n.money -= price.money; for (const [k, v] of Object.entries(price.use)) takeNear(world, b, k, v); }
+    else charge(n, price);
     spent += price.money;
     b.type = next;
     clearRubble(world, plots);

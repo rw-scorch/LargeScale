@@ -109,8 +109,8 @@ if (process.env.RECHECK) {
   check(lc?.loaded.terrain === last.hashes.terrain && lc?.loaded.owner === last.hashes.owner, `after a restart the ${st.map?.kind} world loads terrain ${lc?.loaded.terrain} and owner ${lc?.loaded.owner}, the same as before (${last.hashes.terrain}, ${last.hashes.owner})`);
   check(lc?.saved?.owner === lc?.loaded.owner, `the owner hash stored with the save matches the decoded layer (load took ${st.loadMs} ms)`);
   check(st.loaded && (st.loaded.upgradedFrom === null || st.loaded.upgradedFrom === 2), st.loaded?.upgradedFrom ? `a format ${st.loaded.upgradedFrom} save loaded as format 3, with ${st.loaded.buildings} buildings` : `the format 3 save loaded with ${st.loaded?.buildings} buildings`);
-  const layers = ["zone", "wood", "buildings", "land", "road"].filter(k => last.hashes[k]);
-  check(layers.every(k => lc?.loaded[k] === last.hashes[k]), layers.length ? `zone, wood, building, land and road layers load identically (${layers.map(k => `${k} ${lc?.loaded[k]}`).join(", ")})` : "the save had no zone, wood or building layers yet");
+  const layers = ["zone", "wood", "buildings", "land", "road", "stores"].filter(k => last.hashes[k]);
+  check(layers.every(k => lc?.loaded[k] === last.hashes[k]), layers.length ? `zone, wood, building, land, road and store layers load identically (${layers.map(k => `${k} ${lc?.loaded[k]}`).join(", ")})` : "the save had no zone, wood or building layers yet");
   const again = await connect(last.wid, last.token);
   const h = await waitFor(again, m => m.t === "hello");
   const n = h?.nations.find(x => x.id === last.you);
@@ -288,6 +288,16 @@ check(aSpawn >= 0, "player spawns on land");
     `a supply wagon is loaded with 10 food at the capital, the friend sees it as a wagon, one away from a store is refused ("${farWagon?.error}"), and disbanding it gives the food back (${food0} to ${foodBack}); supply reach is ${cw.purse.supply?.range} plots`);
   check(laid?.ok && laid.laid === 6 && roadSeen && friendRoad && offLand?.error === "roads go on your own land" && /Paved roads/.test(lockedCobble?.error ?? "") && removed?.laid === 6 && roadGone,
     `a dirt road of ${laid?.laid} plots costs ${JSON.stringify(laid?.cost)} (gold ${gold0} before), reaches both clients, is refused off your land ("${offLand?.error}") and as cobble before research ("${lockedCobble?.error}"), and comes up again for free`);
+  view.pump();
+  const lg = cw.purse.logistics, hutRow = lg?.stores?.find(s => cw.buildings.get(s[0])?.type === "chieftain_hut");
+  const sumOf = k => (lg?.stores ?? []).reduce((a, s) => a + (s[1][k] ?? 0), 0);
+  A.ws.send(JSON.stringify({ t: "store", building: hutRow?.[0], kind: "wood", keep: 5, want: 0 }));
+  const setKeep = await nextResult(A, "store");
+  A.ws.send(JSON.stringify({ t: "store", building: hutRow?.[0], kind: "wood", keep: 99999, want: 0 }));
+  const badKeep = await nextResult(A, "store");
+  const keepShown = setKeep?.ok && await until(() => { view.pump(); return cw.purse.logistics?.stores?.find(s => s[0] === hutRow?.[0])?.[3]?.wood === 5; }, 3000);
+  check(hutRow && hutRow[2] === 1000 && Math.abs(sumOf("food") - cw.purse.stock.food) <= 1 && Math.abs(sumOf("wood") - cw.purse.stock.wood) <= 1 && lg.reach === 12 * K && lg.capacity === 10 && keepShown && /from 0 to 1000/.test(badKeep?.error ?? ""),
+    `goods live in stores: the chieftain hut holds ${Math.floor(hutRow?.[1].food ?? 0)} food and ${Math.floor(hutRow?.[1].wood ?? 0)} wood of ${hutRow?.[2]} each, the same as the stock shown; buildings use a store within ${lg?.reach} plots, carts carry ${lg?.capacity}; Keep is set on the hut ("${badKeep?.error}" past its size)`);
   const townClock = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
   const town = await until(() => {
     view.pump();

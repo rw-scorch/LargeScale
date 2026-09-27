@@ -117,6 +117,20 @@ Ryan asked for troops to cross water for free from the start of the game, like O
 - **Bulk upgrades** stay instant. Materials count only from stores within reach of each building. The rest is bought at the existing price for missing materials, as today.
 - **Catch-up.** A sleeping world delivers straight from store to store without travel, so towns keep building while nobody plays.
 
+#### Part C, how it is built (28 September 2026)
+
+Ryan asked for Part C to go ahead before his check of A and B. These are the choices made while building it; each can change after his check.
+
+- **Goods live in stores.** Each store building holds its own goods (`b.goods`); the nation's stock is the total, as the plan says. A nation with no store at all (its seat captured, or a capital on rough ground) keeps a small camp store at its capital, so it can always build a new one.
+- **One store per building.** A building's store is its nearest store within 12 plots of travel, worked out per nation every 10 seconds. Producers deliver there, and sites, training, machine queues and upgrades take from there.
+- **Capacity is per kind of good**, so a full granary does not stop the lumber camp. Seats of government hold 1,000 to 15,000 of each, storage yards 2,000, warehouses 8,000.
+- **Producers** fill their store up to its capacity, then a buffer of 20, then stop, and say why: no store within reach, or store full.
+- **Sites.** Placing a building pays the gold and takes the materials as before, but only what its own store holds is there at once. The rest leaves other stores at once as carts, and the site waits until they arrive. If no store has spare goods, it asks again every few seconds.
+- **Training and machines** take from their buildings' stores. What is short is asked for, and carts bring it to that store.
+- **Towns eat from every store**, from each in proportion to what it holds. Goods towns make, refunds and admin gifts go to the seat of government.
+- **Convoys** carry one kind of good each: 10 on a Tribal hand cart, 30 on a Medieval horse wagon, 50 in the Gunpowder era. At most 12 per nation are on the road at once. A hostile stack within a plot takes the cargo, into its own nearest store.
+- **Keep and Want** are set per store and per good on the store's card. Want asks for goods until the store holds that much; Keep is what it never sends away, and is never below Want.
+
 ### Part D. Sea routes
 
 - Ports are stores. When the land route between two of your stores is missing, or much longer, a convoy crosses water between ports, on the water graph ships already use.
