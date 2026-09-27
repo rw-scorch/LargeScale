@@ -1,6 +1,7 @@
 import rules from "../../data/rules.json" with { type: "json" };
 import { supplyCostOf, reachMap } from "../shared/supply.js";
 import { nationBuildings } from "./buildings.js";
+import { storesOf as storeList, sync, takeFrom, putNear } from "./stores.js";
 
 export const SUPPLY = {
   range: 18, every: 3, carrySeconds: 600, lowSeconds: 60, weakenSeconds: 120, minMult: 0.5, desertPerSec: 0.0005,
@@ -65,7 +66,8 @@ export function supplyCost(world, nid) {
 
 export function reachOf(world, n) {
   if (!((n.stock?.food ?? 0) > 0)) return new Map();
-  const sources = storesOf(world, n.id).map(b => b.anchor).filter(i => world.owner[i] === n.id);
+  const held = world.stores ? storeList(world, n.id).filter(s => !s.camp && (s.goods.food ?? 0) >= 1) : storesOf(world, n.id);
+  const sources = held.map(b => b.anchor).filter(i => i != null && world.owner[i] === n.id);
   if (n.capital != null && world.owner[n.capital] === n.id) sources.push(n.capital);
   const sup = world.supply;
   return reachMap(world.grid, viewOf(world), n.id, sources, sup.rules.range * sup.scale, (a, b) => world.passable(a, b));
@@ -138,24 +140,34 @@ export function formWagon(world, nid, at, food) {
   const n = world.nations.get(nid), r = world.supply.rules;
   if (!Number.isFinite(food) || food < 1) return { error: "load some food onto the wagon" };
   const load = Math.min(Math.floor(food), r.wagonMax);
+  if (world.stores) sync(world, n);
   if ((n.stock?.food ?? 0) < load) return { error: `you have only ${Math.floor(n.stock?.food ?? 0)} food` };
-  const reach = Math.round(r.storeReach * world.supply.scale);
-  const atCapital = n.capital != null && world.owner[n.capital] === nid && world.grid.cheb(n.capital, at) <= reach;
-  if (!atCapital && !storesOf(world, nid).some(b => b.plots.some(p => world.grid.cheb(p, at) <= reach))) return { error: "supply wagons are loaded at your capital or a store: your seat of government, a storage yard or a port" };
+  const reach = Math.round(r.storeReach * world.supply.scale), g = world.grid;
+  const atCapital = n.capital != null && world.owner[n.capital] === nid && g.cheb(n.capital, at) <= reach;
+  let src = null;
+  if (world.stores) {
+    const list = storeList(world, nid), near = list.filter(s => s.plots.some(p => g.cheb(p, at) <= reach));
+    if (!near.length && atCapital) near.push(...list.filter(s => s.anchor != null).sort((a, b) => g.dist(a.anchor, n.capital) - g.dist(b.anchor, n.capital)).slice(0, 1));
+    src = near.sort((a, b) => (b.goods.food ?? 0) - (a.goods.food ?? 0))[0] ?? null;
+    if (!src) return { error: "supply wagons are loaded at your capital or a store: your seat of government, a storage yard or a port" };
+    if ((src.goods.food ?? 0) < load) return { error: `that store holds only ${Math.floor(src.goods.food ?? 0)} food` };
+  } else if (!atCapital && !storesOf(world, nid).some(b => b.plots.some(p => g.cheb(p, at) <= reach))) return { error: "supply wagons are loaded at your capital or a store: your seat of government, a storage yard or a port" };
   if (world.owner[at] !== nid) return { error: "form the wagon on your own land" };
   if ((n.troops ?? 0) < r.wagonCrew + 1) return { error: `a wagon needs ${r.wagonCrew} troops to drive it` };
   const s = world.createStack(nid, at, r.wagonCrew);
   if (!s) return { error: "could not form the wagon there" };
   s.kind = "supply";
   s.supplies = load;
-  n.stock.food -= load;
+  if (src) takeFrom(world, n, src, "food", load);
+  else n.stock.food -= load;
   return { stack: s.id, food: load };
 }
 
 export function unloadWagon(world, s) {
   if (!isWagon(s) || !(s.supplies > 0)) return 0;
   const n = world.nations.get(s.owner), back = s.supplies;
-  n.stock.food = (n.stock.food ?? 0) + back;
+  if (world.stores) { sync(world, n); putNear(world, { owner: s.owner, anchor: s.pos, plots: [s.pos] }, "food", back); }
+  else n.stock.food = (n.stock.food ?? 0) + back;
   s.supplies = 0;
   return back;
 }

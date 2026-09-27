@@ -46,6 +46,7 @@ export function setRoad(world, i, level) {
   log.count[was]--;
   log.count[level]++;
   log.road[i] = level;
+  log.ver = (log.ver ?? 0) + 1;
   log.news.add(i);
   world.bld?.changed.add("road");
 }

@@ -582,12 +582,13 @@ await quarry.click("#build-menu .tabs button:has-text('Resources')");
 const quarryText = await quarry.textContent("#build-menu [data-type=quarry]");
 check(/Makes 0.25 stone a second/.test(quarryText), `the Resources tab lists the quarry with its output: "${quarryText.match(/Makes[^,]*/)?.[0]}"`);
 await quarry.keyboard.press("Escape");
+await quarry.evaluate(() => { const g = window.__ls.game; window.__drain = setInterval(() => { const s = g.world.purse?.stock.stone ?? 0; if (s > 500) g.conn.request({ t: "admin", op: "give", nation: g.world.you, what: "stone", amount: -Math.floor(s - 100) }); }, 1000); });
 const qr = await quarry.evaluate(a => window.__ls.game.conn.request({ t: "build", type: "quarry", at: a }), qat);
 const dry = await quarry.waitForFunction(a => { const w = window.__ls.game.world, b = w.buildingAt(a); return b ? b.plots.find(i => w.depleted.has(i)) ?? null : null; }, qat, { timeout: 120000 }).then(h => h.jsonValue(), () => null);
 const allDry = await quarry.waitForFunction(a => { const g = window.__ls.game, b = g.world.buildingAt(a); return b && g.view.dryDeposit(b); }, qat, { timeout: 180000 }).then(h => h.jsonValue(), () => null);
 const ran = dry !== null && allDry === "stone";
-const stone = await quarry.evaluate(() => window.__ls.game.world.purse?.stock.stone ?? 0);
-check(qr?.ok && ran, `the quarry runs the deposit dry (${stone} stone in stock), and the client marks it depleted`);
+const stone = await quarry.evaluate(() => { clearInterval(window.__drain); return window.__ls.game.world.purse?.stock.stone ?? 0; });
+check(qr?.ok && ran, `the quarry runs the deposit dry (${stone} stone in stock, with the host taking stone out so the hut never fills), and the client marks it depleted`);
 await quarry.evaluate(p => { const g = window.__ls.game; g.focus(p, 16); g.view.cam.scale = 16 * g.view.ratio; g.view.clampCamera(); }, dry ?? spot);
 await quarry.waitForTimeout(600);
 await quarry.screenshot({ path: `${OUT}/11-quarry-dry-${MAP}.png` });
@@ -1627,6 +1628,68 @@ await gp.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.ge
 await gp.waitForTimeout(300);
 await gp.screenshot({ path: `${OUT}/51-supply-wagon.png` });
 check(hut && /Your supply wagon, 30 food/.test(wagonTitle) && /follows that stack/.test(wagonFollows), `a store's card loads a supply wagon ("${wagonTitle}"), which is told to follow a stack: "${wagonFollows.match(/The wagon[^.]*\./)?.[0]}"`);
+
+const stoId = await newWorld(gp, "UI stores", { map: "test", w: 160, h: 100, seed: 12, bots: 0, rules: { spawnRadius: 18 } });
+await gp.goto(`${BASE}/#w=${stoId}`);
+await gp.reload();
+await ready(gp);
+await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, { TERRAIN } = await import("/js/shared/terrain.js");
+  const flat = i => [0, 1, -1, w.w, -w.w, w.w + 1, w.w - 1, -w.w + 1, -w.w - 1].every(d => TERRAIN[w.terrain[i + d]]?.build);
+  for (let y = 22; y < w.h - 22; y += 2) for (let x = 22; x < w.w - 22; x += 2) if (flat(y * w.w + x) && (await g.conn.request({ t: "spawn", x, y })).ok) return;
+});
+await gp.waitForFunction(() => { const w = window.__ls.game.world; return [...w.buildings.values()].some(b => b.owner === w.you && b.def.store) && w.purse?.logistics?.stores.length; }, null, { timeout: 8000 }).catch(() => {});
+const stoHut = await gp.evaluate(() => { const g = window.__ls.game, w = g.world; const b = [...w.buildings.values()].find(b => b.owner === w.you && b.def.store); g.selectBuilding(b.id); g.focus(b.anchor, 16); return b.id; });
+await gp.waitForSelector("#store-orders:not([hidden])", { timeout: 5000 }).catch(() => {});
+const goodsLine = await gp.textContent("#building-goods").catch(() => "");
+await gp.selectOption("#store-kind", "wood").catch(() => {});
+await gp.fill("#store-want", "0");
+await gp.fill("#store-keep", "10");
+await gp.click("#store-set");
+const keepToast = await gp.waitForFunction(() => /keeps its last 10 wood/.test(document.querySelector("#toasts")?.textContent ?? "") ? "ok" : null, null, { timeout: 5000 }).then(() => true, () => false);
+await gp.screenshot({ path: `${OUT}/52-store-card.png` });
+check(stoHut && /^Holds \d+ food and \d+ wood, up to 1,?000 of each good\./.test(goodsLine) && keepToast, `a store's card shows what it holds ("${goodsLine}") and takes standing orders: Keep 10 wood`);
+const farSite = await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world;
+  await g.conn.request({ t: "research", id: "palisades" });
+  await g.conn.request({ t: "admin", op: "finish", nation: w.you });
+  const known = Date.now() + 4000;
+  while (w.lockOf("watchtower_wood") && Date.now() < known) await new Promise(r => setTimeout(r, 100));
+  const hut = [...w.buildings.values()].find(b => b.owner === w.you && b.def.store), hx = hut.anchor % w.w, hy = (hut.anchor / w.w) | 0;
+  const spots = [];
+  for (let i = 0; i < w.owner.length; i++) {
+    if (w.owner[i] !== w.you) continue;
+    const d = Math.abs((i % w.w) - hx) + Math.abs(((i / w.w) | 0) - hy);
+    if (d >= 15 && d <= 24) spots.push([d, i]);
+  }
+  spots.sort((a, b) => a[0] - b[0]);
+  for (const [, at] of spots) {
+    if (w.placeError("watchtower_wood", at)) continue;
+    const res = await g.conn.request({ t: "build", type: "watchtower_wood", at });
+    if (!res.ok) continue;
+    const seen = Date.now() + 4000;
+    while (!w.buildings.has(res.building) && Date.now() < seen) await new Promise(r => setTimeout(r, 50));
+    g.selectBuilding(res.building);
+    g.focus(at, 8);
+    return { id: res.building, at, hut: hut.id, owned: spots.length };
+  }
+  return { owned: spots.length };
+});
+const waitLine = await gp.waitForFunction(() => { const t = document.querySelector("#building-wait"); return t && !t.hidden && /Waiting for \d+ wood/.test(t.textContent) ? t.textContent : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+const carts = await gp.waitForFunction(() => { const w = window.__ls.game.world; return w.convoys?.size ? [...w.convoys.values()].map(c => `${c.amount} ${c.kind}`).join(", ") : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+await gp.waitForTimeout(3000);
+await gp.evaluate(() => { const g = window.__ls.game, c = [...g.world.convoys.values()][0]; if (c) g.focus(c.pos, 48); });
+await gp.waitForTimeout(600);
+await gp.screenshot({ path: `${OUT}/53-convoy.png` });
+check(farSite?.id && /Carts are bringing/.test(waitLine) && carts, `a watchtower out of the hut's reach waits ("${waitLine}"), and carts set off with ${carts}`);
+await gp.keyboard.press("Escape");
+await gp.keyboard.press("l");
+const logText = await gp.waitForFunction(() => { const p = document.querySelector("#logistics-panel"); return p && !p.hidden && /Sites waiting for goods/.test(p.textContent) ? p.textContent : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+await gp.screenshot({ path: `${OUT}/54-logistics.png` });
+check(/watchtower: Waiting for/i.test(logText) && /1 of 12 carts|2 of 12 carts/.test(logText) && /Chieftain hut: Holds/.test(logText), `L opens the Logistics panel with the waiting site, the carts on the road and the stores: "${logText.match(/One store[^.]*\.[^.]*\.[^.]*\./)?.[0] ?? logText.slice(0, 120)}"`);
+await gp.keyboard.press("l");
+const arrived = await gp.waitForFunction(id => { const w = window.__ls.game.world, lg = w.purse?.logistics; return lg && !lg.sites.some(s => s[0] === id) && !w.convoys.size ? w.buildings.get(id)?.progress ?? 0 : null; }, farSite?.id, { timeout: 40000 }).then(h => h.jsonValue(), () => null);
+check(arrived !== null, `the carts arrive and the watchtower starts building (${Math.round((arrived ?? 0) * 100)}%)`);
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();

@@ -25,6 +25,7 @@ import { createTip } from "./ui/tip.js";
 import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
+import { createLogisticsPanel } from "./ui/logistics.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createRing, ownerItems } from "./ui/ring.js";
 import { createAttacks } from "./ui/attacks.js";
@@ -113,6 +114,7 @@ class Game {
     this.research = createResearchPanel(overlay, this);
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
+    this.logistics = createLogisticsPanel(overlay, this);
     this.machinePanel = createMachinePanel(side, this);
     this.nationCard = createNationCard(side, this);
     this.tip = createTip(overlay, this);
@@ -309,6 +311,11 @@ class Game {
     if (e.type === "supplies_low" && e.nation === you) say(`low${e.stack}`, `A stack beyond supply has about ${Math.max(1, Math.ceil(e.left / 60))} min of supplies left.`, 0, "warn", stackAt(e.stack));
     if (e.type === "resupplied" && e.nation === you) say(`res${e.stack}`, "A stack is back in supply.", 0, "good", stackAt(e.stack));
     if (e.type === "wagon_empty" && e.nation === you) say(`we${e.stack}`, "A supply wagon has run out of food.", 0, "warn", stackAt(e.stack));
+    if (e.type === "convoy_taken" && e.nation === you) say(`ct${e.convoy}`, `${name(e.by)} took a cart of yours with ${fmt(e.amount)} ${e.kind}. Keep enemy stacks away from your roads.`, 0, "danger");
+    if (e.type === "convoy_taken" && e.by === you) say(`ct${e.convoy}`, `You took a cart of ${name(e.nation)}'s with ${fmt(e.amount)} ${e.kind}.`, 0, "good");
+    if (e.type === "convoy_lost" && e.nation === you) say(`cl${e.convoy}`, `A cart with ${fmt(e.amount)} ${e.kind} was cut off and lost.`, 0, "warn");
+    if (e.type === "store_captured" && e.nation === you) say(`sc${e.building}`, `${name(e.by)} took your ${w.defs.table[e.kind]?.name.toLowerCase() ?? "store"} with ${fmt(e.goods)} goods in it.`, 0, "danger");
+    if (e.type === "store_captured" && e.by === you) say(`sc${e.building}`, `You took ${name(e.nation)}'s ${w.defs.table[e.kind]?.name.toLowerCase() ?? "store"} with ${fmt(e.goods)} goods in it.`, 0, "good");
     if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);
     if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
     if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0, "warn", stackAt(e.stack));
@@ -398,6 +405,7 @@ class Game {
     if (action === "info") return this.toggleInfo();
     if (action === "upgrade") return this.toggleUpgrade();
     if (action === "army") return this.toggleArmy();
+    if (action === "logistics") return this.toggleLogistics();
     if (action === "deposits") return this.toggleDeposits();
     if (this.group && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.groupPanel.act[action](); return this.updatePanels(); }
     if (["advance", "claim", "target", "move", "draw", "split", "merge", "disband"].includes(action)) act[action]();
@@ -418,6 +426,7 @@ class Game {
       else if (this.worldInfo.open) this.toggleInfo(false);
       else if (this.upgrade.open) this.toggleUpgrade(false);
       else if (this.army.open) this.toggleArmy(false);
+      else if (this.logistics.open) this.toggleLogistics(false);
       else if (this.research.open) this.toggleResearch(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
@@ -438,41 +447,48 @@ class Game {
   }
 
   toggleSettings(on = !this.settings.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); }
     this.settings.show(on);
     this.updatePanels();
   }
 
   toggleResearch(on = !this.research.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     this.research.show(on && !!this.world?.purse?.research);
     this.updatePanels();
   }
 
   toggleInfo(on = !this.worldInfo.open) {
-    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     this.worldInfo.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
   toggleAdmin(on = !this.adminPanel?.open) {
     if (!this.adminPanel) return;
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.settings.show(false); }
     this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
   toggleUpgrade(on = !this.upgrade.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.upgrade.show(on && !!this.world?.purse && !!me?.spawned);
     this.updatePanels();
   }
 
   toggleArmy(on = !this.army.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); this.logistics.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.army.show(on && !!this.world?.purse?.army && !!me?.spawned);
+    this.updatePanels();
+  }
+
+  toggleLogistics(on = !this.logistics.open) {
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    const me = this.world?.nations.get(this.world.you);
+    this.logistics.show(on && !!this.world?.purse?.logistics && !!me?.spawned);
     this.updatePanels();
   }
 
@@ -942,7 +958,7 @@ class Game {
   updatePanels() {
     if (this.left) return;
     this.supplyOverlay();
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

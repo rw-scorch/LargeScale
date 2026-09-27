@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (204)
+npm test                  # unit tests (216)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -101,7 +101,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
 - **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
-- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, D draw a path (then drag), S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, Y upgrade menu, K army panel, R deposits at mid zoom, I world info (schedule, how to win, settings), backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -, Enter confirms a placed building, the arrow keys move the view, and with the crosshair on Space selects and E opens the orders ring). Every key but Esc can be rebound in Settings (the gear, top right). Every control has a mouse and a touch form (Ryan, 26 September 2026). A right-click, or a finger held on the map, opens the ring menu (milestone three, C2); a right-drag with a stack selected still draws the way it goes. Stacks form on any owned plot. A drag that starts on one of your stacks sweeps up every stack it passes into a group, and Shift with a mouse drag draws a box; the group panel (`public/js/ui/group.js`) gives them one `group` order.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, D draw a path (then drag), S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging), T town panel, U research, Y upgrade menu, K army panel, L logistics panel, R deposits at mid zoom, I world info (schedule, how to win, settings), backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -, Enter confirms a placed building, the arrow keys move the view, and with the crosshair on Space selects and E opens the orders ring). Every key but Esc can be rebound in Settings (the gear, top right). Every control has a mouse and a touch form (Ryan, 26 September 2026). A right-click, or a finger held on the map, opens the ring menu (milestone three, C2); a right-drag with a stack selected still draws the way it goes. Stacks form on any owned plot. A drag that starts on one of your stacks sweeps up every stack it passes into a group, and Shift with a mouse drag draws a box; the group panel (`public/js/ui/group.js`) gives them one `group` order.
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
@@ -235,10 +235,24 @@ Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roa
   - Supply wagons are stacks with `kind: "supply"` and `supplies`: the `wagon` and `follow` orders, loaded from store cards.
   - Two players are worked out a tick; bots are left out. Rules are in `rules.json` `supply`.
 - **Free transport boats (same branch).** `src/sim/boats.js` (`installBoats`): a move or attack with no land route walks to your coast and crosses in a free boat (unit 22), losing 1% plus 0.1% a plot of water, up to 15%. At most 3 at sea; warships sink them. Rules are in `rules.json` `boats`.
+- **Part C, stores and convoys (28 September 2026, branch `m5-stores`, PR 26).** Ryan asked for it before his check of A and B. `src/sim/stores.js` (`installStores`); rules in `rules.json` `stores`; choices in `plans/milestone-5.md`.
+  - **Goods live in stores.** Each store building keeps `b.goods`, and capacity is per good (`store.capacity`; `seat` marks the seat of government line). A nation with no store keeps a camp at its capital (`n.camp`).
+    - `n.stock` stays the total. `sync(world, n)` spreads changes made straight to `n.stock` (towns eating, town goods, admin gifts, road costs) across the stores. Call it before taking from a particular store.
+    - `n.stored` is the total at the last sync.
+  - **A building's store** is its nearest store within 12 plots of travel (`homeOf`, from a labelled cost map per nation, `labelMap` in `src/shared/pathfind.js`).
+    - Producers fill it, then a buffer of 20, then stop (`roomFor`, `deliver`).
+    - Sites take from it and wait for carts for the rest (`b.need`).
+    - Training, machine queues and upgrades take from it, and training and machines ask for more (`poolOf`).
+  - **Carts.** They are convoys (`world.stores.convoys`), one good each. Capacity and speed come by era.
+    - At most 12 on the road per nation, and at most 4 path searches a tick; paths are cached.
+    - A hostile stack beside a cart takes its cargo, and a captured store changes hands with its goods.
+  - **Standing orders.** The `store` order sets Want and Keep per store and good; Keep is never below Want.
+  - **Saving and catch-up.** The `stores` row is saved through `bld.extra` and checked on reload. Catch-up moves goods without travel.
+  - **Client.** Clients get convoy rows in `hello.convoys` and `state` `c`/`cg`, and the purse's `logistics`. The Logistics panel is `public/js/ui/logistics.js` (L); store cards show goods and standing orders.
 
 Open items as of 27 September 2026, in order:
 
-1. PRs 14 to 23 are merged (27 September 2026). PR 24 (`m5-roads`: the dev pack, the milestone five and six plans, and roads) is merged (27 September 2026). PR 25 (`m5-supply`: army supply and free transport boats) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads, supply and boats before Part C.
+1. PRs 14 to 25 are merged (roads, army supply and free boats included, 27 September 2026). PR 26 (`m5-stores`: Part C, stores and convoys) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads, supply, boats, stores and carts together. Part D (sea routes) waits for that check.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A new main menu (the world list and login), which Ryan finds bland. Later, at his word. Also later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.

@@ -4,6 +4,7 @@ import { icon } from "./icons.js";
 import { nextLine, when } from "./worldinfo.js";
 import { costText } from "./build.js";
 import { ROAD_NAMES } from "../shared/roads.js";
+import { stuckCount } from "./logistics.js";
 
 const STATUS = { online: "Online", connecting: "Connecting", reconnecting: "Reconnecting", waiting: "Offline", replaced: "Opened elsewhere", outdated: "Needs reload", closed: "Closed", removed: "Removed", deleted: "Deleted" };
 const RES_ICON = { gold: "res_money", concrete: "res_stone" };
@@ -77,8 +78,9 @@ export function createHud(root, game) {
   const research = action("open-research", "res_research", "Research", "research", () => game.toggleResearch());
   const upgrade = action("open-upgrade", "upg_upgrade", "Upgrade", "upgrade", () => game.toggleUpgrade());
   const army = action("open-army", "ui_army", "Army", "army", () => game.toggleArmy());
+  const logistics = action("open-logistics", "ui_map_supply", "Logistics", "logistics", () => game.toggleLogistics());
   const deposits = action("show-deposits", "ui_map_resources", "Deposits", "deposits", () => game.toggleDeposits());
-  const bar = el("nav", { id: "action-bar", class: "panel" }, build, town, research, upgrade, army, deposits);
+  const bar = el("nav", { id: "action-bar", class: "panel" }, build, town, research, upgrade, army, logistics, deposits);
 
   const placeHint = el("div", { id: "place-hint", class: "banner", hidden: true }, "Click your own land to place the stack. ", el("span", { class: "fine-only", text: "Or point and press F. " }), "Esc cancels.");
   const buildText = el("span", { id: "build-text" });
@@ -146,6 +148,11 @@ export function createHud(root, game) {
       upgrade.classList.toggle("on", !!game.upgrade?.open);
       army.disabled = !p?.army || !n?.spawned;
       army.classList.toggle("on", !!game.army?.open);
+      const stuck = w ? stuckCount(w) : 0;
+      logistics.disabled = !p?.logistics || !n?.spawned;
+      logistics.classList.toggle("on", !!game.logistics?.open);
+      logistics.querySelector(".alert").hidden = !stuck;
+      logistics.title = stuck ? `Logistics: ${stuck} ${stuck === 1 ? "thing is" : "things are"} stuck (${keyTag("logistics").textContent})` : `Logistics (${keyTag("logistics").textContent})`;
       deposits.classList.toggle("on", !!game.view?.showDeposits);
 
       placeHint.hidden = !game.placing;

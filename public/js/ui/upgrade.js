@@ -8,9 +8,9 @@ export function upgradeLock(w, next) {
   return eraIdx(next.era) > eraIdx(w.purse?.era ?? "T") ? `needs the ${ERA_NAMES[next.era]} era` : w.lockOf(next.id);
 }
 
-export function upgradePrice(w, cost) {
-  const r = w.consRules, n = w.purse ?? {};
-  return priceOf(cost, n.stock, r.instantPremium, r.moneyForMissing);
+export function upgradePrice(w, cost, stock = w.purse?.stock) {
+  const r = w.consRules;
+  return priceOf(cost, stock, r.instantPremium, r.moneyForMissing);
 }
 
 export function createUpgradePanel(root, game) {

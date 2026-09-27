@@ -91,11 +91,12 @@ export function setPlots(world, b, plots) {
 }
 
 export function setOwner(world, b, nid) {
-  const bld = world.bld;
+  const bld = world.bld, from = b.owner;
   bld.mine.get(b.owner)?.delete(b.id);
   b.owner = nid;
   mineOf(bld, nid).add(b.id);
   touched(world, b);
+  bld.onOwner?.(b, from);
 }
 
 export function buildingAt(world, i) {

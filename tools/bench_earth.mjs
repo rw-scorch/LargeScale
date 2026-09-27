@@ -20,6 +20,7 @@ import { installOvertime } from "../src/sim/overtime.js";
 import { installRoads, setRoad, ROADS } from "../src/sim/logistics.js";
 import { installBoats } from "../src/sim/boats.js";
 import { installSupply, supplyTick } from "../src/sim/supply.js";
+import { installStores, storesOf, setStore, sync, homeAt } from "../src/sim/stores.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -42,6 +43,7 @@ const { values: a } = parseArgs({ options: {
   catchup: { type: "string", default: "12" },
   roads: { type: "string", default: "1500" },
   supply: { type: "string", default: "1" },
+  stores: { type: "string", default: "1" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -133,6 +135,7 @@ const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
 installBoats(w, { scale });
 if (a.supply !== "0") installSupply(w, { scale });
+if (a.stores !== "0") installStores(w, { scale });
 let roadPlots = 0;
 for (const id of players) {
   const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
@@ -162,8 +165,39 @@ for (const id of players) {
   }
   mines += here;
 }
-const feed0 = () => { for (const id of players) { const n = w.nations.get(id); if (!n.stock) continue; n.stock.food = 1e6; n.stock.wood = 1e6; } };
-feed0();
+const asking = new Map();
+const feed0 = () => {
+  for (const id of players) {
+    const n = w.nations.get(id);
+    if (!n.stock) continue;
+    if (!w.stores) { n.stock.food = 1e6; n.stock.wood = 1e6; continue; }
+    sync(w, n);
+    const list = storesOf(w, id), seat = list.reduce((b, s) => (w.grid.dist(s.anchor, n.capital) < w.grid.dist(b.anchor, n.capital) ? s : b), list[0]);
+    if (!seat) continue;
+    seat.goods.food = 1e6;
+    seat.goods.wood = 1e6;
+    for (const s of asking.get(id) ?? []) s.goods.wood = 0;
+    sync(w, n);
+  }
+};
+let storeSetup = null;
+if (a.stores !== "0") {
+  let count = 0;
+  for (const id of players) {
+    const n = w.nations.get(id);
+    sync(w, n);
+    const list = storesOf(w, id).filter(s => !s.camp).sort((p, q) => w.grid.dist(q.anchor, n.capital) - w.grid.dist(p.anchor, n.capital));
+    count += list.length;
+    asking.set(id, list.slice(0, 6));
+    for (const s of list.slice(0, 6)) setStore(w, id, s.id, "wood", 500, 500);
+  }
+  w.stores.fields.clear();
+  const t0 = performance.now();
+  for (const id of players) homeAt(w, id, w.nations.get(id).capital);
+  feed0();
+  storeSetup = { stores: count, asking: [...asking.values()].reduce((t, l) => t + l.length, 0), fieldsMs: +(performance.now() - t0).toFixed(1) };
+}
+if (a.stores === "0") feed0();
 if (woodCut) bld.changed.add("wood");
 const ls0 = performance.now();
 const layers = saveLayers(w, true);
@@ -320,7 +354,8 @@ const report = {
   catchUp,
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
-  supply: a.supply === "0" ? null : (() => { const t0 = performance.now(); supplyTick(w, 3); const ms = performance.now() - t0; w.supply.fields.clear(); for (const n of w.nations.values()) if (n.human) w.supply.fields.set(n.id, new Map()); const stacks = [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human); return { passMs: +ms.toFixed(1), playerStacks: stacks.length, reachPlots: [...w.supply.fields.values()].reduce((t, f) => t + f.size, 0), outOfReach: stacks.filter(s => (s.carry ?? 600) < 600).length }; })(),
+  supply: a.supply === "0" ? null : (() => { const t0 = performance.now(); supplyTick(w, 3); const ms = performance.now() - t0; const reach = [...w.supply.fields.values()].reduce((t, f) => t + f.size, 0); w.supply.fields.clear(); const stacks = [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human); return { passMs: +ms.toFixed(1), playerStacks: stacks.length, reachPlots: reach, outOfReach: stacks.filter(s => (s.carry ?? 600) < 600).length }; })(),
+  stores: storeSetup && { ...storeSetup, carts: w.stores.counts, convoysOnRoad: w.stores.convoys.size, stuckProducers: w.stores.stuck.size, fieldsKept: w.stores.fields.size },
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
   ownedPlots: owned,

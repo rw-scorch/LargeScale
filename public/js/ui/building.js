@@ -2,6 +2,7 @@ import { el, fmt } from "./dom.js";
 import { costText } from "./build.js";
 import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
 import { upgradeLock, upgradePrice } from "./upgrade.js";
+import { storeRow, goodsText, ordersText, siteText, stuckText } from "./logistics.js";
 
 const refundOf = (cost, share) => Object.fromEntries(Object.entries(cost).map(([k, v]) => [k, Math.floor(v * share)]).filter(([, v]) => v > 0));
 
@@ -33,10 +34,19 @@ export function createBuildingPanel(root, game) {
   const queue = el("span", { id: "building-queue", class: "muted" });
   const make = el("div", { id: "building-make", class: "row wrap" });
   const upg = el("span", { id: "building-upgrade-info", class: "muted" });
+  const waiting = el("span", { id: "building-wait", class: "warn-text" });
+  const stored = el("span", { id: "building-goods", class: "muted" });
+  const kind = el("select", { id: "store-kind", class: "small" });
+  const keepIn = el("input", { id: "store-keep", class: "small", type: "number", min: 0, step: 10, value: 0, title: "never send away the last of this many" });
+  const wantIn = el("input", { id: "store-want", class: "small", type: "number", min: 0, step: 10, value: 0, title: "ask for goods until this store holds this many" });
+  const orders = el("div", { id: "store-orders", class: "row wrap", hidden: true },
+    el("span", { class: "muted", text: "Standing orders:" }), kind, el("span", { class: "muted", text: "Want" }), wantIn, el("span", { class: "muted", text: "Keep" }), keepIn,
+    el("button", { id: "store-set", text: "Set", onclick: () => setOrders() }));
+  kind.addEventListener("change", () => fillOrders());
   const food = el("input", { id: "wagon-food", class: "small", type: "number", min: 1, step: 10, value: 200 });
   const wagon = el("div", { id: "building-wagon", class: "row wrap", hidden: true }, el("span", { class: "muted", text: "Supply wagon:" }), food, el("span", { class: "muted", text: "food" }),
     el("button", { id: "wagon-load", text: "Load wagon", title: "a wagon of food that follows your army and feeds it beyond supply reach", onclick: () => loadWagon() }));
-  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, work, queue, make, upg, wagon, actions);
+  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, waiting, work, stored, orders, queue, make, upg, wagon, actions);
   root.append(box);
   let key = "";
 
@@ -71,6 +81,24 @@ export function createBuildingPanel(root, game) {
     game.select(r.stack);
   };
 
+  const fillOrders = () => {
+    const w = game.world, row = storeRow(w, game.selectedBuilding);
+    if (!row) return;
+    keepIn.value = row[3][kind.value] ?? 0;
+    wantIn.value = row[4][kind.value] ?? 0;
+  };
+
+  const setOrders = async () => {
+    const w = game.world, row = storeRow(w, game.selectedBuilding);
+    if (!row) return;
+    const want = Math.max(0, Math.floor(Number(wantIn.value) || 0)), keep = Math.max(want, Math.floor(Number(keepIn.value) || 0));
+    const r = await game.conn.request({ t: "store", building: row[0], kind: kind.value, keep, want });
+    if (!r.ok) return game.toast(r.error ?? "could not set that");
+    keepIn.value = r.keep;
+    game.toast(r.want ? `This store asks for ${kind.value} until it holds ${fmt(r.want)}, and keeps ${fmt(r.keep)}.` : r.keep ? `This store keeps its last ${fmt(r.keep)} ${kind.value}.` : `This store's standing orders for ${kind.value} are cleared.`);
+    key = "";
+  };
+
   const upgradeOne = async (b, next) => {
     const r = await game.conn.request({ t: "upgrade", ids: [b.id] });
     if (!r.ok) return game.toast(r.error ?? "could not upgrade it");
@@ -97,19 +125,33 @@ export function createBuildingPanel(root, game) {
       info.textContent = ` ${yours ? "yours" : owner}, ${b.state === "construction" ? `being built, ${Math.floor(b.progress * 100)}%` : b.state === "rubble" ? "rubble, clears soon" : b.state}`;
       work.textContent = yours ? workText(b.def, w.purse?.town) : "";
       work.hidden = !work.textContent;
+      waiting.textContent = yours ? (b.state === "construction" ? siteText(w, b.id) : stuckText(w, b.id)) : "";
+      waiting.hidden = !waiting.textContent;
+      const row = yours && b.def.store && b.state === "active" ? storeRow(w, b.id) : null;
+      stored.textContent = row ? `${goodsText(row)} ${ordersText(row)}`.trim() : "";
+      stored.hidden = !row;
+      orders.hidden = !row || w.frozen;
+      if (row) {
+        const kinds = [...new Set([...Object.keys(w.purse.stock ?? {}), ...Object.keys(row[1])])];
+        if (kind.dataset.sig !== kinds.join()) { kind.dataset.sig = kinds.join(); const was = kind.value; kind.replaceChildren(...kinds.map(k => el("option", { value: k, text: k }))); kind.value = kinds.includes(was) ? was : kinds[0]; fillOrders(); }
+        if (![keepIn, wantIn, kind].includes(document.activeElement) && orders.dataset.for !== String(b.id)) { orders.dataset.for = b.id; fillOrders(); }
+      }
       const builds = yours && b.state === "active" && !w.frozen ? (b.def.builds ?? []).map(t => w.unitTypes.table[t]).filter(Boolean) : [];
       const q = w.purse?.machines?.queues?.[b.id];
       queue.textContent = builds.length ? queueText(w, q) : "";
       queue.hidden = !queue.textContent;
       const next = yours && b.state === "active" && !w.frozen && b.def.next ? w.defs.table[b.def.next] : null;
-      const lock = next && upgradeLock(w, next), price = next && !lock ? upgradePrice(w, next.cost) : null;
+      const own = b.def.store ? storeRow(w, b.id) : null;
+      const lock = next && upgradeLock(w, next), price = next && !lock ? upgradePrice(w, next.cost, own ? own[1] : undefined) : null;
       const used = price ? costText(Object.fromEntries(Object.entries(price.use).filter(([, v]) => v > 0))) : "";
       upg.textContent = !next ? "" : lock ? `Upgrade to ${next.name}: ${lock}.` : `Upgrade to ${next.name} now for ${fmt(Math.ceil(price.money))} gold${used ? ` and ${used}` : ""}${price.money > (w.purse?.money ?? 0) ? `; you have ${fmt(w.purse?.money ?? 0)} gold` : ""}.`;
       upg.hidden = !upg.textContent;
       const sup = w.purse?.supply;
       wagon.hidden = !(yours && b.state === "active" && !w.frozen && b.def.store && sup);
       if (!wagon.hidden && document.activeElement !== food) food.max = sup.wagonMax;
-      const k = `${b.id}:${b.state}:${yours}:${w.frozen}:${builds.map(d => lockOf(w, d)).join("|")}:${q?.items.length ?? 0}:${next?.id}:${lock}:${price ? price.money <= (w.purse?.money ?? 0) : ""}`;
+      const site = b.state === "construction" ? w.purse?.logistics?.sites.find(s => s[0] === b.id) : null;
+      const paid = site ? Object.fromEntries(Object.entries(b.def.cost).map(([c, v]) => [c, c === "money" ? v : Math.max(0, v - (site[1][c] ?? 0))])) : b.def.cost;
+      const k = `${b.id}:${b.state}:${yours}:${w.frozen}:${JSON.stringify(site?.[1] ?? null)}:${builds.map(d => lockOf(w, d)).join("|")}:${q?.items.length ?? 0}:${next?.id}:${lock}:${price ? price.money <= (w.purse?.money ?? 0) : ""}`;
       if (k === key) return;
       key = k;
       make.replaceChildren(...builds.map(d => {
@@ -118,7 +160,7 @@ export function createBuildingPanel(root, game) {
       }), ...(q?.items.length ? [el("button", { id: "building-clear", text: "Clear queue", onclick: () => clear(b) })] : []));
       make.hidden = !builds.length;
       const can = yours && !w.frozen && b.state !== "rubble";
-      const back = costText(refundOf(b.def.cost, b.state === "construction" ? w.consRules.refundOnCancel : w.consRules.demolishRefund));
+      const back = costText(refundOf(paid, b.state === "construction" ? w.consRules.refundOnCancel : w.consRules.demolishRefund));
       actions.replaceChildren(
         ...(next ? [el("button", { id: "building-upgrade", class: "primary", disabled: !!lock || price.money > (w.purse?.money ?? 0), title: lock ?? "instant, at the upgrade menu's price", onclick: () => upgradeOne(b, next) }, `Upgrade to ${next.name}`)] : []),
         ...(can ? [el("button", { id: "building-demolish", text: b.state === "construction" ? "Cancel building" : "Demolish", title: back ? `refunds ${back}` : "", onclick: () => demolish(b) })] : []),

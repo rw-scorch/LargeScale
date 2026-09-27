@@ -142,6 +142,13 @@ button.act .alert{position:absolute;top:4px;left:6px;width:8px;height:8px;border
 .demand .fill.down{background:var(--bad)}
 .panel.center{left:50%;transform:translateX(-50%);top:calc(var(--hud,48px) + 16px);width:min(980px,calc(100% - 16px));max-height:calc(100% - var(--hud,48px) - 32px);overflow:auto;display:flex;flex-direction:column;gap:8px;z-index:2}
 .army-list{display:flex;flex-direction:column;gap:6px}
+.warn-text{color:var(--signal)}
+#store-orders input{width:70px}
+.logistics-list{display:flex;flex-direction:column;gap:10px}
+.log-section{display:flex;flex-direction:column;gap:4px}
+.log-item{text-align:left;white-space:normal;line-height:1.35}
+.log-item.warn{border-color:var(--signal)}
+.log-item.danger{border-color:var(--bad)}
 .guard-row{align-items:flex-start;gap:8px;border:2px solid var(--line);border-radius:3px;padding:6px 8px;font-size:13px}
 .guard-row input{margin-top:3px}
 .policies{display:flex;flex-direction:column;gap:2px}
