@@ -26,6 +26,7 @@ function ownStack(sim, nation, id) {
   if (!s || s.owner !== nation) return null;
   delete s.guard;
   s.sail = null;
+  s.follow = null;
   return s;
 }
 

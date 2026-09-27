@@ -88,7 +88,7 @@ test("roads stretch supply reach, bots ignore supply, and splits and merges keep
 
 test("a supply wagon is loaded at a store, feeds stacks within 3 plots, runs dry, follows a stack, and gives its food back", () => {
   const { w, g, a, n, order } = field();
-  assert.match(formWagon(w, a, g.idx(30, 9), 100).error, /loaded at a store/);
+  assert.match(formWagon(w, a, g.idx(30, 9), 100).error, /loaded at your capital or a store/);
   const made = order({ t: "wagon", at: g.idx(4, 11), food: 200 });
   assert.ok(made.ok && made.food === 200, JSON.stringify(made));
   assert.equal(n.stock.food, 800);

@@ -250,7 +250,7 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard };
+    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, supply: m.supply ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "schedule") { this.schedule = m.schedule ?? {}; if (m.info) this.info = m.info; }
     if (m.t === "phase") this.lastPhase = m;

@@ -273,6 +273,19 @@ check(aSpawn >= 0, "player spawns on land");
   const removed = run && await rr("none", [run[0], run[5]]);
   const roadGone = removed?.ok && await until(() => { view.pump(); return run.every(i => !cw.roads[i]); }, 3000);
   if (run) await rr("dirt", [run[0], run[2]]);
+  view.pump();
+  const food0 = cw.purse.stock.food;
+  A.ws.send(JSON.stringify({ t: "wagon", at: aSpawn, food: 10 }));
+  const wag = await nextResult(A, "wagon");
+  const friendWagon = wag?.ok && await until(() => B.json.some(m => m.t === "state" && m.s?.some(r => r[0] === wag.stack && r[7] === 1 && r[8] === 10)), 3000);
+  A.ws.send(JSON.stringify({ t: "wagon", at: 0, food: 20 }));
+  const farWagon = await nextResult(A, "wagon");
+  A.ws.send(JSON.stringify({ t: "disband", stack: wag?.stack }));
+  A.ws.send(JSON.stringify({ t: "disband", stack: wag?.stack }));
+  const unload = await until(() => A.json.find(m => m.t === "result" && m.of === "disband" && m.food), 3000);
+  const foodBack = await until(() => { view.pump(); return cw.purse.stock.food >= food0 - 1 ? cw.purse.stock.food : null; }, 3000);
+  check(wag?.ok && wag.food === 10 && friendWagon && /loaded at your capital or a store/.test(farWagon?.error ?? "") && unload?.food === 10 && foodBack && cw.purse.supply?.carry === 600 && cw.purse.supply?.range === 18 * K,
+    `a supply wagon is loaded with 10 food at the capital, the friend sees it as a wagon, one away from a store is refused ("${farWagon?.error}"), and disbanding it gives the food back (${food0} to ${foodBack}); supply reach is ${cw.purse.supply?.range} plots`);
   check(laid?.ok && laid.laid === 6 && roadSeen && friendRoad && offLand?.error === "roads go on your own land" && /Paved roads/.test(lockedCobble?.error ?? "") && removed?.laid === 6 && roadGone,
     `a dirt road of ${laid?.laid} plots costs ${JSON.stringify(laid?.cost)} (gold ${gold0} before), reaches both clients, is refused off your land ("${offLand?.error}") and as cobble before research ("${lockedCobble?.error}"), and comes up again for free`);
   const townClock = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
