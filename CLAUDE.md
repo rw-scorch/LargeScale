@@ -235,7 +235,7 @@ Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roa
   - Supply wagons are stacks with `kind: "supply"` and `supplies`: the `wagon` and `follow` orders, loaded from store cards.
   - Two players are worked out a tick; bots are left out. Rules are in `rules.json` `supply`.
 - **Free transport boats (same branch).** `src/sim/boats.js` (`installBoats`): a move or attack with no land route walks to your coast and crosses in a free boat (unit 22), losing 1% plus 0.1% a plot of water, up to 15%. At most 3 at sea; warships sink them. Rules are in `rules.json` `boats`.
-- **Part C, stores and convoys (28 September 2026, branch `m5-stores`).** Ryan asked for it before his check of A and B. `src/sim/stores.js` (`installStores`); rules in `rules.json` `stores`; choices in `plans/milestone-5.md`.
+- **Part C, stores and convoys (28 September 2026, branch `m5-stores`, PR 26).** Ryan asked for it before his check of A and B. `src/sim/stores.js` (`installStores`); rules in `rules.json` `stores`; choices in `plans/milestone-5.md`.
   - **Goods live in stores.** Each store building keeps `b.goods`, and capacity is per good (`store.capacity`; `seat` marks the seat of government line). A nation with no store keeps a camp at its capital (`n.camp`).
     - `n.stock` stays the total. `sync(world, n)` spreads changes made straight to `n.stock` (towns eating, town goods, admin gifts, road costs) across the stores. Call it before taking from a particular store.
     - `n.stored` is the total at the last sync.
@@ -252,7 +252,7 @@ Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roa
 
 Open items as of 27 September 2026, in order:
 
-1. PRs 14 to 25 are merged (roads, army supply and free boats included, 27 September 2026). `m5-stores` (Part C, stores and convoys) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads, supply, boats, stores and carts together. Part D (sea routes) waits for that check.
+1. PRs 14 to 25 are merged (roads, army supply and free boats included, 27 September 2026). PR 26 (`m5-stores`: Part C, stores and convoys) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads, supply, boats, stores and carts together. Part D (sea routes) waits for that check.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A new main menu (the world list and login), which Ryan finds bland. Later, at his word. Also later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
