@@ -9,7 +9,7 @@ import { unitTable, mixFromRow, mixParts, powerOf } from "./units.js";
 
 const LEVY_ONLY = [{ id: "levy", num: 1, name: "Levies", kind: "troop", era: "T", attack: 1, defence: 1, speed: 1, capture: 1 }];
 
-const stackFromRow = ([id, owner, pos, troops, order, mix, xp], units) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold", mix: mixFromRow(units, mix), xp: xp ?? 0 });
+const stackFromRow = ([id, owner, pos, troops, order, mix, xp, kind, supplies], units) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold", mix: mixFromRow(units, mix), xp: xp ?? 0, kind: kind === 1 ? "supply" : null, supplies: supplies ?? 0 });
 
 const MACHINE_STATES = ["idle", "moving", "wreck"];
 

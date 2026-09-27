@@ -194,3 +194,19 @@ export function planSegment(grid, co, start, regions, goal, cost, { ahead = 8, r
   };
   return search(grid, start, i => co.regionOf(i) === target, h, inside, maxNodes);
 }
+
+export function costMap(grid, sources, cost, limit) {
+  const dist = new Map(), open = new MinHeap();
+  for (const i of sources) if (!dist.has(i)) { dist.set(i, 0); open.push(0, i); }
+  while (open.size) {
+    const d = open.peekKey(), cur = open.pop();
+    if (d > dist.get(cur)) continue;
+    for (const n of grid.neighbours4(cur)) {
+      const c = cost(cur, n);
+      if (!(c < Infinity)) continue;
+      const nd = d + c;
+      if (nd <= limit && nd < (dist.get(n) ?? Infinity)) { dist.set(n, nd); open.push(nd, n); }
+    }
+  }
+  return dist;
+}
