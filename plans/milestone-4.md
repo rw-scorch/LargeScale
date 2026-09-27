@@ -149,6 +149,26 @@ Ryan's answers: guard means stacks and troops at home that watch enemy movement 
   - `npm run ui` 129 of 129 on the test map and on fine Europe: Guard on a phone, the tree, and layout by mouse and by touch.
   - `npm run bench`: all 8 players on Guard against 400 bots, guard pass 4 ms, worst tick 34.2 ms.
 
+## Ryan's asks after PR 22 (27 September 2026, branch `m4-swipe`, stacked on `m4-asks`)
+
+Ryan's list: selecting troops by swiping; zoning only moved the screen; troops stopped advancing into unclaimed land while he was away; scheduled games that show everyone when each event happens; an overtime that forces players to fight. Individual military units come later. His answers: overtime is a shrinking border, the schedule covers every event with all settings and info shown to everyone, and the winner is the last player standing.
+
+- **Zoning with the crosshair.** Zoning and painting needed Select held down, so on a phone a drag moved the map instead. Select is now a toggle there: press, move, press again. Esc cancels.
+- **Away advances.** Standing orders held every advance of an absent player. An advance into unclaimed land now goes on, and a plain advance carries on into unclaimed land only, back to normal when the player returns. An advance at one nation still holds.
+- **Swipe selection** (`public/js/ui/group.js`). A drag that starts on one of your stacks sweeps up every stack it passes; Shift and a mouse drag draws a box. The group panel and ring send one `group` order for up to 100 stacks: advance, take unclaimed land, advance on a nation, move (keeping the formation), gather on the biggest stack, halt and disband.
+- **Schedules** (`src/shared/schedule.js`, admin op `schedule`).
+  - Four times, all optional, in order: the world starts, peace ends, overtime begins, the world ends. At most 60 days ahead.
+  - Before the start only picking a spot is allowed, and the world does not tick; catch-up measures from the start.
+  - Until peace ends players cannot attack each other; bots can still be fought.
+  - At the end the player with the most land wins (`by: "time"`); before that the last player standing wins, as before.
+  - Everyone sees the times: the World info panel (I, or the countdown in the status bar), feed reminders an hour, ten minutes and a minute before, a feed line as each happens, and the next event on the world list.
+- **Overtime** (`src/sim/overtime.js`). Every `shrinkEvery` seconds (the host picks 30 s to an hour; 2 minutes by default) every nation's outer ring of land turns unclaimed, bots included. Capitals are never taken, so nobody is eliminated by the shrink alone. Large shrinks are spread at 4,000 plots a tick.
+- **Evidence.**
+  - `npm test` 182 of 182 (`test/schedule.test.js`: rules, phases, the ring, spreading); reference 95 of 95.
+  - Smoke 102 of 102: a schedule set and heard, a spawn allowed and a stack refused before the start, an attack refused in peace, the host's land shrinking from 49 to 29 plots in overtime, and a win at the end time. The cog landing check failed once on a shore it could not reach and passed on both reruns.
+  - `npm run ui` 144 of 144 on the test map and on fine Europe: the editor, a refused order, the world list line, a phone opening World info from the countdown, the one-minute reminder, overtime in the bar and the feed, and the end-time win.
+  - `npm run bench`: one full overtime shrink on the whole Earth with 400 bots takes 75,262 plots over 20 ticks, worst tick 14.4 ms; the normal worst tick is 31.3 ms, and the border sets still match a full scan.
+
 ## Decisions (answered by Ryan, 26 September 2026)
 
 1. **Yes**: towers and forts change combat.
