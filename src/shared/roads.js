@@ -61,6 +61,7 @@ export function roadPlan(view, nid, points, kind, rules = ROAD_RULES, scale = 1)
     if (!t.land) return { error: "a road cannot cross water; build it along the shore", at: i };
     if (t.move === Infinity) return { error: `a road cannot cross ${t.name.replace(/_/g, " ")}`, at: i };
     if (owner[i] !== nid) return { error: "roads go on your own land", at: i };
+    if (view.blocked?.(i)) return { error: "a building stands in the way", at: i };
   }
   const plots = line.filter(i => road[i] < level);
   return { plots, ...roadPrice(kind, terrain, plots, rules, scale), skipped: line.length - plots.length };

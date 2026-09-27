@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { World } from "../src/sim/territory.js";
-import { installBuildings, saveLayers } from "../src/sim/buildings.js";
+import { installBuildings, saveLayers, addBuilding } from "../src/sim/buildings.js";
+import { placeView } from "../src/sim/construction.js";
+import { placeError } from "../src/shared/buildings.js";
 import { installRoads, layRoad, restoreRoads, takeRoadNews, setRoad, ROADS } from "../src/sim/logistics.js";
 import { unitCost } from "../src/sim/units.js";
 import { roadLine, roadPlan, roadSprite, roadName, ROAD_RULES } from "../src/shared/roads.js";
@@ -130,4 +132,14 @@ test("road sprites join up, and rivers get bridges", () => {
   road[56] = 2;
   assert.equal(roadSprite(road, terrain, w, 56), "bridge_stone_h");
   assert.deepEqual([roadName(road, terrain, 55), roadName(road, terrain, 56), roadName(road, terrain, 0)], ["Dirt road", "Stone bridge", null]);
+});
+
+test("roads and buildings keep off each other's plots", () => {
+  const { world, g, a } = field();
+  addBuilding(world, { type: "watchtower_wood", owner: a, anchor: g.idx(20, 20), plots: [g.idx(20, 20)], state: "active", progress: 1 });
+  assert.equal(layRoad(world, a, [g.idx(18, 20), g.idx(22, 20)], "dirt").error, "a building stands in the way");
+  assert.equal(layRoad(world, a, [g.idx(18, 22), g.idx(22, 22)], "dirt").laid, 5);
+  const def = world.bld.table.watchtower_wood;
+  assert.equal(placeError(placeView(world, a), { id: a, era: "T" }, def, g.idx(20, 22)), "a road runs there; take it up first");
+  assert.equal(placeError(placeView(world, a), { id: a, era: "T" }, def, g.idx(20, 24)), null);
 });

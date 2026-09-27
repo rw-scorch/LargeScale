@@ -72,7 +72,8 @@ export function takeRoadNews(world) {
 export function layRoad(world, nid, points, kind) {
   const log = world.log, n = world.nations.get(nid);
   if (!log?.rules || !n) return { error: "roads are not running in this world" };
-  const plan = roadPlan({ w: world.grid.w, terrain: world.terrain, road: log.road, owner: world.owner }, nid, points, kind, log.rules, log.scale);
+  const bld = world.bld, blocked = i => { const id = bld?.at.get(i); return id !== undefined && bld.list.get(id)?.state !== "rubble"; };
+  const plan = roadPlan({ w: world.grid.w, terrain: world.terrain, road: log.road, owner: world.owner, blocked }, nid, points, kind, log.rules, log.scale);
   if (plan.error) return plan;
   const need = log.rules.types[kind]?.needs, locked = need && world.lockReason?.(nid, need);
   if (locked) return { error: locked };
