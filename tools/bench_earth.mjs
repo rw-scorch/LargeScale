@@ -16,6 +16,7 @@ import { installResearch, orderResearch } from "../src/sim/research.js";
 import { installMachines, giveMachine, orderUnit, UNIT_TYPES } from "../src/sim/units.js";
 import { installEffects } from "../src/sim/effects.js";
 import { installGuard, guardTick } from "../src/sim/guard.js";
+import { installOvertime } from "../src/sim/overtime.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -123,6 +124,7 @@ for (const id of players) {
 }
 installEffects(w);
 const guard = installGuard(w, { scale });
+const overtime = installOvertime(w, { every: allRules.overtime.every });
 for (const id of players) w.nations.get(id).guard = true;
 const guardProbe = () => { const t0 = performance.now(); guardTick(w, guard.rules); return performance.now() - t0; };
 const fortProbe = (() => { const t0 = performance.now(); let s = 0; for (let k = 0; k < 200000; k++) s += w.fortAt(players[k % players.length], (k * 7919) % w.grid.size); return { lookups: 200000, ms: +(performance.now() - t0).toFixed(1), sum: Math.round(s) }; })();
@@ -247,6 +249,18 @@ const catchUp = (() => {
   return { hours, steps, step, ms: Math.round(performance.now() - t0), worstStepMs: +worstStep.toFixed(1), moneyGained: Math.round(after.reduce((t, n, k) => t + n.money - before[k].money, 0) / after.length), popBefore: Math.round(before.reduce((t, b) => t + b.pop, 0)), popAfter: Math.round(after.reduce((t, n) => t + n.pop, 0)), researched: after.reduce((t, n, k) => t + n.research.known.length - before[k].known, 0) };
 })();
 
+const shrink = (() => {
+  const held = () => [...w.nations.values()].reduce((t, n) => t + (n.alive ? n.plots : 0), 0), before = held();
+  overtime.on = true;
+  overtime.clock = overtime.every - DT;
+  let worst = 0, ticks = 0;
+  do { const t0 = performance.now(); w.tick(DT); worst = Math.max(worst, performance.now() - t0); ticks++; } while (overtime.queue.length && ticks < 400);
+  overtime.on = false;
+  w.events.length = 0;
+  w.takeDirty();
+  return { plotsTaken: before - held(), ticks, worstTickMs: +worst.toFixed(1) };
+})();
+
 let borderOk = true;
 for (let i = 0; i < w.owner.length && borderOk; i++) {
   const o = w.owner[i];
@@ -281,6 +295,7 @@ const report = {
   stacks: w.stacks.size,
   guard: { tickMs: +guardProbe().toFixed(1), formed: [...w.stacks.values()].filter(s => s.guard?.formed).length, sent: [...w.stacks.values()].filter(s => s.guard?.threat !== undefined).length },
   catchUp,
+  overtime: shrink,
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
   ownedPlots: owned,
@@ -305,6 +320,7 @@ const report = {
 };
 console.log(JSON.stringify(report, null, 2));
 if (!borderOk) { console.error("FAIL: border sets do not match a full scan"); process.exit(1); }
+if (shrink.worstTickMs > Number(a.budget)) { console.error(`FAIL: an overtime shrink took ${shrink.worstTickMs} ms in one tick`); process.exit(1); }
 if (worst > Number(a.budget)) {
   console.error(`FAIL: worst tick ${worst.toFixed(1)} ms is over the ${a.budget} ms budget`);
   process.exit(1);
