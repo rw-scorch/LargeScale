@@ -17,6 +17,7 @@ import { installMachines, giveMachine, orderUnit, UNIT_TYPES } from "../src/sim/
 import { installEffects } from "../src/sim/effects.js";
 import { installGuard, guardTick } from "../src/sim/guard.js";
 import { installOvertime } from "../src/sim/overtime.js";
+import { installRoads, setRoad, ROADS } from "../src/sim/logistics.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -37,6 +38,7 @@ const { values: a } = parseArgs({ options: {
   crop: { type: "string" },
   seed: { type: "string", default: "1" },
   catchup: { type: "string", default: "12" },
+  roads: { type: "string", default: "1500" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -125,6 +127,22 @@ for (const id of players) {
 installEffects(w);
 const guard = installGuard(w, { scale });
 const overtime = installOvertime(w, { every: allRules.overtime.every });
+installRoads(w, { scale, rules: allRules.roads });
+let roadPlots = 0;
+for (const id of players) {
+  const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
+  let laid = 0;
+  for (let r = 1; r < 400 && laid < Number(a.roads); r++) for (let dy = -r; dy <= r && laid < Number(a.roads); dy++) for (let dx = -r; dx <= r && laid < Number(a.roads); dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || (dx % 6 && dy % 6)) continue;
+    const x = cx + dx, y = cy + dy;
+    if (!w.grid.inside(x, y)) continue;
+    const i = w.grid.idx(x, y);
+    if (w.owner[i] !== id || !isLand(terrain[i]) || bld.at.has(i) || w.log.road[i]) continue;
+    setRoad(w, i, ROADS.cobble);
+    laid++;
+  }
+  roadPlots += laid;
+}
 for (const id of players) w.nations.get(id).guard = true;
 const guardProbe = () => { const t0 = performance.now(); guardTick(w, guard.rules); return performance.now() - t0; };
 const fortProbe = (() => { const t0 = performance.now(); let s = 0; for (let k = 0; k < 200000; k++) s += w.fortAt(players[k % players.length], (k * 7919) % w.grid.size); return { lookups: 200000, ms: +(performance.now() - t0).toFixed(1), sum: Math.round(s) }; })();
@@ -296,6 +314,7 @@ const report = {
   guard: { tickMs: +guardProbe().toFixed(1), formed: [...w.stacks.values()].filter(s => s.guard?.formed).length, sent: [...w.stacks.values()].filter(s => s.guard?.threat !== undefined).length },
   catchUp,
   overtime: shrink,
+  roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
   ownedPlots: owned,

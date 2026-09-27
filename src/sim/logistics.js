@@ -1,9 +1,11 @@
 import { TERRAIN } from "../shared/terrain.js";
 import { findPath, costField } from "../shared/pathfind.js";
+import { encodeRuns, decodeRuns } from "../shared/codec.js";
+import { ROAD_TYPES, ROAD_MULT, ROAD_RULES, roadPlan, roadSprite } from "../shared/roads.js";
 
-export const ROADS = { none: 0, dirt: 1, cobble: 2, paved: 3, highway: 4, rail: 5 };
-export const ROAD_NAMES = Object.keys(ROADS);
-export const ROAD_MULT = [1, 0.6, 0.45, 0.3, 0.2, 0.12];
+export { ROAD_MULT };
+export const ROADS = Object.fromEntries(ROAD_TYPES.map((k, i) => [k, i]));
+export const ROAD_NAMES = ROAD_TYPES;
 export const CONVOY = {
   T: { sprite: "supply_T", capacity: 10, speed: 1.0 },
   M: { sprite: "supply_M", capacity: 30, speed: 1.3 },
@@ -19,6 +21,72 @@ export function installLogistics(world) {
   world.log = log;
   return log;
 }
+
+export function installRoads(world, opts = {}) {
+  const log = world.log ?? installLogistics(world);
+  log.rules = { ...ROAD_RULES, ...opts.rules, types: { ...ROAD_RULES.types, ...opts.rules?.types } };
+  log.scale = opts.scale ?? 1;
+  log.news = new Set();
+  log.count = new Uint32Array(ROAD_TYPES.length);
+  log.count[0] = log.road.length;
+  const base = world.moveCost.bind(world);
+  world.moveCost = (a, b) => base(a, b) * ROAD_MULT[log.road[b]];
+  world.pathMinStep = () => {
+    let low = 1;
+    for (let k = 1; k < log.count.length; k++) if (log.count[k]) low = Math.min(low, ROAD_MULT[k]);
+    return 0.9 * low;
+  };
+  if (world.bld) (world.bld.extra ??= {}).road = () => encodeRuns(log.road);
+  return log;
+}
+
+export function setRoad(world, i, level) {
+  const log = world.log, was = log.road[i];
+  if (was === level) return;
+  log.count[was]--;
+  log.count[level]++;
+  log.road[i] = level;
+  log.news.add(i);
+  world.bld?.changed.add("road");
+}
+
+export function restoreRoads(world, bytes) {
+  const log = world.log;
+  if (bytes?.length) decodeRuns(bytes, log.road);
+  log.count.fill(0);
+  for (const v of log.road) log.count[v]++;
+  log.news.clear();
+  return log.road.length - log.count[0];
+}
+
+export function takeRoadNews(world) {
+  const log = world.log;
+  if (!log?.news?.size) return null;
+  const out = new Uint32Array(log.news.size * 2);
+  let k = 0;
+  for (const i of log.news) { out[k++] = i; out[k++] = log.road[i]; }
+  log.news.clear();
+  return out;
+}
+
+export function layRoad(world, nid, points, kind) {
+  const log = world.log, n = world.nations.get(nid);
+  if (!log?.rules || !n) return { error: "roads are not running in this world" };
+  const bld = world.bld, blocked = i => { const id = bld?.at.get(i); return id !== undefined && bld.list.get(id)?.state !== "rubble"; };
+  const plan = roadPlan({ w: world.grid.w, terrain: world.terrain, road: log.road, owner: world.owner, blocked }, nid, points, kind, log.rules, log.scale);
+  if (plan.error) return plan;
+  const need = log.rules.types[kind]?.needs, locked = need && world.lockReason?.(nid, need);
+  if (locked) return { error: locked };
+  if (!plan.plots.length) return { error: kind === "none" ? "there is no road of yours there" : "that road is already there" };
+  const short = Object.entries(plan.cost).find(([k, v]) => (k === "money" ? n.money ?? 0 : n.stock?.[k] ?? 0) < v);
+  if (short) return { error: `you need ${short[1]} ${short[0] === "money" ? "gold" : short[0]} for ${plan.plots.length} plots`, cost: plan.cost };
+  for (const [k, v] of Object.entries(plan.cost)) if (k === "money") n.money -= v; else n.stock[k] -= v;
+  const level = ROAD_TYPES.indexOf(kind);
+  for (const i of plan.plots) setRoad(world, i, level);
+  return { laid: plan.plots.length, cost: plan.cost, bridges: plan.bridges, skipped: plan.skipped };
+}
+
+export function roadSpriteAt(world, i) { return roadSprite(world.log.road, world.terrain, world.grid.w, i); }
 
 export function roadMask(world, i) {
   const g = world.grid, r = world.log.road, x = g.x(i), y = g.y(i);

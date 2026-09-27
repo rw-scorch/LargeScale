@@ -1,6 +1,7 @@
 import { el } from "./dom.js";
 import { TERRAIN } from "../shared/terrain.js";
 import { ERA_ORDER } from "../shared/buildings.js";
+import { roadName } from "../shared/roads.js";
 
 const pretty = s => s.replace(/_/g, " ");
 const eraRank = e => ERA_ORDER.indexOf(e);
@@ -38,7 +39,7 @@ export function createTip(root, game) {
   const describe = plot => {
     const w = game.world, t = TERRAIN[w.terrain[plot]], o = w.owner[plot], n = o ? w.nations.get(o) : null;
     const b = w.buildingAt(plot), ore = oreText(w, plot, b), fort = o ? w.fortAt(o, plot) : 1;
-    const extra = [pretty(t.name), b?.def?.name, ore, fort > 1 ? `fortified, defends at ${fort} times` : null].filter(Boolean).join(", ");
+    const extra = [pretty(t.name), roadName(w.roads, w.terrain, plot), b?.def?.name, ore, fort > 1 ? `fortified, defends at ${fort} times` : null].filter(Boolean).join(", ");
     if (!t.land) return { colour: null, title: "Water", extra: [pretty(t.name), ore].filter(Boolean).join(", ") };
     if (!n) return { colour: null, title: "Unclaimed", extra };
     return { colour: n.colour, title: o === w.you ? "Your land" : `${n.name}${n.bot ? " (bot)" : ""}`, extra };
@@ -49,7 +50,7 @@ export function createTip(root, game) {
     update() {
       const w = game.world, v = game.view;
       const at = game.hover ?? (performance.now() < pinnedUntil ? pinnedAt : null);
-      const plot = at && !game.building && !game.zoning && !game.placing && !game.stack.choosing ? game.plotAt(...at) : null;
+      const plot = at && !game.building && !game.zoning && !game.roading && !game.placing && !game.stack.choosing ? game.plotAt(...at) : null;
       if (plot === null || !w?.ready || !v) { box.hidden = true; return; }
       const mid = v.machineAt?.(...at), u = mid === null || mid === undefined ? null : w.machines.get(mid);
       const d = u ? machineTip(w, u) : describe(plot);

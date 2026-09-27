@@ -48,10 +48,10 @@ export function unitCost(world, def) {
   const f = (a, b) => {
     const t = TERRAIN[world.terrain[b]];
     if (def.domain === "sea") return t.land ? Infinity : t.water === "ice" ? Infinity : 1;
-    if (def.domain === "land") return t.land ? t.move : Infinity;
+    if (def.domain === "land") return t.land ? world.moveCost(a, b) : Infinity;
     return 1;
   };
-  f.minStep = def.domain === "land" ? 0.9 : 1;
+  f.minStep = def.domain === "land" ? world.pathMinStep?.() ?? 0.9 : 1;
   return f;
 }
 

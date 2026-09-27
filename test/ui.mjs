@@ -1454,6 +1454,92 @@ await sp.screenshot({ path: `${OUT}/44-time-up-phone.png` });
 check(/has won with the most land when time ran out/.test(endText), `at the end time the player with the most land wins: "${endText}"`);
 await sp.close();
 
+const roadCount = p => p.evaluate(() => { let n = 0; for (const v of window.__ls.game.world.roads) if (v) n++; return n; });
+const freeRun = (p, skip = []) => p.evaluate(skip => {
+  const g = window.__ls.game, w = g.world, v = g.view, n = w.nations.get(w.you), cx = n.capital % w.w, cy = (n.capital / w.w) | 0;
+  const free = (x, y) => { const i = y * w.w + x; return w.owner[i] === w.you && !w.buildingAt(i) && !w.roads[i]; };
+  let best = null;
+  for (let y = cy - 5; y <= cy + 5; y++) {
+    if (skip.includes(y)) continue;
+    let run = [];
+    for (let x = cx - 9; x <= cx + 9; x++) {
+      if (free(x, y)) { run.push(x); if (!best || run.length > best.xs.length) best = { y, xs: run.slice() }; } else run = [];
+    }
+  }
+  if (!best || best.xs.length < 3) return null;
+  const s = (x, y) => { const [sx, sy] = v.plotToScreen(x + 0.5, y + 0.5); return [sx / v.ratio, sy / v.ratio]; };
+  return { y: best.y, n: best.xs.length, a: s(best.xs[0], best.y), b: s(best.xs.at(-1), best.y), mid: s(best.xs[1], best.y) };
+}, skip);
+
+await gp.bringToFront();
+await gp.goto(BASE + "/");
+await gp.waitForSelector("#world-create", { timeout: 5000 });
+const roadId = await newWorld(gp, "UI roads", { map: "test", w: 160, h: 100, seed: 12, bots: 0 });
+await gp.goto(`${BASE}/#w=${roadId}`);
+await gp.reload();
+await ready(gp);
+await spawnSomewhere(gp);
+await gp.evaluate(async () => { const g = window.__ls.game, w = g.world; await new Promise(r => setTimeout(r, 1200)); await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "money", amount: 500 }); g.focus(w.nations.get(w.you).capital, 12); });
+await gp.waitForTimeout(600);
+await gp.keyboard.press("b");
+await gp.click("#build-menu .tabs button:has-text('Roads')");
+const roadTab = await gp.textContent("#build-menu .build-list");
+await gp.click("[data-road=dirt]");
+const r1 = await freeRun(gp);
+await gp.mouse.move(...r1.a);
+await gp.mouse.down();
+await gp.mouse.move(...r1.b, { steps: 10 });
+await gp.waitForTimeout(350);
+const roadHint = await gp.textContent("#build-hint");
+await gp.screenshot({ path: `${OUT}/45-road-drawing.png` });
+await gp.mouse.up();
+const laidToast = await gp.waitForFunction(() => /Laid \d+ plots/.test(document.querySelector("#toasts")?.textContent ?? "") ? document.querySelector("#toasts").textContent : null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+const roads1 = await gp.waitForFunction(n => { let c = 0; for (const v of window.__ls.game.world.roads) if (v) c++; return c >= n ? c : null; }, r1.n, { timeout: 4000 }).then(h => h.jsonValue(), () => roadCount(gp));
+check(/Dirt road1 gold a plot/.test(roadTab) && /Needs Paved roads research/.test(roadTab) && new RegExp(`${r1.n} plots: \\d+ gold`).test(roadHint) && roads1 === r1.n && /^Laid \d+ plots of dirt road for \d+ gold/.test(laidToast),
+  `the Roads tab lists dirt and cobbled roads, a drag shows "${roadHint.match(/\d+ plots: [^.]*/)?.[0]}" and letting go lays ${roads1}: "${laidToast}"`);
+await gp.keyboard.press("Escape");
+await gp.keyboard.press("Escape");
+const stopped = await gp.evaluate(() => !window.__ls.game.roading && document.querySelector("#build-hint").hidden);
+await gp.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 30));
+await gp.waitForTimeout(300);
+const r1Close = await gp.evaluate(y => { const g = window.__ls.game, w = g.world, v = g.view; const i = [...w.roads.keys()].find(k => w.roads[k] && ((k / w.w) | 0) === y); const [sx, sy] = v.plotToScreen((i % w.w) + 0.5, y + 0.5); return [sx / v.ratio, sy / v.ratio]; }, r1.y);
+await gp.mouse.move(...r1Close);
+await gp.waitForTimeout(300);
+const roadTip = await gp.textContent("#plot-tip").catch(() => "");
+await gp.screenshot({ path: `${OUT}/46-road-close.png` });
+await gp.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 6));
+await gp.waitForTimeout(300);
+await gp.screenshot({ path: `${OUT}/47-road-mid.png` });
+check(stopped && /Dirt road/.test(roadTip), `Esc stops laying roads, and the tip over a road says so: "${roadTip}"`);
+
+const rp = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+await login(rp, "rw_scorch", "correct horse");
+await rp.goto(`${BASE}/#w=${roadId}`);
+await rp.reload();
+await ready(rp);
+await rp.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 12));
+await rp.waitForTimeout(500);
+await rp.tap("#open-build");
+await rp.tap("#build-menu .tabs button:has-text('Roads')");
+await rp.tap("[data-road=dirt]");
+const r2 = await freeRun(rp, [r1.y]);
+const phoneLaid = await rp.evaluate(async r => {
+  const c = document.querySelector("#map"), keep = c.setPointerCapture;
+  c.setPointerCapture = () => {};
+  const at = (type, x, y) => c.dispatchEvent(new PointerEvent(type, { pointerId: 41, pointerType: "touch", clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+  at("pointerdown", r.a[0], r.a[1]);
+  for (let t = 1; t <= 10; t++) at("pointermove", r.a[0] + (r.b[0] - r.a[0]) * t / 10, r.a[1]);
+  at("pointerup", r.b[0], r.b[1]);
+  c.setPointerCapture = keep;
+  for (let k = 0; k < 40 && !/Laid \d+ plots/.test(document.querySelector("#toasts")?.textContent ?? ""); k++) await new Promise(res => setTimeout(res, 100));
+  return document.querySelector("#toasts")?.textContent ?? "";
+}, r2);
+await rp.waitForTimeout(500);
+const roads2 = await rp.waitForFunction(n => { let c = 0; for (const v of window.__ls.game.world.roads) if (v) c++; return c >= n ? c : null; }, r1.n + (r2?.n ?? 0), { timeout: 4000 }).then(h => h.jsonValue(), () => roadCount(rp));
+await rp.screenshot({ path: `${OUT}/48-road-phone.png` });
+check(r2 && roads2 === r1.n + r2.n && /Laid/.test(phoneLaid), `on a phone one finger lays a road of ${r2?.n} plots (${roads2} in all): "${phoneLaid.match(/Laid[^.]*\./)?.[0]}"`);
+await rp.close();
+
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
 console.log(failures ? `${failures} checks failed` : "all checks passed");

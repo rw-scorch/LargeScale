@@ -86,7 +86,7 @@ function fits(world, nid, plots, zone, self = 0) {
   const bld = world.bld;
   return plots && plots.every(i => {
     const id = bld.at.get(i);
-    return world.owner[i] === nid && bld.zone[i] === ZONES[zone] && TERRAIN[world.terrain[i]].build && (id === undefined || id === self);
+    return world.owner[i] === nid && bld.zone[i] === ZONES[zone] && TERRAIN[world.terrain[i]].build && (id === undefined || id === self) && !world.log?.road[i];
   });
 }
 

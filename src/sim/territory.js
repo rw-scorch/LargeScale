@@ -233,7 +233,7 @@ export class World {
     }
     r.regions.splice(0, k);
     const cost = (a, b) => this.moveCost(a, b);
-    cost.minStep = 0.9;
+    cost.minStep = this.pathMinStep?.() ?? 0.9;
     const seg = planSegment(this.grid, co, from, r.regions, r.goal, cost, { ahead: this.rules.pathAhead, maxNodes: this.rules.pathMaxNodes });
     if (!seg) return false;
     for (let j = 1; j < seg.length; j++) s.path.push(seg[j]);

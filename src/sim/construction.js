@@ -26,6 +26,7 @@ export function placeView(world, nid = 0) {
     w: world.grid.w, h: world.grid.h, terrain: world.terrain, owner: world.owner,
     occupant: i => { const id = bld.at.get(i); return id === undefined || bld.list.get(id).state === "rubble" ? 0 : id; },
     deposit: i => world.res?.depositAt(i) ?? null,
+    road: world.log?.road ?? null,
   };
 }
 

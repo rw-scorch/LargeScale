@@ -49,6 +49,7 @@ export function placeError(v, nation, def, anchor, self = 0) {
   const plots = footprintAt(v.w, v.h, anchor, def.fp);
   if (!plots) return "off the edge of the map";
   if (plots.some(i => { const id = v.occupant(i); return id && id !== self; })) return "something is already there";
+  if (v.road && plots.some(i => v.road[i])) return "a road runs there; take it up first";
   const nid = nation.id, land = plots.filter(i => TERRAIN[v.terrain[i]].land), water = plots.length - land.length;
   if (def.rule === "coast") {
     if (!land.length || !(water || land.some(i => onShore(v, i)))) return "must sit on the coast";

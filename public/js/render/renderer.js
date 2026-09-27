@@ -3,12 +3,13 @@ import { hash2 } from "../shared/rng.js";
 import { areaAround } from "../shared/buildings.js";
 import { People } from "./people.js";
 import { placeLabels } from "./labels.js";
+import { roadSprite } from "../shared/roads.js";
 
 export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
 const FORMATION = [[0, 0], [-0.32, 0.12], [0.32, 0.12], [-0.18, -0.2], [0.18, -0.2]];
-const ROAD_NAMES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
+const ROAD_COLOUR = [null, "#e2c38a", "#d9d4c8", "#b8b8b8", "#f0f0f0", "#8a6a4a"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
 const ZONE_SPRITE = [null, "ov_zone_residential", "ov_zone_commercial", "ov_zone_industrial", "ov_zone_farmland"];
 const DEPOSIT_COLOUR = { stone: "#b8b0a0", clay: "#c07850", iron: "#a05a4a", copper: "#d08a40", tin: "#c8c8d0", coal: "#303030", gold: "#f0c840", silver: "#e0e0f0", gems: "#c060e0", oil: "#101010", gas: "#80c0c0", uranium: "#80f060", bauxite: "#d06040", lithium: "#f0f0f0", sulfur: "#f0f040", salt: "#ffffff", fish: "#50a0f0" };
@@ -59,6 +60,7 @@ export class MapRenderer {
     this.lotAt = new Map();
     this.people = new People(state);
     this.facing = new Map();
+    this.indexRoads();
     this.indexBuildings();
     this.rebuildTerrain();
     this.rebuildTerritory();
@@ -92,7 +94,22 @@ export class MapRenderer {
     this.occupied.fill(0);
     this.lotAt.clear();
     for (const b of s.buildings.values()) this.placeBuilding(b);
-    for (let i = 0; i < s.roads.length; i++) if (s.roads[i]) this.occupied[i] = 1;
+    for (const i of this.roadSet ?? []) this.occupied[i] = 1;
+  }
+
+  indexRoads() {
+    const r = this.state.roads;
+    this.roadSet = new Set();
+    for (let i = 0; i < r.length; i++) if (r[i]) { this.roadSet.add(i); this.occupied[i] = 1; }
+  }
+
+  updateRoads(plots) {
+    const r = this.state.roads;
+    this.roadSet ??= new Set();
+    for (const i of plots) {
+      if (r[i]) { this.roadSet.add(i); this.occupied[i] = 1; }
+      else { this.roadSet.delete(i); this.occupied[i] = this.state.at?.has(i) ? 1 : 0; }
+    }
   }
 
   placeBuilding(b) {
@@ -287,15 +304,41 @@ export class MapRenderer {
     return best;
   }
 
-  roadSprite(i) {
-    const s = this.state, r = s.roads, w = s.w, x = i % w;
-    let m = 0;
-    if (i >= w && r[i - w]) m |= 1;
-    if (x < w - 1 && r[i + 1]) m |= 2;
-    if (i + w < r.length && r[i + w]) m |= 4;
-    if (x > 0 && r[i - 1]) m |= 8;
-    const kind = ROAD_NAMES[r[i]];
-    return kind === "rail" ? `rail_${maskName(m)}` : `road_${kind}_${maskName(m)}`;
+  roadSprite(i) { return roadSprite(this.state.roads, this.state.terrain, this.state.w, i); }
+
+  drawRoadLines() {
+    const s = this.state, r = s.roads, w = s.w, ctx = this.ctx, c = this.cam, R = this.ratio ?? 1, v = this.visibleRange(1);
+    if (!this.roadSet?.size) return;
+    const paths = new Map();
+    const path = k => { let p = paths.get(k); if (!p) paths.set(k, (p = new Path2D())); return p; };
+    for (const i of this.roadSet) {
+      const x = i % w, y = (i / w) | 0;
+      if (x < v.x0 || x > v.x1 || y < v.y0 || y > v.y1) continue;
+      const k = r[i], p = path(k);
+      let joined = false;
+      if (x < w - 1 && r[i + 1]) { p.moveTo(x + 0.5, y + 0.5); p.lineTo(x + 1.5, y + 0.5); joined = true; }
+      if (i + w < r.length && r[i + w]) { p.moveTo(x + 0.5, y + 0.5); p.lineTo(x + 0.5, y + 1.5); joined = true; }
+      if (!joined && !(x > 0 && r[i - 1]) && !(i >= w && r[i - w])) { p.moveTo(x + 0.3, y + 0.5); p.lineTo(x + 0.7, y + 0.5); }
+    }
+    ctx.save();
+    ctx.lineCap = "round";
+    const width = Math.max((2 * R) / c.scale, 0.3);
+    ctx.strokeStyle = "rgba(30,22,14,.75)";
+    ctx.lineWidth = width + (1.6 * R) / c.scale;
+    for (const p of paths.values()) ctx.stroke(p);
+    ctx.lineWidth = width;
+    for (const [k, p] of paths) { ctx.strokeStyle = ROAD_COLOUR[k] ?? ROAD_COLOUR[1]; ctx.stroke(p); }
+    ctx.restore();
+  }
+
+  drawRoadPlan() {
+    const p = this.roadPlan, s = this.state, ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height;
+    if (!p?.line?.length) return;
+    ctx.save();
+    ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
+    ctx.fillStyle = p.ok ? "rgba(111,207,122,.72)" : "rgba(224,106,90,.72)";
+    for (const i of p.line) ctx.fillRect(i % s.w, (i / s.w) | 0, 1, 1);
+    ctx.restore();
   }
 
   lotSprite(i, type) {
@@ -345,6 +388,7 @@ export class MapRenderer {
     if (c.scale < ZOOM.sprites * R) {
       const r = this.visibleRange(0);
       for (const k of this.chunks) if (k && k.x <= r.x1 && k.y <= r.y1 && k.x + CHUNK >= r.x0 && k.y + CHUNK >= r.y0) ctx.drawImage(k.canvas, k.x, k.y);
+      this.drawRoadLines();
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (this.showNames && c.scale < ZOOM.sprites * R) this.drawNames();
@@ -354,6 +398,7 @@ export class MapRenderer {
     if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
     this.drawZoneRect();
+    this.drawRoadPlan();
     this.drawGhost();
     this.drawEffects();
     this.drawRoute();
@@ -587,11 +632,16 @@ export class MapRenderer {
       const [sx, sy] = this.plotToScreen(x, y);
       const lot = this.lotAt.get(i);
       if (lot) a.draw(ctx, this.lotSprite(i, lot), sx, sy, px);
-      if (s.roads[i]) a.draw(ctx, this.roadSprite(i), sx, sy, px);
     }
     this.drawFill(r);
     this.drawDeposits(r);
     this.drawZones(r);
+    for (const i of this.roadSet ?? []) {
+      const x = i % s.w, y = (i / s.w) | 0;
+      if (x < r.x0 || x > r.x1 || y < r.y0 || y > r.y1) continue;
+      const [sx, sy] = this.plotToScreen(x, y);
+      a.draw(ctx, this.roadSprite(i), sx, sy, px);
+    }
     this.drawBorders(r);
     const items = [];
     for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {

@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-4.md`: the Gunpowder era, the first slice of the kit's later eras. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-5.md`: logistics (roads, army supply, stores and convoys), agreed 27 September 2026 and built in four parts. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check, and the Industrial era follows logistics (`plans/milestone-6.md`). Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (182)
+npm test                  # unit tests (195)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -217,16 +217,28 @@ Ryan's decisions (26 September 2026): towers and forts change combat; stop at th
   - **Overtime** (`src/sim/overtime.js`, `installOvertime`, a `live` hook): every `shrinkEvery` seconds each nation's border ring except its capital turns unclaimed, spread over ticks (`rules.json` `overtime`, `schedule`). State carries `shrinkIn`.
   - **World info** (`public/js/ui/worldinfo.js`, I): the schedule with countdowns, how to win, the settings, and the host's editor. The status bar counts down to the next event; the feed reminds at an hour, ten minutes and a minute.
 
+## Milestone five progress
+
+Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roads, army supply, stores and convoys, sea routes. Ryan checks each part before the next.
+
+- **Part A, roads and bridges (27 September 2026, branch `m5-roads`, PR 24).**
+  - `src/shared/roads.js` is shared by the server and the client's preview.
+  - The kit's `src/sim/logistics.js` gains `installRoads`, `layRoad`, `setRoad`, `restoreRoads` and `takeRoadNews`. Roads change `world.moveCost`, which stacks, land machines and route planning all use. Use `world.pathMinStep()` as a search's `minStep`.
+  - The layer is `world.log.road`, saved through `bld.extra` and sent as `MSG.ROAD` and `MSG.ROAD_DIFF`.
+  - The `road` order lays dirt, or cobble after Paved roads; bridges over rivers cost 5 times and mountain roads 4 times (`rules.json` `roads`).
+  - Roads and buildings keep off each other's plots.
+  - The Roads tab is in the build menu (B).
+
 Open items as of 27 September 2026, in order:
 
-1. PRs 14 to 22 are merged (27 September 2026). PR 23 (`m4-swipe`: swipe, away advances, schedules, overtime) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14 to 23 are merged (27 September 2026). PR 24 (`m5-roads`: the dev pack, the milestone five and six plans, and roads) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads before Part B.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A new main menu (the world list and login), which Ryan finds bland. Later, at his word. Also later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
-4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. After it, as Ryan agreed: the Industrial slice with Age of Industry and a steel mill, then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
+4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
 5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
 6. Milestone two, step 7 (economy while away) is built on `m2-step7-away`; step 8 is Ryan's check.
 7. Later: the stat-editing dev panel of piece 14. Tax and army share sliders and self-service passwords are built on `m2-policies`.
-8. Each session's record goes in `devpack/` (see `devpack/README.md`).
+8. Each session's record goes in `devpack/` (see `devpack/README.md`); `tools/devpack.mjs` writes the conversation record. The pack for 25 to 27 September is done.
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 

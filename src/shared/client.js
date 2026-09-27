@@ -41,6 +41,8 @@ export class ClientWorld {
     this.chat = [...(hello.chat ?? [])];
     this.owner = new Uint16Array(this.w * this.h);
     this.zone = new Uint8Array(this.w * this.h);
+    this.roads = new Uint8Array(this.w * this.h);
+    this.roadRules = hello.roadRules ?? null;
     this.terrain = null;
     this.parts = new PartCollector();
     this.queue = [];
@@ -165,7 +167,7 @@ export class ClientWorld {
   placeError(type, anchor) {
     const def = this.defs.table[type], me = this.nations.get(this.you);
     if (!def || !me) return "unknown building";
-    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id) };
+    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id), road: this.roads };
     const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} };
     return placeError(view, nation, def, anchor) ?? costError(def, nation);
   }
@@ -197,6 +199,12 @@ export class ClientWorld {
       for (let k = 0; k < d.length; k += 2) plots.push(d[k]);
       return { layer: "terrain", plots };
     }
+    if (f.type === MSG.ROAD_DIFF) {
+      applyPairs(this.roads, f.body);
+      const d = pairs(f.body), plots = [];
+      for (let k = 0; k < d.length; k += 2) plots.push(d[k]);
+      return { layer: "road", plots };
+    }
     if (f.type === MSG.ZONE_DIFF) {
       applyPairs(this.zone, f.body);
       const d = pairs(f.body), plots = [];
@@ -215,6 +223,7 @@ export class ClientWorld {
     if (f.type === MSG.TERRAIN_DIFF) { applyPairs(this.terrain, whole); return { layer: "terrain", all: true }; }
     if (f.type === MSG.OWNER) { decodeRuns(whole, this.owner); this.ownerReady = true; return { layer: "owner", all: true }; }
     if (f.type === MSG.ZONE) { decodeRuns(whole, this.zone); return { layer: "zone", all: true }; }
+    if (f.type === MSG.ROAD) { decodeRuns(whole, this.roads); return { layer: "road", all: true }; }
     if (f.type === MSG.DEPOSITS) { this.setDeposits(decodeDeposits(whole)); return { layer: "deposits", all: true }; }
     if (f.type === MSG.BUILDINGS) {
       for (const r of decodeRows(whole)) if (!this.early.has(r[0])) this.setBuilding(r);
