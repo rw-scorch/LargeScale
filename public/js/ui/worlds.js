@@ -2,6 +2,14 @@ import { el, armed } from "./dom.js";
 import { api } from "../api.js";
 import { createAccounts } from "./accounts.js";
 import { createPasswordForm } from "./password.js";
+import { phaseAt, countdown } from "../shared/schedule.js";
+import { when } from "./worldinfo.js";
+
+const SOON = { startAt: "starts", peaceUntil: "peace ends", overtimeAt: "overtime", endAt: "ends" };
+const planOf = s => {
+  const p = phaseAt(s, Date.now());
+  return p.next ? `, ${SOON[p.next.key]} in ${countdown(p.next.at - Date.now())} (${when(p.next.at)})` : p.over ? ", time is up" : p.overtime ? ", in overtime" : "";
+};
 
 export async function showWorlds(root, account, { onOpen, onLogout }) {
   const msg = el("p", { class: "msg" });
@@ -28,7 +36,7 @@ export async function showWorlds(root, account, { onOpen, onLogout }) {
     const worlds = await api("/api/worlds");
     if (worlds.error) return (msg.textContent = worlds.error);
     list.replaceChildren(...(worlds.length ? worlds.map(w => el("div", { class: "world" },
-      el("div", {}, el("b", { text: w.name }), el("span", { class: "muted", text: ` ${w.players} player${w.players === 1 ? "" : "s"}${w.host ? ", yours" : ""}${w.removed ? ", the host removed you" : ""}` })),
+      el("div", {}, el("b", { text: w.name }), el("span", { class: "muted", text: ` ${w.players} player${w.players === 1 ? "" : "s"}${w.host ? ", yours" : ""}${w.removed ? ", the host removed you" : ""}${planOf(w.schedule)}` })),
       el("div", { class: "row" },
         account.admin ? armed("Delete", "Really delete?", () => remove(w), { "data-delete": w.id }) : null,
         w.removed ? null : el("button", { class: "primary", "data-world": w.id, onclick: () => open(w), text: w.member ? "Open" : "Join" })))) : [el("p", { class: "muted", text: account.admin ? "No worlds yet. Create one below." : "No worlds yet. The host creates them." })]));

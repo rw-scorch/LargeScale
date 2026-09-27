@@ -1,6 +1,6 @@
 const HOLD_MS = 500;
 
-export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChange, dragging, rightPans, onDrag, onDragEnd, tracing, onTrace, onTraceEnd }) {
+export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChange, dragging, rightPans, onDrag, onDragEnd, tracing, onTrace, onTraceEnd, swipeStart, onSwipe, onSwipeEnd }) {
   const pts = new Map();
   let gesture = null, right = null, swallow = false;
   const ratio = () => view.ratio ?? 1;
@@ -25,12 +25,17 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     pts.set(e.pointerId, at(e));
     if (pts.size === 1) {
       const g = gesture = { start: at(e), t: performance.now(), moved: 0, multi: false, paint: !!dragging?.(), line: tracing?.() ? [at(e)] : null, held: false };
+      g.swipe = !g.paint && !g.line ? swipeStart?.(...g.start, e) ?? null : null;
+      if (g.swipe) g.trail = [g.start];
       if (e.pointerType !== "mouse" && !g.paint && !g.line) g.hold = setTimeout(() => {
         if (gesture !== g || g.multi || far(g)) return;
         g.held = true;
         onSecondary?.(...g.start);
       }, HOLD_MS);
-    } else if (gesture) gesture.multi = true;
+    } else if (gesture) {
+      if (gesture.swipe && !gesture.multi) onSwipeEnd?.(gesture.swipe, null);
+      gesture.multi = true;
+    }
   });
 
   canvas.addEventListener("pointermove", e => {
@@ -50,6 +55,10 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     } else if (pts.size === 1 && gesture?.paint) {
       gesture.moved += Math.hypot(now[0] - prev[0], now[1] - prev[1]);
       onDrag?.(gesture.start, now);
+    } else if (pts.size === 1 && gesture?.swipe && !gesture.multi) {
+      gesture.moved += Math.hypot(now[0] - prev[0], now[1] - prev[1]);
+      gesture.trail.push(now);
+      if (far(gesture)) onSwipe?.(gesture.swipe, gesture.trail);
     } else if (pts.size === 1) {
       view.pan(now[0] - prev[0], now[1] - prev[1]);
       if (gesture) gesture.moved += Math.hypot(now[0] - prev[0], now[1] - prev[1]);
@@ -81,6 +90,7 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     if (g.held) { swallow = true; return; }
     if (g.line) return onTraceEnd?.(g.multi ? null : g.line);
     if (g.paint && !g.multi) return onDragEnd?.(g.start, at(e));
+    if (g.swipe && !g.multi && far(g)) return onSwipeEnd?.(g.swipe, g.trail);
     if (!g.multi && g.moved < 8 * ratio() && performance.now() - g.t < 500) onTap?.(...at(e));
   };
   canvas.addEventListener("pointerup", end);
@@ -91,6 +101,7 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     pts.delete(e.pointerId);
     clearTimeout(gesture?.hold);
     if (gesture?.line) onTraceEnd?.(null);
+    if (gesture?.swipe) onSwipeEnd?.(gesture.swipe, null);
     gesture = null;
   });
 

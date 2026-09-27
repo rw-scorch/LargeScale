@@ -19,7 +19,7 @@ export function createNotices(root, game, top = root) {
       else if (c.status === "removed" || c.status === "deleted") { text = c.endedText ?? (c.status === "removed" ? "The host removed you from this world." : "The host deleted this world."); action = el("button", { id: "notice-back", class: "primary", text: "Back to worlds", onclick: () => game.leave() }); }
       else if (c.status === "replaced") { text = "This game was opened in another tab or device."; action = el("button", { class: "primary", text: "Use it here", onclick: () => game.reconnect() }); }
       else if (w?.ended) text = "The host has ended this world. You can still look around.";
-      else if (w?.victory) text = w.victory.name ? `${w.victory.name} has won. The world is frozen, but you can still look around.` : "Nobody is left standing. The world is frozen.";
+      else if (w?.victory) text = w.victory.name ? `${w.victory.name} has won${w.victory.by === "time" ? " with the most land when time ran out" : ""}. The world is frozen, but you can still look around.` : w.victory.by === "time" ? "Time is up, and no player was left. The world is frozen." : "Nobody is left standing. The world is frozen.";
       banner.hidden = !text;
       if (text && banner.dataset.text !== text) {
         banner.dataset.text = text;

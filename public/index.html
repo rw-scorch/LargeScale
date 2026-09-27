@@ -162,6 +162,7 @@ button.act .alert{position:absolute;top:4px;left:6px;width:8px;height:8px;border
 .layout-bar{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;z-index:61;flex-wrap:wrap;max-width:calc(100% - 16px)}
 @media (pointer:coarse){.layout-grip{width:36px;height:36px}}
 @media (max-height:500px){.layout-bar .muted{display:none}}
+.aim-hint{background:var(--panel);border:1px solid var(--edge);border-radius:6px;padding:4px 8px;font-size:13px;max-width:260px}
 #away-panel{width:min(560px,calc(100% - 16px));z-index:6;background:var(--ink)}
 .away-list{display:flex;flex-direction:column;gap:4px}
 .away-line{display:flex;align-items:center;gap:8px;margin:0;font-size:14px}
@@ -197,6 +198,19 @@ button.act .alert{position:absolute;top:4px;left:6px;width:8px;height:8px;border
 .admin-log p{margin:1px 0}
 .admin-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 input.small{width:110px}
+.next-chip{min-height:0;padding:1px 8px;border-radius:999px;font-size:12px;background:rgba(111,207,122,.14);border:1px solid var(--good);color:var(--good)}
+.next-chip.warn{background:rgba(232,200,74,.14);border-color:var(--signal);color:var(--signal)}
+.next-chip.danger{background:rgba(224,106,90,.16);border-color:var(--bad);color:var(--bad)}
+#info-panel{z-index:5;background:var(--ink)}
+.info-list{display:flex;flex-direction:column;gap:6px}
+.info-list p{margin:0}
+.info-row{display:grid;grid-template-columns:90px 1fr;gap:8px;font-size:13px}
+.info-event{display:flex;flex-direction:column;gap:1px;border:2px solid var(--line);border-radius:3px;padding:6px 8px;font-size:13px}
+.info-event.done{opacity:.6}
+.sched-row{display:grid;grid-template-columns:130px 1fr auto;gap:6px;align-items:center;font-size:13px}
+.sched-row input[type=datetime-local]{min-width:0}
+#sched-note{margin:0;min-height:1.2em}
+@media (pointer:coarse){.sched-row{grid-template-columns:1fr auto}.sched-row>span:first-child{grid-column:1/-1}}
 #research-panel{height:calc(100% - var(--hud,48px) - 32px)}
 .tech-body{display:flex;gap:10px;flex:1;min-height:0}
 .tech-tree{flex:1;min-width:0;overflow:auto;border:1px solid var(--line);border-radius:6px;background:#0c1c2b;cursor:grab;touch-action:pan-x pan-y}
@@ -280,6 +294,7 @@ button.on{border-color:var(--signal)}
   #game{--hud:46px;--left-w:30vw;--side-w:30vw}
   .pill{gap:6px;padding:3px 10px}
   .world-name,#world-clock{display:none}
+  .pill.has-next #world-season,.pill.has-next #status-text{display:none}
   .icon-btn{min-width:34px;min-height:34px;padding:2px}
   #feed .lines{height:96px}
   button.act{min-width:36px;padding:4px}

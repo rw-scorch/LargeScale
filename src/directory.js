@@ -103,6 +103,11 @@ export class Directory extends DurableObject {
     return { ok: true };
   }
 
+  scheduleWorld(id, schedule) {
+    this.ctx.storage.sql.exec("UPDATE worlds SET config = json_set(COALESCE(config, '{}'), '$.schedule', json(?)) WHERE id = ?", JSON.stringify(schedule ?? {}), id);
+    return { ok: true };
+  }
+
   banMember(world, account, who) {
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO bans (world, account, t) VALUES (?, ?, ?)", world, account, Date.now());
     this.ctx.storage.sql.exec("DELETE FROM members WHERE world = ? AND account = ?", world, account);
@@ -162,9 +167,9 @@ export class Directory extends DurableObject {
 
   listWorlds(account) {
     return this.ctx.storage.sql.exec(
-      "SELECT w.id, w.name, w.host = ? AS host, (SELECT COUNT(*) FROM members m WHERE m.world = w.id) AS players, EXISTS(SELECT 1 FROM members m WHERE m.world = w.id AND m.account = ?) AS member, EXISTS(SELECT 1 FROM bans b WHERE b.world = w.id AND b.account = ?) AS removed FROM worlds w ORDER BY w.created DESC",
+      "SELECT w.id, w.name, w.host = ? AS host, json_extract(w.config, '$.schedule') AS schedule, (SELECT COUNT(*) FROM members m WHERE m.world = w.id) AS players, EXISTS(SELECT 1 FROM members m WHERE m.world = w.id AND m.account = ?) AS member, EXISTS(SELECT 1 FROM bans b WHERE b.world = w.id AND b.account = ?) AS removed FROM worlds w ORDER BY w.created DESC",
       account.id, account.id, account.id,
-    ).toArray();
+    ).toArray().map(w => ({ ...w, schedule: w.schedule ? JSON.parse(w.schedule) : null }));
   }
 
   joinWorld(account, id, maxPlayers = 8) {

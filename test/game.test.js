@@ -473,7 +473,7 @@ test("a short route inside one block of the route graph still has a length and a
   assert.ok(r.seconds >= 1);
 });
 
-test("while a player is away, advancing stacks hold, and fall-back stacks retreat when outnumbered", () => {
+test("while a player is away, advances into unclaimed land go on, plain advances keep to unclaimed land, attacks hold, and fall-back stacks retreat", () => {
   const { w, g, nation, fill } = strip(60, 20);
   const a = nation("A", 3, 10), b = nation("B", 50, 10);
   fill(a, 0, 30, 0, 20);
@@ -487,7 +487,20 @@ test("while a player is away, advancing stacks hold, and fall-back stacks retrea
   assert.equal(s.order, "advance", "while its owner is online it keeps going");
   online.delete(a);
   standingOrders(w, presence);
-  assert.deepEqual({ order: s.order, path: s.path.length }, { order: "hold", path: 0 }, "with its owner away it holds, and drops the path it was on");
+  assert.deepEqual({ order: s.order, only: s.only }, { order: "advance", only: 0 }, "with its owner away it keeps taking unclaimed land");
+  const plain = w.createStack(a, g.idx(2, 5), 800), attack = w.createStack(a, g.idx(29, 12), 800);
+  runOrder(w, a, { t: "advance", stack: plain.id });
+  runOrder(w, a, { t: "advance", stack: attack.id, only: b });
+  standingOrders(w, presence);
+  assert.deepEqual({ order: plain.order, only: plain.only }, { order: "advance", only: 0 }, "a plain advance keeps going, into unclaimed land only");
+  assert.deepEqual({ order: attack.order, path: attack.path.length }, { order: "hold", path: 0 }, "an attack on a nation holds and drops its path");
+  for (let t = 0; t < 5; t++) w.tick(1);
+  assert.ok([...w.lost.values()].every(e => e.nation !== b) && w.events.filter(e => e.type === "plot_lost" && e.nation === b).length === 0, "nobody's land is taken while the owner is away");
+  online.add(a);
+  standingOrders(w, presence);
+  assert.deepEqual({ order: plain.order, only: plain.only ?? null }, { order: "advance", only: null }, "back online, the plain advance takes any land again");
+  assert.equal(s.only, 0, "and the unclaimed-only advance stays as it was");
+  online.delete(a);
   const f = w.createStack(a, g.idx(28, 10), 200);
   assert.equal(runOrder(w, a, { t: "standing", stack: f.id, mode: "fallback" }).ok, true);
   const enemy = w.createStack(b, g.idx(41, 10), 500);
@@ -536,4 +549,31 @@ test("land taken by closing a pocket is reported to the nation that loses it", (
   w.fillEnclaves(g.idx(12, 10), a);
   assert.deepEqual(w.events.filter(e => e.type === "plot_lost").map(e => [e.nation, e.by, e.count]), [[b, a, 4]]);
   assert.equal(w.owner[g.idx(10, 10)], a);
+});
+
+test("the group order gives many stacks one order: advance, move in formation, gather, halt, standing", () => {
+  const { w, g, nation, fill } = strip(60, 20);
+  const a = nation("A", 3, 10), b = nation("B", 50, 10);
+  fill(a, 0, 30, 0, 20);
+  fill(b, 40, 60, 0, 20);
+  w.nations.get(a).troops = 9000;
+  const s1 = w.createStack(a, g.idx(5, 5), 1000), s2 = w.createStack(a, g.idx(7, 5), 2000), s3 = w.createStack(a, g.idx(5, 9), 500);
+  const foe = w.createStack(b, g.idx(45, 10), 500);
+  const ids = [s1.id, s2.id, s3.id, foe.id, 999];
+  assert.equal(runOrder(w, a, { t: "group", stacks: [], do: "halt" }).error, "pick 1 to 100 stacks");
+  assert.equal(runOrder(w, a, { t: "group", stacks: [foe.id], do: "halt" }).error, "none of those are your stacks");
+  assert.match(runOrder(w, a, { t: "group", stacks: ids, do: "dance" }).error, /^the group order is/);
+  const adv = runOrder(w, a, { t: "group", stacks: ids, do: "advance", only: "free" });
+  assert.deepEqual([adv.ok, adv.done], [true, 3], "another nation's stack and a missing one are left out");
+  assert.ok([s1, s2, s3].every(s => s.order === "advance" && s.only === 0) && foe.order === "hold");
+  const mv = runOrder(w, a, { t: "group", stacks: ids, do: "move", to: g.idx(20, 10) });
+  assert.equal(mv.done, 3);
+  const goal = s => s.route?.goal ?? s.path.at(-1);
+  assert.deepEqual([s1, s2, s3].map(s => [g.x(goal(s)), g.y(goal(s))]), [[19, 9], [21, 9], [19, 13]], "they keep their formation around the point");
+  runOrder(w, a, { t: "group", stacks: ids, do: "gather" });
+  assert.ok(goal(s1) === s2.pos && goal(s3) === s2.pos && s2.order !== "move", "gather walks the others to the biggest stack");
+  runOrder(w, a, { t: "group", stacks: ids, do: "halt" });
+  assert.ok([s1, s2, s3].every(s => s.order === "hold" && !s.path.length));
+  assert.equal(runOrder(w, a, { t: "group", stacks: ids, do: "standing", mode: "guard" }).done, 3);
+  assert.ok([s1, s2, s3].every(s => s.standing === "guard"));
 });

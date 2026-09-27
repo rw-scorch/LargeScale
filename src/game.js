@@ -218,6 +218,34 @@ export const ORDERS = {
     const r = orderResearch(sim, nation, m.id, mode);
     return r.error ? { ok: false, ...r } : { ok: true, ...r };
   },
+  group(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!Array.isArray(m.stacks) || !m.stacks.length || m.stacks.length > MAX_GROUP) return fail(`pick 1 to ${MAX_GROUP} stacks`);
+    const mine = [...new Set(m.stacks)].map(id => (Number.isInteger(id) ? sim.stacks.get(id) : null)).filter(s => s && s.owner === nation);
+    if (!mine.length) return fail("none of those are your stacks");
+    const one = GROUP_ORDERS[m.do];
+    if (!one) return fail("the group order is advance, move, gather, halt, standing or disband");
+    const g = sim.grid, big = mine.reduce((a, b) => (b.troops > a.troops ? b : a));
+    let to = null, cx = 0, cy = 0;
+    if (m.do === "move") {
+      if (!isPlot(sim, m.to)) return fail("that plot is off the map");
+      to = m.to;
+      for (const s of mine) { cx += g.x(s.pos) / mine.length; cy += g.y(s.pos) / mine.length; }
+    }
+    const results = [];
+    for (const s of mine) {
+      let msg = { stack: s.id, only: m.only, mode: m.mode };
+      if (m.do === "gather") { if (s === big) { results.push(ORDERS.halt(sim, nation, msg)); continue; } msg.to = big.pos; }
+      if (m.do === "move") {
+        const x = Math.round(g.x(to) + g.x(s.pos) - cx), y = Math.round(g.y(to) + g.y(s.pos) - cy);
+        const kept = x >= 0 && y >= 0 && x < g.w && y < g.h ? g.idx(x, y) : to;
+        msg.to = isLand(sim.terrain[kept]) && sim.route(s.pos, kept) ? kept : to;
+      }
+      results.push(ORDERS[one](sim, nation, msg));
+    }
+    const done = results.filter(r => r.ok).length, error = results.find(r => !r.ok)?.error ?? null;
+    return done ? { ok: true, done, failed: results.length - done, error } : fail(error ?? "nothing to do");
+  },
   policy(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
     const P = POLICY, n = sim.nations.get(nation);
@@ -342,6 +370,9 @@ export const ORDERS = {
     return { ok: true, plots, seconds: Math.max(1, Math.round(cost / speed)), points };
   },
 };
+
+const MAX_GROUP = 100;
+const GROUP_ORDERS = { advance: "advance", move: "move", gather: "move", halt: "halt", standing: "standing", disband: "disband" };
 
 export function runOrder(sim, nation, m) {
   const f = Object.hasOwn(ORDERS, m.t) ? ORDERS[m.t] : null;
@@ -492,7 +523,7 @@ export function purseOf(n, extra = {}) {
   return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, ...extra };
 }
 
-const ALWAYS = new Set(["eliminated", "victory", "era_up"]);
+const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink"]);
 const QUIET = new Set(["civ_build", "civ_upgrade"]);
 
 export function publicEvents(sim, events) {
