@@ -682,6 +682,7 @@ export class MapRenderer {
     }
     for (const f of this.people.figures(r, this.time)) items.push({ key: f.y + 0.1, x: f.x, draw: () => this.drawPerson(f, px) });
     for (const f of this.soldiers(r)) items.push({ key: f.y + 0.05, x: f.x, draw: () => this.drawPerson(f, px) });
+    for (const f of this.convoyFigures(r)) items.push({ key: f.y + 0.05, x: f.x, draw: () => this.drawPerson(f, px) });
     const shown = [];
     for (const u of s.machines?.values() ?? []) {
       const x = u.at % s.w, y = (u.at / s.w) | 0;
@@ -802,6 +803,30 @@ export class MapRenderer {
     const k = this.machineScale();
     for (const u of this.state.machines?.values() ?? []) this.drawMachine(u, k);
     for (const u of this.state.machines?.values() ?? []) this.machineOverlay(u, k);
+    this.drawConvoys(k);
+  }
+
+  convoyFigures(r) {
+    const s = this.state, out = [], now = Date.now();
+    for (const c of s.convoys?.values() ?? []) {
+      const t = Math.min(1, (now - (c.movedAt ?? 0)) / 1000);
+      const px = c.prev % s.w, py = (c.prev / s.w) | 0, qx = c.pos % s.w, qy = (c.pos / s.w) | 0;
+      const x = px + (qx - px) * t, y = py + (qy - py) * t;
+      if (r && (x < r.x0 - 2 || x > r.x1 + 2 || y < r.y0 - 2 || y > r.y1 + 2)) continue;
+      out.push({ x: x + 0.5, y: y + 0.8, sprite: WAGON[c.era] ?? "hand_cart", flip: qx < px, owner: c.owner, size: 0.9, convoy: c });
+    }
+    return out;
+  }
+
+  drawConvoys(k) {
+    const a = this.atlas;
+    for (const f of this.convoyFigures(null)) {
+      const sp = a.get(f.sprite);
+      if (!sp) continue;
+      const [sx, sy] = this.plotToScreen(f.x, f.y - 0.3);
+      if (sx < -40 || sy < -40 || sx > this.canvas.width + 40 || sy > this.canvas.height + 40) continue;
+      a.draw(this.ctx, f.sprite, sx - (sp.w * k) / 2, sy - (sp.h * k) / 2, k, this.state.nations.get(f.owner)?.colour, f.flip);
+    }
   }
 
   machineAt(sx, sy) {

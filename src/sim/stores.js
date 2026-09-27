@@ -5,7 +5,7 @@ import { findPath, labelMap } from "../shared/pathfind.js";
 import { supplyCostOf } from "../shared/supply.js";
 
 export const STORE_RULES = {
-  reach: 12, every: 5, fieldEvery: 10, perTick: 2, buffer: 20, campCapacity: 500, convoyMax: 12, raidRange: 1, pathNodes: 60000, cacheMax: 300,
+  reach: 12, every: 5, fieldEvery: 10, perTick: 2, pathsPerTick: 4, buffer: 20, campCapacity: 500, convoyMax: 12, raidRange: 1, pathNodes: 60000, cacheMax: 300,
   convoy: { T: { capacity: 10, speed: 1 }, M: { capacity: 30, speed: 1.3 }, G: { capacity: 50, speed: 1.5 }, I: { capacity: 150, speed: 2.5 }, Mo: { capacity: 300, speed: 3.5 }, F: { capacity: 500, speed: 5 } },
   ...rules.stores,
 };
@@ -16,8 +16,8 @@ const REFRESH = new Set(["built", "kit", "demolished", "upgraded"]);
 export function installStores(world, { scale = 1, rules: r = STORE_RULES } = {}) {
   if (world.stores) return world.stores;
   const st = {
-    rules: r, scale, index: new Map(), rescan: true, fields: new Map(), fieldClock: new Map(), clock: 0,
-    convoys: new Map(), next: 1, paths: new Map(), asks: new Map(), sites: new Set(), held: new Set(), stuck: new Map(), news: new Set(), whole: false,
+    rules: r, scale, index: new Map(), rescan: true, fields: new Map(), fieldClock: new Map(), clocks: new Map(), clock: 0, budget: r.pathsPerTick,
+    convoys: new Map(), next: 1, paths: new Map(), counts: { sent: 0, arrived: 0, taken: 0, lost: 0, searches: 0 }, asks: new Map(), sites: new Set(), held: new Set(), stuck: new Map(), news: new Set(), whole: false,
   };
   world.stores = st;
   (world.bld.extra ??= {}).stores = () => encodeStores(world);
@@ -234,10 +234,11 @@ export function deliver(world, b, kind, v) {
   }
 }
 
-function flushHeld(world) {
+function flushHeld(world, nid = null) {
   const st = world.stores;
   for (const id of st.held) {
     const b = world.bld.list.get(id);
+    if (nid !== null && b?.owner !== nid) continue;
     if (!b?.held || !human(world, b.owner)) { if (b) delete b.held; st.held.delete(id); st.stuck.delete(id); continue; }
     const home = homeOf(world, b), n = world.nations.get(b.owner);
     if (!home) { st.stuck.set(id, "reach"); continue; }
@@ -299,6 +300,8 @@ function pathBetween(world, nid, a, b) {
     if (!hit.path) { if (world.time - hit.at < st.rules.every * 2) return null; }
     else if (hit.path.every(i => ownOrAlly(world, nid, i))) return hit.path;
   }
+  if (!st.whole) { if (st.budget <= 0) return false; st.budget--; }
+  st.counts.searches++;
   const path = findPath(world.grid, a, b, costFor(world, nid), st.rules.pathNodes);
   if (st.paths.size >= st.rules.cacheMax) st.paths.clear();
   st.paths.set(key, { path, ver, at: world.time });
@@ -315,6 +318,7 @@ function launch(world, n, from, to, k, amount) {
   const c = { id: st.next++, owner: n.id, kind: k, amount: load, from: from.id, to: to.id, dest: to.anchor, pos: path[0], path: path.slice(1), progress: 0, era: n.era ?? "T" };
   st.convoys.set(c.id, c);
   st.news.add(c.id);
+  st.counts.sent++;
   return c;
 }
 
@@ -368,6 +372,7 @@ export function requestSite(world, b, use) {
   b.need = need;
   st.sites.add(b.id);
   mark(world);
+  st.budget = Math.max(st.budget, st.rules.pathsPerTick);
   feedSite(world, n, b, storesOf(world, n.id));
 }
 
@@ -413,6 +418,7 @@ function dispatch(world, n) {
 
 function arrive(world, c) {
   const st = world.stores, n = world.nations.get(c.owner);
+  st.counts.arrived++;
   st.convoys.delete(c.id);
   st.news.add(c.id);
   if (!n?.alive) return;
@@ -426,10 +432,12 @@ function arrive(world, c) {
 
 function reroute(world, c) {
   let path = pathBetween(world, c.owner, c.pos, c.dest);
+  if (path === false) return "later";
   if (path) { c.path = path.slice(1); return true; }
   const list = storesOf(world, c.owner).filter(s => s.anchor != null).sort((a, b) => world.grid.dist(a.anchor, c.pos) - world.grid.dist(b.anchor, c.pos));
   for (const s of list.slice(0, 4)) {
     path = pathBetween(world, c.owner, c.pos, s.anchor);
+    if (path === false) return "later";
     if (path) { Object.assign(c, { to: s.id, dest: s.anchor, path: path.slice(1) }); return true; }
   }
   return false;
@@ -437,6 +445,7 @@ function reroute(world, c) {
 
 function lose(world, c, why) {
   const st = world.stores;
+  st.counts.lost++;
   st.convoys.delete(c.id);
   st.news.add(c.id);
   world.emit("convoy_lost", { nation: c.owner, convoy: c.id, kind: c.kind, amount: Math.round(c.amount), at: c.pos, why });
@@ -447,9 +456,11 @@ function stepConvoys(world, dt) {
   for (const c of [...st.convoys.values()]) {
     if (!world.nations.get(c.owner)?.alive) { lose(world, c, "gone"); continue; }
     if (!ownOrAlly(world, c.owner, c.pos)) { lose(world, c, "cut off"); continue; }
-    if (!c.path && !reroute(world, c)) { lose(world, c, "cut off"); continue; }
-    if (!c.path.length) { arrive(world, c); continue; }
-    if (!ownOrAlly(world, c.owner, c.path[0]) && !reroute(world, c)) { lose(world, c, "cut off"); continue; }
+    if (!c.path || !ownOrAlly(world, c.owner, c.path[0] ?? c.pos)) {
+      const r = reroute(world, c);
+      if (r === "later") continue;
+      if (!r) { lose(world, c, "cut off"); continue; }
+    }
     if (!c.path.length) { arrive(world, c); continue; }
     const t = TERRAIN[terrain[c.path[0]]], cost = (t.move < Infinity ? t.move : 10) * ROAD_MULT[road?.[c.path[0]] ?? 0];
     c.progress += (specOf(world, c.era).speed * st.scale * dt) / cost;
@@ -481,6 +492,7 @@ function raid(world) {
       for (const s of byPlot.get(g.idx(x + dx, y + dy)) ?? []) if (s.owner !== c.owner && world.hostile(s.owner, c.owner)) { foe = s; break; }
     }
     if (!foe) continue;
+    st.counts.taken++;
     st.convoys.delete(c.id);
     st.news.add(c.id);
     const by = world.nations.get(foe.owner);
@@ -535,21 +547,29 @@ export function setStore(world, nid, id, kind, keep, want) {
 export function storesTick(world, dt) {
   const st = world.stores, r = st.rules;
   for (const e of world.events) if (REFRESH.has(e.type)) { st.rescan = true; break; }
+  st.budget = r.pathsPerTick;
   st.clock += dt;
-  if (st.clock >= r.every) {
-    st.clock = 0;
-    st.rescan = true;
-    flushHeld(world);
-    for (const n of world.nations.values()) if (n.human && n.alive) dispatch(world, n);
+  if (st.clock >= r.every) { st.clock = 0; st.rescan = true; }
+  const due = [], stale = [];
+  for (const n of world.nations.values()) {
+    if (!n.human || !n.alive) continue;
+    const t = (st.clocks.get(n.id) ?? (n.id * 0.7) % r.every) + dt;
+    st.clocks.set(n.id, t);
+    if (t >= r.every) due.push([t, n]);
   }
-  const due = [];
+  due.sort((a, b) => b[0] - a[0]);
+  for (const [, n] of due.slice(0, r.perTick)) {
+    st.clocks.set(n.id, 0);
+    flushHeld(world, n.id);
+    dispatch(world, n);
+  }
   for (const nid of st.fields.keys()) {
     const t = (st.fieldClock.get(nid) ?? 0) + dt;
     st.fieldClock.set(nid, t);
-    if (t >= r.fieldEvery) due.push([t, nid]);
+    if (t >= r.fieldEvery) stale.push([t, nid]);
   }
-  due.sort((a, b) => b[0] - a[0]);
-  for (const [, nid] of due.slice(0, r.perTick)) st.fields.delete(nid);
+  stale.sort((a, b) => b[0] - a[0]);
+  for (const [, nid] of stale.slice(0, r.perTick)) { st.fields.delete(nid); fieldOf(world, nid); }
   raid(world);
   stepConvoys(world, dt);
   for (const n of world.nations.values()) if (n.human && n.alive) sync(world, n);
