@@ -219,14 +219,14 @@ Ryan's decisions (26 September 2026): towers and forts change combat; stop at th
 
 Open items as of 27 September 2026, in order:
 
-1. PRs 14 to 22 are merged (27 September 2026). PR 23 (`m4-swipe`: swipe, away advances, schedules, overtime) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
+1. PRs 14 to 23 are merged (27 September 2026). Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A new main menu (the world list and login), which Ryan finds bland. Later, at his word. Also later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
-4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. After it, as Ryan agreed: the Industrial slice with Age of Industry and a steel mill, then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
+4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is the logistics proposal, waiting for his answers to its four questions, and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
 5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
 6. Milestone two, step 7 (economy while away) is built on `m2-step7-away`; step 8 is Ryan's check.
 7. Later: the stat-editing dev panel of piece 14. Tax and army share sliders and self-service passwords are built on `m2-policies`.
-8. Each session's record goes in `devpack/` (see `devpack/README.md`).
+8. Each session's record goes in `devpack/` (see `devpack/README.md`); `tools/devpack.mjs` writes the conversation record. The pack for 25 to 27 September is done.
 
 Problems found at handoff (details in `plans/milestone-1.md`), all fixed now:
 
