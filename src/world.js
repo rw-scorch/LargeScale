@@ -12,6 +12,7 @@ import { installCombat } from "./sim/combat.js";
 import { installTroops, TROOP_RULES, armyView } from "./sim/troops.js";
 import unitData from "../data/units.json" with { type: "json" };
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
+import { installGuard } from "./sim/guard.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
 import { installConstruction } from "./sim/construction.js";
 import { installEconomy } from "./sim/economy.js";
@@ -162,6 +163,7 @@ export class World extends DurableObject {
     installEffects(this.sim);
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
+    installGuard(this.sim, { scale: info.map.scale ?? 1 });
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.speed = this.meta("speed") ?? 1;
     this.updatePresence();

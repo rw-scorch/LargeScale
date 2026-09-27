@@ -1,4 +1,5 @@
 import test from "node:test";
+import buildingData from "../data/buildings.json" with { type: "json" };
 import assert from "node:assert/strict";
 import { World } from "../src/sim/territory.js";
 import {
@@ -190,4 +191,15 @@ test("every building type says in a sentence or two what it does, and the idle o
   const idle = defs.filter(d => !d.gathers && !d.producer && !d.housing && !d.jobs && !d.makes && !d.trains && !d.builds && !d.port && !d.fort && !d.effects && !d.research);
   assert.ok(idle.length > 0);
   for (const d of idle) assert.match(d.description, /no effect/, `${d.id} does nothing yet and says so`);
+});
+
+test("every seat of government gathers, each more than the one it upgrades from", () => {
+  const table = Object.fromEntries(buildingData.buildings.map(b => [b.id, b]));
+  const chain = [];
+  for (let id = "chieftain_hut"; id; id = table[id].next) chain.push(table[id]);
+  assert.deepEqual(chain.map(b => b.id), ["chieftain_hut", "great_hall", "town_hall", "parliament"]);
+  for (let k = 1; k < chain.length; k++) {
+    const [was, now] = [chain[k - 1].gathers, chain[k].gathers];
+    assert.ok(now && now.food > was.food && now.wood > was.wood, `${chain[k].id} gathers ${JSON.stringify(now)} after ${JSON.stringify(was)}`);
+  }
 });

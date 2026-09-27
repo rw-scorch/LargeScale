@@ -29,7 +29,9 @@ import { createNationCard } from "./ui/nation.js";
 import { createSettings, loadPrefs, savePrefs } from "./ui/settings.js";
 import { createPlaceConfirm } from "./ui/place.js";
 import { createAim } from "./ui/aim.js";
+import { fmt } from "./ui/dom.js";
 import { createAwayPanel, span } from "./ui/away.js";
+import { createLayout } from "./ui/layout.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -112,6 +114,7 @@ class Game {
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
     this.settings = createSettings(overlay, this);
     this.away = createAwayPanel(overlay, this);
+    this.layout = createLayout(overlay, this);
     const self = this;
     attachInput(canvas, {
       get ratio() { return self.view?.ratio ?? 1; },
@@ -129,7 +132,7 @@ class Game {
       onTrace: line => this.trace(line),
       onTraceEnd: line => this.traced(line),
     });
-    this.onResize = () => this.resize();
+    this.onResize = () => { this.resize(); this.layout?.resized(); };
     addEventListener("resize", this.onResize);
     this.onKey = e => {
       const t = e.target;
@@ -265,6 +268,7 @@ class Game {
     if (e.type === "plot_lost" && e.nation === you) say(`lost${e.by}`, `${name(e.by)} is taking your land.`, 5000, "danger");
     if (e.type === "plot_lost" && e.by === you && !w.nations.get(e.nation)?.bot) say(`took${e.nation}`, `You are taking land from ${name(e.nation)}.`, 5000, "good");
     if (e.type === "stack_destroyed" && e.nation === you) say(`gone${e.stack}`, "One of your stacks was destroyed.", 0, "danger");
+    if (e.type === "guard_sent" && e.nation === you) say(`guard${e.threat}`, `Guard: ${fmt(e.troops)} troops are going to meet a stack of ${name(e.enemy)}.`, 10000, "warn");
     if (e.type === "stack_destroyed" && e.nation !== you) say(`kill${e.stack}`, `A stack of ${name(e.nation)} was destroyed.`, 0, "good");
     if (e.type === "eliminated") say(`elim${e.nation}`, e.nation === you ? "Your nation has been eliminated." : `${name(e.nation)} has been eliminated.`, 0, e.nation === you ? "danger" : "warn", null);
     if (e.type === "stalled" && w.stacks.get(e.stack)?.owner === you) say(`stall${e.stack}`, "A stack stopped: not enough troops to go on.", 5000, "warn");
@@ -368,6 +372,7 @@ class Game {
     if (action === "cancel") {
       if (this.pinned !== null) this.unpin();
       else if (this.building || this.zoning) this.stopBuild();
+      else if (this.layout.editing) this.layout.stop(true);
       else if (this.away.open) this.away.show(false);
       else if (this.settings.open) this.toggleSettings(false);
       else if (this.adminPanel?.open) this.toggleAdmin(false);

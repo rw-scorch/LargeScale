@@ -46,13 +46,16 @@ test("finish completes the research queue in order, and says why it stops", () =
   assert.ok(w.events.filter(e => e.type === "researched").length === 5, "each one is announced like normal research");
   assert.equal(runAdmin(w, { op: "finish", nation: a }).error, "A has nothing queued");
   runOrder(w, a, { t: "research", id: "age_medieval" });
+  const needed = new Set(w.research.locks.nodes.get("age_medieval").requires);
+  const extra = n.research.queue.filter(id => id !== "age_medieval" && !needed.has(id)).at(-1);
+  runOrder(w, a, { t: "research", id: extra, mode: "remove" });
   const age = runAdmin(w, { op: "finish", nation: a });
-  assert.deepEqual(age.done, ["chieftains"]);
-  assert.match(age.waiting, /needs 8 Tribal upgrades across 3 branches \(you have 6 across 3\)/);
+  assert.ok(age.done.length > 0 && !age.done.includes("age_medieval"), `finished ${age.done}`);
+  assert.match(age.waiting, /needs 8 Tribal upgrades across 3 branches \(you have 7 across \d\)/);
   assert.equal(n.era, "T");
   assert.match(runAdmin(w, { op: "finish", nation: a }).error, /^nothing in the queue can be finished: needs 8 Tribal upgrades/);
-  for (const id of ["clubs", "palisades"]) runOrder(w, a, { t: "research", id, mode: "first" });
-  assert.deepEqual(runAdmin(w, { op: "finish", nation: a }).done, ["clubs", "palisades", "age_medieval"]);
+  runOrder(w, a, { t: "research", id: "age_medieval" });
+  assert.equal(runAdmin(w, { op: "finish", nation: a }).done.at(-1), "age_medieval", "queueing the age again fills the gap");
   assert.equal(n.era, "M");
 });
 

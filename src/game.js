@@ -20,7 +20,9 @@ function living(sim, nation) {
 
 function ownStack(sim, nation, id) {
   const s = Number.isInteger(id) ? sim.stacks.get(id) : null;
-  return s && s.owner === nation ? s : null;
+  if (!s || s.owner !== nation) return null;
+  delete s.guard;
+  return s;
 }
 
 function ownMachine(sim, nation, id) {
@@ -227,9 +229,15 @@ export const ORDERS = {
     if (m.conscription !== undefined) n.conscription = Math.round(Math.round(m.conscription / P.conscriptStep) * P.conscriptStep * 100) / 100;
     return { ok: true, ...policyOf(n) };
   },
+  guard(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (typeof m.home !== "boolean") return fail("say whether troops at home guard your land");
+    sim.nations.get(nation).guard = m.home;
+    return { ok: true, home: m.home };
+  },
   standing(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
-    if (!["hold", "fallback"].includes(m.mode)) return fail("mode is hold or fallback");
+    if (!["hold", "fallback", "guard"].includes(m.mode)) return fail("mode is hold, fallback or guard");
     if (m.all === true) {
       sim.nations.get(nation).standing = m.mode;
       let stacks = 0;
@@ -446,9 +454,11 @@ export function ordersOf(sim, nid) {
     const leg = s.route?.goal ?? (s.path.length ? s.path[s.path.length - 1] : null), rest = s.via ?? [];
     const to = rest.length ? rest[rest.length - 1] : leg;
     const only = s.order === "advance" ? s.only ?? null : null;
-    if (to === null && only === null && s.standing !== "fallback") continue;
+    const standing = s.standing && s.standing !== "hold" ? s.standing : null;
+    if (to === null && only === null && !standing) continue;
     const row = { id: s.id, to, only };
-    if (s.standing === "fallback") row.standing = "fallback";
+    if (standing) row.standing = standing;
+    if (s.guard?.threat !== undefined) row.guarding = true;
     if (rest.length) row.via = [...(leg === null ? [] : [leg]), ...rest.slice(0, -1)];
     out.push(row);
   }
@@ -479,7 +489,7 @@ export function purseOf(n, extra = {}) {
   const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), staff: Math.round(s.staff ?? s.workers ?? 0), mood: r2(s.mood ?? 1), foodUse: r2(s.foodUse), needs: r2(s.needs ?? 1), foodSat: r2(s.foodSat ?? 1), fed: Math.floor(s.fed ?? 0), foodCap: r2(s.foodCap ?? 1), worked: r2(s.worked ?? 0), zoned: s.zoned ?? [0, 0, 0, 0], jobSat: r2(s.jobSat ?? 1), goodsSat: r2(s.goodsSat ?? 1), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
   const making = {};
   for (const [k, v] of Object.entries(n.made ?? {})) making[k] = r2(v / (n.madeEvery ?? 5));
-  return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, policy: policyOf(n), ...extra };
+  return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, ...extra };
 }
 
 const ALWAYS = new Set(["eliminated", "victory", "era_up"]);

@@ -123,6 +123,32 @@ The caps stop a nation from stacking a hundred banks.
   - `npm run ui` 118 of 118 on the test map and on fine Europe. A new nation researches into the Gunpowder era; a bank takes income from 1 to 1.08 gold a second; the Army panel offers the four troops; a cannon foundry casts a cannon; and a star fort draws its reach and fortifies the tip.
   - `npm run bench`, now with star forts, towers, banks and courthouses: Earth worst tick about 37 ms, fine Europe 37.5 ms.
 
+## Ryan's asks after PR 19 (27 September 2026, branch `m4-asks`, stacked on `m2-policies`)
+
+Ryan's answers: guard means stacks and troops at home that watch enemy movement and go to intercept and fight; the town hall and parliament gather; the Industrial slice comes after his check. His notes: the research panel was confusing (a tree with side paths wanted), queueing needed prerequisites researched first, notices said he was attacking himself, and panels should move and resize from Settings. A new main menu comes later.
+
+- **Research queue.** An era node needs a number of upgrades across branches as well as its prerequisites, so a queue through one stopped and waited. `planPath` now adds the cheapest missing upgrades of that era, uncovered branches first. Every node, Gunpowder included, queues a path that never waits.
+- **Self-attack notices.** Closing a pocket mid-advance claimed plots further down the same frontier list, and the loop then "captured" them from its own nation: it paid troops and reported you taking your own land. The advance skips your own plots now.
+- **Seats of government gather.** The town hall gathers 0.10 food and 0.06 wood a second, and the parliament 0.12 and 0.07, continuing the chieftain hut and great hall.
+- **Guard** (`src/sim/guard.js`).
+  - **Who goes.** Stacks with the Guard standing order, and troops at home when the Army panel's Guard my land is on (`n.guard`).
+  - **What counts as a threat.** Every 2 seconds it finds hostile stacks on your land, walking into it, or advancing within reach of your border.
+  - **Where they go.** To the point where each threat enters your land or where it is headed.
+  - **How many.** Idle guard stacks go first, nearest first, until they have 1.5 times the threat's strength. Then a stack is formed from home, keeping a quarter of the troop cap at home.
+  - **Afterwards.** Pulled stacks walk back; formed ones fold home without loss, as far as the cap has room.
+  - **Control.** Any order you give a stack takes it off guard duty. It runs online and away, never in catch-up.
+  - Rules are in `rules.json` `guard`.
+- **Research tree** (`public/js/ui/research.js`).
+  - Eras run left to right as bands, with each advance at the end of its band, and branches are lanes.
+  - Lines join nodes to their prerequisites. Nodes no era advance needs are side upgrades, with dashed borders.
+  - Picking a node outlines what Add to queue would queue. Details sit beside the tree, which scrolls by drag or wheel.
+- **Arrange panels** (`public/js/ui/layout.js`, Settings, Layout). Frames for nine panels, moved by dragging and resized by the corner, with a mouse or a finger. The layout is kept in `ls_layout` as fractions of the screen, and there is a reset per panel and for all.
+- **Evidence.**
+  - `npm test` 177 of 177, with `test/guard.test.js`, a pocket test, an era-queue test for every Gunpowder node, and a hall-chain test.
+  - Reference 95 of 95; smoke 98 of 98, where the friend's attack meets a guard stack of 226 formed from home.
+  - `npm run ui` 129 of 129 on the test map and on fine Europe: Guard on a phone, the tree, and layout by mouse and by touch.
+  - `npm run bench`: all 8 players on Guard against 400 bots, guard pass 4 ms, worst tick 34.2 ms.
+
 ## Decisions (answered by Ryan, 26 September 2026)
 
 1. **Yes**: towers and forts change combat.
