@@ -3,6 +3,7 @@ import { ORDER_CODES, MAX_ZONE_SIDE, MAX_WAYPOINTS } from "./shared/protocol.js"
 import { isLand } from "./shared/terrain.js";
 import { zonePlots, ZONE_NAMES, POLICY, CIV_RULES } from "./sim/civilians.js";
 import { orderResearch } from "./sim/research.js";
+import { layRoad } from "./sim/logistics.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -195,6 +196,13 @@ export const ORDERS = {
     }
     if (!picks.length) return fail("none of those can be upgraded now");
     return finish(picks, [...want.values()].reduce((s, v) => s + v, 0));
+  },
+  road(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.log?.rules) return fail("roads are not running in this world");
+    if (typeof m.kind !== "string") return fail("pick a road type");
+    const r = layRoad(sim, nation, m.via, m.kind);
+    return r.error ? { ok: false, ...r } : { ok: true, ...r };
   },
   zone(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");

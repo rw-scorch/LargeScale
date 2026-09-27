@@ -19,6 +19,7 @@ import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./
 import { installConstruction } from "./sim/construction.js";
 import { installEconomy } from "./sim/economy.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
+import { installRoads, restoreRoads, takeRoadNews } from "./sim/logistics.js";
 import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS, DEPOSIT_TABLE } from "./sim/resources.js";
 import { installResearch, researchView, TREE } from "./sim/research.js";
 import { installMachines, saveMachines, machineOrdersOf } from "./sim/units.js";
@@ -161,6 +162,8 @@ export class World extends DurableObject {
       rng: makeRng(((info.seed ?? 1) + 104729 + Math.floor(this.sim.time)) >>> 0),
     });
     this.landLoaded = restoreLand(this.sim, this.readRows("land"));
+    installRoads(this.sim, { scale: info.map.scale ?? 1, rules: rules.roads });
+    this.roadsLoaded = restoreRoads(this.sim, this.readRows("road"));
     installResearch(this.sim, { speed: info.rules?.researchSpeed ?? 1 });
     installEffects(this.sim);
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
@@ -183,7 +186,7 @@ export class World extends DurableObject {
     this.present = new Set();
     this.sim.dirty.clear();
     this.loadMs = Date.now() - t0;
-    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, ...this.landLoaded };
+    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, roads: this.roadsLoaded, ...this.landLoaded };
   }
 
   currentHashes() {
@@ -193,7 +196,7 @@ export class World extends DurableObject {
 
   layerHashes(terrain = this.sim.terrain) {
     const bld = this.sim.bld;
-    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)), land: hashBytes(encodeLand(this.sim)) };
+    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)), land: hashBytes(encodeLand(this.sim)), road: hashRuns(this.sim.log.road) };
   }
 
   async init(config) {
@@ -383,12 +386,13 @@ export class World extends DurableObject {
     const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
     const buildingFrames = partFrames(MSG.BUILDINGS, encodeRows(this.bfeed.rows(this.sim)));
     const zoneFrames = partFrames(MSG.ZONE, encodeRuns(this.sim.bld.zone));
+    const roadFrames = partFrames(MSG.ROAD, encodeRuns(this.sim.log.road));
     const depositFrames = this.info.map.kind === "test" ? partFrames(MSG.DEPOSITS, encodeDeposits(this.sim.res.dep)) : [];
     server.send(JSON.stringify({
       t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
-      hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, deposits: depositFrames.length },
+      hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, road: roadFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
-      defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss,
+      defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale },
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
@@ -397,6 +401,7 @@ export class World extends DurableObject {
     for (const f of ownerFrames) server.send(f);
     for (const f of buildingFrames) server.send(f);
     for (const f of zoneFrames) server.send(f);
+    for (const f of roadFrames) server.send(f);
     for (const f of depositFrames) server.send(f);
     const n = this.sim.nations.get(nation);
     this.broadcast({ t: "joined", nation, name: n.name, colour: n.colour });
@@ -534,6 +539,8 @@ export class World extends DurableObject {
   flushDiffs() {
     const zones = takeZoneNews(this.sim);
     if (zones) this.broadcast(frame(MSG.ZONE_DIFF, zones));
+    const roads = takeRoadNews(this.sim);
+    if (roads) this.broadcast(frame(MSG.ROAD_DIFF, roads));
     const land = takeTerrainNews(this.sim);
     if (land) { this.terrainJoin = null; this.hashes.terrain = null; this.broadcast(frame(MSG.TERRAIN_EDIT, land)); }
     const changes = this.sim.takeDirty();
