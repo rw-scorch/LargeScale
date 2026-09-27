@@ -753,7 +753,7 @@ export class MapRenderer {
   }
 
   machineSprite(u) {
-    const base = u.def.sprite ?? u.type;
+    const era = this.state.nations.get(u.owner)?.era ?? "T", base = u.def.sprites?.[era] ?? u.def.sprite ?? u.type;
     return u.state === "wreck" && this.atlas.has(`${base}_wreck`) ? `${base}_wreck` : base;
   }
 

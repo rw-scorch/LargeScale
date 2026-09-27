@@ -20,6 +20,7 @@ import { installConstruction } from "./sim/construction.js";
 import { installEconomy } from "./sim/economy.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { installRoads, restoreRoads, takeRoadNews } from "./sim/logistics.js";
+import { installBoats } from "./sim/boats.js";
 import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS, DEPOSIT_TABLE } from "./sim/resources.js";
 import { installResearch, researchView, TREE } from "./sim/research.js";
 import { installMachines, saveMachines, machineOrdersOf } from "./sim/units.js";
@@ -167,6 +168,7 @@ export class World extends DurableObject {
     installResearch(this.sim, { speed: info.rules?.researchSpeed ?? 1 });
     installEffects(this.sim);
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
+    installBoats(this.sim, { scale: info.map.scale ?? 1 });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
     installOvertime(this.sim, { every: this.schedule().shrinkEvery ?? rules.schedule.shrinkEvery });

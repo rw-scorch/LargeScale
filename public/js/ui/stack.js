@@ -37,7 +37,10 @@ export function createStackPanel(root, game) {
   const order = async (msg, ok) => {
     const r = await game.conn.request(msg);
     if (!r.ok) game.toast(r.error ?? `${msg.t} failed`);
-    else ok?.(r);
+    else {
+      if (r.boat) game.toast(`No way there by land: they will cross ${r.crossing} plots of water by boat, and lose about ${Math.round(r.loss * 100)}% landing.`);
+      ok?.(r);
+    }
     key = "";
     return r;
   };

@@ -4,6 +4,7 @@ import { isLand } from "./shared/terrain.js";
 import { zonePlots, ZONE_NAMES, POLICY, CIV_RULES } from "./sim/civilians.js";
 import { orderResearch } from "./sim/research.js";
 import { layRoad } from "./sim/logistics.js";
+import { sendByBoat, boatPlan, boatsAtSea } from "./sim/boats.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -23,6 +24,7 @@ function ownStack(sim, nation, id) {
   const s = Number.isInteger(id) ? sim.stacks.get(id) : null;
   if (!s || s.owner !== nation) return null;
   delete s.guard;
+  s.sail = null;
   return s;
 }
 
@@ -82,12 +84,24 @@ export const ORDERS = {
       if (!t?.alive) return fail("that nation is gone");
       if (!sim.hostile(nation, o)) return fail(`you are at peace with ${t.name}`);
     }
-    const from = sim.nearestOwned(nation, m.at);
+    let from = sim.nearestOwned(nation, m.at);
     if (from === null) return fail("you hold no land");
     const share = Number.isFinite(m.share) ? Math.min(1, Math.max(0.05, m.share)) : 0.3;
+    const overseas = sim.boats && !sim.route(from, m.at);
+    if (overseas) {
+      if (boatsAtSea(sim, nation) >= sim.boats.rules.maxBoats) return fail(`at most ${sim.boats.rules.maxBoats} boats at sea at once`);
+      const plan = boatPlan(sim, nation, from, m.at);
+      if (plan.error) return fail(plan.error);
+      from = plan.embark;
+    }
     const s = sim.createStack(nation, from, n.troops * share);
     if (!s) return fail("not enough troops");
     if (n.standing) s.standing = n.standing;
+    if (overseas) {
+      const b = sendByBoat(sim, s.id, m.at, { order: "advance", only: o || 0 });
+      if (b.error) { sim.disbandStack(s.id); return fail(b.error); }
+      return { ok: true, stack: s.id, only: o || 0, ...b };
+    }
     sim.orderAdvance(s.id, o || 0, true);
     return { ok: true, stack: s.id, only: o || 0 };
   },
@@ -99,7 +113,11 @@ export const ORDERS = {
     if (error) return fail(error);
     const none = via.length ? "no land route through those points" : "no land route there";
     if (via.length && !legsOf(sim, s.pos, via, m.to)) return fail(none);
-    if (!sim.orderMove(s.id, m.to, "move", via)) return fail(none);
+    if (!sim.orderMove(s.id, m.to, "move", via)) {
+      if (via.length || !sim.boats || !isLand(sim.terrain[m.to]) || sim.route(s.pos, m.to)) return fail(none);
+      const b = sendByBoat(sim, s.id, m.to, { to: m.to });
+      return b.error ? fail(b.error) : { ok: true, ...b };
+    }
     s.board = null;
     return { ok: true };
   },
@@ -298,6 +316,7 @@ export const ORDERS = {
     if (!u) return fail("not your machine");
     if (u.wreck) return fail("that machine is a wreck");
     const def = UNIT_TYPES[u.type];
+    if (def.transport) return fail("transport boats sail on their own and land where they were sent");
     if (m.do === "stop") {
       Object.assign(u, { path: [], route: null, progress: 0, follow: null, land: null });
       return { ok: true };
@@ -341,6 +360,7 @@ export const ORDERS = {
     if (!s) return fail("not your stack");
     const u = ownMachine(sim, nation, m.ship), def = u && UNIT_TYPES[u.type];
     if (!u || u.wreck || def.domain !== "sea" || !def.capacity) return fail("pick one of your ships");
+    if (def.transport) return fail("a transport boat carries only the stack it was sent for");
     if ((u.cargo?.troops ?? 0) >= def.capacity) return fail("that ship is full");
     if (sim.grid.cheb(s.pos, u.at) > 1) {
       const spot = shoreNear(sim, u.at, s.pos);

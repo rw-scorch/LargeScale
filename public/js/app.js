@@ -303,6 +303,7 @@ class Game {
     if (e.type === "machine_destroyed" && e.nation === you) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
     if (e.type === "machine_captured" && e.nation === you) say(`mc${e.machine}`, `${name(e.by)} captured your ${machine}. Keep a stack beside your machines.`, 0, "danger");
     if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0, "good");
+    if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);
     if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
     if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0, "warn", stackAt(e.stack));
     if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0, "good");
@@ -763,7 +764,7 @@ class Game {
     const r = await this.conn.request({ t: "attack", at: plot, share: this.hud.share });
     if (!r.ok) return this.toast(r.error ?? "could not attack");
     const s = w.stacks.get(r.stack);
-    this.toast(`${s ? `${Math.round(s.troops)} troops go` : "A stack goes"} to take ${o ? `${w.nations.get(o)?.name ?? "their"}'s land` : "unclaimed land"}.`);
+    this.toast(`${s ? `${Math.round(s.troops)} troops go` : "A stack goes"}${r.boat ? " by boat" : ""} to take ${o ? `${w.nations.get(o)?.name ?? "their"}'s land` : "unclaimed land"}${r.boat ? `, losing about ${Math.round(r.loss * 100)}% as they land` : ""}.`);
   }
 
   buildHere(plot) {
