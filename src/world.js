@@ -429,7 +429,7 @@ export class World extends DurableObject {
   worldInfo() {
     const i = this.info ?? {}, s = this.schedule();
     return {
-      map: i.map?.kind ?? "test", crop: i.map?.crop ?? null, detail: i.map?.scale > 1 ? "fine" : "normal", w: i.w, h: i.h, landPlots: i.landPlots, bots: i.bots,
+      map: i.map?.kind ?? "test", crop: i.map?.name ?? null, detail: i.map?.scale > 1 ? "fine" : "normal", w: i.w, h: i.h, landPlots: i.landPlots, bots: i.bots,
       speed: this.speed ?? 1, rules: i.rules ?? {}, maxCatchupHours: i.maxCatchupHours ?? 72, shrinkEvery: s.shrinkEvery ?? rules.schedule.shrinkEvery,
       offline: { defence: rules.offline.defenceMult, output: rules.offline.offlineOutputShare }, win: "last",
     };
@@ -607,7 +607,7 @@ export class World extends DurableObject {
     this.frozen = true;
     this.meta("victory", { ...v, at: Date.now() });
     this.sendState();
-    this.broadcast({ t: "victory", winner: v.winner, name: v.name });
+    this.broadcast({ t: "victory", winner: v.winner, name: v.name, by: v.by ?? null });
     const text = v.name ? `${v.name} has won ${info.name ?? "the world"}.` : `Nobody is left standing in ${info.name ?? "the world"}.`;
     for (const nation of this.accounts.keys()) this.notify(nation, "world", text);
     if (this.env.DISCORD_WEBHOOK_URL) postWebhook(this.env.DISCORD_WEBHOOK_URL, `**${text}**`).catch(() => {});
@@ -671,6 +671,7 @@ export class World extends DurableObject {
         const now = Date.now();
         this.meta("schedule", r.schedule);
         this.sched = r.schedule;
+        if (this.info.id) await dir().scheduleWorld(this.info.id, r.schedule);
         this.announced(this.announced().filter(k => r.schedule[k] != null && r.schedule[k] <= now));
         this.logAdmin(me, "schedule", r.schedule);
         this.applyPhase(now);

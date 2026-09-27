@@ -1,6 +1,7 @@
 import { el, fmt } from "./dom.js";
 import { keyTag } from "./stack.js";
 import { icon } from "./icons.js";
+import { nextLine, when } from "./worldinfo.js";
 
 const STATUS = { online: "Online", connecting: "Connecting", reconnecting: "Reconnecting", waiting: "Offline", replaced: "Opened elsewhere", outdated: "Needs reload", closed: "Closed", removed: "Removed", deleted: "Deleted" };
 const RES_ICON = { gold: "res_money", concrete: "res_stone" };
@@ -29,7 +30,8 @@ export function createHud(root, game) {
   const speed = el("span", { id: "world-speed", class: "badge", hidden: true });
   const clock = el("span", { id: "world-clock" });
   const season = el("span", { id: "world-season" });
-  const pill = el("header", { id: "status-pill", class: "pill" }, worldName, speed, clock, season, el("span", { class: "status" }, dot, status));
+  const next = el("button", { id: "world-next", class: "next-chip", hidden: true, onclick: () => game.toggleInfo() });
+  const pill = el("header", { id: "status-pill", class: "pill" }, worldName, speed, clock, season, next, el("span", { class: "status" }, dot, status));
 
   const iconButton = (id, ic, hint, onclick, extra = {}) => el("button", { id, class: "icon-btn", title: hint, "aria-label": hint, onclick, ...extra }, typeof ic === "string" ? icon(ic, 1.5) : ic);
   const admin = game.admin ? iconButton("open-admin", "ui_dev", "Admin panel (`)", () => game.toggleAdmin()) : null;
@@ -40,6 +42,7 @@ export function createHud(root, game) {
     iconButton("zoom-out", "ui_zoom_out", "Zoom out (-)", () => game.zoom(1 / 1.6)),
     iconButton("zoom-in", "ui_zoom_in", "Zoom in (+)", () => game.zoom(1.6)),
     full,
+    iconButton("open-info", "ui_info", "World info: schedule, how to win and settings (I)", () => game.toggleInfo()),
     iconButton("open-settings", "ui_settings", "Settings: keys and display", () => game.toggleSettings()),
     admin,
     iconButton("leave-world", "ui_close", "Leave this world and go back to the world list", () => game.leave()));
@@ -99,6 +102,15 @@ export function createHud(root, game) {
       season.hidden = !p?.season;
       season.textContent = p?.season ? title(p.season) : "";
       admin?.classList.toggle("on", !!game.adminPanel?.open);
+      corner.querySelector("#open-info").classList.toggle("on", !!game.worldInfo?.open);
+      const nl = w?.ready ? nextLine(w, w.serverNow()) : null;
+      next.hidden = !nl;
+      pill.classList.toggle("has-next", !!nl);
+      if (nl) {
+        next.textContent = nl.text;
+        next.className = `next-chip ${nl.tone}`;
+        next.title = nl.next ? `${nl.next.name} ${when(nl.next.at)}. Click for the schedule.` : "Click for the schedule.";
+      }
       corner.querySelector("#open-settings").classList.toggle("on", !!game.settings?.open);
 
       const n = w?.nations.get(w.you), v = p?.vitals;

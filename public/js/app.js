@@ -33,6 +33,7 @@ import { fmt } from "./ui/dom.js";
 import { createAwayPanel, span } from "./ui/away.js";
 import { createLayout } from "./ui/layout.js";
 import { createGroupPanel } from "./ui/group.js";
+import { createWorldInfo, phaseText } from "./ui/worldinfo.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
 
@@ -114,6 +115,7 @@ class Game {
     this.aim = createAim(overlay, this);
     this.ring = createRing(overlay, this);
     this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
+    this.worldInfo = createWorldInfo(overlay, this);
     this.settings = createSettings(overlay, this);
     this.away = createAwayPanel(overlay, this);
     this.layout = createLayout(overlay, this);
@@ -247,6 +249,8 @@ class Game {
     if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
     if (m.t === "catchup") this.feed.push({ key: "catchup", text: m.left ? `The world is catching up on ${span(m.of)} while nobody played: ${span(m.left)} to go.` : `The world caught up ${span(m.of)} in ${((m.ms ?? 0) / 1000).toFixed(1)} s.`, tone: "info" });
     if (m.t === "away") this.away.summary(m);
+    if (m.t === "schedule") this.worldInfo.changed(m);
+    if (m.t === "phase") { const [text, tone] = phaseText(m); this.feed.push({ key: `phase${m.key}`, text, tone }); }
     if (m.t === "catchup" || m.t === "away") this.updatePanels();
   }
 
@@ -281,6 +285,7 @@ class Game {
       const what = e.only === 0 ? "unclaimed land" : e.only ? `${name(e.only)}'s land` : "land to take";
       say(`done${e.stack}`, e.sought ? `A stack stopped: it found no ${what} it can reach by land${e.only !== null ? " without going through another nation's land" : ""}.` : "A stack stopped advancing: nothing left to take within its reach.", 5000, "warn", stackAt(e.stack));
     }
+    if (e.type === "overtime_shrink") say("shrink", `Overtime: every nation's border shrank, ${fmt(e.plots)} plots in all.`, 0, "danger", null);
     if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0, "danger", e.to);
     if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0, "built", w.buildings.get(e.building)?.anchor ?? null);
     if (e.type === "deposit_depleted" && e.nation === you) say(`dep${e.at}`, `A ${e.kind} deposit has run dry.`, 5000, "warn");
@@ -376,6 +381,7 @@ class Game {
     if (action === "town") return this.toggleTown();
     if (action === "research") return this.toggleResearch();
     if (action === "admin") return this.toggleAdmin();
+    if (action === "info") return this.toggleInfo();
     if (action === "upgrade") return this.toggleUpgrade();
     if (action === "army") return this.toggleArmy();
     if (action === "deposits") return this.toggleDeposits();
@@ -395,6 +401,7 @@ class Game {
       else if (this.away.open) this.away.show(false);
       else if (this.settings.open) this.toggleSettings(false);
       else if (this.adminPanel?.open) this.toggleAdmin(false);
+      else if (this.worldInfo.open) this.toggleInfo(false);
       else if (this.upgrade.open) this.toggleUpgrade(false);
       else if (this.army.open) this.toggleArmy(false);
       else if (this.research.open) this.toggleResearch(false);
@@ -417,33 +424,39 @@ class Game {
   }
 
   toggleSettings(on = !this.settings.open) {
-    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); }
     this.settings.show(on);
     this.updatePanels();
   }
 
   toggleResearch(on = !this.research.open) {
-    if (on) { this.away.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     this.research.show(on && !!this.world?.purse?.research);
+    this.updatePanels();
+  }
+
+  toggleInfo(on = !this.worldInfo.open) {
+    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    this.worldInfo.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
   toggleAdmin(on = !this.adminPanel?.open) {
     if (!this.adminPanel) return;
-    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.settings.show(false); }
     this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
   toggleUpgrade(on = !this.upgrade.open) {
-    if (on) { this.away.show(false); this.research.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.upgrade.show(on && !!this.world?.purse && !!me?.spawned);
     this.updatePanels();
   }
 
   toggleArmy(on = !this.army.open) {
-    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.army.show(on && !!this.world?.purse?.army && !!me?.spawned);
     this.updatePanels();
@@ -856,7 +869,7 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

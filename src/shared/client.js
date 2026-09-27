@@ -264,7 +264,7 @@ export class ClientWorld {
       if (this.events.length > 500) this.events.splice(0, this.events.length - 500);
     }
     if (m.t === "chat") this.chat.push({ t: m.at, who: m.who, text: m.text });
-    if (m.t === "victory") { this.frozen = true; this.victory = { winner: m.winner, name: m.name }; }
+    if (m.t === "victory") { this.frozen = true; this.victory = { winner: m.winner, name: m.name, by: m.by ?? null }; }
     if (m.t === "ended") { this.frozen = true; this.ended = true; }
     if (m.t === "reopened") { this.frozen = !!this.victory; this.ended = false; }
     if (m.t === "speed") this.speed = m.factor;

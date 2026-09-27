@@ -1229,6 +1229,7 @@ const makeStacks = p => p.evaluate(async () => {
   for (const dx of [-4, 0, 4]) { const r = await g.conn.request({ t: "stack", share: 0.1, at: cap + dx }); if (r.ok) made.push(r.stack); await new Promise(r => setTimeout(r, 80)); }
   g.focus(cap, 14);
   await new Promise(r => setTimeout(r, 900));
+  for (let k = 0; k < 50 && !made.every(id => w.stacks.has(id)); k++) await new Promise(r => setTimeout(r, 100));
   return made.map(id => { const s = w.stacks.get(id), [x, y] = g.view.plotToScreen((s.pos % w.w) + 0.5, Math.floor(s.pos / w.w) + 0.5); return { id, x: x / g.view.ratio, y: y / g.view.ratio }; });
 });
 await gp.bringToFront();
@@ -1358,6 +1359,100 @@ await mp.tap("#layout-done");
 const bar1 = await rectIn(mp, "#action-bar");
 check(Math.abs(bar1.y - barMove.y + 60) < 4 && Math.abs(bar1.x - barMove.x + 40) < 4, `on a phone a finger drags the action bar to a new place (${Math.round(barMove.x)},${Math.round(barMove.y)} to ${Math.round(bar1.x)},${Math.round(bar1.y)})`);
 await mp.evaluate(() => window.__ls.game.layout.reset());
+
+const spawnSomewhere = p => p.evaluate(async () => {
+  const g = window.__ls.game, w = g.world;
+  for (let k = 0; k < 400; k++) {
+    const x = 10 + Math.floor(Math.random() * (w.w - 20)), y = 10 + Math.floor(Math.random() * (w.h - 20));
+    if ((await g.conn.request({ t: "spawn", x, y })).ok) return y * w.w + x;
+  }
+  return null;
+});
+const localInput = t => { const d = new Date(t - new Date(t).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+const feedText = p => p.evaluate(() => document.querySelector("#feed-list")?.textContent ?? "");
+const setTimes = (p, schedule) => p.evaluate(async s => {
+  const g = window.__ls.game, now = g.world.serverNow(), out = {};
+  for (const [k, v] of Object.entries(s)) out[k] = typeof v === "number" && k !== "shrinkEvery" ? Math.round(now + v * 1000) : v;
+  return g.conn.request({ t: "admin", op: "schedule", schedule: out });
+}, schedule);
+
+await mp.close();
+await gp.bringToFront();
+await gp.goto(BASE + "/");
+await gp.waitForSelector("#world-create", { timeout: 5000 });
+const schId = await newWorld(gp, "UI schedule", { map: "test", w: 160, h: 100, seed: 12, bots: 2 });
+await gp.goto(`${BASE}/#w=${schId}`);
+await gp.reload();
+await ready(gp);
+await spawnSomewhere(gp);
+await gp.keyboard.press("i");
+const infoOpen = await gp.waitForSelector("#info-panel:not([hidden])", { timeout: 3000 }).then(() => true, () => false);
+const empty = infoOpen ? await gp.textContent("#info-schedule") : "";
+const settingsText = infoOpen ? await gp.textContent("#info-settings") : "";
+check(infoOpen && /Nothing is scheduled/.test(empty) && /Small test map/.test(settingsText) && /160 by 100 plots/.test(settingsText) && /2 bots/.test(settingsText) && !(await gp.isVisible("#world-next")),
+  `I opens World info: no schedule yet, and the settings: "${settingsText.replace(/\s+/g, " ").slice(0, 160)}"`);
+const t0 = Date.now(), H = 3600000;
+await gp.fill("#sched-startAt", localInput(t0 + 2 * H));
+await gp.fill("#sched-peaceUntil", localInput(t0 + 3 * H));
+await gp.fill("#sched-overtimeAt", localInput(t0 + 26 * H));
+await gp.fill("#sched-endAt", localInput(t0 + 50 * H));
+await gp.fill("#sched-every", "5");
+await gp.click("#sched-save");
+const saved = await gp.waitForFunction(() => /Saved/.test(document.querySelector("#sched-note").textContent), null, { timeout: 5000 }).then(() => true, () => false);
+await gp.waitForTimeout(400);
+const eventsShown = await gp.locator("#info-schedule [data-event]").count();
+const chip = await gp.textContent("#world-next");
+const schedFeed = await feedText(gp);
+await gp.screenshot({ path: `${OUT}/41-world-info.png` });
+check(saved && eventsShown === 4 && /^Starts in (1 h 5\d min|2 h 0 min)$/.test(chip) && /set the schedule\. Next: the world starts/.test(schedFeed),
+  `the host sets four times in the editor; the panel lists them, the bar counts down ("${chip}") and the feed says so`);
+const badSave = await (async () => { await gp.fill("#sched-peaceUntil", localInput(t0 + H)); await gp.click("#sched-save"); await gp.waitForTimeout(500); return gp.textContent("#sched-note"); })();
+check(/peace ends must come after the world starts/.test(badSave), `a time out of order is refused: "${badSave}"`);
+await gp.click("#info-panel button.ghost:has-text('Undo changes')");
+await gp.keyboard.press("Escape");
+check(!(await gp.isVisible("#info-panel")), "Esc closes World info");
+
+const sp = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+await sp.goto(BASE + "/");
+await sp.fill("#login-name", `sched${Math.floor(Math.random() * 1e6)}`);
+await sp.fill("#login-pass", "friendly pass");
+await sp.fill("#login-invite", INVITE);
+await sp.click("#register-go");
+await sp.waitForSelector(`[data-world="${schId}"]`, { timeout: 5000 });
+const listRow = await sp.locator(".world", { has: sp.locator(`[data-world="${schId}"]`) }).textContent();
+check(/starts in (1 h 5\d min|2 h 0 min) \(/.test(listRow), `the world list tells a friend when the world starts: "${listRow.replace(/\s+/g, " ").trim()}"`);
+await sp.tap(`[data-world="${schId}"]`);
+await ready(sp);
+await spawnSomewhere(sp);
+await sp.waitForTimeout(500);
+const early = await sp.evaluate(async () => { const g = window.__ls.game, w = g.world; await g.formAt(w.nations.get(w.you).capital); await new Promise(r => setTimeout(r, 200)); return document.querySelector("#toasts")?.textContent ?? ""; });
+check(/the world starts at .* until then you can only pick where to start/.test(early), `before the start a friend can pick a spot but not form a stack: "${early}"`);
+await sp.tap("#world-next");
+const phoneInfo = await sp.waitForSelector("#info-panel:not([hidden])", { timeout: 3000 }).then(() => true, () => false);
+const phoneFits = await sp.evaluate(() => { const r = document.querySelector("#info-panel").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth; });
+await sp.screenshot({ path: `${OUT}/42-world-info-phone.png` });
+check(phoneInfo && phoneFits && !(await sp.isVisible("#sched-editor")) && (await sp.locator("#info-schedule [data-event]").count()) === 4,
+  "on a phone, tapping the countdown opens World info; it fits, lists all four times, and a friend gets no editor");
+await sp.tap("#info-panel button.ghost:has-text('Close')");
+
+await setTimes(gp, { startAt: 62, peaceUntil: 3 * H / 1000, overtimeAt: 26 * H / 1000, endAt: 50 * H / 1000 });
+const reminded = await sp.waitForFunction(() => /The world starts in (\d+ s|1 min 0 s), at .*Until then players can only pick where to start/.test(document.querySelector("#feed-list")?.textContent ?? ""), null, { timeout: 8000 }).then(() => true, () => false);
+check(reminded, `a minute before an event everyone gets a reminder in the feed: "${(await feedText(sp)).match(/The world starts in[^.]*\./)?.[0]}"`);
+
+await setTimes(gp, { startAt: 2, peaceUntil: 5, overtimeAt: 8, endAt: 50 * H / 1000, shrinkEvery: 30 });
+await gp.evaluate(() => window.__ls.game.conn.request({ t: "admin", op: "speed", factor: 8 }));
+const phases = await sp.waitForFunction(() => { const t = document.querySelector("#feed-list")?.textContent ?? ""; return /The world has started/.test(t) && /Peace is over/.test(t) && /Overtime has begun/.test(t) ? t : null; }, null, { timeout: 15000 }).then(h => h.jsonValue(), () => "");
+const shrinkChip = await sp.waitForFunction(() => { const c = document.querySelector("#world-next"); return c && !c.hidden && /Overtime: shrink in/.test(c.textContent) && c.classList.contains("danger") ? c.textContent : null; }, null, { timeout: 8000 }).then(h => h.jsonValue(), () => "");
+const shrank = await sp.waitForFunction(() => /every nation's border shrank/.test(document.querySelector("#feed-list")?.textContent ?? ""), null, { timeout: 10000 }).then(() => true, () => false);
+await sp.screenshot({ path: `${OUT}/43-overtime-phone.png` });
+const pillLay = await overlaps(sp);
+check(!!phases && !!shrinkChip && shrank && !pillLay.hit.length && !pillLay.off.length, `start, peace and overtime reach the feed as they happen, the bar shows "${shrinkChip}" without running into the icons (${JSON.stringify(pillLay.hit)}), and the feed reports each shrink`);
+
+await setTimes(gp, { endAt: 2 });
+const endText = await sp.waitForSelector("#notice-text", { timeout: 10000 }).then(() => sp.textContent("#notice-text"), () => "");
+await sp.screenshot({ path: `${OUT}/44-time-up-phone.png` });
+check(/has won with the most land when time ran out/.test(endText), `at the end time the player with the most land wins: "${endText}"`);
+await sp.close();
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
