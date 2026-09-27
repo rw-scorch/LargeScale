@@ -65,9 +65,15 @@ export class ClientWorld {
     this.depleted = new Set(hello.depleted ?? []);
     this.tech = hello.tech ?? { eras: [], branches: [], nodes: [] };
     this.policyRules = hello.policyRules ?? null;
+    this.schedule = hello.schedule ?? {};
+    this.info = hello.info ?? null;
+    this.skew = (hello.now ?? Date.now()) - Date.now();
+    this.shrinkIn = null;
     this.locks = lockMap(this.tech);
     this.effects = [];
   }
+
+  serverNow() { return Date.now() + (this.skew ?? 0); }
 
   known() {
     const list = this.purse?.research?.known ?? [];
@@ -223,6 +229,7 @@ export class ClientWorld {
     if (m.v !== undefined && m.v !== PROTOCOL) { this.stale = true; return m; }
     if (m.t === "state") {
       this.time = m.time;
+      this.shrinkIn = m.shrinkIn ?? null;
       for (const [id, plots, troops, alive, spawned, era] of m.n) {
         if (!this.nations.has(id)) this.nations.set(id, { id, name: `Nation ${id}`, colour: "#8a8a8a" });
         Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned, era: ERA_ORDER[era] ?? "T" });
@@ -236,6 +243,8 @@ export class ClientWorld {
     }
     if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
+    if (m.t === "schedule") { this.schedule = m.schedule ?? {}; if (m.info) this.info = m.info; }
+    if (m.t === "phase") this.lastPhase = m;
     if (m.t === "joined") {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));

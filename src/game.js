@@ -523,7 +523,7 @@ export function purseOf(n, extra = {}) {
   return { money: Math.floor(n.money), stock, era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, ...extra };
 }
 
-const ALWAYS = new Set(["eliminated", "victory", "era_up"]);
+const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink"]);
 const QUIET = new Set(["civ_build", "civ_upgrade"]);
 
 export function publicEvents(sim, events) {

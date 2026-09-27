@@ -13,6 +13,8 @@ import { installTroops, TROOP_RULES, armyView } from "./sim/troops.js";
 import unitData from "../data/units.json" with { type: "json" };
 import { installBots, spawnBots, BOT } from "./sim/bots.js";
 import { installGuard } from "./sim/guard.js";
+import { installOvertime } from "./sim/overtime.js";
+import { cleanSchedule, phaseAt, EVENTS, EVENT_NAMES } from "./shared/schedule.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
 import { installConstruction } from "./sim/construction.js";
 import { installEconomy } from "./sim/economy.js";
@@ -164,6 +166,10 @@ export class World extends DurableObject {
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
+    installOvertime(this.sim, { every: this.schedule().shrinkEvery ?? rules.schedule.shrinkEvery });
+    const hostile = this.sim.hostile;
+    this.sim.hostile = (a, b) => hostile(a, b) && !(this.sim.peace && this.sim.nations.get(a)?.human && this.sim.nations.get(b)?.human);
+    this.sim.peace = phaseAt(this.schedule(), Date.now()).peace;
     this.frozen = !!(this.meta("victory") || this.meta("ended"));
     this.speed = this.meta("speed") ?? 1;
     this.updatePresence();
@@ -306,6 +312,7 @@ export class World extends DurableObject {
   async heartbeat(now = Date.now()) {
     const info = this.meta("info");
     if (!info || !this.sim) return { skipped: true };
+    if (!this.frozen && phaseAt(this.schedule(), now).over) this.endBySchedule();
     const ends = this.meta("endsAt");
     if (ends && now >= ends && !this.meta("ended")) {
       this.meta("ended", true);
@@ -383,7 +390,7 @@ export class World extends DurableObject {
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss,
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, time: Math.floor(this.sim.time),
-      caughtUp: this.caughtUp ?? 0, nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
+      caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));
     for (const f of terrainFrames) server.send(f);
@@ -412,11 +419,51 @@ export class World extends DurableObject {
     for (const ws of this.sockets()) { try { ws.send(s); } catch {} }
   }
 
+  schedule() { return (this.sched ??= this.meta("schedule") ?? {}); }
+
+  announced(list) {
+    if (list) { this.told = list; this.meta("announced", list); }
+    return (this.told ??= this.meta("announced") ?? []);
+  }
+
+  worldInfo() {
+    const i = this.info ?? {}, s = this.schedule();
+    return {
+      map: i.map?.kind ?? "test", crop: i.map?.crop ?? null, detail: i.map?.scale > 1 ? "fine" : "normal", w: i.w, h: i.h, landPlots: i.landPlots, bots: i.bots,
+      speed: this.speed ?? 1, rules: i.rules ?? {}, maxCatchupHours: i.maxCatchupHours ?? 72, shrinkEvery: s.shrinkEvery ?? rules.schedule.shrinkEvery,
+      offline: { defence: rules.offline.defenceMult, output: rules.offline.offlineOutputShare }, win: "last",
+    };
+  }
+
+  applyPhase(now = Date.now()) {
+    const s = this.schedule(), p = phaseAt(s, now), ot = this.sim.overtime;
+    this.sim.peace = p.peace;
+    if (ot) {
+      ot.every = s.shrinkEvery ?? rules.schedule.shrinkEvery;
+      if (p.overtime && !ot.on) { ot.on = true; ot.clock = 0; }
+      if (!p.overtime && ot.on) { ot.on = false; ot.queue = []; }
+    }
+    const told = this.announced(), fresh = EVENTS.filter(k => s[k] != null && now >= s[k] && !told.includes(k));
+    if (fresh.length) {
+      this.announced([...told, ...fresh]);
+      for (const key of fresh) this.broadcast({ t: "phase", key, name: EVENT_NAMES[key], at: s[key], shrinkEvery: ot?.every });
+    }
+    if (p.over && !this.frozen) this.endBySchedule();
+    return p;
+  }
+
+  endBySchedule() {
+    const left = [...this.sim.nations.values()].filter(n => n.human && n.alive && n.spawned).sort((a, b) => b.plots - a.plots);
+    const top = left[0] ?? null;
+    this.finish({ winner: top?.id ?? null, name: top?.name ?? null, by: "time", plots: top?.plots ?? 0 });
+  }
+
   wake() {
     const since = this.sleptAt;
     this.sleptAt = null;
     if (since == null || this.frozen || this.catching) return;
-    const elapsed = ((Date.now() - since) / 1000) * (this.info.rules?.sleepSpeed ?? 1);
+    const start = this.schedule().startAt ?? 0;
+    const elapsed = ((Date.now() - Math.max(since, start)) / 1000) * (this.info.rules?.sleepSpeed ?? 1);
     if (elapsed <= 5) return;
     const job = planCatchUp(elapsed, { ...OFFLINE, ...rules.offline, maxCatchupSeconds: (this.info.maxCatchupHours ?? 72) * 3600 });
     this.catching = { job, of: job.capped, started: Date.now(), told: 0 };
@@ -503,7 +550,8 @@ export class World extends DurableObject {
 
   sendState() {
     const d = this.feed.delta(this.sim), bd = this.bfeed.delta(this.sim);
-    if (d || bd) this.broadcast({ t: "state", time: Math.floor(this.sim.time), n: [], s: [], gone: [], ...d, ...(bd ? { b: bd.up, bg: bd.gone } : {}) });
+    const ot = this.sim.overtime?.on ? { shrinkIn: Math.max(0, Math.round(this.sim.overtime.every - this.sim.overtime.clock)) } : {};
+    if (d || bd || ot.shrinkIn !== undefined) this.broadcast({ t: "state", time: Math.floor(this.sim.time), n: [], s: [], gone: [], ...d, ...(bd ? { b: bd.up, bg: bd.gone } : {}), ...ot });
     for (const ws of this.sockets()) {
       const me = ws.deserializeAttachment();
       const p = this.purse(this.sim.nations.get(me?.nation));
@@ -517,6 +565,13 @@ export class World extends DurableObject {
 
   step(dt) {
     if (this.frozen) return;
+    const phase = this.applyPhase();
+    if (this.frozen) return;
+    if (phase.waiting) {
+      this.flushDiffs();
+      if (++this.tickCount % 4 === 0) this.sendState();
+      return;
+    }
     for (let left = dt * this.speed; left > 1e-9; left -= 1) this.sim.tick(Math.min(1, left));
     this.standingClock = (this.standingClock ?? 0) + dt * this.speed;
     if (this.standingClock >= rules.offline.standingEvery) {
@@ -587,6 +642,8 @@ export class World extends DurableObject {
       }
       default: {
         if (this.frozen) return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "the world has ended" });
+        const startAt = this.schedule().startAt;
+        if (startAt && Date.now() < startAt && m.t !== "spawn") return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: `the world starts at ${new Date(startAt).toISOString().slice(0, 16).replace("T", " ")} UTC; until then you can only pick where to start` });
         const r = runOrder(this.sim, me.nation, m);
         if (r) reply(r);
       }
@@ -607,6 +664,18 @@ export class World extends DurableObject {
         this.flushDiffs();
         this.sendState();
         return r;
+      }
+      case "schedule": {
+        const r = cleanSchedule(m.schedule, Date.now(), rules.schedule, this.schedule());
+        if (r.error) return fail(r.error);
+        const now = Date.now();
+        this.meta("schedule", r.schedule);
+        this.sched = r.schedule;
+        this.announced(this.announced().filter(k => r.schedule[k] != null && r.schedule[k] <= now));
+        this.logAdmin(me, "schedule", r.schedule);
+        this.applyPhase(now);
+        this.broadcast({ t: "schedule", schedule: r.schedule, info: this.worldInfo(), by: me.name });
+        return { ok: true, schedule: r.schedule };
       }
       case "speed": {
         const factor = parseSpeed(m.factor);
