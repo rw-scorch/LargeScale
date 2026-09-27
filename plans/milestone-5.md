@@ -1,6 +1,6 @@
 # Milestone 5: logistics
 
-A proposal, 27 September 2026, waiting for Ryan's answers to the questions at the end. Ryan chose full logistics before the Industrial era (the Industrial plan is now `plans/milestone-6.md`). This is the kit's piece 7 (`reference/tasks/07-logistics/GUIDE.md`, example code in `src/sim/logistics.js`, never installed).
+Agreed with Ryan on 27 September 2026 (decisions at the end). Ryan chose full logistics before the Industrial era (the Industrial plan is now `plans/milestone-6.md`). This is the kit's piece 7 (`reference/tasks/07-logistics/GUIDE.md`, example code in `src/sim/logistics.js`, never installed).
 
 ## What the design already decided
 
@@ -43,11 +43,11 @@ Four parts, each tested and shown to Ryan before the next: roads first, because 
 ### Part B. Army supply
 
 - **Supply reach.** Every few seconds each player's supply reach is worked out from their stores holding food: 18 plots of travel, so roads stretch it and mountains shrink it. It crosses your land and allied land only.
-- **Stacks carry supplies.** A stack refills automatically while inside your reach, and carries 10 minutes' worth when it leaves (question 2).
+- **Stacks carry supplies.** A stack refills automatically while inside your reach, and carries 10 minutes' worth when it leaves (decision 2).
 - **Out of supply.** When a stack's carried supplies run out, its power falls towards half and a few troops desert each minute. The stack card, its map marker and the feed say so, once, not every tick.
 - **Supply stacks.** Formed at a store, loaded with food, moved like troops, and able to follow a stack. Stacks within 3 plots of a supply stack count as in supply, and the supply stack drains as it feeds them.
 - **Away and catch-up.** Standing orders already hold an absent player's stacks. Supply keeps running while a player is away, but not in catch-up.
-- **Bots** are left out, as they are from the town economy (question 4).
+- **Bots** are left out, as they are from the town economy (decision 4).
 - **Overlay.** A supply reach overlay (the kit's `ov_supply_reach`), and a faint line from a selected stack to its nearest source.
 
 ### Part C. Stores and convoys
@@ -57,11 +57,11 @@ Four parts, each tested and shown to Ryan before the next: roads first, because 
 - **Where goods come from.**
   - Building sites, upgrades, training at the barracks and machine queues take from stores within reach.
   - What is missing is asked for, and the build waits, showing what it waits for.
-  - Towns eat from every store (question 1).
+  - Towns eat from every store (decision 1).
   - The nation's stock in the top-left panel is the total across all stores.
 - **Convoys.** Every few seconds, for each store that asks for something, the nearest store with a surplus sends a convoy. It uses the era's capacity and speed from the kit: a hand cart holds 10 in the Tribal era, a horse wagon 30 in the Medieval, a supply wagon 50 in Gunpowder.
   - Convoys travel your own and allied land, on roads where they can.
-  - An enemy stack meeting a convoy takes its cargo (question 3).
+  - An enemy stack meeting a convoy takes its cargo (decision 3).
   - Paths between stores are cached, and forgotten when a road changes or land along them flips.
 - **Standing orders.** Each store has Keep and Want amounts, automatic by default, with sliders for players who want them. One rule prevents goods bouncing between two stores: Keep is never below Want.
 - **Capture.** Capturing a store takes what is in it. That is new, and the reason to guard storage.
@@ -106,7 +106,14 @@ Four parts, each tested and shown to Ryan before the next: roads first, because 
 - Changes are additive where possible, so the protocol stays 5. It steps to 6 only if the stock format has to change.
 - Road plots are sent as diffs. Convoy rows are sent as deltas, like stacks, and everyone sees them, because there is no fog of war.
 
-## Questions for Ryan
+## Decisions (answered by Ryan, 27 September 2026)
+
+1. **Materials are carried**: building, upgrading, training and machines take from stores within reach. Towns eat from every store, and money stays a number.
+2. **Stacks carry 10 minutes of supplies**, refilled automatically within reach, with supply stacks for deeper pushes.
+3. **An ambushed convoy's cargo goes to the enemy.**
+4. **Bots ignore supply.**
+
+## The questions as asked
 
 1. **How physical should goods be?** Recommended: materials for building, upgrading, training and machines are carried, towns eat from every store, and money stays a number. The alternatives are carrying town food too, so a cut-off town starves, which is more to manage; or only army supply, with the economy staying one national stock.
 2. **Army supply.** Recommended: stacks carry 10 minutes of supplies, refilled automatically within reach, with supply stacks for pushes deeper than that. The alternative is the kit's rule as it stands: any stack beyond reach weakens at once unless a supply stack follows it.
