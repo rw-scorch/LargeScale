@@ -14,7 +14,7 @@ import { createFeed } from "./ui/feed.js";
 import { createStackPanel } from "./ui/stack.js";
 import { createNotices } from "./ui/notice.js";
 import { createBuildMenu, costText } from "./ui/build.js";
-import { roadPlan, roadLine, ROAD_NAMES } from "./shared/roads.js";
+import { roadPlan, routePlan, roadLine, ROAD_NAMES } from "./shared/roads.js";
 import { simplifyPath } from "./shared/pathfind.js";
 import { reachMap } from "./shared/supply.js";
 import { Grid } from "./shared/grid.js";
@@ -83,6 +83,8 @@ class Game {
     this.building = null;
     this.zoning = null;
     this.roading = null;
+    this.routeFrom = null;
+    this.routeTo = null;
     this.ghostAt = null;
     this.selectedBuilding = null;
     this.selectedMachine = null;
@@ -134,14 +136,19 @@ class Game {
     }, {
       onTap: (x, y) => this.tap(x, y),
       onSecondary: (x, y) => this.secondary(x, y),
-      onHover: (x, y) => { if (this.prefs.crosshair) return; this.hover = x === null ? null : [x, y]; this.tip.update(); },
+      onHover: (x, y) => {
+        if (this.prefs.crosshair) return;
+        this.hover = x === null ? null : [x, y];
+        this.tip.update();
+        if (this.roading && this.routeFrom !== null && this.routeTo === null && x !== null) { const p = this.plotAt(x, y); if (p !== this.routeHover) { this.routeHover = p; this.previewRoute(p); this.updatePanels(); } }
+      },
       dragging: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting()),
       rightPans: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting()),
       swipeStart: (x, y, e) => this.swipeStart(x, y, e),
       onSwipe: (kind, line) => this.swiping(kind, line),
       onSwipeEnd: (kind, line) => this.swiped(kind, line),
       onDrag: (a, b) => (this.roading ? this.dragRoad(a, b) : this.building ? this.paintAt(b) : this.dragZone(a, b)),
-      onDragEnd: (a, b) => (this.roading ? (this.dragRoad(a, b), this.layRoad()) : this.building ? this.paintAt(b, true) : this.paintZone(a, b)),
+      onDragEnd: (a, b) => (this.roading ? this.endRoadDrag(a, b) : this.building ? this.paintAt(b, true) : this.paintZone(a, b)),
       tracing: () => this.stack.drawing,
       onTrace: line => this.trace(line),
       onTraceEnd: line => this.traced(line),
@@ -311,6 +318,8 @@ class Game {
     if (e.type === "supplies_low" && e.nation === you) say(`low${e.stack}`, `A stack beyond supply has about ${Math.max(1, Math.ceil(e.left / 60))} min of supplies left.`, 0, "warn", stackAt(e.stack));
     if (e.type === "resupplied" && e.nation === you) say(`res${e.stack}`, "A stack is back in supply.", 0, "good", stackAt(e.stack));
     if (e.type === "wagon_empty" && e.nation === you) say(`we${e.stack}`, "A supply wagon has run out of food.", 0, "warn", stackAt(e.stack));
+    if (e.type === "roads_connected" && e.nation === you) say(`rc${e.plots}${e.stores}`, `Roads laid by themselves: ${fmt(e.plots)} plots for ${costText(e.cost)}, linking ${e.stores} new ${e.stores === 1 ? "store" : "stores"} to your capital.`, 0, "built");
+    if (e.type === "roads_waiting" && e.nation === you) say("rwait", `New stores are waiting for roads: they need ${costText(e.cost)}.`, 60000, "warn");
     if (e.type === "convoy_taken" && e.nation === you) say(`ct${e.convoy}`, `${name(e.by)} took a cart of yours with ${fmt(e.amount)} ${e.kind}. Keep enemy stacks away from your roads.`, 0, "danger");
     if (e.type === "convoy_taken" && e.by === you) say(`ct${e.convoy}`, `You took a cart of ${name(e.nation)}'s with ${fmt(e.amount)} ${e.kind}.`, 0, "good");
     if (e.type === "convoy_lost" && e.nation === you) say(`cl${e.convoy}`, `A cart with ${fmt(e.amount)} ${e.kind} was cut off and lost.`, 0, "warn");
@@ -415,9 +424,11 @@ class Game {
     if (action === "zoomOut") this.zoom(1 / 1.6);
     this.updatePanels();
     if (action === "confirm" && this.pinned !== null) return this.confirmBuild();
+    if (action === "confirm" && this.routeTo !== null) return this.layRouted(this.routeTo);
     if (action === "cancel") {
       if (this.aimHeld?.sticky) { this.aimHeld = null; if (this.view) this.view.zoneRect = null; this.stroke = null; this.updatePanels(); }
       else if (this.pinned !== null) this.unpin();
+      else if (this.routeFrom !== null) this.clearRoute();
       else if (this.building || this.zoning || this.roading) this.stopBuild();
       else if (this.layout.editing) this.layout.stop(true);
       else if (this.away.open) this.away.show(false);
@@ -544,7 +555,69 @@ class Game {
   startRoad(kind) {
     this.startBuild(null);
     this.roading = kind;
+    this.routeFrom = null;
+    this.routeTo = null;
     this.updatePanels();
+  }
+
+  endRoadDrag(a, b) {
+    const pb = this.plotAt(...b);
+    if (this.roading !== "none" && (this.roadStroke?.length ?? 0) <= 1 && this.plotAt(...a) === pb) {
+      this.roadStroke = null;
+      return pb === null ? null : this.routeTap(pb);
+    }
+    this.dragRoad(a, b);
+    return this.layRoad();
+  }
+
+  routeTap(plot) {
+    if (this.routeFrom === null || plot === this.routeFrom) {
+      this.routeFrom = plot;
+      this.routeTo = null;
+      this.previewRoute(plot);
+      return this.updatePanels();
+    }
+    if (plot === this.routeTo || this.placeMode() === "click") return this.layRouted(plot);
+    this.routeTo = plot;
+    this.previewRoute(plot);
+    this.updatePanels();
+  }
+
+  previewRoute(to) {
+    const w = this.world;
+    if (!w || this.routeFrom === null || to === null) { this.roadPreview = null; if (this.view) this.view.roadPlan = null; return null; }
+    const blocked = i => { const b = w.buildingAt(i); return !!b && b.state !== "rubble"; };
+    const plan = to === this.routeFrom ? { plots: [], line: [to], cost: {}, start: true } : routePlan({ w: w.w, terrain: w.terrain, road: w.roads, owner: w.owner, blocked }, w.you, this.routeFrom, to, this.roading, w.roadRules ?? undefined, w.roadRules?.scale ?? 1);
+    this.roadPreview = plan;
+    if (this.view) this.view.roadPlan = { line: plan.line ?? [this.routeFrom], ok: !plan.error };
+    return plan;
+  }
+
+  clearRoute() {
+    this.routeFrom = null;
+    this.routeTo = null;
+    this.routeHover = null;
+    this.roadPreview = null;
+    if (this.view) this.view.roadPlan = null;
+    this.updatePanels();
+  }
+
+  async layRouted(to) {
+    const from = this.routeFrom, kind = this.roading, plan = this.previewRoute(to);
+    this.clearRoute();
+    if (!plan || from === null) return;
+    if (plan.error) return this.toast(plan.error[0].toUpperCase() + plan.error.slice(1) + ".");
+    if (!plan.plots.length) return this.toast("That road is already there.");
+    const r = await this.conn.request({ t: "road", kind, from, to });
+    if (!r.ok) return this.toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + "." : "Could not lay the road.");
+    this.toast(`Laid ${r.laid} plots of ${ROAD_NAMES[kind].toLowerCase()} for ${costText(r.cost)}${r.bridges ? `, ${r.bridges} of them bridges` : ""}.`);
+  }
+
+  async connectStores(kind, dry, keep) {
+    const r = await this.conn.request({ t: "connect", kind, dry, ...(keep !== undefined ? { keep } : {}) });
+    if (!r.ok) { this.toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + "." : "Could not plan the roads."); return r; }
+    if (!dry) this.toast(r.laid ? `Laid ${r.laid} plots of road for ${costText(r.cost)}, linking ${r.joined} ${r.joined === 1 ? "store" : "stores"} to your capital.` : "Every store you can reach is already on your roads.");
+    return r;
   }
 
   dragRoad(a, b) {
@@ -552,6 +625,7 @@ class Game {
     const p = this.plotAt(...b);
     if (!this.roadStroke) { const s = this.plotAt(...a); this.roadStroke = s === null ? [] : [s]; }
     if (p !== null && this.roadStroke[this.roadStroke.length - 1] !== p) this.roadStroke.push(p);
+    if (this.roadStroke.length > 1 && this.routeFrom !== null) { this.routeFrom = null; this.routeTo = null; }
     this.roadPreview = this.planRoad();
     this.view.roadPlan = this.roadPreview && { line: this.roadPreview.line, ok: !this.roadPreview.error };
   }
@@ -599,6 +673,9 @@ class Game {
 
   stopBuild() {
     this.building = null;
+    this.routeFrom = null;
+    this.routeTo = null;
+    this.roadPreview = null;
     if (this.aimHeld?.sticky) this.aimHeld = null;
     this.pinned = null;
     this.stroke = null;
@@ -806,6 +883,7 @@ class Game {
     const plot = this.plotAt(sx, sy);
     if (plot === null) return;
     const x = plot % w.w, y = (plot / w.w) | 0;
+    if (this.roading && this.roading !== "none") return this.routeTap(plot);
     if (this.roading) { this.roadStroke = null; this.dragRoad([sx, sy], [sx, sy]); return this.layRoad(); }
     if (this.zoning) return this.paintZone([sx, sy], [sx, sy]);
     if (this.building) return this.buildAt(plot);

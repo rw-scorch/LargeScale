@@ -656,5 +656,5 @@ export function logisticsView(world, n) {
   const convoys = [];
   for (const c of st.convoys.values()) if (c.owner === n.id) convoys.push(c.id);
   const spec = specOf(world, n.era ?? "T");
-  return { stores, sites, stuck, convoys: convoys.length, convoyMax: st.rules.convoyMax, capacity: spec.capacity, reach: st.rules.reach * st.scale, buffer: st.rules.buffer };
+  return { stores, sites, stuck, autoRoads: n.autoRoads ?? null, convoys: convoys.length, convoyMax: st.rules.convoyMax, capacity: spec.capacity, reach: st.rules.reach * st.scale, buffer: st.rules.buffer };
 }

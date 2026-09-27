@@ -1,4 +1,5 @@
 import { TERRAIN, TID } from "./terrain.js";
+import { MinHeap } from "./heap.js";
 
 export const ROAD_TYPES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
 export const ROAD_MULT = [1, 0.6, 0.45, 0.3, 0.2, 0.12];
@@ -6,7 +7,7 @@ export const ROAD_NAMES = { dirt: "Dirt road", cobble: "Cobbled road", paved: "P
 export const BRIDGE_NAMES = { dirt: "Wooden bridge", cobble: "Stone bridge" };
 export const ROAD_RULES = {
   types: { dirt: { cost: { money: 1 } }, cobble: { cost: { money: 3, stone: 1 }, needs: "road_cobble" } },
-  bridge: 5, rough: 4, roughMove: 3, maxPoints: 64, maxPlots: 400,
+  bridge: 5, rough: 4, roughMove: 3, maxPoints: 64, maxPlots: 400, routeNodes: 40000, connectMax: 2000, autoEvery: 20,
 };
 
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
@@ -65,6 +66,55 @@ export function roadPlan(view, nid, points, kind, rules = ROAD_RULES, scale = 1)
   }
   const plots = line.filter(i => road[i] < level);
   return { plots, ...roadPrice(kind, terrain, plots, rules, scale), skipped: line.length - plots.length };
+}
+
+export function roadRoute(view, nid, starts, isGoal, kind, rules = ROAD_RULES, target = null) {
+  const { w, terrain, road, owner } = view, size = terrain.length, level = Math.max(1, ROAD_TYPES.indexOf(kind));
+  const blocked = i => !!view.blocked?.(i);
+  const step = i => {
+    const t = TERRAIN[terrain[i]];
+    if (!t.land || t.move === Infinity || owner[i] !== nid) return Infinity;
+    if (road[i] >= level) return 0.25;
+    return (bridgeAt(terrain, i) ? rules.bridge : 1) * (roughAt(terrain, i, rules) ? rules.rough : 1);
+  };
+  const tx = target === null ? 0 : target % w, ty = target === null ? 0 : (target / w) | 0;
+  const h = target === null ? () => 0 : i => (Math.abs((i % w) - tx) + Math.abs(((i / w) | 0) - ty)) * 0.25;
+  const g = new Map(), from = new Map(), open = new MinHeap();
+  for (const s of starts) if (!g.has(s)) { g.set(s, 0); open.push(h(s), s); }
+  let seen = 0;
+  while (open.size) {
+    const cur = open.pop();
+    if (isGoal(cur) && !starts.includes(cur)) {
+      const path = [cur];
+      for (let p = cur; from.has(p); ) { p = from.get(p); path.push(p); }
+      return path.reverse();
+    }
+    if (++seen > (rules.routeNodes ?? 40000)) return null;
+    const gc = g.get(cur), x = cur % w;
+    for (const n of [cur - w, x < w - 1 ? cur + 1 : -1, cur + w, x > 0 ? cur - 1 : -1]) {
+      if (n < 0 || n >= size) continue;
+      const goal = isGoal(n);
+      if (blocked(n) && !goal) continue;
+      const c = step(n);
+      if (!(c < Infinity) && !(goal && blocked(n))) continue;
+      const ng = gc + (c < Infinity ? c : 0);
+      if (ng < (g.get(n) ?? Infinity)) { g.set(n, ng); from.set(n, cur); open.push(ng + h(n), n); }
+    }
+  }
+  return null;
+}
+
+export function routePlan(view, nid, from, to, kind, rules = ROAD_RULES, scale = 1) {
+  const { terrain, road } = view;
+  if (![from, to].every(p => Number.isInteger(p) && p >= 0 && p < terrain.length)) return { error: "a road point is off the map" };
+  if (!rules.types[kind]) return { error: "unknown road type" };
+  if (from === to) return { error: "pick two different points" };
+  const path = roadRoute(view, nid, [from], i => i === to, kind, rules, to);
+  if (!path) return { error: "there is no way to lay a road between those points over your own land" };
+  const level = ROAD_TYPES.indexOf(kind), line = path.filter(i => !view.blocked?.(i));
+  const plots = line.filter(i => road[i] < level);
+  if (plots.length > rules.maxPlots) return { error: `that road would be ${plots.length} plots; at most ${rules.maxPlots} at a time` };
+  return { plots, line, ...roadPrice(kind, terrain, plots, rules, scale), skipped: line.length - plots.length };
 }
 
 export function roadSprite(road, terrain, w, i) {

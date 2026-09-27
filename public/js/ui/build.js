@@ -25,7 +25,36 @@ export function createBuildMenu(root, game) {
     el("div", { class: "row spread" }, el("b", { class: "title", text: "Build" }), el("button", { class: "ghost", text: "Close", onclick: () => game.toggleBuildMenu(false) })),
     tabs, list);
   root.append(box);
-  let tab = null, key = "";
+  let tab = null, key = "", plan = null;
+
+  const connectText = r => {
+    if (!r) return "Plan first to see what it costs.";
+    const parts = [`${r.stores} ${r.stores === 1 ? "store" : "stores"}, ${r.already} already on your roads.`];
+    parts.push(r.plots ? `Linking ${r.joined} more takes ${r.plots} plots for ${costText(r.cost)}${r.bridges ? `, with ${r.bridges} bridge plots` : ""}.` : "Nothing more to lay.");
+    if (r.unreachable) parts.push(`${r.unreachable} cannot be reached over your own land.`);
+    return parts.join(" ");
+  };
+
+  const connectBox = w => {
+    const r = w.roadRules, cobble = r.types.cobble, kind = cobble && !(cobble.needs && w.lockOf(cobble.needs)) ? "cobble" : "dirt";
+    const auto = w.purse?.logistics?.autoRoads ?? null;
+    const lay = el("button", { id: "connect-lay", class: "primary", text: "Lay them", hidden: !plan?.plots, onclick: async () => { const res = await game.connectStores(kind, false); plan = null; key = ""; if (res.ok) game.updatePanels(); } });
+    const box = el("input", { id: "auto-roads", type: "checkbox", checked: !!auto });
+    box.addEventListener("change", async () => {
+      const res = await game.connectStores(kind, true, box.checked);
+      if (!res.ok) { box.checked = !box.checked; return; }
+      game.toast(box.checked ? `New stores will be linked to your roads with ${ROAD_NAMES[kind].toLowerCase()}s, paid as they are laid.` : "New stores are no longer linked by themselves.");
+      plan = res;
+      key = "";
+    });
+    return el("div", { id: "connect-box", class: "connect-box" },
+      el("b", { text: "Connect stores" }),
+      el("span", { class: "desc", text: `Lays ${ROAD_NAMES[kind].toLowerCase()}s from every store to your capital's roads along the cheapest way round buildings and water, so carts and armies move faster.` }),
+      el("div", { class: "row wrap" }, el("button", { id: "connect-plan", text: "Plan the roads", onclick: async () => { const res = await game.connectStores(kind, true); if (res.ok) { plan = res; key = ""; game.updatePanels(); } } }), lay),
+      el("span", { id: "connect-text", class: "muted", text: connectText(plan) }),
+      el("label", { class: "row" }, box, el("span", { text: "Keep new stores connected: roads are laid and paid for by themselves." })));
+  };
+
 
   const cap = t => t && t[0].toUpperCase() + t.slice(1);
   const why = (w, def) => {
@@ -51,7 +80,7 @@ export function createBuildMenu(root, game) {
       const cats = ["zones", ...(w.roadRules ? ["roads"] : []), ...new Set(defs.map(d => d.category))];
       tab ??= "zones";
       const rows = defs.filter(d => d.category === tab).sort((a, b) => eraIdx(a.era) - eraIdx(b.era) || a.num - b.num);
-      const k = `${tab}:${game.building}:${game.zoning}:${game.roading}:${rows.map(d => why(w, d)).join("|")}:${[...w.known()].join()}`;
+      const k = `${tab}:${game.building}:${game.zoning}:${game.roading}:${rows.map(d => why(w, d)).join("|")}:${[...w.known()].join()}:${w.purse?.logistics?.autoRoads}`;
       if (k === key) return;
       key = k;
       tabs.replaceChildren(...cats.map(c => el("button", { class: c === tab ? "on" : "", text: c === "zones" ? "Zones" : c === "roads" ? "Roads" : CATEGORY_NAMES[c] ?? c, onclick: () => { tab = c; key = ""; this.update(); } })));
@@ -64,7 +93,8 @@ export function createBuildMenu(root, game) {
             el("span", { class: "row spread" }, el("b", { text: kind === "none" ? "Remove road" : ROAD_NAMES[kind] }), cost ? el("span", { class: "muted", text: `${cost} a plot` }) : null),
             el("span", { class: "desc", text }), locked ? el("span", { class: "why", text: locked }) : null);
         }),
-          el("p", { class: "muted", text: `Drag along your own land; letting go lays the road. Bridges over rivers cost ${r.bridge} times as much, and roads on mountains ${r.rough} times. Roads stay when land changes hands.` }));
+          el("p", { class: "muted", text: `Click where a road starts and where it ends, and it finds its own way; or drag to draw it. Bridges over rivers cost ${r.bridge} times as much, and roads on mountains ${r.rough} times. Roads stay when land changes hands.` }),
+          connectBox(w));
         return;
       }
       if (tab === "zones") {
