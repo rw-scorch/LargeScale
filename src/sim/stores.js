@@ -650,8 +650,8 @@ export function logisticsView(world, n) {
   }
   for (const [id, why] of st.stuck) {
     const b = world.bld.list.get(id);
-    if (!b || b.owner !== n.id) continue;
-    stuck.push([id, why]);
+    if (!b || b.state !== "active") { st.stuck.delete(id); continue; }
+    if (b.owner === n.id) stuck.push([id, why]);
   }
   const convoys = [];
   for (const c of st.convoys.values()) if (c.owner === n.id) convoys.push(c.id);

@@ -1,4 +1,5 @@
 import { el, fmt } from "./dom.js";
+import { eraIdx } from "../shared/buildings.js";
 
 const list = parts => parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0] ?? "";
 const goods = o => Object.entries(o ?? {}).filter(([, v]) => v >= 1).map(([k, v]) => `${fmt(Math.floor(v))} ${k}`);
@@ -28,12 +29,19 @@ export function siteText(w, id) {
   return `Waiting for ${list(goods(need))}. ${why}`;
 }
 
+export function storeHint(w) {
+  const can = id => { const d = w.defs.table[id]; return d && !w.lockOf(id) && eraIdx(d.era) <= eraIdx(w.purse?.era ?? "T"); };
+  if (can("storage_yard")) return "Build a storage yard nearby.";
+  if (can("chieftain_hut")) return "Build a chieftain hut nearby: it stores goods too, and storage yards come with Carpentry in the Medieval era.";
+  return "Research Chieftains to build another chieftain hut nearby, which stores goods; storage yards come in the Medieval era.";
+}
+
 export function stuckText(w, id) {
   const lg = w.purse?.logistics, row = lg?.stuck.find(s => s[0] === id);
   if (!row) return "";
   return row[1] === "reach"
-    ? `No store within ${lg.reach} plots of travel: it keeps ${lg.buffer} and stops. Build a storage yard or another store nearby.`
-    : `Its store is full of what it makes, so it keeps ${lg.buffer} and waits for room.`;
+    ? `No store within ${lg.reach} plots of travel: it keeps ${lg.buffer} and stops. ${storeHint(w)}`
+    : `Its store is full of what it makes, so it keeps ${lg.buffer} and waits for room. Use it, or build another store nearby.`;
 }
 
 export function stuckCount(w) {

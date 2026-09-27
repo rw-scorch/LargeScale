@@ -131,6 +131,30 @@ Ryan asked for Part C to go ahead before his check of A and B. These are the cho
 - **Convoys** carry one kind of good each: 10 on a Tribal hand cart, 30 on a Medieval horse wagon, 50 in the Gunpowder era. At most 12 per nation are on the road at once. A hostile stack within a plot takes the cargo, into its own nearest store.
 - **Keep and Want** are set per store and per good on the store's card. Want asks for goods until the store holds that much; Keep is what it never sends away, and is never below Want.
 
+#### Part C progress (28 September 2026, branch `m5-stores`)
+
+Built and tested; waiting for Ryan's check with parts A and B.
+
+- **Server.** `src/sim/stores.js` (`installStores`), wired into construction, resources, training, machine queues, bulk upgrades and supply wagons. The `store` order sets Want and Keep. Saves add a `stores` row.
+- **Client.**
+  - Store cards list what a store holds and take standing orders.
+  - Sites say what they wait for and what the carts bring; producers say why they stopped.
+  - The Logistics panel (L, and a button in the action bar with a dot when something is stuck) lists waiting sites, stopped producers, held-up training and workshops, stacks beyond supply, and every store.
+  - Carts are drawn with the era's cart sprites.
+- **Found while building:**
+  - The eight nations' store maps expired together and were rebuilt in one production tick, and every nation sent its carts in the same tick: 54 ms worst ticks. Both now take turns, two nations a tick, with at most 4 path searches a tick.
+  - The Tribal era has no storage yard. A producer out of reach says to research Chieftains and build another chieftain hut, which stores goods.
+  - At 2,000 times production the browser test's quarry filled the hut's 1,000 stone and stopped, so that test now takes stone out as it goes.
+  - Old worlds put their whole stock into the seat of government, even past its capacity. Producers of a good the seat is already over-full of wait until it is used or another store is built.
+- **Evidence.**
+  - `npm test` 216 of 216 (`test/stores.test.js`, 12 tests); reference 95 of 95.
+  - Smoke 105 of 105, and after a restart the store layer loads identically.
+  - `npm run ui` 154 of 154 on the test map: the store card, Keep 10 wood, a watchtower 15 plots from the hut waiting for two hand carts, the Logistics panel, and the carts arriving. The same 154 of 154 on fine Europe.
+  - `npm run bench` on the Earth, with carts running (6 stores a player asking for wood):
+    - worst tick 38.0 ms, against 31.5 ms without stores;
+    - 3,712 carts sent and delivered, with 72 path searches.
+  - Fine Europe: worst tick 34.0 ms; 6,290 carts, 26 taken by enemy stacks and 4 cut off.
+
 ### Part D. Sea routes
 
 - Ports are stores. When the land route between two of your stores is missing, or much longer, a convoy crosses water between ports, on the water graph ships already use.
