@@ -368,6 +368,7 @@ export class World extends DurableObject {
       this.meta("info", this.info);
     }
     const account = { id: Number(request.headers.get("X-Account")), name: request.headers.get("X-Name"), admin: request.headers.get("X-Admin") === "1" };
+    const watch = request.headers.get("X-Watch") === "1";
     const [client, server] = Object.values(new WebSocketPair());
     if (Number(new URL(request.url).searchParams.get("v")) !== PROTOCOL) {
       server.accept();
@@ -379,17 +380,18 @@ export class World extends DurableObject {
     try { join = await this.joinData(); } catch (e) { return new Response(`map files are missing: ${e.message}`, { status: 503 }); }
     this.flushDiffs();
     this.sendState();
-    this.ctx.acceptWebSocket(server, [`acc:${account.id}`]);
-    for (const old of this.ctx.getWebSockets(`acc:${account.id}`)) {
+    const tag = `${watch ? "watch" : "acc"}:${account.id}`;
+    this.ctx.acceptWebSocket(server, [tag]);
+    for (const old of this.ctx.getWebSockets(tag)) {
       if (old === server) continue;
       try { old.send(JSON.stringify({ t: "replaced", v: PROTOCOL, text: "This game was opened somewhere else." })); old.close(CLOSE.REPLACED, "opened somewhere else"); } catch {}
     }
-    let nation = [...this.accounts].find(([, a]) => a === account.id)?.[0] ?? null;
-    if (nation === null) {
+    let nation = watch ? null : [...this.accounts].find(([, a]) => a === account.id)?.[0] ?? null;
+    if (nation === null && !watch) {
       nation = this.sim.addNation({ name: account.name, colour: COLOURS[this.accounts.size % COLOURS.length] });
       this.accounts.set(nation, account.id);
     }
-    server.serializeAttachment({ account: account.id, name: account.name, admin: account.admin, nation });
+    server.serializeAttachment({ account: account.id, name: account.name, admin: account.admin, nation, watch });
     this.updatePresence();
     const g = this.sim.grid, runs = encodeRuns(this.sim.owner);
     const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
@@ -401,7 +403,7 @@ export class World extends DurableObject {
       t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, road: roadFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
-      defs: buildingData.buildings, purse: this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale },
+      watch, defs: buildingData.buildings, purse: nation === null ? null : this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale },
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
@@ -412,9 +414,10 @@ export class World extends DurableObject {
     for (const f of zoneFrames) server.send(f);
     for (const f of roadFrames) server.send(f);
     for (const f of depositFrames) server.send(f);
+    if (!this.frozen) this.startLoop();
+    if (watch) return new Response(null, { status: 101, webSocket: client });
     const n = this.sim.nations.get(nation);
     this.broadcast({ t: "joined", nation, name: n.name, colour: n.colour });
-    if (!this.frozen) this.startLoop();
     if (this.catching) server.send(JSON.stringify({ v: PROTOCOL, t: "catchup", left: Math.round(this.catching.job.steps * this.catching.job.step + this.catching.job.rest), of: Math.round(this.catching.of) }));
     else this.sendAway(nation);
     return new Response(null, { status: 101, webSocket: client });
@@ -633,6 +636,7 @@ export class World extends DurableObject {
 
   async webSocketMessage(ws, raw) {
     const me = ws.deserializeAttachment();
+    if (me?.watch) return;
     if (typeof raw !== "string" || raw.length > 4000) return;
     let m;
     try { m = JSON.parse(raw); } catch { return; }
@@ -683,17 +687,8 @@ export class World extends DurableObject {
         return r;
       }
       case "schedule": {
-        const r = cleanSchedule(m.schedule, Date.now(), rules.schedule, this.schedule());
-        if (r.error) return fail(r.error);
-        const now = Date.now();
-        this.meta("schedule", r.schedule);
-        this.sched = r.schedule;
-        if (this.info.id) await dir().scheduleWorld(this.info.id, r.schedule);
-        this.announced(this.announced().filter(k => r.schedule[k] != null && r.schedule[k] <= now));
-        this.logAdmin(me, "schedule", r.schedule);
-        this.applyPhase(now);
-        this.broadcast({ t: "schedule", schedule: r.schedule, info: this.worldInfo(), by: me.name });
-        return { ok: true, schedule: r.schedule };
+        const r = await this.setSchedule(m.schedule, me.name);
+        return r.error ? fail(r.error) : r;
       }
       case "speed": {
         const factor = parseSpeed(m.factor);
@@ -752,6 +747,21 @@ export class World extends DurableObject {
     }
   }
 
+  async setSchedule(schedule, by) {
+    if (!this.sim) return { error: "world not initialised" };
+    const r = cleanSchedule(schedule, Date.now(), rules.schedule, this.schedule());
+    if (r.error) return r;
+    const now = Date.now();
+    this.meta("schedule", r.schedule);
+    this.sched = r.schedule;
+    if (this.info.id) await this.env.DIRECTORY.getByName("directory").scheduleWorld(this.info.id, r.schedule);
+    this.announced(this.announced().filter(k => r.schedule[k] != null && r.schedule[k] <= now));
+    this.logAdmin({ name: by }, "schedule", r.schedule);
+    this.applyPhase(now);
+    this.broadcast({ t: "schedule", schedule: r.schedule, info: this.worldInfo(), by });
+    return { ok: true, schedule: r.schedule };
+  }
+
   logAdmin(me, op, detail = {}) {
     this.ctx.storage.sql.exec("INSERT INTO admin_log (t, who, op, detail) VALUES (?, ?, ?, ?)", Date.now(), me.name, op, JSON.stringify(detail));
   }
@@ -761,7 +771,7 @@ export class World extends DurableObject {
   }
 
   dropAccount(account, text) {
-    for (const ws of this.ctx.getWebSockets(`acc:${account}`)) {
+    for (const ws of [...this.ctx.getWebSockets(`acc:${account}`), ...this.ctx.getWebSockets(`watch:${account}`)]) {
       try { ws.send(JSON.stringify({ v: PROTOCOL, t: "removed", text })); ws.close(CLOSE.REMOVED, "removed by the host"); } catch {}
     }
     this.updatePresence();

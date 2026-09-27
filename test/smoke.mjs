@@ -28,9 +28,9 @@ async function api(path, body, token, method = body ? "POST" : "GET") {
   return { status: r.status, body: await r.json() };
 }
 
-function connect(world, token, v = PROTOCOL) {
+function connect(world, token, v = PROTOCOL, extra = "") {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(BASE.replace("http", "ws") + `/ws/${world}?token=${token}&v=${v}`);
+    const ws = new WebSocket(BASE.replace("http", "ws") + `/ws/${world}?token=${token}&v=${v}${extra}`);
     ws.binaryType = "arraybuffer";
     const got = { json: [], binary: [], ws, closed: null };
     ws.onmessage = e => {
@@ -776,7 +776,32 @@ const schWon = await waitFor(SA, m => m.t === "victory", 25000);
 check(schWon && (schWon.winner === sah.you || schWon.winner === sbh.you), `at the end time the world ends and ${schWon?.name} wins with the most land of the players left`);
 SA.ws.close();
 SB.ws.close();
-const dLog = (await api("/api/admin/log", null, ta)).body;
+const hour = Date.now() + 3600e3;
+const badMade = await api("/api/worlds", { name: "Bad schedule", config: { w: 120, h: 90, seed: 9, bots: 0, schedule: { startAt: hour, peaceUntil: hour - 60e3 } } }, ta);
+const wat = await api("/api/worlds", { name: "Watch test", config: { w: 120, h: 90, seed: 9, bots: 2, schedule: { startAt: hour } } }, ta);
+const watId = wat.body.id;
+const HA = await connect(watId, ta);
+const hah = await waitFor(HA, m => m.t === "hello");
+check(badMade.status === 400 && /must come after/.test(badMade.body.error ?? "") && wat.status === 200 && hah?.schedule?.startAt === hour,
+  `a world can be scheduled as it is made, and a bad schedule refuses it ("${badMade.body.error}")`);
+const W = await connect(watId, tb, PROTOCOL, "&watch=1");
+const wh = await waitFor(W, m => m.t === "hello");
+W.ws.send(JSON.stringify({ t: "spawn", x: 60, y: 45 }));
+const watchOrder = await nextResult(W, "spawn", 1500);
+const playAs = await connect(watId, tb).then(() => "opened", () => "refused");
+await sleep(500);
+const watchStatus = (await api(`/api/worlds/${watId}/status`, null, ta)).body;
+check(wh?.you === null && wh.watch === true && wh.purse === null && !watchOrder && playAs === "refused" && !HA.json.some(m => m.t === "joined" && m.nation !== hah.you) && !HA.json.some(m => m.t === "presence" && m.online.length > 1) && watchStatus.players === 1,
+  `a non-member can watch a world live (${wh?.nations?.length} nations) without a nation, a presence light or orders, and still cannot play it without joining (${watchStatus.players} player)`);
+const httpSched = await api(`/api/admin/worlds/${watId}/schedule`, { schedule: { startAt: hour + 3600e3 } }, ta);
+const friendSched = await api(`/api/admin/worlds/${watId}/schedule`, { schedule: { startAt: hour } }, tb);
+const heardHttp = await waitFor(HA, m => m.t === "schedule", 2000), watcherHeard = await waitFor(W, m => m.t === "schedule", 2000);
+const watchListed = (await api("/api/worlds", null, tb)).body.find(w => w.id === watId);
+check(httpSched.status === 200 && friendSched.status === 403 && heardHttp?.schedule.startAt === hour + 3600e3 && watcherHeard && watchListed?.schedule?.startAt === hour + 3600e3 && watchListed.map === "test",
+  `the host schedules a world from the list, players and watchers hear at once, the list shows the new time, and a friend cannot (${friendSched.status})`);
+W.ws.close();
+HA.ws.close();
+const dLog =(await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);
 console.log(failures ? `${failures} checks failed` : "all checks passed");
 process.exit(failures ? 1 : 0);
