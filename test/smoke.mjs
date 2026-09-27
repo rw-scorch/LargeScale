@@ -591,9 +591,12 @@ const stays = await adminOp(H, { op: "give", nation: ph.you, what: "troops", amo
 const palList = (await api("/api/worlds", null, tp)).body.find(w => w.id === awid);
 check(selfKick?.error === "you cannot remove yourself" && kick?.ok && told && P.closed?.code === CLOSE.REMOVED && rejoin.body.error === "the host removed you from this world" && !back && stays?.ok && palList?.removed === 1,
   `removing the friend closes their game with "${told?.text}", they cannot rejoin ("${rejoin.body.error}") or reconnect, their nation stays, and their list marks the world`);
-const heldAway = await until(() => H.json.slice(beforeKick).some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === acceptedOrder?.stack && r[4] === 0)), 8000);
+await sleep(3000);
+const pRows = H.json.slice(beforeKick).filter(m => m.t === "state").flatMap(m => (m.s ?? []).filter(r => r[0] === acceptedOrder?.stack));
+const tookFromHost = H.json.slice(beforeKick).some(m => m.t === "events" && m.events.some(e => e.type === "plot_lost" && e.nation === hh.you && e.by === ph.you));
+const heldAway = pRows.length > 0 && pRows.at(-1)[4] === 2 && !tookFromHost;
 const heardAway = H.json.filter(m => m.t === "presence").at(-1)?.online.includes(ph.you) === false;
-check(pAdvance?.ok && pGoing && heldAway && heardAway, `the removed friend shows as away, and their advancing stack holds its ground while they are gone${pAdvance?.ok && pGoing && heldAway && heardAway ? "" : ` (advance ${pAdvance?.ok ?? pAdvance?.error}, seen advancing ${!!pGoing}, held ${!!heldAway}, away ${heardAway})`}`);
+check(pAdvance?.ok && pGoing && heldAway && heardAway, `the removed friend shows as away, and their advance keeps taking unclaimed land while they are gone, never the host's${pAdvance?.ok && pGoing && heldAway && heardAway ? "" : ` (advance ${pAdvance?.ok ?? pAdvance?.error}, seen advancing ${!!pGoing}, still going ${!!heldAway}, away ${heardAway})`}`);
 const accounts = (await api("/api/admin/accounts", null, ta)).body;
 const palRow = accounts.find(a => a.id === palId);
 check(Array.isArray(accounts) && palRow?.name === "pal" + suffix && palRow.lastLogin > 0 && accounts.some(a => a.admin), `the host lists ${accounts.length} accounts with worlds and last login`);
