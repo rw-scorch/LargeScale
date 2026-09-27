@@ -16,6 +16,8 @@ import { createNotices } from "./ui/notice.js";
 import { createBuildMenu, costText } from "./ui/build.js";
 import { roadPlan, roadLine, ROAD_NAMES } from "./shared/roads.js";
 import { simplifyPath } from "./shared/pathfind.js";
+import { reachMap } from "./shared/supply.js";
+import { Grid } from "./shared/grid.js";
 import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel, nodeFor } from "./ui/town.js";
 import { createResearchPanel } from "./ui/research.js";
@@ -303,6 +305,11 @@ class Game {
     if (e.type === "machine_destroyed" && e.nation === you) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
     if (e.type === "machine_captured" && e.nation === you) say(`mc${e.machine}`, `${name(e.by)} captured your ${machine}. Keep a stack beside your machines.`, 0, "danger");
     if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0, "good");
+    if (e.type === "out_of_supply" && e.nation === you) say(`oos${e.stack}`, "A stack is out of supply: it weakens and troops desert. Bring it back near a store, or send a supply wagon.", 0, "danger", stackAt(e.stack));
+    if (e.type === "supplies_low" && e.nation === you) say(`low${e.stack}`, `A stack beyond supply has about ${Math.max(1, Math.ceil(e.left / 60))} min of supplies left.`, 0, "warn", stackAt(e.stack));
+    if (e.type === "resupplied" && e.nation === you) say(`res${e.stack}`, "A stack is back in supply.", 0, "good", stackAt(e.stack));
+    if (e.type === "wagon_empty" && e.nation === you) say(`we${e.stack}`, "A supply wagon has run out of food.", 0, "warn", stackAt(e.stack));
+    if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);
     if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
     if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0, "warn", stackAt(e.stack));
     if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0, "good");
@@ -763,7 +770,7 @@ class Game {
     const r = await this.conn.request({ t: "attack", at: plot, share: this.hud.share });
     if (!r.ok) return this.toast(r.error ?? "could not attack");
     const s = w.stacks.get(r.stack);
-    this.toast(`${s ? `${Math.round(s.troops)} troops go` : "A stack goes"} to take ${o ? `${w.nations.get(o)?.name ?? "their"}'s land` : "unclaimed land"}.`);
+    this.toast(`${s ? `${Math.round(s.troops)} troops go` : "A stack goes"}${r.boat ? " by boat" : ""} to take ${o ? `${w.nations.get(o)?.name ?? "their"}'s land` : "unclaimed land"}${r.boat ? `, losing about ${Math.round(r.loss * 100)}% as they land` : ""}.`);
   }
 
   buildHere(plot) {
@@ -918,8 +925,23 @@ class Game {
 
   toast(text) { this.notices?.toast(text); }
 
+  supplyOverlay() {
+    const w = this.world, v = this.view, sup = w?.purse?.supply;
+    if (!v || !sup) return;
+    v.starving = new Set(sup.stacks.filter(r => r[1] <= 0).map(r => r[0]));
+    const s = w.stacks.get(this.selected), show = s && s.owner === w.you;
+    if (!show) { v.supplyReach = null; this.reachAt = 0; return; }
+    if (performance.now() - (this.reachAt ?? 0) < 2000) return;
+    this.reachAt = performance.now();
+    const cap = w.nations.get(w.you)?.capital;
+    const sources = (w.purse.stock?.food ?? 0) > 0 ? [...w.buildings.values()].filter(b => b.owner === w.you && b.state === "active" && b.def?.store && w.owner[b.anchor] === w.you).map(b => b.anchor).concat(cap != null && w.owner[cap] === w.you ? [cap] : []) : [];
+    this.grid ??= new Grid(w.w, w.h);
+    v.supplyReach = reachMap(this.grid, { terrain: w.terrain, owner: w.owner, road: w.roads }, w.you, sources, sup.range);
+  }
+
   updatePanels() {
     if (this.left) return;
+    this.supplyOverlay();
     for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 

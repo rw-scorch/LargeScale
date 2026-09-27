@@ -11,7 +11,7 @@ export const LANDING = { penalty: 0.15, beachPenalty: 0.05, portPenalty: 0, drop
 export const MINES = { stackShare: 0.25, stackMax: 200, vehicleDamage: 60 };
 export const MACHINE_RULES = { wreckSeconds: 300, queueMax: 10, hpPerLoss: 1, supportScale: 1, portRadius: 2, followEvery: 1, lethality: rules.combat?.lethality ?? 0.08, ...rules.machines };
 
-const waterOk = t => !TERRAIN[t].land && TERRAIN[t].water !== "ice";
+export const waterOk = t => !TERRAIN[t].land && TERRAIN[t].water !== "ice";
 const WATER_MOVE = Float32Array.from({ length: 256 }, (_, t) => (TERRAIN[t] && waterOk(t) ? 1 : Infinity));
 
 function around(grid, i, r = 1) {
@@ -182,7 +182,7 @@ export function embark(world, stackId, shipId) {
   return null;
 }
 
-export function disembark(world, shipId, target, ownsPort = false) {
+export function disembark(world, shipId, target, ownsPort = false, penalty = null) {
   const u = world.units.list.get(shipId);
   if (!u?.cargo?.troops) return { error: "nothing aboard" };
   if (!isLand(world.terrain[target])) return { error: "must land on land" };
@@ -190,7 +190,7 @@ export function disembark(world, shipId, target, ownsPort = false) {
   const def = UNIT_TYPES[u.type], cargo = u.cargo, owner = cargo.owner, o = world.owner[target];
   const ours = o === owner || (o && world.passable(owner, o));
   if (!ours && o && !world.hostile(owner, o)) return { error: "you are not at war with them" };
-  const pen = ownsPort ? LANDING.portPenalty : def.beach ? LANDING.beachPenalty : LANDING.penalty;
+  const pen = ownsPort ? LANDING.portPenalty : penalty ?? (def.beach ? LANDING.beachPenalty : LANDING.penalty);
   let troops = cargo.troops * (1 - pen);
   const mix = cargo.mix ? { ...cargo.mix } : null, scale = k => { if (mix) for (const id in mix) mix[id] *= k; };
   scale(1 - pen);
@@ -421,12 +421,21 @@ function landCargo(world) {
   const g = world.grid;
   for (const u of world.units.list.values()) {
     if (u.wreck || u.land === null || u.path.length || u.route) continue;
-    const at = u.land;
+    let at = u.land;
     u.land = null;
-    if (!u.cargo) continue;
-    if (g.cheb(u.at, at) > 1) { world.emit("landing_failed", { nation: u.owner, at, lost: 0, machine: u.id, why: "the ship could not reach the coast there" }); continue; }
-    const r = disembark(world, u.id, at, ownsPort(world, u.cargo.owner, at));
+    if (!u.cargo) { world.afterLanding?.(u, null); continue; }
+    const t = u.transport;
+    if (g.cheb(u.at, at) > 1 && t) at = shoreNear(world, u.at, at) ?? at;
+    const r = g.cheb(u.at, at) > 1 ? { error: "the ship could not reach the coast there" } : disembark(world, u.id, at, ownsPort(world, u.cargo.owner, at), world.landingPenalty?.(u) ?? null);
+    if (r.error && t && !t.returning && t.home !== undefined) {
+      Object.assign(t, { returning: true, loss: 0 });
+      if (orderUnit(world, u.id, t.homeSea)) { u.path = []; u.route = null; }
+      u.land = t.home;
+      world.emit("landing_failed", { nation: u.owner, at, lost: 0, machine: u.id, why: `${r.error}; the boat is taking them home` });
+      continue;
+    }
     if (r.error) world.emit("landing_failed", { nation: u.owner, at, lost: 0, machine: u.id, why: r.error });
+    if (!r.error || t) world.afterLanding?.(u, r.stack ?? null);
   }
 }
 

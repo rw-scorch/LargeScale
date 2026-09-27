@@ -18,6 +18,8 @@ import { installEffects } from "../src/sim/effects.js";
 import { installGuard, guardTick } from "../src/sim/guard.js";
 import { installOvertime } from "../src/sim/overtime.js";
 import { installRoads, setRoad, ROADS } from "../src/sim/logistics.js";
+import { installBoats } from "../src/sim/boats.js";
+import { installSupply, supplyTick } from "../src/sim/supply.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -39,6 +41,7 @@ const { values: a } = parseArgs({ options: {
   seed: { type: "string", default: "1" },
   catchup: { type: "string", default: "12" },
   roads: { type: "string", default: "1500" },
+  supply: { type: "string", default: "1" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -128,6 +131,8 @@ installEffects(w);
 const guard = installGuard(w, { scale });
 const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
+installBoats(w, { scale });
+if (a.supply !== "0") installSupply(w, { scale });
 let roadPlots = 0;
 for (const id of players) {
   const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
@@ -315,6 +320,7 @@ const report = {
   catchUp,
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
+  supply: a.supply === "0" ? null : (() => { const t0 = performance.now(); supplyTick(w, 3); const ms = performance.now() - t0; w.supply.fields.clear(); for (const n of w.nations.values()) if (n.human) w.supply.fields.set(n.id, new Map()); const stacks = [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human); return { passMs: +ms.toFixed(1), playerStacks: stacks.length, reachPlots: [...w.supply.fields.values()].reduce((t, f) => t + f.size, 0), outOfReach: stacks.filter(s => (s.carry ?? 600) < 600).length }; })(),
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
   ownedPlots: owned,

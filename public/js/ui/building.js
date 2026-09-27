@@ -33,7 +33,10 @@ export function createBuildingPanel(root, game) {
   const queue = el("span", { id: "building-queue", class: "muted" });
   const make = el("div", { id: "building-make", class: "row wrap" });
   const upg = el("span", { id: "building-upgrade-info", class: "muted" });
-  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, work, queue, make, upg, actions);
+  const food = el("input", { id: "wagon-food", class: "small", type: "number", min: 1, step: 10, value: 200 });
+  const wagon = el("div", { id: "building-wagon", class: "row wrap", hidden: true }, el("span", { class: "muted", text: "Supply wagon:" }), food, el("span", { class: "muted", text: "food" }),
+    el("button", { id: "wagon-load", text: "Load wagon", title: "a wagon of food that follows your army and feeds it beyond supply reach", onclick: () => loadWagon() }));
+  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, work, queue, make, upg, wagon, actions);
   root.append(box);
   let key = "";
 
@@ -56,6 +59,16 @@ export function createBuildingPanel(root, game) {
     const back = costText(r.refund ?? {});
     game.toast(back ? `Queue cleared. Refunded ${back}.` : "Queue cleared.");
     key = "";
+  };
+
+  const loadWagon = async () => {
+    const b = game.world?.buildings.get(game.selectedBuilding);
+    if (!b) return;
+    const r = await game.conn.request({ t: "wagon", at: b.anchor, food: Number(food.value) });
+    if (!r.ok) return game.toast(r.error ?? "could not load a wagon");
+    game.toast(`A supply wagon with ${fmt(r.food)} food is ready. Send it after your army with Follow a stack.`);
+    game.selectBuilding(null);
+    game.select(r.stack);
   };
 
   const upgradeOne = async (b, next) => {
@@ -93,6 +106,9 @@ export function createBuildingPanel(root, game) {
       const used = price ? costText(Object.fromEntries(Object.entries(price.use).filter(([, v]) => v > 0))) : "";
       upg.textContent = !next ? "" : lock ? `Upgrade to ${next.name}: ${lock}.` : `Upgrade to ${next.name} now for ${fmt(Math.ceil(price.money))} gold${used ? ` and ${used}` : ""}${price.money > (w.purse?.money ?? 0) ? `; you have ${fmt(w.purse?.money ?? 0)} gold` : ""}.`;
       upg.hidden = !upg.textContent;
+      const sup = w.purse?.supply;
+      wagon.hidden = !(yours && b.state === "active" && !w.frozen && b.def.store && sup);
+      if (!wagon.hidden && document.activeElement !== food) food.max = sup.wagonMax;
       const k = `${b.id}:${b.state}:${yours}:${w.frozen}:${builds.map(d => lockOf(w, d)).join("|")}:${q?.items.length ?? 0}:${next?.id}:${lock}:${price ? price.money <= (w.purse?.money ?? 0) : ""}`;
       if (k === key) return;
       key = k;

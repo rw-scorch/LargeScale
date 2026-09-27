@@ -8,6 +8,7 @@ import { roadSprite } from "../shared/roads.js";
 export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
+const WAGON = { T: "hand_cart", M: "horse_wagon", G: "supply_wagon", I: "supply_truck", Mo: "supply_truck", F: "supply_truck" };
 const FORMATION = [[0, 0], [-0.32, 0.12], [0.32, 0.12], [-0.18, -0.2], [0.18, -0.2]];
 const ROAD_COLOUR = [null, "#e2c38a", "#d9d4c8", "#b8b8b8", "#f0f0f0", "#8a6a4a"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
@@ -288,7 +289,7 @@ export class MapRenderer {
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
       const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) ? "selected" : st.order === "hold" ? "idle" : "moving";
-      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
+      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0, wagon: st.kind === "supply", supplies: st.supplies ?? 0, starving: !!this.starving?.has(st.id) });
     }
     return out;
   }
@@ -328,6 +329,19 @@ export class MapRenderer {
     for (const p of paths.values()) ctx.stroke(p);
     ctx.lineWidth = width;
     for (const [k, p] of paths) { ctx.strokeStyle = ROAD_COLOUR[k] ?? ROAD_COLOUR[1]; ctx.stroke(p); }
+    ctx.restore();
+  }
+
+  drawSupplyReach() {
+    const reach = this.supplyReach, s = this.state, ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height, v = this.visibleRange(1);
+    if (!reach?.size) return;
+    ctx.save();
+    ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
+    ctx.fillStyle = "rgba(111,207,122,.2)";
+    for (const i of reach.keys()) {
+      const x = i % s.w, y = (i / s.w) | 0;
+      if (x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1) ctx.fillRect(x, y, 1, 1);
+    }
     ctx.restore();
   }
 
@@ -398,6 +412,7 @@ export class MapRenderer {
     if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
     this.drawZoneRect();
+    this.drawSupplyReach();
     this.drawRoadPlan();
     this.drawGhost();
     this.drawEffects();
@@ -753,7 +768,7 @@ export class MapRenderer {
   }
 
   machineSprite(u) {
-    const base = u.def.sprite ?? u.type;
+    const era = this.state.nations.get(u.owner)?.era ?? "T", base = u.def.sprites?.[era] ?? u.def.sprite ?? u.type;
     return u.state === "wreck" && this.atlas.has(`${base}_wreck`) ? `${base}_wreck` : base;
   }
 
@@ -815,8 +830,9 @@ export class MapRenderer {
     const [sx, sy0] = this.plotToScreen(m.x, m.y);
     const size = Math.max(16 * (this.ratio ?? 1), 16 * px);
     const k = size / 16, sy = sy0 - this.markerLift(px);
-    a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
-    this.label(String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
+    a.draw(ctx, m.wagon ? `supply_${m.era}` : `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
+    this.label(m.wagon ? `${Math.round(m.supplies)} food` : String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
+    if (m.starving) a.draw(ctx, "alert_starving", sx + size / 4, sy - size / 2 - 4 * k, k * 0.8);
     if (m.xp) this.rank(sx, sy - size / 2 - 2 * k, m.xp, Math.max(this.ratio ?? 1, k * 0.6));
   }
 
@@ -859,6 +875,10 @@ export class MapRenderer {
         seen.pos = st.pos;
       }
       const dir = this.facing.get(st.id).dir;
+      if (st.kind === "supply") {
+        out.push({ x: x + 0.5, y: y + 0.75, sprite: WAGON[s.nations.get(st.owner)?.era ?? "T"] ?? "hand_cart", flip: dir === "w", owner: st.owner, stack: st.id, size: 1 });
+        continue;
+      }
       let main = "levy", most = st.troops - Object.values(st.mix ?? {}).reduce((a, b) => a + b, 0);
       for (const [id, n] of Object.entries(st.mix ?? {})) if (n > most) { most = n; main = id; }
       const base = types.table[main]?.sprite ?? "hunter";

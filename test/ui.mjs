@@ -1540,6 +1540,94 @@ await rp.screenshot({ path: `${OUT}/48-road-phone.png` });
 check(r2 && roads2 === r1.n + r2.n && /Laid/.test(phoneLaid), `on a phone one finger lays a road of ${r2?.n} plots (${roads2} in all): "${phoneLaid.match(/Laid[^.]*\./)?.[0]}"`);
 await rp.close();
 
+await gp.bringToFront();
+await gp.goto(BASE + "/");
+await gp.waitForSelector("#world-create", { timeout: 5000 });
+const boatId = await newWorld(gp, "UI boats", { map: "test", w: 160, h: 100, seed: 12, bots: 0 });
+await gp.goto(`${BASE}/#w=${boatId}`);
+await gp.reload();
+await ready(gp);
+await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, { isLand } = await import("/js/shared/terrain.js");
+  for (let y = 10; y < w.h - 10; y += 3) for (let x = 10; x < w.w - 10; x += 3) {
+    const i = y * w.w + x;
+    if (isLand(w.terrain[i]) && [i - 1, i + 1, i - w.w, i + w.w].some(j => w.terrain[j] <= 2) && (await g.conn.request({ t: "spawn", x, y })).ok) return;
+  }
+});
+const overseas = await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world;
+  await new Promise(r => setTimeout(r, 1200));
+  const { isLand } = await import("/js/shared/terrain.js"), n = w.nations.get(w.you);
+  const seen = new Uint8Array(w.w * w.h), todo = [n.capital];
+  seen[n.capital] = 1;
+  while (todo.length) {
+    const i = todo.pop(), x = i % w.w;
+    for (const j of [i - w.w, i + w.w, x > 0 ? i - 1 : -1, x < w.w - 1 ? i + 1 : -1]) if (j >= 0 && j < seen.length && !seen[j] && isLand(w.terrain[j])) { seen[j] = 1; todo.push(j); }
+  }
+  let best = -1, bd = Infinity;
+  const cx = n.capital % w.w, cy = (n.capital / w.w) | 0;
+  for (let i = 0; i < seen.length; i++) {
+    if (seen[i] || !isLand(w.terrain[i])) continue;
+    const d = Math.hypot((i % w.w) - cx, ((i / w.w) | 0) - cy);
+    if (d < bd && d > 6) { bd = d; best = i; }
+  }
+  await g.conn.request({ t: "admin", op: "speed", factor: 4 });
+  await g.attackAt(best);
+  return best;
+});
+const boatToast = await gp.waitForFunction(() => /by boat/.test(document.querySelector("#toasts")?.textContent ?? "") ? document.querySelector("#toasts").textContent : null, null, { timeout: 5000 }).then(h => h.jsonValue(), async () => `none: target ${overseas}, toasts "${await gp.textContent("#toasts")}"`);
+const boatAt = await gp.waitForFunction(() => [...window.__ls.game.world.machines.values()].find(u => u.type === "transport_boat")?.at ?? null, null, { timeout: 20000 }).then(h => h.jsonValue(), () => null);
+if (boatAt !== null) { await gp.evaluate(at => window.__ls.game.focus(at, 20), boatAt); await gp.waitForTimeout(250); await gp.screenshot({ path: `${OUT}/49-boat.png` }); }
+const landedLine = await gp.waitForFunction(() => { const t = document.querySelector("#feed-list")?.textContent ?? ""; return /troops landed/.test(t) ? t.match(/\d+ troops landed[^.]*\.[^.]*\./)?.[0] ?? "landed" : null; }, null, { timeout: 40000 }).then(h => h.jsonValue(), () => "");
+const boatGone = await gp.waitForFunction(() => ![...window.__ls.game.world.machines.values()].some(u => u.type === "transport_boat"), null, { timeout: 5000 }).then(() => true, () => false);
+const heldThere = await gp.evaluate(t => window.__ls.game.world.owner[t] === window.__ls.game.world.you, overseas);
+check(/by boat to take unclaimed land, losing about \d+% as they land/.test(boatToast) && boatAt !== null && /troops landed/.test(landedLine) && boatGone && heldThere,
+  `Attack on land across water sends a free boat from the start ("${boatToast}"); it lands ("${landedLine}"), takes the land and the boat is gone`);
+
+await gp.bringToFront();
+await gp.goto(BASE + "/");
+await gp.waitForSelector("#world-create", { timeout: 5000 });
+const supId = await newWorld(gp, "UI supply", { map: "test", w: 160, h: 100, seed: 12, bots: 0 });
+await gp.goto(`${BASE}/#w=${supId}`);
+await gp.reload();
+await ready(gp);
+await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, { TERRAIN } = await import("/js/shared/terrain.js");
+  const flat = i => [0, 1, -1, w.w, -w.w, w.w + 1, w.w - 1, -w.w + 1, -w.w - 1].every(d => TERRAIN[w.terrain[i + d]]?.build);
+  for (let y = 10; y < w.h - 10; y += 2) for (let x = 10; x < w.w - 10; x += 2) if (flat(y * w.w + x) && (await g.conn.request({ t: "spawn", x, y })).ok) return;
+});
+const troopStack = await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world;
+  await new Promise(r => setTimeout(r, 1500));
+  const cap = w.nations.get(w.you).capital, x = cap % w.w, y = (cap / w.w) | 0;
+  let at = null;
+  for (let r = 2; r < 6 && at === null; r++) for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) { const i = (y + dy) * w.w + x + dx; if (w.owner[i] === w.you && !w.buildingAt(i)) { at = i; break; } }
+  const r = await g.conn.request({ t: "stack", share: 0.3, at });
+  g.select(r.stack);
+  g.focus(cap, 12);
+  return r.stack;
+});
+const inSupply = await gp.waitForFunction(() => { const t = document.querySelector("#stack-supply"); return t && !t.hidden && /In supply/.test(t.textContent) && window.__ls.game.view.supplyReach?.size > 0 ? window.__ls.game.view.supplyReach.size : null; }, null, { timeout: 8000 }).then(h => h.jsonValue(), () => 0);
+await gp.screenshot({ path: `${OUT}/50-supply-reach.png` });
+check(inSupply > 0, `a selected stack says it is in supply, and the map shades your supply reach (${inSupply} plots)`);
+const hut = await gp.evaluate(() => { const g = window.__ls.game, w = g.world; const b = [...w.buildings.values()].find(b => b.owner === w.you && b.def.store); g.select(null); g.selectBuilding(b.id); return b.id; });
+await gp.waitForSelector("#building-wagon:not([hidden])", { timeout: 5000 }).catch(() => {});
+await gp.fill("#wagon-food", "30");
+await gp.click("#wagon-load");
+const wagonTitle = await gp.waitForFunction(() => /supply wagon, 30 food/.test(document.querySelector("#stack-title")?.textContent ?? "") ? document.querySelector("#stack-title").textContent : null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+await gp.click("#stack-follow", { timeout: 5000 }).catch(() => {});
+const wagonFollows = await gp.evaluate(async sid => {
+  const g = window.__ls.game, w = g.world, v = g.view, s = w.stacks.get(sid);
+  const [sx, sy] = v.plotToScreen((s.pos % w.w) + 0.5, ((s.pos / w.w) | 0) + 0.5);
+  await g.stack.pickTarget(s.pos, sx, sy - v.markerLift(v.cam.scale / 16));
+  await new Promise(r => setTimeout(r, 400));
+  return document.querySelector("#toasts")?.textContent ?? "";
+}, troopStack);
+await gp.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 24));
+await gp.waitForTimeout(300);
+await gp.screenshot({ path: `${OUT}/51-supply-wagon.png` });
+check(hut && /Your supply wagon, 30 food/.test(wagonTitle) && /follows that stack/.test(wagonFollows), `a store's card loads a supply wagon ("${wagonTitle}"), which is told to follow a stack: "${wagonFollows.match(/The wagon[^.]*\./)?.[0]}"`);
+
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
 console.log(failures ? `${failures} checks failed` : "all checks passed");

@@ -69,6 +69,35 @@ Built and tested; waiting for Ryan's check before Part B.
 - **Bots** are left out, as they are from the town economy (decision 4).
 - **Overlay.** A supply reach overlay (the kit's `ov_supply_reach`), and a faint line from a selected stack to its nearest source.
 
+#### Part B progress (27 September 2026, branch `m5-supply`)
+
+Built and tested; waiting for Ryan's check with Part A.
+
+- **Reach.** `src/sim/supply.js` (`installSupply`) works out each player's reach from the capital and their stores (buildings with a `store` block: the seat of government line, storage yards, warehouses, depots and ports) while they have food. `reachMap` in `src/shared/supply.js` is shared with the client's overlay, and `costMap` in `src/shared/pathfind.js` keeps it sparse.
+- **Found while building:** a capital on rough ground gets no chieftain hut, so such a nation had no store at all. The capital now always counts as a source and as a place to load wagons.
+- **Carried supplies.** Stacks refill to 600 s in reach and use them up outside. Then power falls to half over 120 s through `powerOf` and `stackAttack`, and 0.05% of the troops desert a second at the worst. Splits copy the state; merges keep the worse one.
+- **Wagons.** The `wagon` order loads up to 500 food at a store, with 20 troops as crew. Wagons feed stacks within 3 plots at 0.0005 food a troop a second, follow a stack (the `follow` order), and give their food back when disbanded on your land. They cannot advance, split or merge. Stack rows carry the kind and food at positions 7 and 8.
+- **Speed.** At most two players are worked out a tick (`perTick`), and bots are left out.
+- **Client.**
+  - The stack card's supply line, and wagon buttons and ring items.
+  - The Load wagon row on store cards.
+  - Cart sprites by era, the `alert_starving` mark, the reach overlay for a selected stack, and feed lines.
+- **Evidence.**
+  - `npm test` 204 of 204 (`test/supply.test.js`, 4 tests); reference 95 of 95.
+  - Smoke 104 of 104.
+  - `npm run ui` 150 of 150 on the test map and on fine Europe.
+  - Bench, back to back on a busy machine: supply adds about 1 ms to the median tick (7.1 against 6.2 ms) and nothing to the worst.
+
+## Free transport boats (Ryan's ask, 27 September 2026)
+
+Ryan asked for troops to cross water for free from the start of the game, like OpenFront. He chose free boats, and a landing loss that grows with the water crossed.
+
+- A move or attack on land with no land route walks the stack to your coast, where a free transport boat (unit 22, `transport: true`, never built) takes the whole stack across, lands it and disappears. The landed troops carry on with their order. `src/sim/boats.js` (`installBoats`) does this with the existing ship code.
+- **Landing loss:** 1% plus 0.1% a plot of water, up to 15%, and nothing by your own port. It is shown before sending.
+- **Limits:** at most 3 boats at sea. Boats leave only from your own coast. Warships within range sink them fast (`sinkMult` 40), taking everyone aboard. A refused landing sails the troops home. Boats cannot be boarded or steered.
+- **Looks:** canoe, fishing boat, caravel, then landing craft, by era.
+- **Evidence:** `test/boats.test.js` (5 tests), and `npm run ui` sends a boat from the start and lands it.
+
 ### Part C. Stores and convoys
 
 - **Stores.** The seat of government (chieftain hut up to parliament), storage yards, warehouses and ports. Each holds goods up to a capacity; storage yards and warehouses stop saying "no effect yet".

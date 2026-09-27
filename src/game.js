@@ -4,6 +4,8 @@ import { isLand } from "./shared/terrain.js";
 import { zonePlots, ZONE_NAMES, POLICY, CIV_RULES } from "./sim/civilians.js";
 import { orderResearch } from "./sim/research.js";
 import { layRoad } from "./sim/logistics.js";
+import { sendByBoat, boatPlan, boatsAtSea } from "./sim/boats.js";
+import { formWagon, unloadWagon, isWagon } from "./sim/supply.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -23,6 +25,8 @@ function ownStack(sim, nation, id) {
   const s = Number.isInteger(id) ? sim.stacks.get(id) : null;
   if (!s || s.owner !== nation) return null;
   delete s.guard;
+  s.sail = null;
+  s.follow = null;
   return s;
 }
 
@@ -82,12 +86,24 @@ export const ORDERS = {
       if (!t?.alive) return fail("that nation is gone");
       if (!sim.hostile(nation, o)) return fail(`you are at peace with ${t.name}`);
     }
-    const from = sim.nearestOwned(nation, m.at);
+    let from = sim.nearestOwned(nation, m.at);
     if (from === null) return fail("you hold no land");
     const share = Number.isFinite(m.share) ? Math.min(1, Math.max(0.05, m.share)) : 0.3;
+    const overseas = sim.boats && !sim.route(from, m.at);
+    if (overseas) {
+      if (boatsAtSea(sim, nation) >= sim.boats.rules.maxBoats) return fail(`at most ${sim.boats.rules.maxBoats} boats at sea at once`);
+      const plan = boatPlan(sim, nation, from, m.at);
+      if (plan.error) return fail(plan.error);
+      from = plan.embark;
+    }
     const s = sim.createStack(nation, from, n.troops * share);
     if (!s) return fail("not enough troops");
     if (n.standing) s.standing = n.standing;
+    if (overseas) {
+      const b = sendByBoat(sim, s.id, m.at, { order: "advance", only: o || 0 });
+      if (b.error) { sim.disbandStack(s.id); return fail(b.error); }
+      return { ok: true, stack: s.id, only: o || 0, ...b };
+    }
     sim.orderAdvance(s.id, o || 0, true);
     return { ok: true, stack: s.id, only: o || 0 };
   },
@@ -99,7 +115,11 @@ export const ORDERS = {
     if (error) return fail(error);
     const none = via.length ? "no land route through those points" : "no land route there";
     if (via.length && !legsOf(sim, s.pos, via, m.to)) return fail(none);
-    if (!sim.orderMove(s.id, m.to, "move", via)) return fail(none);
+    if (!sim.orderMove(s.id, m.to, "move", via)) {
+      if (via.length || !sim.boats || !isLand(sim.terrain[m.to]) || sim.route(s.pos, m.to)) return fail(none);
+      const b = sendByBoat(sim, s.id, m.to, { to: m.to });
+      return b.error ? fail(b.error) : { ok: true, ...b };
+    }
     s.board = null;
     return { ok: true };
   },
@@ -114,6 +134,7 @@ export const ORDERS = {
       if (!sim.hostile(nation, m.only)) return fail(`you are at peace with ${t.name}`);
       only = m.only;
     }
+    if (isWagon(s)) return fail("supply wagons carry food; they do not take land");
     if (!sim.orderAdvance(s.id, only, true)) return fail("cannot advance");
     s.board = null;
     return { ok: true, only };
@@ -133,6 +154,7 @@ export const ORDERS = {
     if (!s) return fail("not your stack");
     const amount = Number.isInteger(m.amount) ? m.amount : Number.isFinite(m.share) ? Math.floor(s.troops * Math.min(1, Math.max(0, m.share))) : NaN;
     if (!(amount > 0)) return fail("give amount or share");
+    if (isWagon(s)) return fail("a supply wagon cannot be split");
     const c = sim.splitStack(s.id, amount);
     return c ? { ok: true, stack: c.id } : fail(`both halves need at least ${sim.rules.minStack} troops`);
   },
@@ -140,16 +162,18 @@ export const ORDERS = {
     const a = ownStack(sim, nation, m.into), b = ownStack(sim, nation, m.stack);
     if (!a || !b) return fail("not your stack");
     if (a === b) return fail("pick two different stacks");
+    if (isWagon(a) || isWagon(b)) return fail("supply wagons do not merge with troops");
     return sim.mergeStacks(a.id, b.id) ? { ok: true, stack: a.id } : fail("stacks must be next to each other");
   },
   disband(sim, nation, m) {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
+    const food = isWagon(s) && sim.owner[s.pos] === nation ? unloadWagon(sim, s) : 0;
     const had = Math.floor(s.troops), r = sim.dischargeStack(s.id);
     if (!r) return fail("disband on your own land");
     if (!(r.back > 0)) return fail("your troops are already at their cap, so the stack stays");
     const left = Math.floor(r.left), back = Math.round(r.back);
-    return { ok: true, back, lost: Math.max(0, had - left - back), left };
+    return { ok: true, back, lost: Math.max(0, had - left - back), left, ...(food ? { food: Math.floor(food) } : {}) };
   },
   build(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
@@ -203,6 +227,25 @@ export const ORDERS = {
     if (typeof m.kind !== "string") return fail("pick a road type");
     const r = layRoad(sim, nation, m.via, m.kind);
     return r.error ? { ok: false, ...r } : { ok: true, ...r };
+  },
+  wagon(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.supply) return fail("supply is not running in this world");
+    if (!isPlot(sim, m.at)) return fail("that plot is off the map");
+    const r = formWagon(sim, nation, m.at, Number(m.food));
+    return r.error ? fail(r.error) : { ok: true, ...r };
+  },
+  follow(sim, nation, m) {
+    const s = ownStack(sim, nation, m.stack);
+    if (!s) return fail("not your stack");
+    if (!isWagon(s)) return fail("only supply wagons follow other stacks");
+    if (m.target === null) { s.follow = null; return { ok: true }; }
+    const t = Number.isInteger(m.target) ? sim.stacks.get(m.target) : null;
+    if (!t || t.owner !== nation || t === s) return fail("pick one of your stacks to follow");
+    if (isWagon(t)) return fail("pick a stack of troops to follow");
+    s.follow = t.id;
+    if (sim.grid.cheb(s.pos, t.pos) > 1 && !sim.orderMove(s.id, t.pos, "move")) return fail("no land route to that stack");
+    return { ok: true };
   },
   zone(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
@@ -298,6 +341,7 @@ export const ORDERS = {
     if (!u) return fail("not your machine");
     if (u.wreck) return fail("that machine is a wreck");
     const def = UNIT_TYPES[u.type];
+    if (def.transport) return fail("transport boats sail on their own and land where they were sent");
     if (m.do === "stop") {
       Object.assign(u, { path: [], route: null, progress: 0, follow: null, land: null });
       return { ok: true };
@@ -341,6 +385,7 @@ export const ORDERS = {
     if (!s) return fail("not your stack");
     const u = ownMachine(sim, nation, m.ship), def = u && UNIT_TYPES[u.type];
     if (!u || u.wreck || def.domain !== "sea" || !def.capacity) return fail("pick one of your ships");
+    if (def.transport) return fail("a transport boat carries only the stack it was sent for");
     if ((u.cargo?.troops ?? 0) >= def.capacity) return fail("that ship is full");
     if (sim.grid.cheb(s.pos, u.at) > 1) {
       const spot = shoreNear(sim, u.at, s.pos);
@@ -414,14 +459,15 @@ const nationRow = n => [n.id, n.plots, Math.floor(n.troops), n.alive ? 1 : 0, n.
 const stackRow = s => {
   const row = [s.id, s.owner, s.pos, Math.floor(s.troops), ORDER_CODES.indexOf(s.order)];
   const mix = s.mix ? mixRow(UNITS, s.mix) : [], lv = xpLevelOf(s);
-  if (mix.length || lv) row.push(mix, lv);
+  if (mix.length || lv || s.kind === "supply") row.push(mix, lv);
+  if (s.kind === "supply") row.push(1, Math.floor(s.supplies ?? 0));
   return row;
 };
 const machineRow = u => [u.id, u.owner, UNITS.table[u.type].num, u.at, Math.ceil(u.hp), u.wreck ? 2 : u.path.length || u.route ? 1 : 0, Math.floor(u.cargo?.troops ?? 0), u.follow ?? 0, u.face ?? 1];
 const NONE = [];
 const sameTypes = (p, q) => {
   const a = p[5] ?? NONE, b = q[5] ?? NONE;
-  if (a.length !== b.length || (p[6] ?? 0) !== (q[6] ?? 0)) return false;
+  if (a.length !== b.length || (p[6] ?? 0) !== (q[6] ?? 0) || (p[8] ?? 0) !== (q[8] ?? 0)) return false;
   for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return false;
   return true;
 };

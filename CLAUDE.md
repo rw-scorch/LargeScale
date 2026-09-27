@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (195)
+npm test                  # unit tests (204)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -229,9 +229,16 @@ Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roa
   - Roads and buildings keep off each other's plots.
   - The Roads tab is in the build menu (B).
 
+- **Part B, army supply (27 September 2026, branch `m5-supply`, PR 25).** `src/sim/supply.js` (`installSupply`):
+  - Reach is 18 plots of travel from the capital and any store holding food (`store` blocks in `data/buildings.json`), shared with the client through `src/shared/supply.js`.
+  - Stacks carry 600 s beyond reach (`s.carry`), then weaken to half (`s.supplyMult`, applied in `powerOf` and `stackAttack`) and slowly desert.
+  - Supply wagons are stacks with `kind: "supply"` and `supplies`: the `wagon` and `follow` orders, loaded from store cards.
+  - Two players are worked out a tick; bots are left out. Rules are in `rules.json` `supply`.
+- **Free transport boats (same branch).** `src/sim/boats.js` (`installBoats`): a move or attack with no land route walks to your coast and crosses in a free boat (unit 22), losing 1% plus 0.1% a plot of water, up to 15%. At most 3 at sea; warships sink them. Rules are in `rules.json` `boats`.
+
 Open items as of 27 September 2026, in order:
 
-1. PRs 14 to 23 are merged (27 September 2026). PR 24 (`m5-roads`: the dev pack, the milestone five and six plans, and roads) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads before Part B.
+1. PRs 14 to 23 are merged (27 September 2026). PR 24 (`m5-roads`: the dev pack, the milestone five and six plans, and roads) is merged (27 September 2026). PR 25 (`m5-supply`: army supply and free transport boats) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads, supply and boats before Part C.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. A new main menu (the world list and login), which Ryan finds bland. Later, at his word. Also later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
