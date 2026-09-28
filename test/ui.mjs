@@ -973,7 +973,7 @@ await fix.waitForSelector("#building-make [data-make=catapult]:not([disabled])",
 await fix.click("#building-make [data-make=catapult]").catch(() => null);
 const makingText = await fix.waitForFunction(() => /catapult/.test(document.querySelector("#building-queue")?.textContent ?? ""), null, { timeout: 5000 }).then(() => fix.textContent("#building-queue"), () => "");
 const cat = await fix.waitForFunction(() => { const w = window.__ls.game.world; return [...w.machines.values()].find(u => u.owner === w.you && u.type === "catapult")?.id ?? null; }, null, { timeout: 15000 }).then(h => h.jsonValue(), () => null);
-check(shop && shopUp && /Building a catapult|Waiting to start a catapult/.test(makingText) && cat, `a siege workshop, after Siegecraft, builds a catapult from its panel ("${makingText.trim()}")`);
+check(shop && shopUp && /Building a catapult|Waiting to start a catapult/.test(makingText) && /You have \d+ of 100 tanks, guns and siege engines/.test(makingText) && cat, `a siege workshop, after Siegecraft, builds a catapult from its panel, with the limit shown ("${makingText.trim()}")`);
 const cog = await fix.evaluate(async () => {
   const g = window.__ls.game, w = g.world;
   const r = await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit: "cog", amount: 1 });
