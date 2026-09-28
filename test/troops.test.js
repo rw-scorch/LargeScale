@@ -184,18 +184,20 @@ test("a war camp keeps the reserve topped up to its target, charging for each so
   assert.ok(near(n.mix.club_warrior, 25), "and the camp starts refilling the reserve");
 });
 
-test("a barracks trains Medieval types, as far as materials and levies allow", () => {
+test("a barracks trains Medieval types, as far as gold and levies allow", () => {
   const { w, g, a, n } = camp();
   n.era = "M";
   complete(w, n, "iron_working");
   addBuilding(w, { type: "barracks", owner: a, anchor: g.idx(8, 8), state: "active" });
   assert.equal(setKeep(w, a, { swordsman: 100 }).error, undefined);
+  const price = w.troops.units.table.swordsman.cost.money;
+  n.money = 0;
   trainTick(w, 5);
-  assert.equal(n.drill.why, "not enough gold or iron for swordsmen");
-  n.stock.iron = 2;
+  assert.equal(n.drill.why, "not enough gold for swordsmen");
+  n.money = 10 * price;
   trainTick(w, 5);
-  assert.ok(near(n.mix.swordsman, 10) && near(n.stock.iron, 0), "2 iron buys 10 swordsmen, which is also the barracks' 2 a second for 5 s");
-  n.stock.iron = 100;
+  assert.ok(near(n.mix.swordsman, 10) && near(n.money, 0), `${10 * price} gold buys 10 swordsmen, which is also the barracks' 2 a second for 5 s`);
+  n.money = 10000;
   n.troops = 13;
   trainTick(w, 5);
   assert.ok(near(n.mix.swordsman, 13), "only levies at home can be trained");

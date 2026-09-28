@@ -7,7 +7,7 @@ import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
 import { installTroops } from "../src/sim/troops.js";
 import { installBots, spawnBots } from "../src/sim/bots.js";
-import { installBuildings, addBuilding, footprint, saveLayers, ZONES, WOOD_FULL } from "../src/sim/buildings.js";
+import { installBuildings, addBuilding, removeBuilding, footprint, saveLayers, ZONES, WOOD_FULL } from "../src/sim/buildings.js";
 import { installConstruction } from "../src/sim/construction.js";
 import { installEconomy } from "../src/sim/economy.js";
 import { installCivilians } from "../src/sim/civilians.js";
@@ -19,9 +19,7 @@ import { installGuard, guardTick } from "../src/sim/guard.js";
 import { installOvertime } from "../src/sim/overtime.js";
 import { installRoads, setRoad, ROADS } from "../src/sim/logistics.js";
 import { installBoats } from "../src/sim/boats.js";
-import { installSupply, supplyTick } from "../src/sim/supply.js";
-import { installStores, storesOf, setStore, sync, homeAt } from "../src/sim/stores.js";
-import { installSeaRoutes, docksOf, seaPlan } from "../src/sim/sea.js";
+import { installTrade, dockOf, railPath } from "../src/sim/trade.js";
 import { waterOk } from "../src/sim/units.js";
 import { installPower, powerTick } from "../src/sim/power.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
@@ -48,9 +46,7 @@ const { values: a } = parseArgs({ options: {
   rail: { type: "string", default: "200" },
   tanks: { type: "string", default: "4" },
   power: { type: "string", default: "1" },
-  supply: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
-  stores: { type: "string", default: "1" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -84,7 +80,7 @@ const bld = installBuildings(w);
 installConstruction(w);
 installEconomy(w);
 const perPlayer = Number(a.buildings);
-const pick = t => (t % 20 === 3 ? "crop_wheat" : t % 20 === 13 ? "woodcutter_camp" : t % 10 < 7 ? "hut_grass" : t % 10 < 9 ? "market_stall" : "chieftain_hut");
+const pick = t => (t % 20 === 3 ? "crop_wheat" : t % 20 === 13 ? "pasture_sheep" : t % 10 < 7 ? "hut_grass" : t % 10 < 9 ? "market_stall" : "chieftain_hut");
 const allDeposits = decodeDeposits(gunzipSync(readFileSync(`${a.map}/deposits.bin.gz`)));
 const deposits = rect ? cropDeposits(allDeposits, src.w, rect) : allDeposits;
 let placed = 0, woodCut = 0;
@@ -142,11 +138,9 @@ const guard = installGuard(w, { scale });
 const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
 installBoats(w, { scale });
-if (a.supply !== "0") installSupply(w, { scale });
-if (a.stores !== "0") installStores(w, { scale });
+const trade = installTrade(w, { scale, seed: Number(a.seed) + 11 });
 let seaSetup = null;
-if (a.stores !== "0" && Number(a.ports) > 0) {
-  installSeaRoutes(w);
+if (Number(a.ports) > 0) {
   const coast = new Map(players.map(id => [id, []]));
   for (let i = 0; i < w.grid.size; i++) {
     const list = coast.get(w.owner[i]);
@@ -160,27 +154,41 @@ if (a.stores !== "0" && Number(a.ports) > 0) {
     addBuilding(w, { type: "jetty", owner: id, anchor: i, plots: [i], state: "active", progress: 1 });
     placed++;
   }
-  w.stores.rescan = true;
   const t0 = performance.now();
-  const docks = players.reduce((t, id) => t + docksOf(w, id).length, 0);
+  const docks = [...bld.list.values()].filter(b => b.type === "jetty" && dockOf(w, b)).length;
   seaSetup = { ports: placed, docks, docksMs: +(performance.now() - t0).toFixed(1) };
 }
-let railPlots = 0;
+let railPlots = 0, stations = 0;
 for (const id of players) {
   const n = w.nations.get(id), cy = w.grid.y(n.capital);
-  for (const dir of [1, -1]) for (let x = w.grid.x(n.capital) + dir * 3, laid = 0; laid < Number(a.rail) / 2 && x > 0 && x < w.grid.w - 1; x += dir) {
-    const i = w.grid.idx(x, cy);
-    if (w.owner[i] !== id || !isLand(terrain[i])) break;
-    if (bld.at.has(i)) continue;
-    setRoad(w, i, ROADS.rail);
-    laid++;
-    railPlots++;
+  for (const dir of [1, -1]) {
+    let end = null;
+    for (let x = w.grid.x(n.capital) + (dir > 0 ? 0 : -1), laid = 0; laid < Number(a.rail) / 2 && x > 0 && x < w.grid.w - 1; x += dir) {
+      const i = w.grid.idx(x, cy);
+      if (w.owner[i] !== id || !isLand(terrain[i])) break;
+      if (bld.at.has(i)) removeBuilding(w, bld.at.get(i));
+      setRoad(w, i, ROADS.rail);
+      laid++;
+      railPlots++;
+      end = i;
+    }
+    if (end === null || !Number(a.rail)) continue;
+    for (const [dx, dy] of [[0, 1], [-1, 1], [-2, 1], [0, -2], [-1, -2], [-2, -2]]) {
+      const x = w.grid.x(end) + dx, y = w.grid.y(end) + dy;
+      if (!w.grid.inside(x, y)) continue;
+      const at = w.grid.idx(x, y), plots = footprint(w, at, bld.table.station_large.fp);
+      if (!plots || plots.some(p => w.owner[p] !== id || w.log.road[p] || !isLand(terrain[p]))) continue;
+      for (const p of plots) if (bld.at.has(p)) removeBuilding(w, bld.at.get(p));
+      addBuilding(w, { type: "station_large", owner: id, anchor: at, plots, state: "active", progress: 1 });
+      stations++;
+      break;
+    }
   }
 }
 const power = a.power !== "0" ? installPower(w, { scale }) : null;
 if (power) for (const id of players) {
   const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
-  const want = [["coal_plant", 2], ["steel_mill", 6], ["power_pole", 40]];
+  const want = [["coal_plant", 2], ["vehicle_factory", 6], ["power_pole", 40]];
   for (let r = 4; r < 80 && want.some(([, k]) => k > 0); r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !w.grid.inside(cx + dx, cy + dy)) continue;
     const pick = want.find(([, k]) => k > 0);
@@ -221,43 +229,8 @@ for (const id of players) {
   }
   mines += here;
 }
-const asking = new Map();
-const feed0 = () => {
-  for (const id of players) {
-    const n = w.nations.get(id);
-    if (!n.stock) continue;
-    if (!w.stores) { n.stock.food = 1e6; n.stock.wood = 1e6; continue; }
-    sync(w, n);
-    const list = storesOf(w, id), seat = list.reduce((b, s) => (w.grid.dist(s.anchor, n.capital) < w.grid.dist(b.anchor, n.capital) ? s : b), list[0]);
-    if (!seat) continue;
-    seat.goods.food = 1e6;
-    seat.goods.wood = 1e6;
-    seat.goods.coal = 1e6;
-    seat.goods.iron = 1e6;
-    for (const s of asking.get(id) ?? []) s.goods.wood = 0;
-    sync(w, n);
-  }
-};
-let storeSetup = null;
-if (a.stores !== "0") {
-  let count = 0;
-  for (const id of players) {
-    const n = w.nations.get(id);
-    sync(w, n);
-    const list = storesOf(w, id).filter(s => !s.camp).sort((p, q) => w.grid.dist(q.anchor, n.capital) - w.grid.dist(p.anchor, n.capital));
-    count += list.length;
-    const ports = w.stores.sea ? docksOf(w, id).map(d => d.store) : [];
-    asking.set(id, [...list.slice(0, 6), ...ports]);
-    for (const s of list.slice(0, 6)) setStore(w, id, s.id, "wood", 500, 500);
-    for (const s of ports) setStore(w, id, s.id, "wood", 200, 200);
-  }
-  w.stores.fields.clear();
-  const t0 = performance.now();
-  for (const id of players) homeAt(w, id, w.nations.get(id).capital);
-  feed0();
-  storeSetup = { stores: count, asking: [...asking.values()].reduce((t, l) => t + l.length, 0), fieldsMs: +(performance.now() - t0).toFixed(1) };
-}
-if (a.stores === "0") feed0();
+const feed0 = () => { for (const id of players) { const n = w.nations.get(id); if (n.money !== undefined && n.money < 1e6) n.money = 1e7; } };
+feed0();
 if (woodCut) bld.changed.add("wood");
 const ls0 = performance.now();
 const layers = saveLayers(w, true);
@@ -414,8 +387,7 @@ const report = {
   catchUp,
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
-  supply: a.supply === "0" ? null : (() => { const t0 = performance.now(); supplyTick(w, 3); const ms = performance.now() - t0; const reach = [...w.supply.fields.values()].reduce((t, f) => t + f.size, 0); w.supply.fields.clear(); const stacks = [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human); return { passMs: +ms.toFixed(1), playerStacks: stacks.length, reachPlots: reach, outOfReach: stacks.filter(s => (s.carry ?? 600) < 600).length }; })(),
-  rail: { plots: railPlots, trains: w.stores?.counts.trains ?? 0 },
+  rail: { plots: railPlots, stations, trainsNow: trade.trains.size, railSearch: (() => { const list = [...bld.list.values()].filter(b => b.type === "station_large"), t0 = performance.now(); trade.paths.clear(); let found = 0; for (const b of list) for (const c of list) if (b !== c && b.owner === c.owner && railPath(w, b.owner, b, c)) found++; return { pairs: found, ms: +(performance.now() - t0).toFixed(1) }; })() },
   power: power && (() => {
     const t0 = performance.now();
     powerTick(w, 5);
@@ -423,25 +395,7 @@ const report = {
     return { passMs: +ms.toFixed(1), grids: views.reduce((t, v) => t + v.grids.length, 0), plants: [...w.bld.list.values()].filter(b => b.type === "coal_plant").length, poles: [...w.bld.list.values()].filter(b => b.type === "power_pole").length, users: views.reduce((t, v) => t + Object.keys(v.users).length, 0), powered: views.reduce((t, v) => t + Object.values(v.users).filter(k => k >= 0).length, 0) };
   })(),
   tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
-  sea: seaSetup && (() => {
-    const st = w.stores, t0 = performance.now(), searches = st.counts.searches;
-    st.paths.clear();
-    st.whole = true;
-    let plans = 0, found = 0, worst = 0;
-    for (const id of players) {
-      const n = w.nations.get(id), seat = storesOf(w, id).find(s => w.bld.table[s.type]?.store?.seat);
-      if (!seat) continue;
-      for (const s of asking.get(id) ?? []) {
-        const t1 = performance.now(), p = seaPlan(w, n, seat, s, null);
-        worst = Math.max(worst, performance.now() - t1);
-        plans++;
-        if (p) found++;
-      }
-    }
-    st.whole = false;
-    return { ...seaSetup, plans, found, searches: st.counts.searches - searches, planMs: +(performance.now() - t0).toFixed(1), worstPlanMs: +worst.toFixed(1) };
-  })(),
-  stores: storeSetup && { ...storeSetup, carts: w.stores.counts, convoysOnRoad: w.stores.convoys.size, stuckProducers: w.stores.stuck.size, fieldsKept: w.stores.fields.size },
+  trade: seaSetup && { ...seaSetup, shipsAtSea: [...w.units.list.values()].filter(u => u.trade && !u.wreck).length, goldEarned: Math.round(players.reduce((t, id) => t + (w.nations.get(id).tradeGold ?? 0), 0)) },
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
   ownedPlots: owned,

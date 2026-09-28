@@ -141,7 +141,7 @@ test("a new nation researches through Tribal into Medieval, and everyone hears",
   assert.deepEqual({ nation: era.nation, era: era.era, name: era.name }, { nation: a, era: "M", name: "Medieval" });
   assert.ok(publicEvents(w, [era, { type: "era_up", nation: 2 }]).length === 2, "announced to everyone, bots too");
   assert.equal(canPlace(w, a, "barracks", w.grid.idx(33, 17)), null, "Medieval buildings the tree does not gate appear");
-  assert.equal(canPlace(w, a, "sawmill", w.grid.idx(36, 20)), "needs Carpentry research");
+  assert.equal(canPlace(w, a, "tower_stone", w.grid.idx(36, 20)), "needs Masonry research");
   const feed = new StateFeed();
   assert.equal(feed.delta(w).n.find(row => row[0] === a)[5], 1, "the era travels in the nation row");
 });
@@ -152,15 +152,14 @@ test("once Carpentry is known, huts turn into timber cottages without help", () 
   runOrder(w, a, { t: "zone", zone: "res", x: 25, y: 14, w: 11, h: 4 });
   runOrder(w, a, { t: "zone", zone: "com", x: 25, y: 19, w: 11, h: 3 });
   for (const [x, y] of [[26, 24], [28, 24], [30, 24], [32, 24], [34, 24], [36, 24]]) addProducer(w, a, "crop_wheat", w.grid.idx(x, y));
-  const feed = () => { n.stock.food = Math.max(n.stock.food, 500); n.stock.wood = Math.max(n.stock.wood, 500); };
-  for (let t = 0; t < 400; t++) { feed(); w.tick(1); }
+  for (let t = 0; t < 400; t++) w.tick(1);
   const huts = [...w.bld.list.values()].filter(b => b.type === "hut_grass").length;
   assert.ok(huts >= 20, `a Tribal town of ${huts} huts`);
   assert.equal(w.events.filter(e => e.type === "civ_upgrade").length, 0, "no upgrades while Tribal");
   complete(w, n, "age_medieval");
   complete(w, n, "carpentry");
   let upgraded = 0;
-  for (let t = 0; t < 900 && upgraded < 5; t++) { feed(); w.tick(1); upgraded = w.events.filter(e => e.type === "civ_upgrade" && e.to === "cottage_timber").length; }
+  for (let t = 0; t < 900 && upgraded < 5; t++) { w.tick(1); upgraded = w.events.filter(e => e.type === "civ_upgrade" && e.to === "cottage_timber").length; }
   assert.ok(upgraded >= 5, `${upgraded} of ${huts} huts upgraded (needs ${n.stats.needs.toFixed(2)})`);
 });
 
@@ -170,11 +169,14 @@ test("effects from research change the numbers they name", () => {
   complete(w, n, "barter");
   complete(w, n, "chieftains");
   assert.ok(Math.abs(w.maxTroops(n) - cap * 1.05) < 1e-6, "troop_cap 0.05");
-  addBuilding(w, { type: "woodcutter_camp", owner: a, anchor: g.idx(38, 20), state: "active", progress: 1 });
+  const farm = addBuilding(w, { type: "crop_wheat", owner: a, anchor: g.idx(38, 20), state: "active", progress: 1 });
   n.stats = { worked: 1 };
-  const before = produce(w, 10).get(a).wood;
+  const earns = () => { const m = farm.made ?? 0; produce(w, 10); return farm.made - m; };
+  const before = earns();
+  complete(w, n, "foraging");
+  assert.ok(Math.abs(earns() / before - 1.1) < 1e-6, "food_rate 0.1 raises what farms earn");
   complete(w, n, "stone_tools");
-  assert.ok(Math.abs(produce(w, 10).get(a).wood / before - 1.1) < 1e-6, "wood_rate 0.1");
+  assert.ok(Math.abs(n.effects.income - 0.05) < 1e-9, "Stone tools gives income 0.05 now that wood is gone");
 });
 
 test("the client shows the same research and building reasons as the server", () => {

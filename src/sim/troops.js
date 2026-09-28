@@ -3,7 +3,6 @@ import rules from "../../data/rules.json" with { type: "json" };
 import { unitTable, mixTotal, levelOf, powerOf } from "../shared/units.js";
 import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
 import { nationBuildings } from "./buildings.js";
-import { sync, poolOf } from "./stores.js";
 
 export const UNITS = unitTable(unitData.units);
 export const TROOP_RULES = { xpLevels: [0, 0.3, 1, 3], xpBonus: [0, 0.1, 0.2, 0.35], trainEvery: 5, keepMax: 1000000, ...rules.troops };
@@ -163,16 +162,14 @@ export function trainers(world, nid) {
   return { rate, kinds, list };
 }
 
-const costOf = (n, res, pool) => (res === "money" ? n.money ?? 0 : pool ? pool.have(res) : n.stock?.[res] ?? 0);
+const costOf = (n, res) => (res === "money" ? n.money ?? 0 : n.stock?.[res] ?? 0);
 
 export function trainTick(world, dt) {
   const t = world.troops, units = t.units;
   for (const n of world.nations.values()) {
     const keep = n.drill?.keep;
     if (!n.alive || !n.human || !keep || !Object.keys(keep).length) continue;
-    const { rate, kinds, list } = trainers(world, n.id);
-    if (world.stores) sync(world, n);
-    const pool = world.stores && list.length ? poolOf(world, n, list) : null;
+    const { rate, kinds } = trainers(world, n.id);
     const wants = [];
     let why = null;
     for (const d of units.troops) {
@@ -189,15 +186,10 @@ export function trainTick(world, dt) {
     for (const [d, want] of wants) {
       const levies = n.troops - mixTotal(n.mix);
       let k = Math.min(want, (budget * want) / total, levies);
-      const fit = Math.min(want, (budget * want) / total, levies);
-      for (const [res, per] of Object.entries(d.cost)) if (per > 0) {
-        k = Math.min(k, costOf(n, res, pool) / per);
-        if (pool && res !== "money" && costOf(n, res, pool) < per * fit) pool.ask(res, per * Math.max(fit, want));
-      }
-      if (!(k > 1e-9)) { why ??= levies < 1 ? "no levies left at home to train" : pool && !pool.stores.length && Object.keys(d.cost).some(res => res !== "money") ? "no store within reach of your training buildings" : `not enough ${Object.keys(d.cost).map(res => (res === "money" ? "gold" : res)).join(" or ")} for ${d.name.toLowerCase()}${pool ? " in the stores near your training buildings" : ""}`; continue; }
+      for (const [res, per] of Object.entries(d.cost)) if (per > 0) k = Math.min(k, costOf(n, res) / per);
+      if (!(k > 1e-9)) { why ??= levies < 1 ? "no levies left at home to train" : `not enough ${Object.keys(d.cost).map(res => (res === "money" ? "gold" : res)).join(" or ")} for ${d.name.toLowerCase()}`; continue; }
       for (const [res, per] of Object.entries(d.cost)) {
         if (res === "money") n.money -= per * k;
-        else if (pool) pool.take(res, per * k);
         else n.stock[res] -= per * k;
       }
       n.mix ??= {};

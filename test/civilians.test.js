@@ -4,7 +4,7 @@ import { World } from "../src/sim/territory.js";
 import { installConstruction } from "../src/sim/construction.js";
 import { installEconomy } from "../src/sim/economy.js";
 import { installCivilians, econTick, takeZoneNews } from "../src/sim/civilians.js";
-import { installResources } from "../src/sim/resources.js";
+import { installResources, goldOf } from "../src/sim/resources.js";
 import { ZONES } from "../src/sim/buildings.js";
 import { runOrder, purseOf, publicEvents } from "../src/game.js";
 import { makeRng } from "../src/shared/rng.js";
@@ -50,46 +50,38 @@ test("the zone order paints only your own buildable land, and erases", () => {
   assert.ok(w.bld.changed.has("zone"));
 });
 
-test("a zoned area fills with huts and grows while fed; starving empties it", () => {
+test("a zoned area fills with huts your people build for free, and grows with no food to find", () => {
   const { w, a, n } = setup();
   town(w, a);
-  n.stock.wood = 400;
-  for (let t = 0; t < 400; t++) { n.stock.food = 500; w.tick(1); }
-  const fed = n.pop;
+  let low = n.money;
+  for (let t = 0; t < 400; t++) { const m = n.money; w.tick(1); low = Math.min(low, n.money - m); }
   assert.ok(huts(w, a).length >= 10, `huts ${huts(w, a).length}`);
-  assert.ok(fed > 40, `population ${fed}`);
-  n.stock.food = 0;
-  for (let t = 0; t < 600; t++) w.tick(1);
-  assert.ok(n.pop < fed * 0.3, `starving: ${Math.round(fed)} fell to ${Math.round(n.pop)}`);
-  assert.ok(n.stats.foodSat < 0.01);
+  assert.ok(n.pop > 40, `population ${n.pop}`);
+  assert.ok(low >= 1 - 1e-9, `the town never took gold from the treasury: the smallest gain in a second was ${low}`);
+  assert.equal(n.stock, undefined, "there are no goods");
+  assert.ok(Math.abs(n.stats.needs - (0.6 + 0.4 * n.stats.jobSat) * n.stats.mood) < 1e-9, "needs are work and tax alone");
 });
 
-test("the chieftain hut gathers food and wood, and a town levels off at what its food feeds instead of starving", () => {
+test("the chieftain hut earns gold without workers, and shops earn gold for the town", () => {
   const { w, a, n } = setup();
   installResources(w, undefined, { rng: makeRng(9) });
   for (let t = 0; t < 100; t++) w.tick(1);
-  assert.ok(Math.abs(n.made.food - 0.3) < 1e-9 && Math.abs(n.made.wood - 0.2) < 1e-9, `made ${JSON.stringify(n.made)} in five seconds`);
-  assert.ok(Math.abs(n.stock.food - 56) < 0.5 && Math.abs(n.stock.wood - 44) < 0.5, `stock ${JSON.stringify(n.stock)}`);
+  const hut = goldOf("food", 0.06 * 5) + goldOf("wood", 0.04 * 5);
+  assert.ok(Math.abs(n.made - hut) < 1e-9, `made ${n.made} gold in five seconds, expected ${hut}`);
   town(w, a);
-  n.stock.wood = 400;
-  let peak = 0, low = Infinity, starved = 0;
-  for (let t = 0; t < 2400; t++) {
-    w.tick(1);
-    if (n.pop > peak) { peak = n.pop; low = n.pop; }
-    low = Math.min(low, n.pop);
-    if (n.stats.foodSat < 1) starved++;
-  }
-  assert.ok(peak > 40, `the town grows on its stock first: peak ${Math.round(peak)}`);
-  assert.equal(starved, 0, "the food never runs out");
-  assert.ok(low > 20, `no crash after the peak: lowest ${Math.round(low)}`);
-  assert.ok(Math.abs(n.pop - 30) < 8, `it settles near the 30 people 0.06 food a second feeds: ${Math.round(n.pop)}`);
-  assert.ok(n.stats.foodCap < 1 && Math.abs(n.stats.fed - n.pop) < 10, `food is what limits it: feeds ${Math.round(n.stats.fed)}`);
+  for (let t = 0; t < 1200; t++) w.tick(1);
+  const s = n.stats;
+  assert.ok(s.shops > 0 && s.worked > 0, `shops ${s.shops}, staffed ${s.worked}`);
+  assert.ok(Math.abs(s.trade - goldOf("goods", s.shops * s.worked)) < 1e-9, `shops earn ${s.trade} gold a second`);
+  const before = n.money;
+  w.civ.clock = 4.99;
+  w.tick(0.01);
+  assert.ok(n.money - before >= s.trade * 5 - 1e-6, "the town's earnings arrive every five seconds");
 });
 
 test("the town finds free plots from its zone sets, not by scanning the map", () => {
   const { w, a, n, rng } = setup();
   for (let y = 7; y < 17; y++) for (let x = 7; x < 12; x++) w.bld.zone[w.grid.idx(x, y)] = ZONES.res;
-  n.stock.wood = 400;
   for (let t = 0; t < 10; t++) econTick(w, 5, rng);
   assert.equal(huts(w, a).length, 0, "zone written behind the town's back is not seen");
   zone(w, a, "res", 13, 7, 4, 10);
@@ -104,9 +96,6 @@ test("zones and buildings pass to the capturer, and the town keeps building for 
   for (let y = 0; y < 40; y++) for (let x = 0; x < 30; x++) if (w.owner[g.idx(x, y)] === a) w.claim(g.idx(x, y), b);
   assert.equal(w.civ.zoned.get(a)[ZONES.res].size, 0);
   assert.ok(w.civ.zoned.get(b)[ZONES.res].size >= 30);
-  const nb = w.nations.get(b);
-  nb.stock.wood = 100;
-  nb.stock.food = 100;
   econTick(w, 5, rng);
   assert.ok(huts(w, b).some(h => g.x(h.anchor) < 20), "B builds on the zones it took");
 });
@@ -114,8 +103,7 @@ test("zones and buildings pass to the capturer, and the town keeps building for 
 test("troop cap is land plus people, and money is 1 gold a second plus tax", () => {
   const { w, a, n } = setup();
   town(w, a);
-  n.stock.wood = 400;
-  for (let t = 0; t < 300; t++) { n.stock.food = 500; w.tick(1); }
+  for (let t = 0; t < 300; t++) w.tick(1);
   const r = w.rules;
   assert.ok(n.pop > 20);
   assert.ok(Math.abs(w.maxTroops(n) - (r.troopBase + r.troopPerPlot * n.plots + n.pop * 0.35)) < 1e-6);
@@ -139,7 +127,7 @@ test("bots keep simple troop growth with no economy", () => {
 test("the purse carries the town stats, and civilian building events stay private", () => {
   const { w, a, n } = setup();
   town(w, a);
-  for (let t = 0; t < 60; t++) { n.stock.food = 500; w.tick(1); }
+  for (let t = 0; t < 60; t++) w.tick(1);
   const p = purseOf(n);
   assert.equal(p.town.pop, Math.round(n.pop));
   assert.ok(p.town.housing > 0 && p.town.needs > 0);

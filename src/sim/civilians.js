@@ -1,4 +1,5 @@
 import { effectOf } from "./effects.js";
+import { goldOf } from "./resources.js";
 import { TERRAIN } from "../shared/terrain.js";
 import { ERA_ORDER, ZONES, BUILDINGS, installBuildings, footprint, addBuilding, setPlots, nationBuildings, touched } from "./buildings.js";
 import rules from "../../data/rules.json" with { type: "json" };
@@ -51,7 +52,6 @@ function zonedOf(civ, nid) {
 export function initNation(n, r = CIV_RULES) {
   n.era ??= "T";
   n.pop ??= 0;
-  n.stock ??= { ...r.startStock };
   n.stats ??= {};
 }
 
@@ -90,9 +90,6 @@ function fits(world, nid, plots, zone, self = 0) {
   });
 }
 
-function affordable(n, cost) { return Object.entries(cost).every(([k, v]) => (n.stock[k] ?? 0) >= v); }
-function pay(n, cost) { for (const [k, v] of Object.entries(cost)) n.stock[k] -= v; }
-
 export function bestTypeFor(zone, era, table = CIVIL, allowed = () => true) {
   let best = null;
   for (const [id, b] of Object.entries(table)) {
@@ -105,8 +102,7 @@ export function bestTypeFor(zone, era, table = CIVIL, allowed = () => true) {
 export function startBuilding(world, nid, anchor, type) {
   const def = world.bld.table[type], n = world.nations.get(nid);
   const plots = footprint(world, anchor, def.fp);
-  if (!fits(world, nid, plots, def.zone) || !affordable(n, def.cost)) return null;
-  pay(n, def.cost);
+  if (!n || !fits(world, nid, plots, def.zone)) return null;
   const b = addBuilding(world, { type, owner: nid, anchor, plots });
   world.emit("civ_build", { nation: nid, building: b.id, kind: type });
   return b;
@@ -116,14 +112,13 @@ export function tryUpgrade(world, b, force = false) {
   const table = world.bld.table, r = world.civ?.rules ?? CIV_RULES, def = table[b.type], n = world.nations.get(b.owner);
   if (!def.next || b.state !== "active") return false;
   const nd = table[def.next];
-  if (eraIdx(nd.era) > eraIdx(n.era) || !affordable(n, nd.cost) || world.unlocked?.(b.owner, def.next) === false) return false;
+  if (eraIdx(nd.era) > eraIdx(n.era) || world.unlocked?.(b.owner, def.next) === false) return false;
   const plots = footprint(world, b.anchor, nd.fp);
   if (!fits(world, b.owner, plots, nd.zone, b.id)) return false;
   if (!force) {
     const needs = n.stats.needs ?? 0, occ = def.housing ? b.residents / def.housing : 1;
     if (needs < r.upgradeNeeds || occ < r.upgradeOccupancy * needs) return false;
   }
-  pay(n, nd.cost);
   b.type = def.next;
   setPlots(world, b, plots);
   b.state = "construction";
@@ -184,33 +179,24 @@ export function econTick(world, dt, rng) {
     const workers = s.pop * r.workerShare, level = n.taxLevel ?? 1;
     const mood = 1 - POLICY.taxUnrest * Math.max(0, level - 1);
     const staff = workers * Math.max(0, 1 - POLICY.conscriptWorkLoss * ((n.conscription ?? r.conscriptShare) - r.conscriptShare));
-    const foodNeed = s.pop * r.foodPerPerson * dt;
-    const foodSat = foodNeed > 0 ? Math.min(1, n.stock.food / foodNeed) : 1;
-    const batch = n.made?.food ?? 0;
-    const fed = (batch / (n.madeEvery ?? r.econEvery) + Math.max(0, n.stock.food - batch) / Math.max(r.foodReserveSeconds, dt)) / r.foodPerPerson;
-    n.stock.food = Math.max(0, n.stock.food - foodNeed);
     const jobSat = workers > 0 ? Math.min(1, s.jobs / workers) : 1;
     const worked = workers > 0 ? Math.min(1, staff / Math.max(1, s.jobs)) : 0;
-    n.stock.goods += s.goodsMade * worked * dt;
-    const goodsNeed = n.era === "T" ? 0 : s.pop * r.goodsPerPerson * dt;
-    const goodsSat = goodsNeed > 0 ? Math.min(1, n.stock.goods / goodsNeed) : 1;
-    n.stock.goods = Math.max(0, n.stock.goods - goodsNeed);
-    const needs = foodSat * (0.6 + 0.4 * jobSat) * (0.8 + 0.2 * goodsSat) * mood;
-    const foodCap = s.housing * needs > fed ? fed / (s.housing * needs) : 1;
+    const trade = goldOf("goods", (s.shops + s.goodsMade) * worked) * (n.outputMult ?? 1);
+    if (n.money !== undefined) n.money += trade * dt;
+    const needs = (0.6 + 0.4 * jobSat) * mood;
     const zoned = world.civ?.zoned.get(n.id)?.slice(1).map(set => set.size) ?? [0, 0, 0, 0];
-    n.stats = { ...s, workers, staff, mood, worked, foodSat, jobSat, goodsSat, needs, foodUse: s.pop * r.foodPerPerson, fed, foodCap, zoned };
+    n.stats = { ...s, workers, staff, mood, worked, jobSat, needs, trade, zoned };
     let pop = 0;
     const span = Math.min(dt, r.settleStep ?? dt);
-    const grow = 1 - Math.exp(-r.growth * (1 + effectOf(world, n, "pop_growth")) * (1 + POLICY.taxGrowth * Math.max(0, 1 - level)) * span), starve = Math.exp(-(1 - foodSat) * r.starveLoss * span);
+    const grow = 1 - Math.exp(-r.growth * (1 + effectOf(world, n, "pop_growth")) * (1 + POLICY.taxGrowth * Math.max(0, 1 - level)) * span);
     const mine = bld.mine.get(n.id) ?? [];
     for (const id of mine) {
       const b = bld.list.get(id);
       if (!b.civilian) continue;
       const cap = table[b.type].housing;
       if (!cap || b.state !== "active") { pop += b.residents; continue; }
-      const target = cap * needs * foodCap;
+      const target = cap * needs;
       b.residents += (target - b.residents) * grow;
-      b.residents *= starve;
       b.residents = Math.max(0, Math.min(cap, b.residents));
       pop += b.residents;
     }

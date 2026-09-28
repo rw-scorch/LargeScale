@@ -4,7 +4,7 @@ import { ERA_NAMES } from "../shared/buildings.js";
 import { eraProgress, planPath } from "../shared/research.js";
 
 const BRANCH_NAMES = { military: "Military", economy: "Economy", civic: "Civic", government: "Government" };
-const EFFECT_NAMES = { research: "research", troop_cap: "troop cap", wood_rate: "wood output", food_rate: "food output", pop_growth: "population growth", defence: "defence", income: "gold income" };
+const EFFECT_NAMES = { research: "research", troop_cap: "troop cap", food_rate: "farm earnings", pop_growth: "population growth", defence: "defence", income: "gold income" };
 const BADGE = { known: "researched", current: "in_progress", queued: "available", ready: "available", locked: "locked" };
 const COL = 184, NODE_W = 156, NODE_H = 50, ROW = 60, TOP = 34, PAD = 10, LANE_GAP = 14;
 const pretty = id => id.replace(/_/g, " ").replace(/^./, c => c.toUpperCase());

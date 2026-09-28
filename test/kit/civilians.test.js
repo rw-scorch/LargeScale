@@ -6,7 +6,7 @@ import { makeRng } from "../../src/shared/rng.js";
 import { TID } from "../../src/shared/terrain.js";
 import { disc } from "../../src/shared/grid.js";
 
-function setup(food = 500) {
+function setup() {
   const map = { w: 60, h: 60, terrain: new Uint8Array(3600).fill(TID.grassland) };
   const w = new World(map, { spawnRadius: 8 });
   const a = w.addNation({ name: "A" });
@@ -14,27 +14,26 @@ function setup(food = 500) {
   const rng = makeRng(3);
   installCivilians(w, rng);
   const n = w.nations.get(a);
-  n.stock.food = food;
-  n.stock.wood = 500;
   return { w, a, n, rng };
 }
 
-test("residential zoning grows huts and people when fed", () => {
+test("residential zoning grows huts and people", () => {
   const { w, a, n, rng } = setup();
   zonePlots(w, a, disc(w.grid, 30, 30, 4), "res");
-  for (let i = 0; i < 80; i++) { n.stock.food = 500; econTick(w, 5, rng); }
+  for (let i = 0; i < 80; i++) econTick(w, 5, rng);
   const huts = [...w.bld.list.values()].filter(b => b.type === "hut_grass" && b.state === "active");
   assert.ok(huts.length >= 3, `huts ${huts.length}`);
   assert.ok(n.pop > 10, `pop ${n.pop}`);
 });
 
-test("starvation shrinks the population", () => {
+test("a heavy tax empties homes, where food once did", () => {
   const { w, a, n, rng } = setup();
   zonePlots(w, a, disc(w.grid, 30, 30, 4), "res");
-  for (let i = 0; i < 80; i++) { n.stock.food = 500; econTick(w, 5, rng); }
-  const fed = n.pop;
-  for (let i = 0; i < 80; i++) { n.stock.food = 0; econTick(w, 5, rng); }
-  assert.ok(n.pop < fed * 0.6, `fed ${fed} starving ${n.pop}`);
+  for (let i = 0; i < 80; i++) econTick(w, 5, rng);
+  const settled = n.pop;
+  n.taxLevel = 2;
+  for (let i = 0; i < 80; i++) econTick(w, 5, rng);
+  assert.ok(n.pop < settled * 0.9, `${Math.round(settled)} settled, ${Math.round(n.pop)} under a very high tax`);
 });
 
 test("upgrades wait for the era", () => {
@@ -52,7 +51,6 @@ test("upgrades wait for the era", () => {
 test("bigger buildings need all their plots zoned and empty", () => {
   const { w, a, n } = setup();
   n.era = "Mo";
-  n.stock.steel = 999; n.stock.concrete = 999;
   zonePlots(w, a, [w.grid.idx(30, 30)], "res");
   assert.equal(startBuilding(w, a, w.grid.idx(30, 30), "apartment_block"), null);
   zonePlots(w, a, [w.grid.idx(31, 30), w.grid.idx(30, 31), w.grid.idx(31, 31)], "res");
@@ -68,7 +66,7 @@ test("best type follows the era", () => {
 test("troop cap follows population and conscription costs people", () => {
   const { w, a, n, rng } = setup();
   zonePlots(w, a, disc(w.grid, 30, 30, 4), "res");
-  for (let i = 0; i < 80; i++) { n.stock.food = 500; econTick(w, 5, rng); }
+  for (let i = 0; i < 80; i++) econTick(w, 5, rng);
   const cap = w.maxTroops(n);
   assert.ok(Math.abs(cap - (w.rules.troopBase + w.rules.troopPerPlot * n.plots + n.pop * 0.35)) < 1e-6, "land plus people");
   const before = n.pop;

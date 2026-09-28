@@ -5,6 +5,9 @@ import { installConstruction, canPlace, place, progressConstruction, listUpgrada
 import { installCivilians, zonePlots, startBuilding, econTick } from "../../src/sim/civilians.js";
 import { makeRng } from "../../src/shared/rng.js";
 import { TID } from "../../src/shared/terrain.js";
+import { BUILDINGS } from "../../src/sim/buildings.js";
+
+const price = id => BUILDINGS.table[id].cost.money;
 
 function setup() {
   const map = { w: 40, h: 30, terrain: new Uint8Array(1200).fill(TID.grassland) };
@@ -15,7 +18,7 @@ function setup() {
   for (let x = 18; x < 30; x++) for (let y = 8; y < 22; y++) w.claim(w.grid.idx(x, y), a);
   installConstruction(w);
   const n = w.nations.get(a);
-  Object.assign(n, { era: "M", money: 5000, stock: { wood: 500, stone: 500, steel: 0, concrete: 0, clay: 0, food: 100, goods: 0 } });
+  Object.assign(n, { era: "M", money: 5000 });
   return { w, a, b, n };
 }
 
@@ -27,7 +30,8 @@ test("placement rules", () => {
   assert.equal(canPlace(w, a, "barracks", g.idx(31, 10)), "cannot build on water");
   assert.equal(canPlace(w, a, "harbour", g.idx(20, 10)), "must sit on the coast");
   assert.equal(canPlace(w, a, "harbour", g.idx(29, 10)), null);
-  assert.equal(canPlace(w, a, "warehouse", g.idx(20, 10)), "needs the Industrial era");
+  assert.equal(canPlace(w, a, "university", g.idx(20, 10)), "needs the Industrial era");
+  assert.equal(canPlace(w, a, "storage_yard", g.idx(20, 10)), "no longer built: every cost is in gold now");
   place(w, a, "barracks", g.idx(20, 10));
   assert.equal(canPlace(w, a, "tower_stone", g.idx(21, 10)), "something is already there");
 });
@@ -35,8 +39,7 @@ test("placement rules", () => {
 test("construction pays up front and finishes over time", () => {
   const { w, a, n } = setup();
   const b = place(w, a, "tower_stone", w.grid.idx(22, 12));
-  assert.equal(n.money, 5000 - 80);
-  assert.equal(n.stock.stone, 470);
+  assert.equal(n.money, 5000 - price("tower_stone"));
   for (let t = 0; t < 59; t++) progressConstruction(w, 1);
   assert.equal(b.state, "construction");
   progressConstruction(w, 2);
@@ -56,14 +59,14 @@ test("bulk menu lists lowest levels first and swipe picks a range", () => {
   assert.deepEqual(res.done.sort(), [t1.id, t3.id].sort());
   assert.equal(t1.type, "tower_stone");
   assert.equal(t2.type, "tower_stone");
-  assert.equal(res.spent, 2 * 80 * 1.5);
+  assert.equal(res.spent, 2 * price("tower_stone") * 1.5);
 });
 
 test("bulk upgrade stops cleanly when money runs out and reports why", () => {
   const { w, a, n } = setup();
   for (let x = 19; x < 29; x += 2) place(w, a, "watchtower_wood", w.grid.idx(x, 20));
   progressConstruction(w, 999);
-  n.money = 250;
+  n.money = 2.5 * price("tower_stone") * 1.5;
   const res = bulkUpgrade(w, a, selectRange(listUpgradable(w, a), 0, 99));
   assert.equal(res.done.length, 2);
   assert.ok(res.skipped.every(([, why]) => why === "not enough money"));

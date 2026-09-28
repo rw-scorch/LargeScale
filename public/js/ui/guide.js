@@ -3,7 +3,7 @@ import { icon } from "./icons.js";
 import { TERRAIN, isLand } from "../shared/terrain.js";
 import { nodeFor } from "./town.js";
 
-const WOODS = new Set(TERRAIN.map((t, i) => (/forest|jungle|thicket|bamboo/.test(t.name) ? i : -1)).filter(i => i >= 0));
+const FERTILE = new Set(TERRAIN.map((t, i) => (t.land && t.build && t.fertility > 0.1 ? i : -1)).filter(i => i >= 0));
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
@@ -36,12 +36,12 @@ export function createGuide(root, game) {
     const n = w.nations.get(w.you), p = w.purse, cap = n?.capital;
     const mine = type => [...w.buildings.values()].some(b => b.owner === w.you && b.type === type && b.state !== "rubble");
     const goal = 200 * (w.map?.scale ?? 1) ** 2, known = w.known().size;
-    const campLock = nodeFor(w, "war_camp"), woodLock = nodeFor(w, "woodcutter_camp");
+    const campLock = nodeFor(w, "war_camp"), farmLock = nodeFor(w, "crop_wheat");
     return [
       { id: "spawn", title: "Choose where to start", done: !!n?.spawned },
       { id: "land", title: "Take land", done: n?.plots >= goal, progress: [n?.plots ?? 0, goal], text: "Right-click open land beside yours and pick Take land. The Stack slider sets how many troops go.", target: () => nearest(w, cap, i => !w.owner[i] && isLand(w.terrain[i])), mark: "Right-click here" },
       { id: "homes", title: "Zone homes", done: (p?.town?.zoned?.[0] ?? 0) > 0, text: "Open Build (B), then Zones and Residential, and drag over your land next to the capital. Huts go up there.", pulse: "open-build", target: () => cap, mark: "Zone here" },
-      { id: "wood", title: "Build a Woodcutter camp", done: mine("woodcutter_camp") || mine("sawmill"), text: woodLock ? `Woodcutter camps need ${woodLock.name}: queue it in Research (U).` : "Wood builds huts. Open Build (B), Resources, and place a Woodcutter camp by forest on your land.", pulse: woodLock ? "open-research" : "open-build", target: () => nearest(w, cap, i => WOODS.has(w.terrain[i]) && w.owner[i] === w.you, 40) ?? nearest(w, cap, i => WOODS.has(w.terrain[i])), mark: "Forest" },
+      { id: "farm", title: "Build a farm", done: [...w.buildings.values()].some(b => b.owner === w.you && b.def?.producer && b.state !== "rubble"), text: farmLock ? `Farms earn gold. Wheat fields need ${farmLock.name}: queue it in Research (U).` : "Farms earn gold. Open Build (B), Farming, and place a wheat field on fertile land.", pulse: farmLock ? "open-research" : "open-build", target: () => nearest(w, cap, i => FERTILE.has(w.terrain[i]) && w.owner[i] === w.you && !w.buildingAt(i), 40), mark: "Fertile land" },
       { id: "research", title: "Learn three techs", done: known >= 3, progress: [known, 3], text: "Research runs on its own. Open Research (U) to choose what comes next.", pulse: "open-research" },
       { id: "camp", title: "Build a War camp", done: mine("war_camp") || mine("barracks"), text: campLock ? `A War camp trains soldiers. It needs ${campLock.name}: queue it in Research (U).` : "A War camp trains soldiers from your troops: Build (B), Military. Then set what to train in Army (K).", pulse: campLock ? "open-research" : "open-build", target: () => cap, mark: "Build near here" },
       { id: "attack", title: "Attack a neighbour", done: attacked, text: "Right-click another nation's land and pick Attack. A stack forms at your nearest land and takes theirs.", target: () => nearest(w, cap, i => w.owner[i] && w.owner[i] !== w.you, 200), mark: "Right-click here" },

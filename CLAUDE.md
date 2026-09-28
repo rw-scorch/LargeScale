@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (242)
+npm test                  # unit tests (223)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -290,10 +290,24 @@ Ryan's asks of 28 September 2026: one currency, individual soldiers, piloting, p
   - A group crossing shares one key (`BOAT_GROUP`, a symbol clients cannot send), counted once against `boats.maxBoats`, and keeps its formation on the far side.
   - A drawn path may cross water once (`crossingOf` in `src/sim/boats.js`); `sendByBoat` takes `from`, `via` and `group`.
   - Selected stack, machine and group cards keep their room in the side column, and the folded feed stays inside its column on short screens.
+- **Part B, gold only (29 September 2026, branch `m7-gold`, stacked on `m7-boats`).** Milestone five's stores, carts, army supply and sea routes are gone (`src/sim/stores.js`, `sea.js` and `supply.js` are deleted), and so is the steel of milestone six.
+  - **Costs.** Every cost in `data/` is gold, converted once by `tools/gold_only.mjs` at the worths in `rules.json` `economy.worth`.
+  - **Retired buildings.** They carry `retired: true` and are refused by `placeError`: the woodcutter, quarry, clay pit, sawmill, steel mill and the three store buildings.
+  - **Income.**
+    - Producers earn `goldOf(kind, amount)` (`src/sim/resources.js`), reported as `n.made`.
+    - Towns grow on housing and jobs, and shops and works earn `stats.trade`.
+    - Power plants cost `power.upkeep` gold.
+  - **Trade (`src/sim/trade.js`, `installTrade`).**
+    - Ports send free trade ships (unit 23) to friendly ports in the same water, and both ends are paid on arrival.
+    - Hostile warships capture them.
+    - Stations send trains along rail-only paths, drawn from the convoy rows.
+    - The purse carries `trade` (`tradeView`), and `hello` carries `goldRules`.
+  - **Old worlds.** Save format 4. `convertToGold` in `src/sim/economy.js` turns stock, store goods, carts, wagons and retired buildings into gold on load.
+  - **Client.** The Logistics panel (L) is now the Trade panel. The HUD shows gold and people, and the build menu hides retired buildings.
 
-Open items as of 28 September 2026, in order:
+Open items as of 29 September 2026, in order:
 
-1. PRs 14 to 27 are merged (roads, army supply, free boats, stores and carts, road tools, the new menu, 28 September 2026). PR 28 (`m5-sea`, sea routes) and the milestone six PR (`m6-industry`, stacked on it) wait for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks logistics and the Industrial era together.
+1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`, so `main` does not have milestone six yet. PR 30 (`m7-boats`, base `m6-industry`) and the Part B PR (`m7-gold`, stacked on it) wait for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` for Part B wait for a dev server run, which Ryan starts or asks for.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.

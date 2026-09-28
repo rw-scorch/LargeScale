@@ -5,7 +5,7 @@ import { nextResearch, researchError } from "./shared/research.js";
 import rules from "../data/rules.json" with { type: "json" };
 
 export const ADMIN_RULES = rules.admin;
-export const GIVE = ["money", "food", "wood", "stone", "clay", "iron", "coal", "steel", "oil", "troops", "unit", "machine"];
+export const GIVE = ["money", "troops", "unit", "machine"];
 
 const fail = error => ({ ok: false, error });
 
@@ -45,8 +45,7 @@ export const ADMIN_OPS = {
       return now === null ? fail("pick a troop type") : { ...done(now), unit: m.unit };
     }
     if (n.money === undefined) return fail(`${n.name} has no economy`);
-    if (m.what === "money") return done((n.money = Math.max(0, n.money + amount)));
-    return done((n.stock[m.what] = Math.max(0, (n.stock[m.what] ?? 0) + amount)));
+    return done((n.money = Math.max(0, n.money + amount)));
   },
   finish(sim, m) {
     const n = living(sim, m.nation);

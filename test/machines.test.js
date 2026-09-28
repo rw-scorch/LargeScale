@@ -63,25 +63,26 @@ test("the Medieval and Gunpowder machines come from the unit registry, and resea
 test("a siege workshop builds catapults one after another, paying as each starts, and waits when gold runs short", () => {
   const { w, g, a, n, order } = field();
   const ws = addBuilding(w, { type: "siege_workshop", owner: a, anchor: g.idx(10, 10), state: "active" });
-  Object.assign(n, { money: 250 });
-  n.stock.wood = 500;
+  const price = UNIT_TYPES.catapult.cost.money;
+  assert.deepEqual(Object.keys(UNIT_TYPES.catapult.cost), ["money"]);
+  Object.assign(n, { money: 2 * price + 20 });
   assert.deepEqual(order(a, { t: "produce", building: ws.id, type: "catapult", count: 3 }), { t: "result", of: "produce", ok: true, queued: 3 });
   w.tick(1);
-  assert.equal(n.money, 130, "the first catapult is paid for as it starts");
+  assert.equal(n.money, price + 20, "the first catapult is paid for as it starts");
   const first = until(w, () => w.units.list.size === 1);
   assert.ok(first >= 58 && first <= 61, `it takes its 60 seconds: ${first + 1}`);
   const cat = [...w.units.list.values()][0];
   assert.equal(cat.type, "catapult");
   assert.ok(ws.plots.some(p => g.cheb(p, cat.at) === 1) && !ws.plots.includes(cat.at), "it appears next to the workshop");
   w.tick(1);
-  assert.equal(n.money, 10);
+  assert.equal(n.money, 20);
   until(w, () => w.units.list.size === 2);
   w.tick(1);
   assert.equal(w.machines.queues.get(ws.id).why, "not enough gold");
   n.money = 500;
   w.tick(1);
-  assert.equal(n.money, 380);
-  assert.deepEqual(order(a, { t: "produce", building: ws.id, clear: true }), { t: "result", of: "produce", ok: true, cleared: 1, refund: { money: 120, wood: 60 } });
+  assert.equal(n.money, 500 - price);
+  assert.deepEqual(order(a, { t: "produce", building: ws.id, clear: true }), { t: "result", of: "produce", ok: true, cleared: 1, refund: { money: price } });
   assert.equal(n.money, 500, "clearing the queue refunds the one being built");
 });
 

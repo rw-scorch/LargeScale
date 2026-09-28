@@ -1,17 +1,17 @@
 import { el, fmt } from "./dom.js";
-import { costText } from "./build.js";
+import { costText, earnText } from "./build.js";
 import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
 import { upgradeLock, upgradePrice } from "./upgrade.js";
-import { storeRow, goodsText, ordersText, siteText, stuckText } from "./logistics.js";
+import { tradeText } from "./logistics.js";
 
 const refundOf = (cost, share) => Object.fromEntries(Object.entries(cost).map(([k, v]) => [k, Math.floor(v * share)]).filter(([, v]) => v > 0));
 
 const list = parts => parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
 
-function workText(def, town) {
-  const out = [];
-  if (def.producer?.kind === "convert") out.push(`Each ${def.producer.out} takes ${list(Object.entries(def.producer.in).map(([k, v]) => `${v} ${k}`))} from its store, and its store asks for more.`);
-  if (def.gathers) out.push(`Gathers ${list(Object.entries(def.gathers).map(([k, v]) => `${v} ${k}`))} a second, no workers needed.`);
+function workText(w, def, town) {
+  const out = [], g = w.goldRules;
+  if (def.gathers && g) out.push(`Earns ${Object.entries(def.gathers).reduce((s, [k, v]) => s + v * (g.worth[k] ?? 1) * g.yield, 0).toFixed(2)} gold a second, no workers needed.`);
+  if (def.producer) out.push(`${earnText(w, def)}.`);
   if (def.producer && town) {
     const staffed = Math.round(Math.max(0.25, town.worked ?? 0) * 100);
     out.push(`${def.jobs} ${def.jobs === 1 ? "job" : "jobs"}. Your workplaces are ${staffed}% staffed${(town.worked ?? 0) < 0.25 ? ": with too few people they work at the 25% floor, so grow your town" : ""}.`);
@@ -24,15 +24,15 @@ export function powerText(w, b) {
   if (!p || b.owner !== w.you || b.state !== "active") return "";
   if (d.power) {
     const [fuel, load] = p.plants?.[b.id] ?? [0, 0];
-    if (fuel) return `Makes ${d.power.make} power, ${load}% of it used, burning up to ${d.power.burn} coal a second.`;
-    return w.purse?.logistics?.stuck.some(r => r[0] === b.id && r[1] === "reach") ? `No store within ${w.purse.logistics.reach} plots of travel, so it has no coal and makes no power. Build a store nearby.` : "No coal in its store, so it makes no power. Carts bring coal from your other stores; mine more if none have any.";
+    if (fuel) return `Makes ${d.power.make} power, ${load}% of it used, for up to ${d.power.upkeep} gold a second.`;
+    return "Your treasury is empty, so it cannot pay its upkeep and makes no power.";
   }
   if (d.pole) return `Carries your grid ${w.powerRules?.reach ?? d.pole.reach} plots further.`;
   if (!d.uses) return "";
   const k = p.users?.[b.id];
   if (k === undefined || k < 0) return `No power: it works at half rate. Build a coal plant within ${(w.powerRules?.scale ?? 1) * 6} plots, or run power poles to it (Build, Power).`;
   const [make, need, share] = p.grids[k] ?? [0, 0, 0];
-  return share >= 100 ? `Powered: it uses ${d.uses} of the ${make} its grid makes.` : make ? `Short of power: its grid makes ${make} for ${need} wanted, so everything on it works at ${50 + share / 2}%.` : "Its grid has no coal, so it works at half rate.";
+  return share >= 100 ? `Powered: it uses ${d.uses} of the ${make} its grid makes.` : make ? `Short of power: its grid makes ${make} for ${need} wanted, so everything on it works at ${50 + share / 2}%.` : "Its grid's plants cannot pay their upkeep, so it works at half rate.";
 }
 
 function queueText(w, q) {
@@ -51,19 +51,7 @@ export function createBuildingPanel(root, game) {
   const queue = el("span", { id: "building-queue", class: "muted" });
   const make = el("div", { id: "building-make", class: "row wrap" });
   const upg = el("span", { id: "building-upgrade-info", class: "muted" });
-  const waiting = el("span", { id: "building-wait", class: "warn-text" });
-  const stored = el("span", { id: "building-goods", class: "muted" });
-  const kind = el("select", { id: "store-kind", class: "small" });
-  const keepIn = el("input", { id: "store-keep", class: "small", type: "number", min: 0, step: 10, value: 0, title: "never send away the last of this many" });
-  const wantIn = el("input", { id: "store-want", class: "small", type: "number", min: 0, step: 10, value: 0, title: "ask for goods until this store holds this many" });
-  const orders = el("div", { id: "store-orders", class: "row wrap", hidden: true },
-    el("span", { class: "muted", text: "Standing orders:" }), kind, el("span", { class: "muted", text: "Want" }), wantIn, el("span", { class: "muted", text: "Keep" }), keepIn,
-    el("button", { id: "store-set", text: "Set", onclick: () => setOrders() }));
-  kind.addEventListener("change", () => fillOrders());
-  const food = el("input", { id: "wagon-food", class: "small", type: "number", min: 1, step: 10, value: 200 });
-  const wagon = el("div", { id: "building-wagon", class: "row wrap", hidden: true }, el("span", { class: "muted", text: "Supply wagon:" }), food, el("span", { class: "muted", text: "food" }),
-    el("button", { id: "wagon-load", text: "Load wagon", title: "a wagon of food that follows your army and feeds it beyond supply reach", onclick: () => loadWagon() }));
-  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, waiting, work, stored, orders, queue, make, upg, wagon, actions);
+  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, work, queue, make, upg, actions);
   root.append(box);
   let key = "";
 
@@ -85,34 +73,6 @@ export function createBuildingPanel(root, game) {
     if (!r.ok) return game.toast(r.error ?? "could not clear the queue");
     const back = costText(r.refund ?? {});
     game.toast(back ? `Queue cleared. Refunded ${back}.` : "Queue cleared.");
-    key = "";
-  };
-
-  const loadWagon = async () => {
-    const b = game.world?.buildings.get(game.selectedBuilding);
-    if (!b) return;
-    const r = await game.conn.request({ t: "wagon", at: b.anchor, food: Number(food.value) });
-    if (!r.ok) return game.toast(r.error ?? "could not load a wagon");
-    game.toast(`A supply wagon with ${fmt(r.food)} food is ready. Send it after your army with Follow a stack.`);
-    game.selectBuilding(null);
-    game.select(r.stack);
-  };
-
-  const fillOrders = () => {
-    const w = game.world, row = storeRow(w, game.selectedBuilding);
-    if (!row) return;
-    keepIn.value = row[3][kind.value] ?? 0;
-    wantIn.value = row[4][kind.value] ?? 0;
-  };
-
-  const setOrders = async () => {
-    const w = game.world, row = storeRow(w, game.selectedBuilding);
-    if (!row) return;
-    const want = Math.max(0, Math.floor(Number(wantIn.value) || 0)), keep = Math.max(want, Math.floor(Number(keepIn.value) || 0));
-    const r = await game.conn.request({ t: "store", building: row[0], kind: kind.value, keep, want });
-    if (!r.ok) return game.toast(r.error ?? "could not set that");
-    keepIn.value = r.keep;
-    game.toast(r.want ? `This store asks for ${kind.value} until it holds ${fmt(r.want)}, and keeps ${fmt(r.keep)}.` : r.keep ? `This store keeps its last ${fmt(r.keep)} ${kind.value}.` : `This store's standing orders for ${kind.value} are cleared.`);
     key = "";
   };
 
@@ -140,35 +100,18 @@ export function createBuildingPanel(root, game) {
       desc.textContent = b.def.description ?? "";
       desc.hidden = !desc.textContent;
       info.textContent = ` ${yours ? "yours" : owner}, ${b.state === "construction" ? `being built, ${Math.floor(b.progress * 100)}%` : b.state === "rubble" ? "rubble, clears soon" : b.state}`;
-      work.textContent = yours ? [workText(b.def, w.purse?.town), powerText(w, b)].filter(Boolean).join(" ") : "";
+      work.textContent = yours ? [workText(w, b.def, w.purse?.town), b.state === "active" ? tradeText(w, b) : "", powerText(w, b)].filter(Boolean).join(" ") : "";
       work.hidden = !work.textContent;
-      waiting.textContent = yours ? (b.state === "construction" ? siteText(w, b.id) : stuckText(w, b.id)) : "";
-      waiting.hidden = !waiting.textContent;
-      const row = yours && b.def.store && b.state === "active" ? storeRow(w, b.id) : null;
-      stored.textContent = row ? `${goodsText(row)} ${ordersText(row)}`.trim() : "";
-      stored.hidden = !row;
-      orders.hidden = !row || w.frozen;
-      if (row) {
-        const kinds = [...new Set([...Object.keys(w.purse.stock ?? {}), ...Object.keys(row[1])])];
-        if (kind.dataset.sig !== kinds.join()) { kind.dataset.sig = kinds.join(); const was = kind.value; kind.replaceChildren(...kinds.map(k => el("option", { value: k, text: k }))); kind.value = kinds.includes(was) ? was : kinds[0]; fillOrders(); }
-        if (![keepIn, wantIn, kind].includes(document.activeElement) && orders.dataset.for !== String(b.id)) { orders.dataset.for = b.id; fillOrders(); }
-      }
       const builds = yours && b.state === "active" && !w.frozen ? (b.def.builds ?? []).map(t => w.unitTypes.table[t]).filter(Boolean) : [];
       const q = w.purse?.machines?.queues?.[b.id];
       queue.textContent = builds.length ? queueText(w, q) : "";
       queue.hidden = !queue.textContent;
       const next = yours && b.state === "active" && !w.frozen && b.def.next ? w.defs.table[b.def.next] : null;
-      const own = b.def.store ? storeRow(w, b.id) : null;
-      const lock = next && upgradeLock(w, next), price = next && !lock ? upgradePrice(w, next.cost, own ? own[1] : undefined) : null;
-      const used = price ? costText(Object.fromEntries(Object.entries(price.use).filter(([, v]) => v > 0))) : "";
-      upg.textContent = !next ? "" : lock ? `Upgrade to ${next.name}: ${lock}.` : `Upgrade to ${next.name} now for ${fmt(Math.ceil(price.money))} gold${used ? ` and ${used}` : ""}${price.money > (w.purse?.money ?? 0) ? `; you have ${fmt(w.purse?.money ?? 0)} gold` : ""}.`;
+      const lock = next && upgradeLock(w, next), price = next && !lock ? upgradePrice(w, next.cost) : null;
+      upg.textContent = !next ? "" : lock ? `Upgrade to ${next.name}: ${lock}.` : `Upgrade to ${next.name} now for ${fmt(Math.ceil(price.money))} gold${price.money > (w.purse?.money ?? 0) ? `; you have ${fmt(w.purse?.money ?? 0)} gold` : ""}.`;
       upg.hidden = !upg.textContent;
-      const sup = w.purse?.supply;
-      wagon.hidden = !(yours && b.state === "active" && !w.frozen && b.def.store && sup);
-      if (!wagon.hidden && document.activeElement !== food) food.max = sup.wagonMax;
-      const site = b.state === "construction" ? w.purse?.logistics?.sites.find(s => s[0] === b.id) : null;
-      const paid = site ? Object.fromEntries(Object.entries(b.def.cost).map(([c, v]) => [c, c === "money" ? v : Math.max(0, v - (site[1][c] ?? 0))])) : b.def.cost;
-      const k = `${b.id}:${b.state}:${yours}:${w.frozen}:${JSON.stringify(site?.[1] ?? null)}:${builds.map(d => lockOf(w, d)).join("|")}:${q?.items.length ?? 0}:${next?.id}:${lock}:${price ? price.money <= (w.purse?.money ?? 0) : ""}`;
+      const paid = b.def.cost;
+      const k = `${b.id}:${b.state}:${yours}:${w.frozen}:${builds.map(d => lockOf(w, d)).join("|")}:${q?.items.length ?? 0}:${next?.id}:${lock}:${price ? price.money <= (w.purse?.money ?? 0) : ""}`;
       if (k === key) return;
       key = k;
       make.replaceChildren(...builds.map(d => {

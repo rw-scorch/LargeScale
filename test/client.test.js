@@ -70,15 +70,13 @@ test("a frame or message from another protocol version marks the client stale", 
   assert.equal(d.stale, true);
 });
 
-test("a convoy row at sea names its ship, and the ship's cargo can be found", () => {
+test("a train row carries its trip's gold and slides from plot to plot", () => {
   const c = new ClientWorld(hello());
-  c.setConvoy([4, 1, 50, "wood", 10, "T", 90]);
-  c.setConvoy([4, 1, 51, "wood", 10, "T", 90, 7]);
-  assert.equal(c.convoys.get(4).ship, 7);
-  assert.equal(c.cargoOf(7).amount, 10);
-  assert.equal(c.convoys.get(4).prev, 51, "boarding does not slide the cart out to sea");
-  c.setConvoy([4, 1, 60, "wood", 10, "T", 90, 0]);
-  assert.equal(c.convoys.get(4).ship, null);
-  assert.equal(c.convoys.get(4).prev, 60, "landing does not slide it back");
-  assert.equal(c.cargoOf(7), null);
+  c.setConvoy([4, 1, 50, "gold", 30, "I", 90, 0, 1]);
+  const t = c.convoys.get(4);
+  assert.deepEqual([t.train, t.kind, t.amount, t.ship, t.prev], [true, "gold", 30, null, 50]);
+  c.setConvoy([4, 1, 51, "gold", 30, "I", 90, 0, 1]);
+  assert.equal(c.convoys.get(4).prev, 50, "it slides from where it was");
+  c.message({ v: PROTOCOL, t: "state", time: 1, n: [], s: [], gone: [], cg: [4] });
+  assert.equal(c.convoys.has(4), false, "gone when it arrives");
 });

@@ -28,7 +28,7 @@ function town(policy = null) {
   return { w, a, n };
 }
 
-const grow = (w, n, seconds) => { for (let t = 0; t < seconds; t++) { n.stock.food = 500; n.stock.wood = 400; w.tick(1); } };
+const grow = (w, n, seconds) => { for (let t = 0; t < seconds; t++) w.tick(1); };
 
 test("the policy order checks its values and the purse reports them", () => {
   const { w, a, n } = town();
@@ -53,7 +53,7 @@ test("higher tax pays more per person but people leave; no tax fills towns faste
   const [p1, p2] = [normal.n.pop, high.n.pop];
   assert.ok(p2 < p1 * 0.8, `settled: very high tax ${p2.toFixed(0)} people against ${p1.toFixed(0)}`);
   assert.ok(Math.abs(high.n.stats.mood - 0.7) < 1e-9 && normal.n.stats.mood === 1);
-  const perPerson = t => (vitalsOf(t.w, t.n).income - rules.economy.baseIncome) / t.n.pop;
+  const perPerson = t => (vitalsOf(t.w, t.n).income - rules.economy.baseIncome - (t.n.stats.trade ?? 0)) / t.n.pop;
   assert.ok(Math.abs(perPerson(high) - 2 * perPerson(normal)) < 1e-3, `per person ${perPerson(high)} against ${perPerson(normal)}`);
   const before = none.n.money;
   none.w.tick(1);
@@ -64,7 +64,7 @@ test("a bigger army share raises the troop cap and takes workers from producers"
   const sets = [0.1, null, 0.6].map(c => town(c === null ? null : { conscription: c }));
   for (const t of sets) {
     grow(t.w, t.n, 600);
-    for (let k = 0; k < 30; k++) addBuilding(t.w, { type: "woodcutter_camp", owner: t.a, anchor: t.w.grid.idx(2 + k * 2, 36), state: "active" });
+    for (let k = 0; k < 10; k++) addBuilding(t.w, { type: "mine_pit", owner: t.a, anchor: t.w.grid.idx(2 + k * 2, 36), state: "active" });
     grow(t.w, t.n, 5);
   }
   const [low, mid, high] = sets, n = mid.n;
