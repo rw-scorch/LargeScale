@@ -809,6 +809,7 @@ export class MapRenderer {
   convoyFigures(r) {
     const s = this.state, out = [], now = Date.now();
     for (const c of s.convoys?.values() ?? []) {
+      if (c.ship) continue;
       const t = Math.min(1, (now - (c.movedAt ?? 0)) / 1000);
       const px = c.prev % s.w, py = (c.prev / s.w) | 0, qx = c.pos % s.w, qy = (c.pos / s.w) | 0;
       const x = px + (qx - px) * t, y = py + (qy - py) * t;

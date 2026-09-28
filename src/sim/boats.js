@@ -101,7 +101,7 @@ function raidBoats(world, dt) {
   for (const u of world.units.list.values()) {
     const d = UNIT_TYPES[u.type];
     if (u.wreck || d?.domain !== "sea") continue;
-    if (d.transport) boats.push(u);
+    if (d.transport || d.freight) boats.push(u);
     else if (d.attack > 0) ships.push(u);
   }
   if (!boats.length || !ships.length) return;
@@ -111,6 +111,7 @@ function raidBoats(world, dt) {
     const d = UNIT_TYPES[s.type];
     if (g.cheb(s.at, b.at) > Math.max(1, Math.round(d.range * world.machines.scale))) continue;
     b.hp -= d.attack * hit;
+    b.hitBy = s.owner;
     if (b.hp <= 0) wreck(world, b);
   }
 }

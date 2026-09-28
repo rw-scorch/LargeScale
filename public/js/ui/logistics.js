@@ -3,6 +3,7 @@ import { eraIdx } from "../shared/buildings.js";
 
 const list = parts => parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0] ?? "";
 const goods = o => Object.entries(o ?? {}).filter(([, v]) => v >= 1).map(([k, v]) => `${fmt(Math.floor(v))} ${k}`);
+export const seaText = ports => (ports >= 2 ? `${ports} ports send goods over the water when the way by land is missing or much longer.` : ports === 1 ? "A second port on the same water would send goods by sea." : "");
 
 export function storeRow(w, id) {
   return w.purse?.logistics?.stores.find(s => s[0] === id) ?? null;
@@ -89,7 +90,7 @@ export function createLogisticsPanel(root, game) {
       const next = JSON.stringify([lg, sup, army?.why, Object.entries(queues).map(([id, q]) => [id, q.why])]);
       if (next === sig) return;
       sig = next;
-      summary.textContent = `${lg.stores.length === 1 ? "One store" : `${lg.stores.length} stores`}. Buildings use a store within ${lg.reach} plots of travel. ${lg.convoys} of ${lg.convoyMax} carts on the road, each carrying up to ${lg.capacity}.`;
+      summary.textContent = `${lg.stores.length === 1 ? "One store" : `${lg.stores.length} stores`}. Buildings use a store within ${lg.reach} plots of travel. ${lg.convoys} of ${lg.convoyMax} carts on the road, each carrying up to ${lg.capacity}${lg.bySea ? `; ${lg.bySea} going by sea` : ""}. ${seaText(lg.ports ?? 0)}`.trim();
       const sites = lg.sites.map(([id]) => item(`${name(id)}: ${siteText(w, id)}`, () => goBuilding(id), "warn"));
       const stuck = lg.stuck.map(([id]) => item(`${name(id)}: ${stuckText(w, id)}`, () => goBuilding(id), "warn"));
       const held = [

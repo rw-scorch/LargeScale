@@ -85,7 +85,7 @@ export function createMachinePanel(root, game) {
     },
     ringFor(plot, sx, sy) {
       const u = mine();
-      if (!u || u.def.transport) return [];
+      if (!u || u.def.transport || u.def.freight) return [];
       const onLand = isLand(w().terrain[plot]), ship = isShip(u), items = [];
       const s = ship ? null : ownStackAt(sx, sy);
       if (s) items.push({ id: "follow", label: "Follow stack", note: fmt(s.troops), icon: "ui_eye", run: () => follow(u, s) });
@@ -106,19 +106,21 @@ export function createMachinePanel(root, game) {
       const yours = u.owner === world.you, owner = world.nations.get(u.owner)?.name ?? "someone", name = u.def.name.toLowerCase();
       title.textContent = yours ? `Your ${name}` : `${owner}'s ${name}`;
       info.textContent = ` ${u.state === "wreck" ? "" : `${Math.ceil(u.hp)} of ${u.def.hp} health, `}${statusOf(u)}`;
-      cargo.textContent = u.def.transport && u.state !== "wreck" ? `${fmt(u.cargo)} troops aboard.` : isShip(u) && u.def.capacity && u.state !== "wreck" ? `${fmt(u.cargo)} of ${u.def.capacity} troops aboard.` : "";
+      const goods = u.def.freight && u.state !== "wreck" ? world.cargoOf(u.id) : null;
+      cargo.textContent = goods ? `${fmt(goods.amount)} ${goods.kind} aboard, for your port over the water.` : u.def.transport && u.state !== "wreck" ? `${fmt(u.cargo)} troops aboard.` : isShip(u) && u.def.capacity && u.state !== "wreck" ? `${fmt(u.cargo)} of ${u.def.capacity} troops aboard.` : "";
       cargo.hidden = !cargo.textContent;
       desc.textContent = u.def.description ?? "";
       hint.textContent = mode === "move" ? (isShip(u) ? "Click the water to sail to." : "Click where it should go.")
         : mode === "follow" ? "Click one of your stacks."
         : mode === "land" ? "Click the coast to land the troops on."
         : u.def.transport ? "It sails on its own and lands where the troops were sent."
+        : u.def.freight ? "It sails on its own between your ports."
         : yours && u.state !== "wreck" && !world.frozen ? (isShip(u) ? "Right-click the map for its orders: sail, or land the troops aboard on a coast." : "Right-click the map for its orders: move, or follow one of your stacks.") : "";
       hint.classList.toggle("fine-only", !mode);
       const k = `${u.id}:${yours}:${mode}:${u.state}:${!!u.cargo}:${world.frozen}`;
       if (k === key) return;
       key = k;
-      const can = yours && u.state !== "wreck" && !world.frozen && !u.def.transport;
+      const can = yours && u.state !== "wreck" && !world.frozen && !u.def.transport && !u.def.freight;
       const list = !can ? [] : mode ? [el("button", { text: "Cancel", onclick: cancel })] : [
         el("button", { id: "machine-move", onclick: () => act.move() }, "Move ", keyTag("move")),
         isShip(u)

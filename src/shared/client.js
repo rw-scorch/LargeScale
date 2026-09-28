@@ -96,9 +96,14 @@ export class ClientWorld {
 
   myMachines() { return [...this.machines.values()].filter(u => u.owner === this.you); }
 
-  setConvoy([id, owner, pos, kind, amount, era, dest]) {
-    const old = this.convoys.get(id), moved = old && old.pos !== pos;
-    this.convoys.set(id, { id, owner, pos, kind, amount, era, dest, prev: moved ? old.pos : old?.prev ?? pos, movedAt: moved ? Date.now() : old?.movedAt ?? 0 });
+  setConvoy([id, owner, pos, kind, amount, era, dest, ship = 0]) {
+    const old = this.convoys.get(id), moved = old && old.pos !== pos && !!old.ship === !!ship;
+    this.convoys.set(id, { id, owner, pos, kind, amount, era, dest, ship: ship || null, prev: moved ? old.pos : old && !!old.ship !== !!ship ? pos : old?.prev ?? pos, movedAt: moved ? Date.now() : old?.movedAt ?? 0 });
+  }
+
+  cargoOf(shipId) {
+    for (const c of this.convoys.values()) if (c.ship === shipId) return c;
+    return null;
   }
 
   powerOf(s, holding = false) { return powerOf(this.unitTypes, s.troops, s.mix, holding ? "defence" : "attack", this.troopRules.xpBonus[s.xp] ?? 0); }

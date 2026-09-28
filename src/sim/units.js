@@ -140,7 +140,7 @@ export function stepUnits(world, dt) {
     }
     if (u.route && u.path.length < (world.rules.pathLookahead ?? 24) && !extendUnitPath(world, u)) {
       u.route = null;
-      world.emit("machine_blocked", { machine: u.id, nation: u.owner });
+      if (!def.freight) world.emit("machine_blocked", { machine: u.id, nation: u.owner });
     }
     if (!u.path.length) { u.progress = 0; continue; }
     const c = unitCost(world, def);
@@ -493,6 +493,8 @@ function shipBattles(world, dt) {
   const power = u => UNIT_TYPES[u.type][u.path.length ? "attack" : "defence"] / foes.get(u.id);
   const hits = pairs.map(([a, b]) => [a, b, power(a), power(b)]);
   for (const [a, b, pa, pb] of hits) {
+    if (pb > 0) a.hitBy = b.owner;
+    if (pa > 0) b.hitBy = a.owner;
     damage(world, a, r.lethality * pb * dt * r.hpPerLoss);
     damage(world, b, r.lethality * pa * dt * r.hpPerLoss);
   }

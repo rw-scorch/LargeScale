@@ -370,6 +370,7 @@ export const ORDERS = {
     if (u.wreck) return fail("that machine is a wreck");
     const def = UNIT_TYPES[u.type];
     if (def.transport) return fail("transport boats sail on their own and land where they were sent");
+    if (def.freight) return fail("merchant ships sail on their own between your ports");
     if (m.do === "stop") {
       Object.assign(u, { path: [], route: null, progress: 0, follow: null, land: null });
       return { ok: true };
