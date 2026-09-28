@@ -155,6 +155,30 @@ Built and tested; waiting for Ryan's check with parts A and B.
     - 3,712 carts sent and delivered, with 72 path searches.
   - Fine Europe: worst tick 34.0 ms; 6,290 carts, 26 taken by enemy stacks and 4 cut off.
 
+### Ryan's asks after PR 26 (28 September 2026, branch `m5-asks`)
+
+Ryan: "some things dont work, can you add a auto road lay button? also I cant schedule things. Also we need to rework the menu to look way cooler." He chose both road tools. For the menu, he asked for the live game on the side, like Terraria's title screen. For what does not work, he asked for a go through the code.
+
+- **Going through the code.**
+  - A new soak test (`npm run soak`): two players give about 2,000 random orders over 20 game minutes at 8 times speed. No tick errors and no bad numbers. The one thing it found was a purse sent straight after an admin gift showing the gift before the stores had it; purses now sync the stores first.
+  - Laying roads was the real trouble. A drawn road is a straight line through the points, and any building, water or foreign plot on it refused the whole road: the soak test hit that more than 50 times in 20 minutes. A click in road mode also laid a single plot, because the input layer ends every road gesture as a drag.
+- **Road from A to B.** Click where a road starts and where it ends. It finds the cheapest way over your land, round buildings and water, reusing roads already laid and bridging rivers only where it must. The route and its price show before Lay road (or Enter), or at once with one-click placing. Dragging still draws a road by hand.
+- **Connect stores.** In the Roads tab, Plan the roads shows how many plots and what gold it takes to link every store to the capital's roads, and Lay them lays them. Keep new stores connected is a standing order that lays and pays by itself every 20 seconds when new stores appear.
+- **Scheduling.** The in-game editor (World info, I) was there, but hard to find. The host now also has a Schedule button on every world's card on the list, and optional times when making a world.
+- **The menu.**
+  - The list sits on the left, with the logo, the account bar, world cards and New world.
+  - The right side is a live view of the selected world: territories, armies and carts moving, with the camera drifting between capitals and towns.
+  - Logged out, it pans across the Earth map instead.
+  - On a phone the live map fills the background behind the menu.
+  - Watching does not count as playing: no nation is made, nobody sees you online, and the socket ignores orders. It closes after 20 minutes, or when the tab is hidden, so a menu left open does not keep a world running.
+- **Found while testing.**
+  - On a phone held sideways, a long event in the folded feed wrapped to three lines and ran into the action bar. The preview is now two lines at most, and one on short screens.
+- **Evidence.**
+  - `npm test`: 218 of 218.
+  - `npm run smoke` on the test map: 108 of 108. New checks cover a world scheduled as it is made (a bad schedule refuses it), watching without a nation, presence or orders, and the host scheduling from the list (a friend gets 403). `RECHECK` after a restart: 7 of 7, stores included.
+  - `npm run ui` on the test map: 160 of 160. It includes a road from A to B, Connect stores and its standing order, the list watching the last world live, Schedule on a card, a scheduled new world, and the Earth scenery when logged out. Screenshots are `55` to `58` in `.screens`.
+  - Soak: 20 game minutes, about 2,000 orders, no tick errors.
+
 ### Part D. Sea routes
 
 - Ports are stores. When the land route between two of your stores is missing, or much longer, a convoy crosses water between ports, on the water graph ships already use.
