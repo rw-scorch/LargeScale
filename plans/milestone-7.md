@@ -13,6 +13,14 @@ Ryan's asks of 28 September 2026, after the Industrial era: one currency, indivi
    - No limit on trade.
 5. **Pilot everything now:** soldiers, tanks, ships and planes, with PC and phone controls.
 6. **Order:** the boat fix, gold only, soldiers, piloting, then planes.
+7. **Ryan's answers to the readings below (28 September 2026):**
+   - Soldiers grow stronger by era and by experience.
+   - Trade ships just move between ports and make money.
+   - Troops no longer need supply: no food, no reach, no wagons.
+   - Warships sink other warships and capture trade ships.
+   - Tanks and artillery have a limit of 100.
+   - Bots keep their stacks.
+   - Deposits, research points, and power plants on gold upkeep are as read below.
 
 ## What the decisions mean
 
@@ -27,7 +35,7 @@ This is how the answers are read. Ryan corrects anything here that is wrong.
   - Bots keep their stacks, drawn as crowds. With up to 400 of them there is no room for their soldiers.
 - **Trade** means trade ships and trains that earn gold, since there are no goods left to carry.
   - Ports send trade ships to other ports: other nations' ports that are not at war with you, and your own far ports. Each trip pays both ends, more for longer trips.
-  - Warships sink them.
+  - A hostile warship captures a trade ship: it becomes the captor's and pays the captor when it reaches the captor's nearest port. With no port to go to, it sinks.
   - Trains between your stations pay the same way.
   - There is no cap, but each port and station sends one at a time.
 - **Planes** come with a Flight node in the Industrial era: biplane fighters, bombers and the airfield. Modern planes come with the Modern era. The art is in the kit (`aircraft` sheet, airfield and hangar).
@@ -53,7 +61,7 @@ Evidence: unit tests for the route and group orders, and a browser test that pre
 ### Costs and income
 
 - **Costs.**
-  - Every cost is in gold: buildings, upgrades, roads, rail, training, machines and supply wagons.
+  - Every cost is in gold: buildings, upgrades, roads, rail, training and machines.
   - Each material has a worth in `rules.json` `economy.worth`, used once by a script to turn today's costs into gold. After that, `data/` holds gold only.
   - Upgrades keep the instant premium, with no "materials bought at 4 gold".
 - **Income.**
@@ -73,10 +81,10 @@ Evidence: unit tests for the route and group orders, and a browser test that pre
 | Food, wood, stone, clay, iron, coal, steel, oil, gas, goods | Gone. Stocks become gold. |
 | Woodcutter, quarry, clay pit, sawmill, gas plant, steel mill, textile mill | Retired (kept in the registry, not buildable, removed from old worlds with a refund). |
 | Farms, mines, oil wells | Earn gold. |
-| Store buildings, stores, carts and their standing orders | Stores become depots: they reach army supply and nothing else. Carts are gone. |
+| Store buildings, stores, carts and their standing orders | Gone. The storage yard, warehouse and logistics depot are retired. Ports and stations stay for trade. |
 | Merchant ships carrying goods | They become trade ships (below). |
 | Trains carrying goods | They become trade trains (below). Rail stays the fastest way to move. |
-| Army supply from stores holding food | Supply reaches out from the capital and from depots, with no food. Wagons cost gold. |
+| Army supply, supply wagons and desertion | Gone. Troops need no supply. |
 | Power plants burning coal | Plants cost gold upkeep. Power still speeds up factories, vehicle factories, naval docks and universities. |
 | The market board | Gone, since there is nothing to list. |
 | Admin give | Gold, troops, soldiers and machines. |
@@ -86,7 +94,7 @@ Research points stay as they are: they are progress, not money. Research nodes t
 ### Trade ships and trains
 
 - Every port launches a trade ship every `trade.every` seconds, to a port chosen by distance and by who is at peace with you. It pays both ends on arrival: `trade.base` plus `trade.perPlot` for each plot sailed.
-- A hostile warship near a trade ship sinks it.
+- A hostile warship near a trade ship captures it and sends it to the captor's nearest port.
 - Each station sends a train along the rail to your furthest reachable station in the same way.
 - Merchant ship unit 23 becomes the trade ship. Trains are drawn as they are now.
 
@@ -97,6 +105,7 @@ The save format goes up by one. On load:
 - stock and store goods turn into gold at their worth;
 - retired buildings are removed and their cost refunded;
 - carts and merchant ships at sea are refunded;
+- supply wagons are disbanded and their food refunded;
 - store standing orders are dropped.
 
 A unit test loads a saved milestone-six world and checks the gold.
@@ -106,7 +115,7 @@ A unit test loads a saved milestone-six world and checks the gold.
 - The purse shows gold and income.
 - The build menu shows gold costs.
 - The Town panel has no food or goods.
-- The Logistics panel becomes a depots and trade panel.
+- The Logistics panel becomes a trade panel: ports, stations, ships and trains at work, and what trade earned.
 - The market panel goes.
 
 ### Evidence
@@ -129,7 +138,7 @@ A unit test loads a saved milestone-six world and checks the gold.
 - **Fighting.**
   - Soldiers look up enemies nearby through a grid of buckets and fight whoever is in range: melee types beside them, ranged types from a few plots.
   - Health falls by the enemy's attack. A bot stack fights as a crowd of its troops.
-  - Forts, siege and supply work on soldiers as they do on stacks.
+  - Forts and siege work on soldiers as they do on stacks.
 - **Growing stronger.**
   - A soldier's weight is set by era.
   - The barracks can retrain old soldiers into a newer type for gold, in bulk.
