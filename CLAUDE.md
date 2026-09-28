@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (226)
+npm test                  # unit tests (227)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -268,6 +268,7 @@ Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roa
 - **Part D, sea routes (28 September 2026, branch `m5-sea`).** `src/sim/sea.js` (`installSeaRoutes`), called by the stores through `world.stores.sea`; rules in `rules.json` `stores.sea`; choices in `plans/milestone-5.md`.
   - A convoy whose land way is missing, or over 40 plots and 1.5 times slower than going by water, walks to your port, crosses in a free merchant ship (unit 23, `freight`), and walks on from your far port. Ports are stores with `port`: jetty, harbour, shipyard and commercial port.
   - Warships sink merchant ships and their cargo (`hitBy` names who). Merchant ships take no orders.
+  - A port still being built takes its own materials off the ship (`portSite`), so land taken by boat can get its first port.
   - Convoy rows carry the ship's id as an eighth field; the client hides the cart while it is at sea.
 
 Open items as of 28 September 2026, in order:

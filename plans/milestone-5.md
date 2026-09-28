@@ -201,6 +201,7 @@ Ryan asked for the next step after PR 27. These are the choices made while build
   - A merchant ship (unit 23, free and never built) sails its load to the other port. It carries the cart's load, and counts against the 12 carts a nation can have out.
   - The cart then walks on to the destination.
   - If the far port is lost on the way, the ship makes for your nearest port on the same water. If it cannot board at the start, the goods go into the first port's store.
+- **The first port on a new shore.** A port still being built takes its own materials straight off the ship. Without that, land taken by boat could never get a port: its site needs goods, and goods cross water only to a port. Before Part D such a site waited for ever.
 - **Warships.** Hostile warships within range sink merchant ships as they sink transport boats. The goods go down with the ship, and the owner hears who sank it. Land stacks on the shore cannot raid a ship.
 - **No orders.** Merchant ships sail on their own. They are not listed with your machines in the Army panel.
 - **Looks.** A raft in the Tribal era, then a cog, galleon, steamship, cargo ship and container ship. The cart is hidden while its goods are at sea.
@@ -218,7 +219,18 @@ Ryan asked for the next step after PR 27. These are the choices made while build
   - The Logistics panel counts your ports and the carts going by sea.
   - The feed says who sank a ship.
 - **Evidence.**
-  - `npm test`: 226 of 226. `test/sea.test.js` has 7 tests: a site across the water fed through two jetties; sea chosen only when the land way is much longer (round a bay); no sea route with one port; a frigate sinking a ship; a save in mid-voyage, with the ship refusing orders; and catch-up. `test/client.test.js` checks convoy rows at sea.
+  - `npm test`: 227 of 227. `test/sea.test.js` has 8 tests:
+    - a site across the water fed through two jetties;
+    - sea chosen only when the land way is much longer (round a bay);
+    - no sea route with one port;
+    - a frigate sinking a ship;
+    - a save in mid-voyage, with the ship refusing orders;
+    - catch-up;
+    - the first jetty on a new shore built from the sea.
+
+    `test/client.test.js` checks convoy rows at sea.
+  - Smoke on the test map: 108 of 108, and 7 of 7 reloading after a restart.
+  - `npm run ui` on the test map: 161 of 161. The new check follows the boat test: after taking land across the water, a jetty at home and one on the new land. A merchant ship brings the far jetty's wood, its card shows "10 wood aboard" and no orders, no cart is drawn at sea, the jetty is built, and the Logistics panel counts 2 ports. Screenshot `59-merchant-ship.png`.
   - Reference: 95 of 95.
   - `npm run bench` on the Earth with 4 jetties a player on their own coast (`--ports`, default 4): worst tick 34.7 ms. The worst-case probe planned 72 sea routes as if there were no land way: 65 path searches, 23 ms in all, 2.8 ms for the slowest.
   - Fine Europe: worst tick 36.4 ms (40.3 in another run), against 33.9 ms with `--ports 0` on the same machine. 34 carts went by sea there.
