@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (237)
+npm test                  # unit tests (243)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -326,10 +326,20 @@ Ryan's asks of 28 September 2026: one currency, individual soldiers, piloting, p
     - `app.pilotFrame` sends input and follows the unit with the camera.
     - `public/js/ui/pilot.js` has the banner, and the stick and Fire button on phones.
     - P pilots; WASD or the arrows move, the mouse aims, a held click or Space fires.
+- **Part E, planes and bombing (29 September 2026, branch `m7-air`, stacked on `m7-pilot`).**
+  - **Content.** Flight unlocks the airfield (`airbase`, `antiAir`), the biplane fighter and the bomber (`bomb` in `data/units.json`). Anti-aircraft guns unlock the flak tower (`antiAir`).
+  - **Simulation.** `src/sim/air.js` (`installAir`, a postTick hook with a whole-step version) keeps each plane's flight in `u.air`: base, position, heading, fuel, bombs, mission, landed and rearm.
+    - `orderPlane` checks the radius from the airfield; `drop` resolves a bombing.
+    - Fighters hunt and dogfight through buckets, and flak sites hit planes overhead.
+    - Bombed plots are cheaper to take through a `captureCost` wrapper, and damaged buildings repair themselves.
+    - Rules are in `rules.json` `air`.
+  - **Orders.** The `air` order: patrol, bomb or return. The admin's `give machine` places planes at an airfield.
+  - **Rows.** A plane's machine row carries a tenth field (`planeRow`), which the client reads into `u.air`. `planeAt` glides planes between samples.
+  - **Client.** `drawPlane` (rotated, with a shadow), `drawFlak`, and a bomb blast effect. The machine card has Patrol, Bomb and Fly home. B, or the Bomb button, drops bombs while piloting a bomber.
 
 Open items as of 29 September 2026, in order:
 
-1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`, so `main` does not have milestone six yet. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C) and the Part D PR (`m7-pilot`) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` for Parts B, C and D wait for a dev server run, which Ryan starts or asks for. Next: Part E (planes and bombing).
+1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`, so `main` does not have milestone six yet. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C), PR 33 (`m7-pilot`, Part D) and the Part E PR (`m7-air`) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` for Parts B to E wait for a dev server run, which Ryan starts or asks for. Milestone seven is then complete apart from Ryan's checks; the Modern era (modern planes among it) is next.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
