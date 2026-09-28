@@ -205,6 +205,17 @@ Evidence: unit tests for input checks (speed and terrain), and a browser test pi
 
 Evidence: unit tests for range, rearming, bombing and the limit; a smoke world where a bomber hits a stack; the bench with 100 planes per player.
 
+## Progress
+
+- **Part A (28 September 2026, branch `m7-boats`).** Built as planned.
+  - Group crossings share one key and still sail one boat per stack, so the far side shows the whole group.
+  - Found while testing: with the Town card open, the selected stack's card was squeezed until its buttons scrolled out of sight. On a phone held sideways, the folded feed grew past its column when both tabs showed a count. Both are fixed in `public/index.html`.
+  - Evidence:
+    - `npm test`: 242 of 242, with three new boat tests.
+    - Reference: 95 of 95.
+    - `npm run ui` on the test map: 167 of 167, including M and a click on another island (`49b-move-boat.png`).
+    - `npm run smoke`: 111 of 111.
+
 ## Ryan's checks
 
 Each part is its own branch and pull request, and Ryan checks it before the next: A, then B, then C, D and E.

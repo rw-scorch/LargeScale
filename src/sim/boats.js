@@ -106,7 +106,7 @@ export function sendByBoat(world, sid, target, then = {}, { from = null, via = [
   if ((s.pos !== plan.embark || via.length) && !world.orderMove(s.id, plan.embark, "move", via)) return { error: "no land route to your coast there" };
   s.sail = { ...plan, target, then, group };
   s.board = null;
-  return { boat: true, crossing: plan.crossing, loss: plan.loss, landing: plan.landing };
+  return { boat: true, crossing: Math.round(plan.crossing), loss: plan.loss, landing: plan.landing };
 }
 
 function raidBoats(world, dt) {

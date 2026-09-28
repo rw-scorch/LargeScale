@@ -509,7 +509,7 @@ export const ORDERS = {
     if (b.error) return fail(b.error);
     const { plan, walk, land, sea } = b, xy = i => [g.x(i), g.y(i)];
     return {
-      ok: true, boat: true, crossing: plan.crossing, loss: plan.loss, embark: plan.embark, landing: plan.landing,
+      ok: true, boat: true, crossing: Math.round(plan.crossing), loss: plan.loss, embark: plan.embark, landing: plan.landing,
       plots: walk.plots + plan.crossing + land.plots,
       seconds: Math.max(1, Math.round((walk.cost + land.cost) / speed + b.seaSeconds)),
       points: [...walk.points, xy(plan.embark), xy(plan.sea), ...sea, xy(plan.landSea), xy(plan.landing), ...land.points],
