@@ -161,7 +161,7 @@ export function produce(world, dt) {
     if (!p || b.state !== "active" || world.owner[b.anchor] !== b.owner) continue;
     const n = world.nations.get(b.owner);
     const staffed = Math.max(r.minWorkforce, n?.stats?.worked ?? 1);
-    let want = p.rate * dt * staffed * (r.speed ?? 1) * (n?.outputMult ?? 1), got = 0, kind = p.out, capped = !!p.out;
+    let want = p.rate * dt * staffed * (r.speed ?? 1) * (n?.outputMult ?? 1) * (b.power ?? 1), got = 0, kind = p.out, capped = !!p.out;
     if (p.out) want = Math.min(want, roomFor(world, b, p.out));
     if (p.kind === "deposit") {
       for (const i of nearestFirst(world, b, p.radius ?? 0)) {

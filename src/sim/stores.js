@@ -1,12 +1,12 @@
 import rules from "../../data/rules.json" with { type: "json" };
 import { TERRAIN } from "../shared/terrain.js";
-import { ROAD_MULT } from "../shared/roads.js";
+import { ROAD_MULT, ROAD_TYPES } from "../shared/roads.js";
 import { findPath, labelMap } from "../shared/pathfind.js";
 import { supplyCostOf } from "../shared/supply.js";
 
 export const STORE_RULES = {
   reach: 12, every: 5, fieldEvery: 10, perTick: 2, pathsPerTick: 4, buffer: 20, campCapacity: 500, convoyMax: 12, raidRange: 1, pathNodes: 60000, cacheMax: 300,
-  sea: { ship: "merchant_ship", checkPlots: 40, prefer: 1.5, detour: 1.3, ports: 2 },
+  train: { load: 5 }, sea: { ship: "merchant_ship", checkPlots: 40, prefer: 1.5, detour: 1.3, ports: 2 },
   convoy: { T: { capacity: 10, speed: 1 }, M: { capacity: 30, speed: 1.3 }, G: { capacity: 50, speed: 1.5 }, I: { capacity: 150, speed: 2.5 }, Mo: { capacity: 300, speed: 3.5 }, F: { capacity: 500, speed: 5 } },
   ...rules.stores,
 };
@@ -18,7 +18,7 @@ export function installStores(world, { scale = 1, rules: r = STORE_RULES } = {})
   if (world.stores) return world.stores;
   const st = {
     rules: r, scale, index: new Map(), rescan: true, fields: new Map(), fieldClock: new Map(), clocks: new Map(), clock: 0, budget: r.pathsPerTick,
-    convoys: new Map(), next: 1, paths: new Map(), counts: { sent: 0, sea: 0, arrived: 0, taken: 0, lost: 0, searches: 0 }, asks: new Map(), sites: new Set(), held: new Set(), stuck: new Map(), news: new Set(), whole: false,
+    convoys: new Map(), next: 1, paths: new Map(), counts: { sent: 0, sea: 0, trains: 0, arrived: 0, taken: 0, lost: 0, searches: 0 }, asks: new Map(), sites: new Set(), held: new Set(), stuck: new Map(), news: new Set(), whole: false,
   };
   world.stores = st;
   (world.bld.extra ??= {}).stores = () => encodeStores(world);
@@ -328,10 +328,22 @@ export function pathBetween(world, nid, a, b) {
   return path;
 }
 
+const isStation = (world, b) => !!b && !b.camp && !!defOf(world, b)?.station;
+
+export function railAll(world, path, a, b) {
+  const road = world.log?.road, rail = ROAD_TYPES.indexOf("rail"), ends = new Set([...(a.plots ?? []), ...(b.plots ?? [])]);
+  let any = false;
+  for (const i of path) {
+    if (ends.has(i)) continue;
+    if (road?.[i] !== rail) return false;
+    any = true;
+  }
+  return any;
+}
+
 function launch(world, n, from, to, k, amount) {
   const st = world.stores, spec = specOf(world, n.era ?? "T");
-  const load = Math.min(amount, spec.capacity, surplus(world, from, k));
-  if (!(load > EPS) || from.anchor == null || to.anchor == null) return null;
+  if (!(surplus(world, from, k) > EPS) || from.anchor == null || to.anchor == null) return null;
   const path = pathBetween(world, n.id, from.anchor, to.anchor);
   if (path === false) return null;
   let sea = null;
@@ -340,10 +352,14 @@ function launch(world, n, from, to, k, amount) {
     if (sea === false) return null;
   }
   if (!path && !sea) return null;
+  const train = !sea && isStation(world, from) && isStation(world, to) && railAll(world, path, from, to);
+  const load = Math.min(amount, spec.capacity * (train ? st.rules.train.load : 1), surplus(world, from, k));
+  if (!(load > EPS)) return null;
   take(world, n, from, k, load);
   const leg = sea ? sea.leg : path;
   const c = { id: st.next++, owner: n.id, kind: k, amount: load, from: from.id, to: to.id, dest: to.anchor, pos: leg[0], path: leg.slice(1), progress: 0, era: n.era ?? "T" };
   if (sea) { Object.assign(c, { sea: sea.route, goal: sea.goal }); st.counts.sea++; }
+  if (train) { c.train = true; st.counts.trains++; }
   st.convoys.set(c.id, c);
   st.news.add(c.id);
   st.counts.sent++;
@@ -648,7 +664,7 @@ export function encodeStores(world) {
     if (b.need) out.need.push([b.id, round(b.need)]);
     if (b.held) out.held.push([b.id, round(b.held)]);
   }
-  for (const c of st.convoys.values()) out.c.push([c.id, c.owner, c.kind, Math.round(c.amount * 1000) / 1000, c.from, c.to, c.dest, c.pos, c.era, ...(c.sea ? [c.sea, c.ship ?? 0, c.goal ?? null] : [])]);
+  for (const c of st.convoys.values()) out.c.push([c.id, c.owner, c.kind, Math.round(c.amount * 1000) / 1000, c.from, c.to, c.dest, c.pos, c.era, c.sea ?? 0, c.ship ?? 0, c.goal ?? null, c.train ? 1 : 0]);
   return new TextEncoder().encode(JSON.stringify(out));
 }
 
@@ -667,7 +683,7 @@ export function restoreStores(world, bytes) {
   }
   for (const [id, need] of d.need) { const b = bld.list.get(id); if (b && Object.keys(need).length) { b.need = need; st.sites.add(id); } }
   for (const [id, held] of d.held) { const b = bld.list.get(id); if (b && Object.keys(held).length) { b.held = held; st.held.add(id); } }
-  for (const [id, owner, kind, amount, from, to, dest, pos, era, sea, ship, goal] of d.c) st.convoys.set(id, { id, owner, kind, amount, from, to, dest, pos, path: null, progress: 0, era, ...(sea ? { sea, ship: ship || null, goal } : {}) });
+  for (const [id, owner, kind, amount, from, to, dest, pos, era, sea, ship, goal, train] of d.c) st.convoys.set(id, { id, owner, kind, amount, from, to, dest, pos, path: null, progress: 0, era, ...(sea ? { sea, ship: ship || null, goal } : {}), ...(train ? { train: true } : {}) });
   st.next = Math.max(st.next, d.next ?? 1);
   st.rescan = true;
   bld.changed.delete("stores");
@@ -675,7 +691,7 @@ export function restoreStores(world, bytes) {
 }
 
 export function convoyRow(world, c) {
-  return [c.id, c.owner, c.pos, c.kind, Math.round(c.amount), c.era, c.dest, c.ship ?? 0];
+  return [c.id, c.owner, c.pos, c.kind, Math.round(c.amount), c.era, c.dest, c.ship ?? 0, c.train ? 1 : 0];
 }
 
 export function logisticsView(world, n) {

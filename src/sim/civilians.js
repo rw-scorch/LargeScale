@@ -148,7 +148,7 @@ export function nationTotals(world) {
     if (b.state !== "active") continue;
     s.housing += d.housing ?? 0;
     if (d.zone === "com") { s.comJobs += d.jobs; s.shops += d.goods ?? 0; }
-    if (d.zone === "ind") { s.indJobs += d.jobs; s.goodsMade += d.makes?.goods ?? 0; }
+    if (d.zone === "ind") { s.indJobs += d.jobs; s.goodsMade += (d.makes?.goods ?? 0) * (b.power ?? 1); }
     s.jobs += d.jobs ?? 0;
   }
   return t;

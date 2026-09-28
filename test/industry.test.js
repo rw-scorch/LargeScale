@@ -13,6 +13,7 @@ import { installStores, sync, putInto, storesTick, logisticsView, STORE_RULES } 
 import { TREE } from "../src/sim/research.js";
 import { lockMap, planPath } from "../src/shared/research.js";
 import { makeRng } from "../src/shared/rng.js";
+import { runOrder } from "../src/game.js";
 import { TID } from "../src/shared/terrain.js";
 import rules from "../data/rules.json" with { type: "json" };
 import unitData from "../data/units.json" with { type: "json" };
@@ -127,4 +128,30 @@ test("a vehicle factory builds an early tank with steel and oil from its store",
   queueMachines(w, a, f.id, "early_tank");
   produce(w, 1);
   assert.match(w.machines.queues.get(f.id).why, /oil/);
+});
+
+test("rail needs Railways, costs 4 gold and 1 steel a plot, and carts between two stations joined by rail run as trains carrying 5 times as much", () => {
+  const { w, g, a, n, hut, put } = field();
+  assert.equal(lockMap(TREE).buildings.get("rail"), "railways");
+  const steel = n.stock.steel, money = n.money;
+  const r = runOrder(w, a, { t: "road", kind: "rail", via: [g.idx(13, 8), g.idx(39, 8)] });
+  assert.ok(r.ok, r.error);
+  assert.deepEqual([r.laid, money - n.money, steel - n.stock.steel], [27, 27 * 4, 27]);
+  const A = put("station_large", 10, 8), B = put("station_large", 40, 8);
+  w.stores.rescan = true;
+  sync(w, n);
+  putInto(w, n, A, "coal", 2000);
+  assert.ok(runOrder(w, a, { t: "store", building: B.id, kind: "coal", keep: 1000, want: 1000 }).ok);
+  storesTick(w, STORE_RULES.every);
+  const trains = [...w.stores.convoys.values()].filter(c => c.to === B.id);
+  assert.ok(trains.length && trains.every(c => c.train && c.from === A.id), "trains from the other station");
+  assert.equal(trains[0].amount, 150 * 5, "an Industrial cart carries 150; a train 750");
+  const taken = [...w.stores.convoys.values()].find(c => c.to === hut.id);
+  assert.ok(!taken, "nothing else moves");
+  const far = put("warehouse", 40, 14);
+  w.stores.rescan = true;
+  sync(w, n);
+  assert.ok(runOrder(w, a, { t: "store", building: far.id, kind: "coal", keep: 100, want: 100 }).ok);
+  storesTick(w, STORE_RULES.every * 2);
+  assert.ok([...w.stores.convoys.values()].filter(c => c.to === far.id).every(c => !c.train), "a warehouse is not a station: carts, not trains");
 });

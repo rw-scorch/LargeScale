@@ -24,6 +24,7 @@ import { installBoats } from "./sim/boats.js";
 import { installSupply, supplyView } from "./sim/supply.js";
 import { installStores, restoreStores, encodeStores, logisticsView, sync } from "./sim/stores.js";
 import { installSeaRoutes } from "./sim/sea.js";
+import { installPower, powerView } from "./sim/power.js";
 import { installAutoRoads } from "./sim/autoroads.js";
 import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS, DEPOSIT_TABLE } from "./sim/resources.js";
 import { installResearch, researchView, TREE } from "./sim/research.js";
@@ -177,6 +178,7 @@ export class World extends DurableObject {
     installStores(this.sim, { scale: info.map.scale ?? 1 });
     this.storesLoaded = restoreStores(this.sim, this.readRows("stores"));
     installSeaRoutes(this.sim);
+    installPower(this.sim, { scale: info.map.scale ?? 1 });
     installAutoRoads(this.sim);
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
@@ -567,7 +569,7 @@ export class World extends DurableObject {
 
   purse(n) {
     if (n) sync(this.sim, n);
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), supply: supplyView(this.sim, n), logistics: logisticsView(this.sim, n) });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), supply: supplyView(this.sim, n), logistics: logisticsView(this.sim, n), power: powerView(this.sim, n) });
   }
 
   sendState() {
