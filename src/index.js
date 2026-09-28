@@ -1,6 +1,8 @@
 import { Directory } from "./directory.js";
 import { World } from "./world.js";
 import { parseWorldConfig } from "./worldconfig.js";
+import { cleanSchedule } from "./shared/schedule.js";
+import rules from "../data/rules.json" with { type: "json" };
 import { verifyRequest, handleInteraction, message, optionValue, userIdOf, COMMANDS } from "./discord.js";
 
 export { Directory, World };
@@ -75,6 +77,12 @@ async function adminRoute(request, env, dir, me, path) {
     await Promise.all(r.worlds.map(w => env.WORLD.getByName(w).accountRemoved(id, me.name).catch(() => null)));
     return json(r);
   }
+  const sched = path.match(/^\/api\/admin\/worlds\/([A-Za-z0-9_-]+)\/schedule$/);
+  if (sched && post) {
+    if (!(await dir.worldConfig(sched[1]))) return json({ error: "no such world" }, 404);
+    const r = await env.WORLD.getByName(sched[1]).setSchedule(((await body(request)) ?? {}).schedule, me.name);
+    return json(r, r.error ? 400 : 200);
+  }
   const del = path.match(/^\/api\/admin\/worlds\/([A-Za-z0-9_-]+)\/delete$/);
   if (del && post) {
     if (!(await dir.worldConfig(del[1]))) return json({ error: "no such world" }, 404);
@@ -126,13 +134,17 @@ export default {
     if (path === "/api/worlds" && request.method === "POST") {
       if (!me.admin) return json({ error: "only the host can create worlds" }, 403);
       const b = (await body(request)) ?? {};
-      const bad = parseWorldConfig(b.config ?? {}).error;
+      const bad = parseWorldConfig(b.config ?? {}).error ?? (b.config?.schedule ? cleanSchedule(b.config.schedule, Date.now(), rules.schedule, {}).error : null);
       if (bad) return json({ error: bad }, 400);
       const { id } = await dir.createWorld(me, b.name ?? "New world", b.config ?? {});
       const r = await env.WORLD.getByName(id).init({ name: b.name, ...(b.config ?? {}), id });
       if (r.error) {
         await dir.removeWorld(id);
         return json({ error: r.error }, 500);
+      }
+      if (b.config?.schedule) {
+        const s = await env.WORLD.getByName(id).setSchedule(b.config.schedule, me.name);
+        if (s.error) return json({ id, ...r, scheduleError: s.error });
       }
       return json({ id, ...r });
     }
@@ -150,8 +162,10 @@ export default {
     const wsMatch = path.match(/^\/ws\/([A-Za-z0-9_-]+)$/);
     if (wsMatch) {
       if (request.headers.get("Upgrade") !== "websocket") return json({ error: "expected websocket" }, 426);
-      if (!(await dir.isMember(me, wsMatch[1]))) return json({ error: "join first" }, 403);
+      const watch = url.searchParams.get("watch") === "1";
+      if (!(await (watch ? dir.canWatch(me, wsMatch[1]) : dir.isMember(me, wsMatch[1])))) return json({ error: watch ? "you cannot watch that world" : "join first" }, 403);
       const headers = new Headers(request.headers);
+      if (watch) headers.set("X-Watch", "1");
       headers.set("X-Account", String(me.id));
       headers.set("X-Name", me.name);
       headers.set("X-Admin", me.admin ? "1" : "0");

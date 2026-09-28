@@ -167,7 +167,7 @@ export class Directory extends DurableObject {
 
   listWorlds(account) {
     return this.ctx.storage.sql.exec(
-      "SELECT w.id, w.name, w.host = ? AS host, json_extract(w.config, '$.schedule') AS schedule, (SELECT COUNT(*) FROM members m WHERE m.world = w.id) AS players, EXISTS(SELECT 1 FROM members m WHERE m.world = w.id AND m.account = ?) AS member, EXISTS(SELECT 1 FROM bans b WHERE b.world = w.id AND b.account = ?) AS removed FROM worlds w ORDER BY w.created DESC",
+      "SELECT w.id, w.name, w.host = ? AS host, json_extract(w.config, '$.schedule') AS schedule, COALESCE(CASE json_type(w.config, '$.map') WHEN 'object' THEN 'area' ELSE json_extract(w.config, '$.map') END, 'test') AS map, (SELECT COUNT(*) FROM members m WHERE m.world = w.id) AS players, EXISTS(SELECT 1 FROM members m WHERE m.world = w.id AND m.account = ?) AS member, EXISTS(SELECT 1 FROM bans b WHERE b.world = w.id AND b.account = ?) AS removed FROM worlds w ORDER BY w.created DESC",
       account.id, account.id, account.id,
     ).toArray().map(w => ({ ...w, schedule: w.schedule ? JSON.parse(w.schedule) : null }));
   }
@@ -181,6 +181,11 @@ export class Directory extends DurableObject {
     if (!already && n >= maxPlayers) return { error: "world is full" };
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO members (world, account, joined) VALUES (?, ?, ?)", id, account.id, Date.now());
     return { ok: true };
+  }
+
+  canWatch(account, id) {
+    if (!this.ctx.storage.sql.exec("SELECT 1 FROM worlds WHERE id = ?", id).toArray().length) return false;
+    return !this.ctx.storage.sql.exec("SELECT 1 FROM bans WHERE world = ? AND account = ?", id, account.id).toArray().length;
   }
 
   isMember(account, id) {

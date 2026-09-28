@@ -12,8 +12,8 @@ const MEANS = {
 const TEST_RULES = { buildSpeed: "construction", produceSpeed: "production", researchSpeed: "research", trainSpeed: "training", sleepSpeed: "catch-up" };
 
 export const when = t => new Date(t).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const toInput = t => (t == null ? "" : new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-const fromInput = v => (v ? new Date(v).getTime() : null);
+export const toInput = t => (t == null ? "" : new Date(t - new Date(t).getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+export const fromInput = v => (v ? new Date(v).getTime() : null);
 const beat = s => (s % 60 ? countdown(s * 1000) : `${s / 60} min`);
 
 export function nextLine(w, now) {

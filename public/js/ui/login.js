@@ -13,12 +13,13 @@ export function showLogin(root, onDone) {
     session.token = r.token;
     onDone(r.account);
   };
-  root.replaceChildren(el("div", { class: "card" },
-    el("h1", { text: "Large Scale" }),
-    el("form", { onsubmit: e => { e.preventDefault(); go("login"); } },
+  root.replaceChildren(el("div", { class: "login" },
+    el("h2", { text: "Take your seat" }),
+    el("p", { class: "muted", text: "Log in, or register with the invite code the host gave you." }),
+    el("form", { class: "form", onsubmit: e => { e.preventDefault(); go("login"); } },
       name, pass, invite,
       el("div", { class: "row" },
-        el("button", { id: "login-go", type: "submit", class: "primary", text: "Log in" }),
+        el("button", { id: "login-go", type: "submit", class: "primary big", text: "Log in" }),
         el("button", { id: "register-go", type: "button", onclick: () => go("register"), text: "Register" })),
       msg)));
   name.focus();

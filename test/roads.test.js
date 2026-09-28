@@ -4,9 +4,10 @@ import { World } from "../src/sim/territory.js";
 import { installBuildings, saveLayers, addBuilding } from "../src/sim/buildings.js";
 import { placeView } from "../src/sim/construction.js";
 import { placeError } from "../src/shared/buildings.js";
-import { installRoads, layRoad, restoreRoads, takeRoadNews, setRoad, ROADS } from "../src/sim/logistics.js";
+import { installRoads, layRoad, layRoute, roadView, restoreRoads, takeRoadNews, setRoad, ROADS } from "../src/sim/logistics.js";
+import { installAutoRoads, connectPlan, connectStores } from "../src/sim/autoroads.js";
 import { unitCost } from "../src/sim/units.js";
-import { roadLine, roadPlan, roadSprite, roadName, ROAD_RULES } from "../src/shared/roads.js";
+import { roadLine, roadPlan, routePlan, roadSprite, roadName, ROAD_RULES } from "../src/shared/roads.js";
 import { TID } from "../src/shared/terrain.js";
 import rules from "../data/rules.json" with { type: "json" };
 
@@ -142,4 +143,46 @@ test("roads and buildings keep off each other's plots", () => {
   const def = world.bld.table.watchtower_wood;
   assert.equal(placeError(placeView(world, a), { id: a, era: "T" }, def, g.idx(20, 22)), "a road runs there; take it up first");
   assert.equal(placeError(placeView(world, a), { id: a, era: "T" }, def, g.idx(20, 24)), null);
+});
+
+test("a routed road goes around buildings and rivers to the point you pick, reusing roads already there", () => {
+  const { world, g, a, n } = field();
+  const wall = [];
+  for (let y = 5; y < 25; y++) wall.push(g.idx(20, y));
+  for (let k = 0; k < wall.length; k++) addBuilding(world, { type: "watchtower_wood", owner: a, anchor: wall[k], plots: [wall[k]], state: "active", progress: 1 });
+  const straight = layRoad(world, a, [g.idx(10, 15), g.idx(30, 15)], "dirt");
+  assert.equal(straight.error, "a building stands in the way", "a drawn line refuses the tower in the way");
+  const r = layRoute(world, a, g.idx(10, 15), g.idx(30, 15), "dirt");
+  assert.ok(!r.error, r.error);
+  assert.equal(world.log.road[g.idx(10, 15)], 1);
+  assert.equal(world.log.road[g.idx(30, 15)], 1);
+  assert.ok(wall.every(i => !world.log.road[i]), "no road on the towers");
+  assert.ok(r.laid >= 20 + 2 * 10 && r.laid <= 20 + 2 * 11 + 2, `it goes round the end of the wall: ${r.laid} plots`);
+  assert.equal(n.money, 1000 - r.cost.money);
+  const again = layRoute(world, a, g.idx(10, 15), g.idx(30, 15), "dirt");
+  assert.equal(again.error, "that road is already there");
+  const plan = routePlan(roadView(world), a, g.idx(10, 16), g.idx(30, 16), "dirt", world.log.rules);
+  assert.ok(plan.plots.length < 5, `a parallel route rides the road already laid: ${plan.plots.length} new plots`);
+  assert.match(layRoute(world, a, g.idx(10, 15), g.idx(55, 15), "dirt").error, /no way to lay a road/, "the far end is not your land");
+});
+
+test("Connect stores links every store to the capital's roads, and the standing order connects new ones", () => {
+  const { world, g, a, n } = field();
+  installAutoRoads(world);
+  n.capital = g.idx(5, 15);
+  const hut = addBuilding(world, { type: "chieftain_hut", owner: a, anchor: g.idx(5, 15), state: "active", progress: 1 });
+  const yard = addBuilding(world, { type: "storage_yard", owner: a, anchor: g.idx(25, 5), state: "active", progress: 1 });
+  const dry = connectPlan(world, a, "dirt");
+  assert.equal(dry.joined, 1);
+  assert.ok(dry.plots.length >= 25 && dry.plots.length <= 32, `${dry.plots.length} plots from the yard to the hut`);
+  const r = connectStores(world, a, "dirt");
+  assert.equal(r.laid, dry.plots.length);
+  assert.equal(connectPlan(world, a, "dirt").already, 1, "now it is on the network");
+  assert.equal(connectPlan(world, a, "dirt").plots.length, 0);
+  n.autoRoads = "dirt";
+  const jetty = addBuilding(world, { type: "storage_yard", owner: a, anchor: g.idx(40, 25), state: "active", progress: 1 });
+  for (let t = 0; t < 21; t++) world.tick(1);
+  assert.ok(world.events.some(e => e.type === "roads_connected" && e.nation === a), "the standing order laid roads by itself");
+  assert.equal(connectPlan(world, a, "dirt").already, 2);
+  assert.ok(hut && yard && jetty);
 });

@@ -3,7 +3,8 @@ import { ORDER_CODES, MAX_ZONE_SIDE, MAX_WAYPOINTS } from "./shared/protocol.js"
 import { isLand } from "./shared/terrain.js";
 import { zonePlots, ZONE_NAMES, POLICY, CIV_RULES } from "./sim/civilians.js";
 import { orderResearch } from "./sim/research.js";
-import { layRoad } from "./sim/logistics.js";
+import { layRoad, layRoute } from "./sim/logistics.js";
+import { connectPlan, connectStores } from "./sim/autoroads.js";
 import { sendByBoat, boatPlan, boatsAtSea } from "./sim/boats.js";
 import { formWagon, unloadWagon, isWagon } from "./sim/supply.js";
 import { convoyRow, setStore } from "./sim/stores.js";
@@ -226,8 +227,27 @@ export const ORDERS = {
     if (!living(sim, nation)) return fail("spawn first");
     if (!sim.log?.rules) return fail("roads are not running in this world");
     if (typeof m.kind !== "string") return fail("pick a road type");
-    const r = layRoad(sim, nation, m.via, m.kind);
-    return r.error ? { ok: false, ...r } : { ok: true, ...r };
+    const routed = m.from !== undefined || m.to !== undefined;
+    if (routed && m.kind === "none") return fail("pick dirt or cobble to route a road");
+    const r = routed ? layRoute(sim, nation, m.from, m.to, m.kind) : layRoad(sim, nation, m.via, m.kind);
+    return r.error ? { ok: false, ...r, plots: undefined, line: undefined } : { ok: true, ...r };
+  },
+  connect(sim, nation, m) {
+    const n = living(sim, nation);
+    if (!n) return fail("spawn first");
+    if (!sim.log?.rules || !sim.autoRoads) return fail("roads are not running in this world");
+    const kind = m.kind ?? "dirt";
+    if (!["dirt", "cobble"].includes(kind)) return fail("pick dirt or cobble");
+    const need = sim.log.rules.types[kind]?.needs, locked = need && sim.lockReason?.(nation, need);
+    if (locked) return fail(locked);
+    if (m.keep !== undefined) {
+      if (typeof m.keep !== "boolean") return fail("keep is true or false");
+      n.autoRoads = m.keep ? kind : null;
+      sim.autoRoads.done.delete(nation);
+    }
+    const r = m.dry ? connectPlan(sim, nation, kind) : connectStores(sim, nation, kind);
+    const info = { plots: r.plots?.length ?? 0, cost: r.cost ?? {}, bridges: r.bridges ?? 0, stores: r.stores ?? 0, joined: r.joined ?? 0, already: r.already ?? 0, unreachable: r.unreachable ?? 0, keep: n.autoRoads ?? null, laid: r.laid ?? 0 };
+    return r.error ? { ok: false, error: r.error, ...info } : { ok: true, dry: !!m.dry, ...info };
   },
   store(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");

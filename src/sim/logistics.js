@@ -1,7 +1,7 @@
 import { TERRAIN } from "../shared/terrain.js";
 import { findPath, costField } from "../shared/pathfind.js";
 import { encodeRuns, decodeRuns } from "../shared/codec.js";
-import { ROAD_TYPES, ROAD_MULT, ROAD_RULES, roadPlan, roadSprite } from "../shared/roads.js";
+import { ROAD_TYPES, ROAD_MULT, ROAD_RULES, roadPlan, routePlan, roadSprite } from "../shared/roads.js";
 
 export { ROAD_MULT };
 export const ROADS = Object.fromEntries(ROAD_TYPES.map((k, i) => [k, i]));
@@ -70,12 +70,13 @@ export function takeRoadNews(world) {
   return out;
 }
 
-export function layRoad(world, nid, points, kind) {
-  const log = world.log, n = world.nations.get(nid);
-  if (!log?.rules || !n) return { error: "roads are not running in this world" };
+export function roadView(world) {
   const bld = world.bld, blocked = i => { const id = bld?.at.get(i); return id !== undefined && bld.list.get(id)?.state !== "rubble"; };
-  const plan = roadPlan({ w: world.grid.w, terrain: world.terrain, road: log.road, owner: world.owner, blocked }, nid, points, kind, log.rules, log.scale);
-  if (plan.error) return plan;
+  return { w: world.grid.w, terrain: world.terrain, road: world.log.road, owner: world.owner, blocked };
+}
+
+export function payAndLay(world, nid, plan, kind) {
+  const log = world.log, n = world.nations.get(nid);
   const need = log.rules.types[kind]?.needs, locked = need && world.lockReason?.(nid, need);
   if (locked) return { error: locked };
   if (!plan.plots.length) return { error: kind === "none" ? "there is no road of yours there" : "that road is already there" };
@@ -85,6 +86,20 @@ export function layRoad(world, nid, points, kind) {
   const level = ROAD_TYPES.indexOf(kind);
   for (const i of plan.plots) setRoad(world, i, level);
   return { laid: plan.plots.length, cost: plan.cost, bridges: plan.bridges, skipped: plan.skipped };
+}
+
+export function layRoad(world, nid, points, kind) {
+  const log = world.log, n = world.nations.get(nid);
+  if (!log?.rules || !n) return { error: "roads are not running in this world" };
+  const plan = roadPlan(roadView(world), nid, points, kind, log.rules, log.scale);
+  return plan.error ? plan : payAndLay(world, nid, plan, kind);
+}
+
+export function layRoute(world, nid, from, to, kind) {
+  const log = world.log, n = world.nations.get(nid);
+  if (!log?.rules || !n) return { error: "roads are not running in this world" };
+  const plan = routePlan(roadView(world), nid, from, to, kind, log.rules, log.scale);
+  return plan.error ? plan : payAndLay(world, nid, plan, kind);
 }
 
 export function roadSpriteAt(world, i) { return roadSprite(world.log.road, world.terrain, world.grid.w, i); }
