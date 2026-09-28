@@ -1,6 +1,6 @@
 import { complete, knownOf } from "./sim/research.js";
 import { addUnits } from "./sim/troops.js";
-import { giveMachine, UNIT_TYPES } from "./sim/units.js";
+import { giveMachine, limitError, UNIT_TYPES } from "./sim/units.js";
 import { nextResearch, researchError } from "./shared/research.js";
 import rules from "../data/rules.json" with { type: "json" };
 
@@ -37,8 +37,10 @@ export const ADMIN_OPS = {
       if (!sim.units || typeof m.unit !== "string" || !Object.hasOwn(UNIT_TYPES, m.unit)) return fail("pick a machine");
       if (amount < 1 || amount > 10) return fail("give 1 to 10 machines at a time");
       const made = [];
-      for (let k = 0; k < amount; k++) { const u = giveMachine(sim, n.id, m.unit); if (u) made.push(u.id); }
-      return made.length ? { ...done(made.length), unit: m.unit, machines: made } : fail(`no room for a ${UNIT_TYPES[m.unit].name.toLowerCase()} near ${n.name}'s capital`);
+      let limit = null;
+      for (let k = 0; k < amount && !(limit = limitError(sim, n.id, UNIT_TYPES[m.unit])); k++) { const u = giveMachine(sim, n.id, m.unit); if (u) made.push(u.id); }
+      if (made.length) return { ...done(made.length), unit: m.unit, machines: made, ...(limit ? { limit } : {}) };
+      return fail(limit ?? `no room for a ${UNIT_TYPES[m.unit].name.toLowerCase()} near ${n.name}'s capital`);
     }
     if (m.what === "unit") {
       const now = addUnits(sim, n.id, m.unit, amount);

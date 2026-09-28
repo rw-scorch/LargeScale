@@ -7,6 +7,7 @@ import { installBuildings, addBuilding } from "../src/sim/buildings.js";
 import { installResearch, complete, TREE } from "../src/sim/research.js";
 import { installMachines, spawnUnit, saveMachines, fleetOf, machineOrdersOf, UNIT_TYPES, MACHINE_RULES } from "../src/sim/units.js";
 import { runOrder, StateFeed } from "../src/game.js";
+import { runAdmin } from "../src/admin.js";
 import { lockMap } from "../src/shared/research.js";
 import { TID } from "../src/shared/terrain.js";
 
@@ -111,6 +112,10 @@ test("warships and land machines are limited per nation, counting queues, but tr
   assert.equal(n.money, money - UNIT_TYPES.cog.cost.money, "only the cog was paid for");
   const view = machineOrdersOf(w, a);
   assert.deepEqual([view.fleet, view.limits], [{ land: 2, sea: 1, air: 0 }, { land: 2, sea: 3, air: 1 }]);
+  w.machines.rules.limits.sea = 5;
+  const gift = runAdmin(w, { op: "give", nation: a, what: "machine", unit: "cog", amount: 3 });
+  assert.deepEqual([gift.ok, gift.now, gift.limit], [true, 2, "at most 5 warships: you have 3 and 2 queued"], "an admin gift stops at the limit");
+  assert.deepEqual(runAdmin(w, { op: "give", nation: a, what: "machine", unit: "catapult", amount: 1 }), { ok: false, error: "at most 2 tanks, guns and siege engines: you have 2 and 2 queued" });
 });
 
 test("a harbour launches ships onto the water beside it, and orders are checked", () => {
