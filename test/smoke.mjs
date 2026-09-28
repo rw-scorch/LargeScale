@@ -379,6 +379,17 @@ check(sought, `with the unclaimed land around it taken, the stack goes looking f
 A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
 const st2 = await nextResult(A, "stack");
 const from = (await until(() => view.pump().stacks.get(st2?.stack)))?.pos;
+{
+  const whole = view.stacks.get(st2.stack)?.troops ?? 0;
+  A.ws.send(JSON.stringify({ t: "detach", picks: [{ stack: st2.stack, take: { levy: 3 } }] }));
+  const d = await nextResult(A, "detach");
+  const part = d?.ok && (await until(() => view.pump().stacks.get(d.stacks[0])));
+  const field = view.world.purse?.field;
+  check(d?.ok && part && Math.abs(part.troops - 30) < 1 && Math.abs(view.stacks.get(st2.stack).troops + part.troops - whole) < 1 && hello.soldierRules?.troopsEach === 10,
+    `three picked soldiers leave their company as a company of ${part?.troops} troops; the purse counts ${field?.soldiers} of ${field?.cap} soldiers in ${field?.companies} companies`);
+  A.ws.send(JSON.stringify({ t: "merge", into: st2.stack, stack: d?.stacks?.[0] }));
+  await nextResult(A, "merge");
+}
 let moved = null;
 const far = Math.min(250 * K, Math.floor(hello.w / 3));
 for (const i of land.filter((_, k) => k % 211 === 0)) {

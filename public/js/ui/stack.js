@@ -4,6 +4,7 @@ import { isLand } from "../shared/terrain.js";
 import { simplifyPath } from "../shared/pathfind.js";
 import { MAX_WAYPOINTS } from "../shared/protocol.js";
 import { XP_NAMES } from "../shared/units.js";
+import { soldierCount, soldierTypes } from "../shared/soldiers.js";
 
 const ORDER_TEXT = { hold: "holding", move: "moving", advance: "advancing" };
 
@@ -228,8 +229,10 @@ export function createStackPanel(root, game) {
       drawRoute(s, w);
       const owner = w.nations.get(s.owner), yours = s.owner === w.you;
       const rank = s.xp ? `, ${XP_NAMES[s.xp] ?? "Veteran"}` : "";
-      title.textContent = yours ? `Your stack, ${fmt(s.troops)} troops${rank}` : `${owner?.name ?? "Unknown"}'s stack, ${fmt(s.troops)} troops${rank}`;
-      const parts = w.mixOf(s);
+      const each = w.soldierRules?.troopsEach, company = each && !owner?.bot;
+      const size = company ? `${fmt(soldierCount(s.troops, each))} soldiers (${fmt(s.troops)} troops)` : `${fmt(s.troops)} troops`, what = company ? "company" : "stack";
+      title.textContent = yours ? `Your ${what}, ${size}${rank}` : `${owner?.name ?? "Unknown"}'s ${what}, ${size}${rank}`;
+      const parts = company ? soldierTypes(s.troops, s.mix, each).map(([id, count]) => ({ id, count, name: w.unitTypes.table[id]?.name ?? id })) : w.mixOf(s);
       mixLine.textContent = parts.length > 1 || parts[0]?.id !== "levy" ? parts.map(p => `${fmt(p.count)} ${p.name.toLowerCase()}`).join(", ") : "";
       mixLine.hidden = !mixLine.textContent;
       away.hidden = !yours || w.frozen;

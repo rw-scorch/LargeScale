@@ -4,11 +4,18 @@ import { areaAround } from "../shared/buildings.js";
 import { People } from "./people.js";
 import { placeLabels } from "./labels.js";
 import { roadSprite } from "../shared/roads.js";
+import { soldierCount, soldierTypes, typeOfSlot, formationSlot } from "../shared/soldiers.js";
 
 export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
 const FORMATION = [[0, 0], [-0.32, 0.12], [0.32, 0.12], [-0.18, -0.2], [0.18, -0.2]];
+const SLOTS = { spacing: 0, list: [] };
+const slotOf = (k, spacing) => {
+  if (SLOTS.spacing !== spacing) { SLOTS.spacing = spacing; SLOTS.list = []; }
+  while (SLOTS.list.length <= k) SLOTS.list.push(formationSlot(SLOTS.list.length, spacing));
+  return SLOTS.list[k];
+};
 const ROAD_COLOUR = [null, "#e2c38a", "#d9d4c8", "#b8b8b8", "#f0f0f0", "#8a6a4a"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
 const ZONE_SPRITE = [null, "ov_zone_residential", "ov_zone_commercial", "ov_zone_industrial", "ov_zone_farmland"];
@@ -287,8 +294,9 @@ export class MapRenderer {
     const s = this.state, out = [], showBots = this.cam.scale >= ZOOM.icons * (this.ratio ?? 1);
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
-      const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) ? "selected" : st.order === "hold" ? "idle" : "moving";
-      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
+      const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) || this.picked?.get(st.id)?.size ? "selected" : st.order === "hold" ? "idle" : "moving";
+      const [x, y] = this.stackPoint(st);
+      out.push({ id: st.id, owner: st.owner, x, y, troops: st.troops, soldiers: this.soldiersIn(st), era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
     }
     return out;
   }
@@ -848,6 +856,16 @@ export class MapRenderer {
     const k = px * (f.size ?? 0.85), sp = this.atlas.get(f.sprite);
     if (!sp) return;
     const [sx, sy] = this.plotToScreen(f.x, f.y);
+    if (f.picked) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.strokeStyle = "rgba(232,200,74,.95)";
+      ctx.lineWidth = Math.max(1, (this.ratio ?? 1) * 1.5);
+      ctx.beginPath();
+      ctx.ellipse(sx, sy - k, Math.max(3, sp.w * k * 0.45), Math.max(1.5, sp.w * k * 0.2), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     this.atlas.draw(this.ctx, f.sprite, sx - (sp.w * k) / 2, sy - sp.h * k, k, this.state.nations.get(f.owner)?.colour, f.flip);
   }
 
@@ -857,7 +875,7 @@ export class MapRenderer {
     const size = Math.max(16 * (this.ratio ?? 1), 16 * px);
     const k = size / 16, sy = sy0 - this.markerLift(px);
     a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
-    this.label(String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
+    this.label(String(m.soldiers ?? Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
     if (m.xp) this.rank(sx, sy - size / 2 - 2 * k, m.xp, Math.max(this.ratio ?? 1, k * 0.6));
   }
 
@@ -886,10 +904,47 @@ export class MapRenderer {
     ctx.restore();
   }
 
+  stackPoint(st) {
+    const w = this.state.w, t = st.movedAt && st.prev != null ? Math.min(1, (Date.now() - st.movedAt) / 1000) : 1, a = st.prev ?? st.pos;
+    return [(a % w) + ((st.pos % w) - (a % w)) * t + 0.5, ((a / w) | 0) + (((st.pos / w) | 0) - ((a / w) | 0)) * t + 0.5];
+  }
+
+  soldiersIn(st) {
+    const rules = this.state.soldierRules;
+    return rules && !this.state.nations.get(st.owner)?.bot ? soldierCount(st.troops, rules.troopsEach) : null;
+  }
+
+  oneByOne() {
+    const rules = this.state.soldierRules;
+    return !!rules && this.cam.scale >= rules.drawZoom * (this.ratio ?? 1);
+  }
+
+  soldierSpots(st, share = 1) {
+    const s = this.state, rules = s.soldierRules, n = soldierCount(st.troops, rules.troopsEach), out = [];
+    if (!n) return out;
+    const [cx, cy] = this.stackPoint(st), m = Math.max(1, Math.min(n, Math.round(n * share)));
+    const land = (x, y) => { const i = Math.floor(y) * s.w + Math.floor(x); return x >= 0 && y >= 0 && x < s.w && y < s.h && TERRAIN[s.terrain?.[i]]?.land; };
+    for (let k = 0; k < m; k++) {
+      const slot = m === n ? k : Math.floor((k * n) / m), [ox, oy] = slotOf(slot, rules.spacing);
+      let x = cx + ox, y = cy + oy;
+      if (!land(x, y)) { x = cx + ox * 0.4; y = cy + oy * 0.4; if (!land(x, y)) { x = cx + ox * 0.1; y = cy + oy * 0.1; } }
+      out.push({ slot, x, y });
+    }
+    return out;
+  }
+
   soldiers(r) {
     const s = this.state, types = s.unitTypes, out = [];
     if (!types) return out;
-    const near = [...s.stacks.values()].filter(st => { const x = st.pos % s.w, y = (st.pos / s.w) | 0; return x >= r.x0 - 2 && x <= r.x1 + 2 && y >= r.y0 - 2 && y <= r.y1 + 2; });
+    const near = [...s.stacks.values()].filter(st => { const x = st.pos % s.w, y = (st.pos / s.w) | 0; return x >= r.x0 - 8 && x <= r.x1 + 8 && y >= r.y0 - 8 && y <= r.y1 + 8; });
+    const one = this.oneByOne(), lines = new Set();
+    let total = 0;
+    for (const st of near) {
+      if (one && this.soldiersIn(st) !== null) { lines.add(st); total += this.soldiersIn(st); }
+    }
+    const R = this.ratio ?? 1, budget = Math.max(60, Math.floor((this.canvas.width * this.canvas.height) / (R * R) / (s.soldierRules?.drawArea ?? 900)));
+    const share = total > budget ? budget / total : 1;
+    this.soldierShare = share;
     for (const st of near) {
       const x = st.pos % s.w, y = (st.pos / s.w) | 0;
       const seen = this.facing.get(st.id);
@@ -904,6 +959,16 @@ export class MapRenderer {
       for (const [id, n] of Object.entries(st.mix ?? {})) if (n > most) { most = n; main = id; }
       const base = types.table[main]?.sprite ?? "hunter";
       const fighting = near.some(o => o.owner !== st.owner && Math.max(Math.abs((o.pos % s.w) - x), Math.abs(((o.pos / s.w) | 0) - y)) <= 1);
+      if (lines.has(st)) {
+        const rules = s.soldierRules, kinds = soldierTypes(st.troops, st.mix, rules.troopsEach), walking = st.order !== "hold" || (st.movedAt && Date.now() - st.movedAt < 1000);
+        const whole = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id), picked = this.picked?.get(st.id);
+        for (const p of this.soldierSpots(st, share)) {
+          const kind = typeOfSlot(kinds, p.slot) ?? "levy", sprite = types.table[kind]?.sprite ?? "hunter", beat = Math.floor(this.time * 4 + p.slot * 0.37 + st.id) % 2;
+          const frame = fighting ? (beat ? "attack" : "idle") : walking ? (beat ? "walk1" : "walk2") : "idle";
+          out.push({ x: p.x, y: p.y + 0.2, sprite: `${sprite}_${dir === "w" ? "e" : dir}_${frame}`, flip: dir === "w", owner: st.owner, stack: st.id, slot: p.slot, size: 0.62, picked: whole || !!picked?.has(p.slot) });
+        }
+        continue;
+      }
       const count = Math.max(1, Math.min(5, Math.floor(1 + Math.log2(Math.max(1, st.troops / 40)))));
       for (let k = 0; k < count; k++) {
         const [ox, oy] = FORMATION[k], beat = Math.floor(this.time * 4 + k + st.id) % 2;
@@ -945,7 +1010,7 @@ export class MapRenderer {
     for (const m of this.markers()) {
       const [sx, sy] = this.plotToScreen(m.x, m.y);
       a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - 8 * rk, sy - 8 * rk, rk, s.nations.get(m.owner)?.colour);
-      this.label(String(Math.round(m.troops)), sx, sy + 9 * rk, 11 * rk);
+      this.label(String(m.soldiers ?? Math.round(m.troops)), sx, sy + 9 * rk, 11 * rk);
     }
   }
 

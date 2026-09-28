@@ -105,9 +105,10 @@ export function createArmyPanel(root, game) {
       counts.get(d.id).textContent = `${fmt(home)} at home, ${fmt(field[d.id] ?? 0)} in stacks.`;
     }
     const held = army?.why && army.why !== "build a war camp to train soldiers" ? ` Held up: ${army.why}.` : "";
-    summary.textContent = !army ? "" : army.rate
+    const f = w.purse?.field, out = f ? ` In the field: ${fmt(f.soldiers)} of ${fmt(f.cap)} soldiers, in ${f.companies} of ${f.maxCompanies} companies; each soldier is ${f.troopsEach} troops.` : "";
+    summary.textContent = !army ? "" : (army.rate
       ? `Training ${army.rate} a second at your war camps and barracks, from ${fmt(army.levies)} levies at home.${held}`
-      : `Build a war camp (Build, Military) to train soldiers. Training turns levies at home into the types you set below.${held}`;
+      : `Build a war camp (Build, Military) to train soldiers. Training turns levies at home into the types you set below.${held}`) + out;
   };
 
   return {

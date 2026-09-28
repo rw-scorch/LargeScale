@@ -924,7 +924,7 @@ const trainedUp = await fix.waitForFunction(() => (window.__ls.game.world.purse?
 await fix.waitForTimeout(400);
 const armyCount = await fix.textContent("#army-panel [data-count=club_warrior]").catch(() => "");
 const armySummary = await fix.textContent("#army-summary").catch(() => "");
-check(barracksUp && keepBox && trainedUp && /12 at home/.test(armyCount) && /Training \d/.test(armySummary) && /Needs Stirrups research/.test(lockedKnights), `K opens the Army panel; keeping 12 club warriors trains them at the barracks: "${armyCount}" "${armySummary}"; knights say "${lockedKnights}"`);
+check(barracksUp && keepBox && trainedUp && /12 at home/.test(armyCount) && /Training \d/.test(armySummary) && /In the field: [\d,]+ of 1,000 soldiers/.test(armySummary) && /Needs Stirrups research/.test(lockedKnights), `K opens the Army panel; keeping 12 club warriors trains them at the barracks: "${armyCount}" "${armySummary}"; knights say "${lockedKnights}"`);
 await fix.screenshot({ path: `${OUT}/26-army.png` });
 await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#army-panel")), "Esc closes the Army panel");
@@ -1939,6 +1939,79 @@ await out.waitForTimeout(1500);
 await out.screenshot({ path: `${OUT}/58-login.png` });
 check(scenery === true, "logged out, the login screen pans across the Earth map with no world shown");
 await out.close();
+
+await gp.bringToFront();
+{
+const solId = await newWorld(gp, "UI soldiers", { map: "test", w: 160, h: 100, seed: 12, bots: 0 });
+await gp.goto(`${BASE}/#w=${solId}`);
+await gp.reload();
+await ready(gp);
+const company = await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, { TERRAIN } = await import("/js/shared/terrain.js");
+  const flat = i => [0, 1, -1, w.w, -w.w].every(d => TERRAIN[w.terrain[i + d]]?.build);
+  for (let y = 20; y < w.h - 20 && !w.nations.get(w.you)?.spawned; y += 2) for (let x = 20; x < w.w - 20; x += 2) if (flat(y * w.w + x) && (await g.conn.request({ t: "spawn", x, y })).ok) break;
+  await new Promise(r => setTimeout(r, 1200));
+  await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "troops", amount: 3000 });
+  await new Promise(r => setTimeout(r, 600));
+  const cap = w.nations.get(w.you).capital;
+  const r = await g.conn.request({ t: "stack", share: 0.5, at: cap });
+  const seen = Date.now() + 4000;
+  while (!w.stacks.has(r.stack) && Date.now() < seen) await new Promise(res => setTimeout(res, 50));
+  g.focus(cap, 28);
+  return { id: r.stack, troops: w.stacks.get(r.stack)?.troops ?? 0, cap };
+});
+await gp.waitForTimeout(500);
+const soldiersDrawn = await gp.evaluate(() => { const v = window.__ls.game.view; return v.soldiers(v.visibleRange()).filter(f => f.slot !== undefined).length; });
+const cardTitle = await gp.evaluate(id => { window.__ls.game.select(id); return new Promise(r => setTimeout(() => r(document.querySelector("#stack-title")?.textContent ?? ""), 300)); }, company.id);
+await gp.screenshot({ path: `${OUT}/66-soldiers.png` });
+check(company.troops >= 1000 && soldiersDrawn >= Math.floor(company.troops / 10) * 0.9 && /^Your company, \d+ soldiers \(\d[\d,]* troops\)/.test(cardTitle), `zoomed in, a company is drawn as its soldiers one by one (${soldiersDrawn} figures for ${Math.round(company.troops)} troops): "${cardTitle}"`);
+await gp.keyboard.press("Escape");
+await gp.keyboard.press("v");
+const armiesOn = await gp.waitForFunction(() => window.__ls.game.armies && !document.querySelector("#armies-hint").hidden, null, { timeout: 3000 }).then(() => true, () => false);
+const half = await gp.evaluate(id => {
+  const g = window.__ls.game, v = g.view, s = g.world.stacks.get(id), pts = v.soldierSpots(s).map(p => v.plotToScreen(p.x, p.y));
+  const xs = pts.map(p => p[0]).sort((a, b) => a - b), mid = xs[xs.length >> 1], ys = pts.map(p => p[1]);
+  const r = v.ratio ?? 1;
+  return { x0: (Math.min(...xs) - 6) / r, x1: mid / r, y0: (Math.min(...ys) - 6) / r, y1: (Math.max(...ys) + 6) / r };
+}, company.id);
+await gp.keyboard.down("Shift");
+await gp.mouse.move(half.x0, half.y0);
+await gp.mouse.down();
+await gp.mouse.move((half.x0 + half.x1) / 2, (half.y0 + half.y1) / 2, { steps: 4 });
+await gp.mouse.move(half.x1, half.y1, { steps: 4 });
+await gp.mouse.up();
+await gp.keyboard.up("Shift");
+const pickedTitle = await gp.waitForFunction(() => { const p = document.querySelector("#soldiers-panel"); return p && !p.hidden ? document.querySelector("#soldiers-title").textContent : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+const pickedN = Number(pickedTitle.match(/^(\d+)/)?.[1] ?? 0), total = Math.floor(company.troops / 10);
+await gp.screenshot({ path: `${OUT}/67-soldiers-picked.png` });
+check(armiesOn && pickedN > total * 0.2 && pickedN < total * 0.8, `V turns Armies on, and a Shift-drag box picks part of the company: "${pickedTitle}" of ${total}`);
+const to = await gp.evaluate(cap => { const w = window.__ls.game.world; for (let r = 8; r < 14; r++) for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) { const i = cap + dy * w.w + dx; if (w.owner[i] === w.you && !w.buildingAt(i)) return i; } return null; }, company.cap);
+await gp.click("#soldiers-move");
+const toAt = await toScreen(gp, to);
+await gp.mouse.click(toAt.x, toAt.y);
+const split = await gp.waitForFunction(id => { const w = window.__ls.game.world, mine = w.myStacks(); return mine.length === 2 && mine.some(s => s.id !== id && s.order === "move") ? mine.map(s => Math.round(s.troops)) : null; }, company.id, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+await gp.waitForTimeout(1500);
+await gp.screenshot({ path: `${OUT}/68-soldiers-move.png` });
+check(split && Math.abs(split.reduce((a, b) => a + b, 0) - company.troops) < 2 && split.some(t => Math.abs(t - pickedN * 10) <= 10), `Move sends just the picked soldiers: the company splits into ${JSON.stringify(split)} troops and the new one marches`);
+await gp.keyboard.press("v");
+const pp = await openPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+await login(pp, "rw_scorch", "correct horse");
+await pp.goto(`${BASE}/#w=${solId}`);
+await ready(pp);
+const phoneDraw = await pp.evaluate(async cap => {
+  const g = window.__ls.game, v = g.view;
+  g.focus(cap, 30);
+  await new Promise(r => setTimeout(r, 400));
+  const figs = v.soldiers(v.visibleRange()).filter(f => f.slot !== undefined).length, R = v.ratio ?? 1;
+  const budget = Math.floor((v.canvas.width * v.canvas.height) / (R * R) / g.world.soldierRules.drawArea);
+  const t0 = performance.now();
+  for (let k = 0; k < 20; k++) v.render(0.016);
+  return { figs, budget, share: v.soldierShare, frameMs: +((performance.now() - t0) / 20).toFixed(1) };
+}, company.cap);
+await pp.screenshot({ path: `${OUT}/69-soldiers-phone.png` });
+check(phoneDraw.figs > 0 && phoneDraw.figs <= phoneDraw.budget + 5, `on a phone the soldiers drawn stay inside the screen's budget: ${phoneDraw.figs} of at most ${phoneDraw.budget}, a frame in ${phoneDraw.frameMs} ms`);
+await pp.close();
+}
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
