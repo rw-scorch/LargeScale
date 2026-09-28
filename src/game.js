@@ -3,7 +3,8 @@ import { ORDER_CODES, MAX_ZONE_SIDE, MAX_WAYPOINTS } from "./shared/protocol.js"
 import { isLand } from "./shared/terrain.js";
 import { zonePlots, ZONE_NAMES, POLICY, CIV_RULES } from "./sim/civilians.js";
 import { orderResearch } from "./sim/research.js";
-import { layRoad, layRoute } from "./sim/logistics.js";
+import { layRoad, layRoute, roadView } from "./sim/logistics.js";
+import { polePlan } from "./shared/power.js";
 import { connectPlan, connectStores } from "./sim/autoroads.js";
 import { sendByBoat, boatPlan, boatsAtSea } from "./sim/boats.js";
 import { formWagon, unloadWagon, isWagon } from "./sim/supply.js";
@@ -228,16 +229,35 @@ export const ORDERS = {
     if (!sim.log?.rules) return fail("roads are not running in this world");
     if (typeof m.kind !== "string") return fail("pick a road type");
     const routed = m.from !== undefined || m.to !== undefined;
-    if (routed && m.kind === "none") return fail("pick dirt or cobble to route a road");
+    if (routed && m.kind === "none") return fail("pick dirt, cobble or rail to route a road");
     const r = routed ? layRoute(sim, nation, m.from, m.to, m.kind) : layRoad(sim, nation, m.via, m.kind);
     return r.error ? { ok: false, ...r, plots: undefined, line: undefined } : { ok: true, ...r };
+  },
+  poles(sim, nation, m) {
+    const n = living(sim, nation);
+    if (!n) return fail("spawn first");
+    if (!sim.power || !sim.log) return fail("power is not running in this world");
+    const def = sim.bld.table.power_pole, lock = sim.lockReason?.(nation, "power_pole");
+    if (lock) return fail(lock);
+    const plan = polePlan(roadView(sim), nation, m.via, { ...sim.power.rules, reach: def.pole.reach * sim.power.scale });
+    if (plan.error) return fail(plan.error);
+    const cost = Object.fromEntries(Object.entries(def.cost).map(([k, v]) => [k, v * plan.poles.length]));
+    if (m.dry) return { ok: true, dry: true, poles: plan.poles, gaps: plan.gaps, cost };
+    let placed = 0, error = null;
+    for (const p of plan.poles) {
+      const b = place(sim, nation, "power_pole", p);
+      if (b.error) { error ??= b.error; continue; }
+      placed++;
+    }
+    if (!placed) return fail(error ?? "no poles could go there");
+    return { ok: true, placed, total: plan.poles.length, gaps: plan.gaps, ...(error ? { skipped: error } : {}) };
   },
   connect(sim, nation, m) {
     const n = living(sim, nation);
     if (!n) return fail("spawn first");
     if (!sim.log?.rules || !sim.autoRoads) return fail("roads are not running in this world");
     const kind = m.kind ?? "dirt";
-    if (!["dirt", "cobble"].includes(kind)) return fail("pick dirt or cobble");
+    if (!["dirt", "cobble", "rail"].includes(kind)) return fail("pick dirt, cobble or rail");
     const need = sim.log.rules.types[kind]?.needs, locked = need && sim.lockReason?.(nation, need);
     if (locked) return fail(locked);
     if (m.keep !== undefined) {

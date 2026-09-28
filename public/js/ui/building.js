@@ -10,12 +10,29 @@ const list = parts => parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and $
 
 function workText(def, town) {
   const out = [];
+  if (def.producer?.kind === "convert") out.push(`Each ${def.producer.out} takes ${list(Object.entries(def.producer.in).map(([k, v]) => `${v} ${k}`))} from its store, and its store asks for more.`);
   if (def.gathers) out.push(`Gathers ${list(Object.entries(def.gathers).map(([k, v]) => `${v} ${k}`))} a second, no workers needed.`);
   if (def.producer && town) {
     const staffed = Math.round(Math.max(0.25, town.worked ?? 0) * 100);
     out.push(`${def.jobs} ${def.jobs === 1 ? "job" : "jobs"}. Your workplaces are ${staffed}% staffed${(town.worked ?? 0) < 0.25 ? ": with too few people they work at the 25% floor, so grow your town" : ""}.`);
   }
   return out.join(" ");
+}
+
+export function powerText(w, b) {
+  const d = b.def, p = w.purse?.power;
+  if (!p || b.owner !== w.you || b.state !== "active") return "";
+  if (d.power) {
+    const [fuel, load] = p.plants?.[b.id] ?? [0, 0];
+    if (fuel) return `Makes ${d.power.make} power, ${load}% of it used, burning up to ${d.power.burn} coal a second.`;
+    return w.purse?.logistics?.stuck.some(r => r[0] === b.id && r[1] === "reach") ? `No store within ${w.purse.logistics.reach} plots of travel, so it has no coal and makes no power. Build a store nearby.` : "No coal in its store, so it makes no power. Carts bring coal from your other stores; mine more if none have any.";
+  }
+  if (d.pole) return `Carries your grid ${w.powerRules?.reach ?? d.pole.reach} plots further.`;
+  if (!d.uses) return "";
+  const k = p.users?.[b.id];
+  if (k === undefined || k < 0) return `No power: it works at half rate. Build a coal plant within ${(w.powerRules?.scale ?? 1) * 6} plots, or run power poles to it (Build, Power).`;
+  const [make, need, share] = p.grids[k] ?? [0, 0, 0];
+  return share >= 100 ? `Powered: it uses ${d.uses} of the ${make} its grid makes.` : make ? `Short of power: its grid makes ${make} for ${need} wanted, so everything on it works at ${50 + share / 2}%.` : "Its grid has no coal, so it works at half rate.";
 }
 
 function queueText(w, q) {
@@ -123,7 +140,7 @@ export function createBuildingPanel(root, game) {
       desc.textContent = b.def.description ?? "";
       desc.hidden = !desc.textContent;
       info.textContent = ` ${yours ? "yours" : owner}, ${b.state === "construction" ? `being built, ${Math.floor(b.progress * 100)}%` : b.state === "rubble" ? "rubble, clears soon" : b.state}`;
-      work.textContent = yours ? workText(b.def, w.purse?.town) : "";
+      work.textContent = yours ? [workText(b.def, w.purse?.town), powerText(w, b)].filter(Boolean).join(" ") : "";
       work.hidden = !work.textContent;
       waiting.textContent = yours ? (b.state === "construction" ? siteText(w, b.id) : stuckText(w, b.id)) : "";
       waiting.hidden = !waiting.textContent;

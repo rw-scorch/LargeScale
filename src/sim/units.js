@@ -613,7 +613,7 @@ export function produce(world, dt) {
       q.progress = 0;
     }
     q.why = null;
-    q.progress = Math.min(1, q.progress + (dt * M.speed) / def.time);
+    q.progress = Math.min(1, q.progress + (dt * M.speed * (b.power ?? 1)) / def.time);
     if (q.progress < 1) continue;
     const at = spawnSpot(world, b, def);
     if (at === null) { q.why = def.domain === "sea" ? "no open water next to it" : "no free land next to it"; continue; }

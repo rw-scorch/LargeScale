@@ -132,10 +132,53 @@ The early tank is the first machine that helps take land itself (siege 1.5 where
 
 ### I9. Ryan's check
 
+## How it is built (28 September 2026, branch `m6-industry`)
+
+Ryan asked for the next part once logistics was built (PR 28). He settled the power grid on 28 September 2026 with the drafts above: plants and poles, half rate off the grid, and trains from station to station. The other numbers are the draft's, checked again after logistics:
+
+- **Research (I1).** Age of Industry (1,800 points) and fifteen nodes from 440 to 960, as in the table. Stormtroopers come with Trench warfare, since the table gave them no node. The oil derrick, early factory and parliament now need their research; Steam power unlocks the coal plant and power pole.
+- **Steel (I2).** The steel mill (building 56) is a producer of a new kind, `convert`. Each steel takes 1 iron and 1.5 coal from the mill's own store, at 0.2 a second, scaled by staff and power.
+  - Its store asks for a minute of each input, so carts bring more.
+  - When an input runs out the mill stops, and its card and the Logistics panel say what it waits for.
+  - It costs iron, not steel, so the first one can be built.
+- **Troops and machines (I3, I4).** Units 24 to 32 (23 went to the merchant ship), with the tables' numbers. Steel and oil are paid from the building's store like other materials.
+- **Rail (I5).** A road kind needing Railways: 4 gold and 1 steel a plot, travel cost 0.12, and steel bridges over rivers. Connect stores can lay it too.
+  - A cart between two railway stations looks for a path over rail only. If there is one it runs as a train along it, carrying 5 times an Industrial cart (750).
+  - The station (building 64) is a store of 5,000.
+- **Power (I5).** `src/sim/power.js`, with the grid worked out in `src/shared/power.js` so the client draws the same thing.
+  - A coal plant (building 65) makes 20 power for buildings within 6 plots. It burns up to 0.2 coal a second from its store, in step with its load.
+  - Power poles (building 66, 15 gold, no materials, so they need no carts) carry the grid 4 plots each.
+  - The `poles` order lays a line of them 3 plots apart, like a road: two clicks or a drag. Each pole stays within reach of the last, and the line says where no pole fits.
+  - Users and their power: steel mill 6, vehicle factory 6, naval dock 6, early factory 4, university 4, textile mill 3.
+  - On a grid they work at its share of power; off it, or with no coal, at half. That covers production, goods from factories, machine building and a university's research.
+  - The grid is worked out every 5 seconds and not saved. Capturing a pole or plant splits it.
+- **Buildings (I6).** University (research +12%, up to 3), clinic (growth +10%, up to 5), tax office (income +5%, up to 5), bunker (a fort: 1.4 within 3), vehicle factory, naval dock (a port and a store of 3,000), textile mill (a town industry building, 0.5 goods) and railway station. All work through the building effects from milestone four, with no new code.
+- **Admins** can give coal, steel and oil.
+
+### Progress
+
+- **Found while testing:**
+  - The poles order's reply had a field named `of`, which overwrote the reply's `of: "poles"`. The client never matched it: the poles went up, but no message came back. It is now `total`.
+  - Pole lines used to promise poles on rough ground, which the server refuses.
+  - A cart's cheapest path between two stations could step off the rail near a station and go as a cart; trains now look for a rail-only path.
+  - At 8 times speed a short train can arrive within one tick, before any client sees it. The smoke test sends its train at normal speed.
+- **Evidence.**
+  - `npm test`: 239 of 239: `test/industry.test.js` (6 tests), `test/power.test.js` (6), plus updated machine, road, building and admin tests.
+  - Reference: 95 of 95.
+  - `npm run smoke` on the test map: 111 of 111. A nation researches into the Industrial era (35 nodes), a steel mill beside a coal plant makes steel on full power (grid 20 made, 6 used), and rail between two stations (17 plots for 68 gold and 17 steel) carries 250 coal as one train.
+  - `npm run ui` on the test map: 166 of 166. The Industrial band in the research tree, a powered steel mill's card with the powered land shown, a line of poles by two clicks (and by two taps on a phone), and rail from the Roads tab. Screenshots `60` to `65` in `.screens`.
+  - `npm run bench` on the Earth, with 200 plots of rail, 4 early tanks and a grid of 2 coal plants, 6 steel mills and 40 poles a player: worst tick 41.0 ms. One power pass for all eight players takes 1.2 ms (13 grids, 320 poles).
+  - Fine Europe: worst tick 38.1 ms, with a power pass of 6.9 ms.
+- **Not done yet:**
+  - Trains are drawn as a locomotive without carriages.
+  - The guide (`guide.js`) does not yet point at steel; the Town panel's next step does.
+  - Riflemen, tanks and the new ships are drawn from their sprites the same way as earlier units, but no screenshot checks them yet.
+  - The reload check after a restart (`RECHECK`) was not run this time: Claude Code stopped the dev server for low memory after the browser run.
+
 ## Budgets
 
 - Rail lives in milestone five's road layer. Power poles are buildings; the grid is worked out from them, not saved.
-- New unit numbers start at 23 (22 is the free transport boat) and building numbers at 56; nothing already saved changes number.
+- New unit numbers start at 24 (22 is the free transport boat and 23 the merchant ship) and building numbers at 56; nothing already saved changes number.
 
 ## Decisions (answered by Ryan, 27 September 2026)
 

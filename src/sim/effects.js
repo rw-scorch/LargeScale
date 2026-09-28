@@ -15,7 +15,7 @@ export function buildingEffects(world, nid) {
     const k = (count.get(d.id) ?? 0) + 1;
     count.set(d.id, k);
     if (d.cap && k > d.cap) continue;
-    for (const [e, v] of Object.entries(d.effects)) fx[e] = (fx[e] ?? 0) + v;
+    for (const [e, v] of Object.entries(d.effects)) fx[e] = (fx[e] ?? 0) + v * (b.power ?? 1);
   }
   return { fx, forts };
 }

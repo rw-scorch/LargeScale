@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-5.md`: logistics (roads, army supply, stores and convoys), agreed 27 September 2026 and built in four parts. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check, and the Industrial era follows logistics (`plans/milestone-6.md`). Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-6.md`: the Industrial era (steel, rail, a power grid, new troops and machines), built 28 September 2026. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (227)
+npm test                  # unit tests (239)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -39,7 +39,7 @@ $env:SOAK_SECONDS = "180"; npm run soak   # two players give random orders; repo
 
 `npm run ui` needs Playwright, which is not a project dependency: `npm install --no-save playwright` then `npx playwright install chromium`.
 
-`npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50 --buildings 2000 --ports 4`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
+`npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50 --buildings 2000 --ports 4 --rail 200 --tanks 4 --power 1`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
 
 ## Layout
 
@@ -271,9 +271,19 @@ Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roa
   - A port still being built takes its own materials off the ship (`portSite`), so land taken by boat can get its first port.
   - Convoy rows carry the ship's id as an eighth field; the client hides the cart while it is at sea.
 
+## Milestone six progress
+
+The Industrial era, branch `m6-industry`, stacked on `m5-sea` (28 September 2026). Ryan's power grid choices: plants and poles, half rate off the grid, trains from station to station. Details and evidence are in `plans/milestone-6.md`.
+
+- **Research and content.** Age of Industry and fifteen nodes; buildings 56 to 66 and units 24 to 32. Admins can give coal, steel and oil.
+- **Steel.** The steel mill is a producer of kind `convert` (`in`, `out`, `rate`): inputs come from its own store, which asks for more, and `setShort` in `src/sim/stores.js` records what it waits for.
+- **Rail and trains.** Rail is a road kind that needs Railways (`needs: "rail"`). A cart between two stations (`station` in `data/buildings.json`) with a rail-only path (`railPath`) runs as a train (`c.train`, `rules.json` `stores.train`). Convoy rows carry a ninth field for trains.
+- **Power.** `src/sim/power.js` (`installPower`, rank -2, every 5 s) and `src/shared/power.js` (`gridsOf`, `coverOf`, `polePlan`). Plants have `power`, poles `pole`, users `uses`; users get `b.power` (1 on a full grid, 0.5 off it), applied to producers, factory goods, machine building and building effects. The purse carries `power`, and `hello` carries `powerRules`. The `poles` order lays a line.
+- **Client.** The Power tab (with the pole line tool, `roading === "pole"`), rail in the Roads tab, the power overlay (`view.powerCover`), power lines on building cards, and trains drawn as `loco_steam`. The `energy` sheet is loaded.
+
 Open items as of 28 September 2026, in order:
 
-1. PRs 14 to 27 are merged (roads, army supply, free boats, stores and carts, road tools, the new menu, 28 September 2026). `m5-sea` (Part D, sea routes) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks the whole of milestone five together.
+1. PRs 14 to 27 are merged (roads, army supply, free boats, stores and carts, road tools, the new menu, 28 September 2026). PR 28 (`m5-sea`, sea routes) and the milestone six PR (`m6-industry`, stacked on it) wait for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks logistics and the Industrial era together.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.

@@ -19,7 +19,7 @@ function ringOf(g, b) {
 
 export function connectPlan(world, nid, kind) {
   const log = world.log, rules = log?.rules, n = world.nations.get(nid), g = world.grid;
-  if (!rules?.types[kind]) return { error: "pick dirt or cobble" };
+  if (!rules?.types[kind]) return { error: "pick dirt, cobble or rail" };
   const list = storeList(world, nid);
   if (!list.length) return { error: "you have no stores to connect yet" };
   const view = roadView(world), road = log.road, level = ROAD_TYPES.indexOf(kind);

@@ -44,6 +44,22 @@
     { "id": "printing", "name": "Printing", "branch": "civic", "era": "G", "cost": 260, "requires": ["age_gunpowder"], "unlocks": {"buildings":["library"],"effects":{"research":0.1}} },
     { "id": "schools", "name": "Schools", "branch": "civic", "era": "G", "cost": 280, "requires": ["printing"], "unlocks": {"buildings":["school"]} },
     { "id": "playhouses", "name": "Playhouses", "branch": "civic", "era": "G", "cost": 300, "requires": ["printing"], "unlocks": {"buildings":["theatre"]} },
-    { "id": "courts", "name": "Courts", "branch": "government", "era": "G", "cost": 300, "requires": ["age_gunpowder"], "unlocks": {"buildings":["courthouse"],"effects":{"troop_cap":0.05}} }
+    { "id": "courts", "name": "Courts", "branch": "government", "era": "G", "cost": 300, "requires": ["age_gunpowder"], "unlocks": {"buildings":["courthouse"],"effects":{"troop_cap":0.05}} },
+    {"id":"age_industry","name":"Age of Industry","branch":"era","era":"G","cost":1800,"requires":["star_forts","navigation","schools","courts"],"advances":"I","need":{"nodes":10,"branches":4},"icon":"era_badge_I"},
+    {"id":"steelmaking","name":"Steelmaking","branch":"economy","era":"I","cost":440,"requires":["age_industry"],"unlocks":{"buildings":["steel_mill"]}},
+    {"id":"steam_power","name":"Steam power","branch":"economy","era":"I","cost":520,"requires":["steelmaking"],"unlocks":{"buildings":["coal_plant","power_pole"]}},
+    {"id":"railways","name":"Railways","branch":"economy","era":"I","cost":640,"requires":["steam_power"],"unlocks":{"buildings":["station_large","rail"]}},
+    {"id":"oil","name":"Oil","branch":"economy","era":"I","cost":560,"requires":["steam_power"],"unlocks":{"buildings":["oil_derrick"]}},
+    {"id":"mass_production","name":"Mass production","branch":"economy","era":"I","cost":600,"requires":["steelmaking"],"unlocks":{"buildings":["factory_early","textile_mill"]}},
+    {"id":"rifling","name":"Rifling","branch":"military","era":"I","cost":480,"requires":["age_industry"],"unlocks":{"units":["rifleman"]}},
+    {"id":"machine_guns","name":"Machine guns","branch":"military","era":"I","cost":560,"requires":["rifling"],"unlocks":{"units":["machine_gunner"],"effects":{"defence":0.05}}},
+    {"id":"trench_warfare","name":"Trench warfare","branch":"military","era":"I","cost":620,"requires":["machine_guns"],"unlocks":{"buildings":["bunker"],"units":["mortar_team","stormtrooper"]}},
+    {"id":"field_guns","name":"Field guns","branch":"military","era":"I","cost":700,"requires":["rifling","steelmaking"],"unlocks":{"buildings":["vehicle_factory"],"units":["field_artillery"]}},
+    {"id":"armour","name":"Armour","branch":"military","era":"I","cost":960,"requires":["field_guns","oil"],"unlocks":{"units":["early_tank"]}},
+    {"id":"steam_navy","name":"Steam navy","branch":"military","era":"I","cost":720,"requires":["steam_power","navigation"],"unlocks":{"buildings":["naval_dock"],"units":["steamship","ironclad"]}},
+    {"id":"destroyers","name":"Destroyers","branch":"military","era":"I","cost":840,"requires":["steam_navy"],"unlocks":{"units":["destroyer"]}},
+    {"id":"universities","name":"Universities","branch":"civic","era":"I","cost":520,"requires":["age_industry"],"unlocks":{"buildings":["university"],"effects":{"research":0.1}}},
+    {"id":"medicine","name":"Medicine","branch":"civic","era":"I","cost":600,"requires":["universities"],"unlocks":{"buildings":["clinic"]}},
+    {"id":"bureaucracy","name":"Bureaucracy","branch":"government","era":"I","cost":500,"requires":["age_industry"],"unlocks":{"buildings":["tax_office","parliament"]}}
   ]
 }

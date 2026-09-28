@@ -23,6 +23,7 @@ import { installSupply, supplyTick } from "../src/sim/supply.js";
 import { installStores, storesOf, setStore, sync, homeAt } from "../src/sim/stores.js";
 import { installSeaRoutes, docksOf, seaPlan } from "../src/sim/sea.js";
 import { waterOk } from "../src/sim/units.js";
+import { installPower, powerTick } from "../src/sim/power.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -44,6 +45,9 @@ const { values: a } = parseArgs({ options: {
   seed: { type: "string", default: "1" },
   catchup: { type: "string", default: "12" },
   roads: { type: "string", default: "1500" },
+  rail: { type: "string", default: "200" },
+  tanks: { type: "string", default: "4" },
+  power: { type: "string", default: "1" },
   supply: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
   stores: { type: "string", default: "1" },
@@ -119,6 +123,7 @@ installMachines(w, { scale });
 for (const id of players) {
   for (let k = 0; k < 6; k++) giveMachine(w, id, "catapult");
   for (let k = 0; k < 3; k++) giveMachine(w, id, "cog");
+  for (let k = 0; k < Number(a.tanks); k++) giveMachine(w, id, "early_tank");
 }
 let forts = 0;
 for (const id of players) {
@@ -160,6 +165,33 @@ if (a.stores !== "0" && Number(a.ports) > 0) {
   const docks = players.reduce((t, id) => t + docksOf(w, id).length, 0);
   seaSetup = { ports: placed, docks, docksMs: +(performance.now() - t0).toFixed(1) };
 }
+let railPlots = 0;
+for (const id of players) {
+  const n = w.nations.get(id), cy = w.grid.y(n.capital);
+  for (const dir of [1, -1]) for (let x = w.grid.x(n.capital) + dir * 3, laid = 0; laid < Number(a.rail) / 2 && x > 0 && x < w.grid.w - 1; x += dir) {
+    const i = w.grid.idx(x, cy);
+    if (w.owner[i] !== id || !isLand(terrain[i])) break;
+    if (bld.at.has(i)) continue;
+    setRoad(w, i, ROADS.rail);
+    laid++;
+    railPlots++;
+  }
+}
+const power = a.power !== "0" ? installPower(w, { scale }) : null;
+if (power) for (const id of players) {
+  const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
+  const want = [["coal_plant", 2], ["steel_mill", 6], ["power_pole", 40]];
+  for (let r = 4; r < 80 && want.some(([, k]) => k > 0); r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !w.grid.inside(cx + dx, cy + dy)) continue;
+    const pick = want.find(([, k]) => k > 0);
+    if (!pick) break;
+    if (pick[0] === "power_pole" && (dx % 3 || dy % 3)) continue;
+    const i = w.grid.idx(cx + dx, cy + dy), plots = footprint(w, i, bld.table[pick[0]].fp);
+    if (!plots || plots.some(p => w.owner[p] !== id || bld.at.has(p) || w.log.road[p] || !isLand(terrain[p]))) continue;
+    addBuilding(w, { type: pick[0], owner: id, anchor: i, plots, state: "active", progress: 1 });
+    pick[1]--;
+  }
+}
 let roadPlots = 0;
 for (const id of players) {
   const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
@@ -200,6 +232,8 @@ const feed0 = () => {
     if (!seat) continue;
     seat.goods.food = 1e6;
     seat.goods.wood = 1e6;
+    seat.goods.coal = 1e6;
+    seat.goods.iron = 1e6;
     for (const s of asking.get(id) ?? []) s.goods.wood = 0;
     sync(w, n);
   }
@@ -381,6 +415,14 @@ const report = {
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
   supply: a.supply === "0" ? null : (() => { const t0 = performance.now(); supplyTick(w, 3); const ms = performance.now() - t0; const reach = [...w.supply.fields.values()].reduce((t, f) => t + f.size, 0); w.supply.fields.clear(); const stacks = [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human); return { passMs: +ms.toFixed(1), playerStacks: stacks.length, reachPlots: reach, outOfReach: stacks.filter(s => (s.carry ?? 600) < 600).length }; })(),
+  rail: { plots: railPlots, trains: w.stores?.counts.trains ?? 0 },
+  power: power && (() => {
+    const t0 = performance.now();
+    powerTick(w, 5);
+    const ms = performance.now() - t0, views = [...power.views.values()];
+    return { passMs: +ms.toFixed(1), grids: views.reduce((t, v) => t + v.grids.length, 0), plants: [...w.bld.list.values()].filter(b => b.type === "coal_plant").length, poles: [...w.bld.list.values()].filter(b => b.type === "power_pole").length, users: views.reduce((t, v) => t + Object.keys(v.users).length, 0), powered: views.reduce((t, v) => t + Object.values(v.users).filter(k => k >= 0).length, 0) };
+  })(),
+  tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
   sea: seaSetup && (() => {
     const st = w.stores, t0 = performance.now(), searches = st.counts.searches;
     st.paths.clear();

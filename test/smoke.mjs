@@ -801,7 +801,76 @@ check(httpSched.status === 200 && friendSched.status === 403 && heardHttp?.sched
   `the host schedules a world from the list, players and watchers hear at once, the list shows the new time, and a friend cannot (${friendSched.status})`);
 W.ws.close();
 HA.ws.close();
-const dLog =(await api("/api/admin/log", null, ta)).body;
+const indWorld = await api("/api/worlds", { name: "Industry test", config: { w: 160, h: 100, seed: 5, bots: 0, rules: { buildSpeed: 60, produceSpeed: 5 } } }, ta);
+const IN = await connect(indWorld.body.id, ta);
+const ih = await waitFor(IN, m => m.t === "hello");
+const IM = await new Mirror(IN, ih).load();
+const ask = async m => { IN.ws.send(JSON.stringify(m)); return nextResult(IN, m.t, 8000); };
+let inSpawn = false;
+for (let y = 20; y < 85 && !inSpawn; y += 8) for (const x of [40, 80, 120]) if ((inSpawn = !!(await ask({ t: "spawn", x, y }))?.ok)) break;
+await adminOp(IN, { op: "speed", factor: 8 });
+await adminOp(IN, { op: "give", nation: ih.you, what: "troops", amount: 6000 });
+const inStack = await ask({ t: "stack", share: 0.9 });
+await ask({ t: "advance", stack: inStack?.stack, only: "free" });
+for (const id of ["railways", "steelmaking"]) await ask({ t: "research", id, mode: "queue" });
+const inFin = await adminOp(IN, { op: "finish", nation: ih.you });
+for (const [what, amount] of [["money", 100000], ["iron", 600], ["coal", 900], ["stone", 900], ["steel", 400]]) await adminOp(IN, { op: "give", nation: ih.you, what, amount });
+const inPurse = () => IM.pump().world.purse;
+const industrial = await until(() => inPurse()?.era === "I" && (inPurse().stock.steel ?? 0) >= 400, 8000);
+check(inSpawn && inFin?.ok && ["age_industry", "steelmaking", "steam_power", "railways"].every(id => inFin.done.includes(id)) && industrial,
+  `a nation researches through Gunpowder into the Industrial era: ${inFin?.done?.length} nodes, ending ${inFin?.done?.slice(-4).join(", ")}`);
+await until(() => IM.pump().world.owner.reduce((t, o) => t + (o === ih.you), 0) >= 600, 30000);
+const inCap = IM.world.nations.get(ih.you).capital;
+const spotFor = (type, near, lo, hi) => {
+  const w = IM.pump().world;
+  for (let r = lo; r <= hi; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    const x = (near % w.w) + dx, y = ((near / w.w) | 0) + dy;
+    if (x < 1 || y < 1 || x >= w.w - 4 || y >= w.h - 4) continue;
+    const i = y * w.w + x;
+    if (!w.placeError(type, i)) return i;
+  }
+  return null;
+};
+const buildAt = async (type, at) => {
+  const r = at === null || at === undefined ? null : await ask({ t: "build", type, at });
+  if (r?.ok) await until(() => IM.pump().world.buildings.get(r.building), 5000);
+  return r?.ok ? r.building : null;
+};
+const millId = await buildAt("steel_mill", spotFor("steel_mill", inCap, 3, 9));
+const plantId = await buildAt("coal_plant", millId && spotFor("coal_plant", IM.world.buildings.get(millId).anchor, 3, 5));
+const bothUp = await until(() => [millId, plantId].every(id => IM.pump().world.buildings.get(id)?.state === "active"), 20000);
+const steel0 = inPurse()?.stock.steel ?? 0;
+const powered = await until(() => { const p = inPurse()?.power; return p?.grids?.[0]?.[2] === 100 && p.users?.[millId] >= 0 ? p.grids[0] : null; }, 15000);
+const madeSteel = await until(() => (inPurse()?.stock.steel ?? 0) > steel0 + 1, 20000);
+check(millId && plantId && bothUp && powered && madeSteel,
+  `a steel mill beside a coal plant makes steel on full power (grid ${JSON.stringify(powered)}: made, used, % met; steel ${Math.floor(steel0)} to ${Math.floor(inPurse()?.stock.steel ?? 0)})`);
+const aId = await buildAt("station_large", spotFor("station_large", inCap, 4, 12));
+const aAt = aId ? IM.world.buildings.get(aId).anchor : null;
+const bId = await buildAt("station_large", aAt === null ? null : spotFor("station_large", aAt, 14, 24));
+const bAt = bId ? IM.world.buildings.get(bId).anchor : null;
+const stationsUp = await until(() => [aId, bId].every(id => IM.pump().world.buildings.get(id)?.state === "active"), 20000);
+const beside = (id, toward) => {
+  const w = IM.pump().world, b = w.buildings.get(id), set = new Set(b.plots), out = [];
+  for (const p of b.plots) for (const q of [p - 1, p + 1, p - w.w, p + w.w]) if (!set.has(q) && w.owner[q] === ih.you && !w.buildingAt(q) && isLand(w.terrain[q])) out.push(q);
+  return out.sort((p, q) => Math.hypot(p % w.w - toward % w.w, ((p / w.w) | 0) - ((toward / w.w) | 0)) - Math.hypot(q % w.w - toward % w.w, ((q / w.w) | 0) - ((toward / w.w) | 0)))[0] ?? null;
+};
+const railFrom = aId && bId ? beside(aId, bAt) : null, railTo = aId && bId ? beside(bId, aAt) : null;
+const rail = railFrom !== null && railTo !== null ? await ask({ t: "road", kind: "rail", from: railFrom, to: railTo }) : null;
+const coalAt = id => inPurse()?.logistics?.stores.find(r => r[0] === id)?.[1].coal ?? 0;
+const hutId = inPurse()?.logistics?.stores.find(r => IM.world.buildings.get(r[0])?.type === "chieftain_hut")?.[0];
+await ask({ t: "store", building: aId, kind: "coal", keep: 400, want: 400 });
+const filled = await until(() => coalAt(aId) >= 300, 30000);
+await ask({ t: "store", building: hutId, kind: "coal", keep: 1000, want: 0 });
+await ask({ t: "store", building: aId, kind: "coal", keep: 0, want: 0 });
+await adminOp(IN, { op: "speed", factor: 1 });
+await ask({ t: "store", building: bId, kind: "coal", keep: 250, want: 250 });
+const train = await until(() => IN.json.filter(m => m.t === "state").flatMap(m => m.c ?? []).find(r => r[8] === 1 && r[6] === bAt), 20000);
+const delivered = await until(() => coalAt(bId) >= 200, 30000);
+check(stationsUp && rail?.ok && rail.laid > 8 && filled && train && delivered,
+  `rail between two railway stations (${rail?.laid} plots for ${JSON.stringify(rail?.cost)}) carries coal as a train of ${train?.[4]}, and the far station has ${Math.floor(coalAt(bId))}${rail?.ok ? "" : ` (${rail?.error})`}`);
+IN.ws.close();
+const dLog = (await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);
 console.log(failures ? `${failures} checks failed` : "all checks passed");
 process.exit(failures ? 1 : 0);

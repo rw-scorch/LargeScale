@@ -40,6 +40,7 @@ export function storeHint(w) {
 export function stuckText(w, id) {
   const lg = w.purse?.logistics, row = lg?.stuck.find(s => s[0] === id);
   if (!row) return "";
+  if (row[1].startsWith("short:")) return `Waiting for ${list(row[1].slice(6).split(","))} in its store. Carts bring them from your other stores; mine more if none have any.`;
   return row[1] === "reach"
     ? `No store within ${lg.reach} plots of travel: it keeps ${lg.buffer} and stops. ${storeHint(w)}`
     : `Its store is full of what it makes, so it keeps ${lg.buffer} and waits for room. Use it, or build another store nearby.`;

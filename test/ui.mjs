@@ -1818,6 +1818,178 @@ check(arrived !== null, `the carts arrive and the watchtower starts building (${
 
 
 await gp.bringToFront();
+const indId = await newWorld(gp, "UI industry", { map: "test", w: 160, h: 100, seed: 12, bots: 0, rules: { buildSpeed: 60 } });
+await gp.goto(`${BASE}/#w=${indId}`);
+await gp.reload();
+await ready(gp);
+const indSetup = await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, { isLand } = await import("/js/shared/terrain.js");
+  const comp = new Int32Array(w.w * w.h).fill(-1), sizes = [];
+  for (let i = 0; i < comp.length; i++) {
+    if (comp[i] >= 0 || !isLand(w.terrain[i])) continue;
+    const id = sizes.length, todo = [i];
+    comp[i] = id;
+    let n = 0;
+    while (todo.length) {
+      const c = todo.pop(), x = c % w.w;
+      n++;
+      for (const j of [c - w.w, c + w.w, x > 0 ? c - 1 : -1, x < w.w - 1 ? c + 1 : -1]) if (j >= 0 && j < comp.length && comp[j] < 0 && isLand(w.terrain[j])) { comp[j] = id; todo.push(j); }
+    }
+    sizes.push(n);
+  }
+  const big = sizes.indexOf(Math.max(...sizes)), inside = i => { const x = i % w.w, y = (i / w.w) | 0; for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) if (comp[(y + dy) * w.w + x + dx] !== big) return false; return true; };
+  let spawned = false;
+  for (let y = 8; y < w.h - 8 && !spawned; y += 3) for (let x = 8; x < w.w - 8 && !spawned; x += 3) if (inside(y * w.w + x) && w.terrain[y * w.w + x] >= 12 && w.terrain[y * w.w + x] <= 14) spawned = (await g.conn.request({ t: "spawn", x, y })).ok;
+  await new Promise(r => setTimeout(r, 1000));
+  await g.conn.request({ t: "admin", op: "speed", factor: 8 });
+  await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "troops", amount: 6000 });
+  const st = await g.conn.request({ t: "stack", share: 0.9 });
+  await g.conn.request({ t: "advance", stack: st.stack, only: "free" });
+  for (const id of ["railways", "steelmaking"]) await g.conn.request({ t: "research", id, mode: "queue" });
+  const fin = await g.conn.request({ t: "admin", op: "finish", nation: w.you });
+  for (const [what, amount] of [["money", 100000], ["iron", 600], ["coal", 900], ["stone", 900], ["steel", 400]]) await g.conn.request({ t: "admin", op: "give", nation: w.you, what, amount });
+  return { spawned, done: fin.done?.length ?? 0 };
+});
+await gp.waitForFunction(() => { const w = window.__ls.game.world; let n = 0; for (const o of w.owner) if (o === w.you) n++; return n >= 500 && w.purse?.era === "I"; }, null, { timeout: 40000 }).catch(() => {});
+await gp.evaluate(() => window.__ls.game.conn.request({ t: "admin", op: "speed", factor: 4 }));
+await gp.keyboard.press("u");
+const indTree = await gp.waitForFunction(() => { const t = document.querySelector("#research-panel")?.textContent ?? ""; return /Age of Industry/.test(t) && /Railways/.test(t) ? t : null; }, null, { timeout: 5000 }).then(() => true, () => false);
+await gp.evaluate(() => document.querySelector("#research-panel [data-node=age_industry]")?.scrollIntoView({ block: "center", inline: "center" }));
+await gp.screenshot({ path: `${OUT}/60-research-industry.png` });
+await gp.keyboard.press("u");
+check(indSetup.spawned && indSetup.done > 30 && indTree, `the research tree has its Industrial band, and a nation researches into it (${indSetup.done} nodes finished)`);
+const works = await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital;
+  const spot = (type, near, lo, hi) => {
+    for (let r = lo; r <= hi; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = (near % w.w) + dx, y = ((near / w.w) | 0) + dy;
+      if (x < 2 || y < 2 || x >= w.w - 5 || y >= w.h - 5) continue;
+      if (!w.placeError(type, y * w.w + x)) return y * w.w + x;
+    }
+    return null;
+  };
+  const build = async (type, at) => { if (at === null) return null; const r = await g.conn.request({ t: "build", type, at }); if (!r.ok) return null; for (let k = 0; k < 50 && !w.buildings.get(r.building); k++) await new Promise(res => setTimeout(res, 100)); return r.building; };
+  const plant = await build("coal_plant", spot("coal_plant", cap, 3, 6));
+  const mill = plant && await build("steel_mill", spot("steel_mill", w.buildings.get(plant).anchor, 3, 5));
+  return { mill, plant };
+});
+await gp.waitForFunction(ids => ids.every(id => window.__ls.game.world.buildings.get(id)?.state === "active"), [works.mill, works.plant], { timeout: 20000 }).catch(() => {});
+await gp.evaluate(id => { const g = window.__ls.game; g.selectBuilding(id); g.focus(g.world.buildings.get(id).anchor, 16); }, works.mill);
+const millCard = await gp.waitForFunction(() => { const t = document.querySelector("#building-work")?.textContent ?? ""; return /Powered: it uses 6 of the 20/.test(t) ? t : null; }, null, { timeout: 15000 }).then(h => h.jsonValue(), async () => `none: "${await gp.textContent("#building-work").catch(() => "")}"`);
+const overlayOn = await gp.waitForFunction(() => !!window.__ls.game.view.powerCover, null, { timeout: 4000 }).then(() => true, () => false);
+await gp.screenshot({ path: `${OUT}/61-powered-mill.png` });
+check(works.mill && works.plant && /Powered: it uses 6 of the 20/.test(millCard) && overlayOn, `a steel mill beside a coal plant is powered, and its card says so with the powered land shown: "${millCard.match(/Powered[^.]*\./)?.[0] ?? millCard}"`);
+await gp.keyboard.press("Escape");
+const poleRun = await gp.evaluate(async plantId => {
+  const g = window.__ls.game, w = g.world, v = g.view, p = w.buildings.get(plantId), { TERRAIN } = await import("/js/shared/terrain.js");
+  const free = i => w.owner[i] === w.you && !w.buildingAt(i) && !w.roads[i] && TERRAIN[w.terrain[i]].build;
+  const px = p.anchor % w.w, py = (p.anchor / w.w) | 0;
+  for (let r = 3; r <= 5; r++) for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
+    if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
+    const ax = px + ox, ay = py + oy, dx = Math.abs(ox) >= Math.abs(oy) ? Math.sign(ox) : 0, dy = dx ? 0 : Math.sign(oy), run = [];
+    for (let k = 0; k <= 8; k++) run.push((ay + dy * k) * w.w + ax + dx * k);
+    if (run.every(i => i >= 0 && i < w.owner.length && free(i))) { g.focus(run[4], 18); return { a: run[0], b: run[8] }; }
+  }
+  return null;
+}, works.plant);
+await gp.waitForTimeout(300);
+const toScr = async i => gp.evaluate(i => { const g = window.__ls.game, w = g.world, v = g.view; const [sx, sy] = v.plotToScreen((i % w.w) + 0.5, ((i / w.w) | 0) + 0.5); return [sx / v.ratio, sy / v.ratio]; }, i);
+await gp.keyboard.press("b");
+await gp.click("#build-menu .tabs button:has-text('Power')");
+const powerTab = await gp.textContent("#build-menu .build-list");
+await gp.click("[data-type=power_pole]");
+let poleHint = "", poleToast = "", polesUp = 0;
+if (poleRun) {
+  await gp.mouse.click(...(await toScr(poleRun.a)));
+  await gp.mouse.move(...(await toScr(poleRun.b)), { steps: 5 });
+  await gp.mouse.click(...(await toScr(poleRun.b)));
+  await gp.waitForSelector("#road-lay", { timeout: 3000 }).catch(() => {});
+  poleHint = await gp.textContent("#build-hint");
+  await gp.screenshot({ path: `${OUT}/62-pole-line.png` });
+  await gp.click("#road-lay").catch(() => {});
+  poleToast = await gp.waitForFunction(() => (document.querySelector("#toasts")?.textContent ?? "").match(/Placed \d+ power poles?[^.]*\./)?.[0] ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), async () => `toasts: ${await gp.textContent("#toasts").catch(() => "")}`);
+  polesUp = await gp.waitForFunction(() => { const n = [...window.__ls.game.world.buildings.values()].filter(b => b.type === "power_pole" && b.state === "active").length; return n >= 3 ? n : null; }, null, { timeout: 15000 }).then(h => h.jsonValue(), () => 0);
+}
+await gp.waitForTimeout(2500);
+await gp.screenshot({ path: `${OUT}/63-power-grid.png` });
+check(/Coal plant/.test(powerTab) && /Power pole/.test(powerTab) && /\d+ poles: \d+ gold/.test(poleHint) && /^Placed \d+ power poles/.test(poleToast) && polesUp >= 3,
+  `the Power tab lists the coal plant and poles; two clicks lay a line of poles ("${poleHint.match(/\d+ poles: [^.]*/)?.[0]}"): "${poleToast}", ${polesUp} built`);
+await gp.keyboard.press("Escape");
+await gp.click("#build-menu .tabs button:has-text('Roads')");
+const railRow = await gp.evaluate(() => { const b = document.querySelector("[data-road=rail]"); return b ? { text: b.textContent, disabled: b.disabled } : null; });
+await gp.click("[data-road=rail]").catch(() => {});
+const railEnds = await gp.evaluate(() => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  const free = i => w.owner[i] === w.you && !w.buildingAt(i) && !w.roads[i] && w.terrain[i] > 2;
+  for (let dy = 3; dy <= 12; dy++) for (const sy of [1, -1]) for (let sx = -4; sx <= 4; sx++) {
+    const y = cy + sy * dy, run = [];
+    for (let x = cx + sx - 4; x <= cx + sx + 4; x++) run.push(y * w.w + x);
+    if (y > 1 && y < w.h - 2 && run.every(i => i >= 0 && i < w.owner.length && free(i))) { g.focus(run[4], 18); return { a: run[0], b: run[8] }; }
+  }
+  return null;
+});
+await gp.waitForTimeout(300);
+let railToast = "";
+if (railEnds) {
+  await gp.mouse.click(...(await toScr(railEnds.a)));
+  await gp.mouse.click(...(await toScr(railEnds.b)));
+  await gp.waitForSelector("#road-lay", { timeout: 3000 }).catch(() => {});
+  await gp.click("#road-lay").catch(() => {});
+  railToast = await gp.waitForFunction(() => (document.querySelector("#toasts")?.textContent ?? "").match(/Laid \d+ plots of railway[^.]*\./)?.[0] ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+  await gp.evaluate(e => window.__ls.game.focus(e.a + 4, 40), railEnds);
+  await gp.waitForTimeout(500);
+  await gp.screenshot({ path: `${OUT}/64-rail.png` });
+}
+await gp.keyboard.press("Escape");
+await gp.keyboard.press("Escape");
+const railN = Number(railToast.match(/^Laid (\d+) plots of railway for (\d+) gold, (\d+) steel/)?.[1] ?? 0);
+const railPrice = railToast.match(/for (\d+) gold, (\d+) steel/);
+check(railRow && !railRow.disabled && /Railway4 gold, 1 steel a plot/.test(railRow.text) && railN >= 9 && railPrice && Number(railPrice[1]) === 4 * Number(railPrice[2]) && Number(railPrice[2]) >= railN, `once Railways is known, the Roads tab lays rail: "${railToast}"`);
+const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+await login(ip, "rw_scorch", "correct horse");
+await ip.goto(`${BASE}/#w=${indId}`);
+await ip.reload();
+await ready(ip);
+const phoneLine = await ip.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0, { TERRAIN } = await import("/js/shared/terrain.js");
+  const free = i => w.owner[i] === w.you && !w.buildingAt(i) && !w.roads[i] && TERRAIN[w.terrain[i]].build;
+  for (let dx = 4; dx <= 12; dx++) for (const sx of [1, -1]) for (let sy = -3; sy <= 3; sy++) {
+    const x = cx + sx * dx, run = [];
+    for (let y = cy + sy - 4; y <= cy + sy + 4; y++) run.push(y * w.w + x);
+    if (!run.every(i => i >= 0 && i < w.owner.length)) continue;
+    if (x > 1 && x < w.w - 2 && run.every(free)) { g.focus(run[4], 14); return { a: run[0], b: run[8] }; }
+  }
+  return null;
+});
+await ip.waitForTimeout(400);
+const ipScr = async i => ip.evaluate(i => { const g = window.__ls.game, w = g.world, v = g.view; const [sx, sy] = v.plotToScreen((i % w.w) + 0.5, ((i / w.w) | 0) + 0.5); return [sx / v.ratio, sy / v.ratio]; }, i);
+await ip.tap("#open-build");
+await ip.tap("#build-menu .tabs button:has-text('Power')");
+await ip.tap("[data-type=power_pole]").catch(() => {});
+let phoneToast = "";
+if (phoneLine) {
+  const touchTap = async i => {
+    const [x, y] = await ipScr(i);
+    await ip.evaluate(([x, y]) => {
+      const c = document.querySelector("#map"), keep = c.setPointerCapture;
+      c.setPointerCapture = () => {};
+      for (const type of ["pointerdown", "pointerup"]) c.dispatchEvent(new PointerEvent(type, { pointerId: 42, pointerType: "touch", clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+      c.setPointerCapture = keep;
+    }, [x, y]);
+    await ip.waitForTimeout(600);
+  };
+  await touchTap(phoneLine.a);
+  await touchTap(phoneLine.b);
+  await ip.waitForSelector("#road-lay", { timeout: 3000 }).catch(() => {});
+  await ip.tap("#road-lay").catch(() => {});
+  phoneToast = await ip.waitForFunction(() => (document.querySelector("#toasts")?.textContent ?? "").match(/Placed \d+ power poles?[^.]*\./)?.[0] ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+}
+await ip.screenshot({ path: `${OUT}/65-poles-phone.png` });
+check(/^Placed \d+ power poles/.test(phoneToast), `on a phone, two taps and Place poles lay a line: "${phoneToast}"`);
+await ip.close();
+
+await gp.bringToFront();
 const menuId = await newWorld(gp, "UI menu", { map: "test", w: 160, h: 100, seed: 3, bots: 6 });
 await gp.evaluate(id => localStorage.setItem("ls_last_world", id), menuId);
 await gp.goto(BASE + "/");
