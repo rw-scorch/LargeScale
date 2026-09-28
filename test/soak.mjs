@@ -73,7 +73,7 @@ const near = (w, from, r) => { const x = from % w.w, y = (from / w.w) | 0; retur
 async function act(p) {
   const w = p.cw, you = w.you, n = w.nations.get(you), purse = w.purse;
   if (!n?.alive || !purse) return;
-  const land = mine(p), stacks = [...w.stacks.values()].filter(s => s.owner === you), troops = stacks.filter(s => s.kind !== "supply");
+  const land = mine(p), stacks = [...w.stacks.values()].filter(s => s.owner === you), troops = stacks;
   const cap = n.capital ?? land[0];
   const roll = rand();
   let m;
@@ -90,17 +90,14 @@ async function act(p) {
   else if (roll < 0.65 && troops.length) m = { t: "split", stack: pick(troops).id, share: 0.5 };
   else if (roll < 0.68 && troops.length > 1) m = { t: "merge", into: troops[0].id, stack: troops[1].id };
   else if (roll < 0.7 && stacks.length) m = { t: "disband", stack: pick(stacks).id };
-  else if (roll < 0.73) m = { t: "wagon", at: cap, food: 20 + Math.floor(rand() * 60) };
-  else if (roll < 0.75 && troops.length && stacks.some(s => s.kind === "supply")) m = { t: "follow", stack: stacks.find(s => s.kind === "supply").id, target: pick(troops).id };
+  else if (roll < 0.75 && troops.length) { const s = pick(troops), far = pick([...w.buildings.values()].filter(b => b.owner !== you && b.state === "active")); if (far) m = { t: "move", stack: s.id, to: far.anchor }; }
   else if (roll < 0.8) { const node = pick(w.locks?.nodes ? [...w.locks.nodes.keys()] : []); if (node) m = { t: "research", id: node, mode: "queue" }; }
   else if (roll < 0.83) m = { t: "army", keep: { [pick(["club_warrior", "spear_thrower", "horse_archer", "spearman", "archer"])]: Math.floor(rand() * 200) } };
   else if (roll < 0.86) {
     const shop = [...w.buildings.values()].find(b => b.owner === you && b.state === "active" && b.def.builds?.length);
     if (shop) m = { t: "produce", building: shop.id, type: pick(shop.def.builds) };
-  } else if (roll < 0.89) {
-    const st = purse.logistics?.stores.filter(s => s[0]) ?? [];
-    if (st.length) { const want = Math.floor(rand() * 60); m = { t: "store", building: pick(st)[0], kind: pick(["wood", "food", "stone"]), keep: want + Math.floor(rand() * 20), want }; }
-  } else if (roll < 0.92) {
+  } else if (roll < 0.89) m = { t: "connect", kind: "dirt", keep: rand() < 0.5 };
+  else if (roll < 0.92) {
     const b = [...w.buildings.values()].filter(b => b.owner === you && b.state === "active" && b.def.next);
     if (b.length) m = { t: "upgrade", ids: [pick(b).id] };
   } else if (roll < 0.94) m = { t: "policy", tax: Math.floor(rand() * 5), conscription: 0.1 + Math.round(rand() * 10) * 0.05 };
@@ -118,13 +115,10 @@ function inspect(p, label) {
   if (!purse) return;
   const bad = (v, where) => { if (typeof v === "number" && !Number.isFinite(v)) problem(`${label}: ${where} is ${v}`); };
   bad(purse.money, "money");
-  for (const [k, v] of Object.entries(purse.stock ?? {})) { bad(v, `stock ${k}`); if (v < -1) problem(`${label}: stock ${k} is ${v}`); }
-  const lg = purse.logistics;
-  if (lg) {
-    const tot = {};
-    for (const s of lg.stores) for (const [k, v] of Object.entries(s[1])) { tot[k] = (tot[k] ?? 0) + v; if (v < -0.01) problem(`${label}: store ${s[0]} holds ${v} ${k}`); }
-    for (const k of new Set([...Object.keys(tot), ...Object.keys(purse.stock ?? {})])) if (Math.abs((tot[k] ?? 0) - (purse.stock[k] ?? 0)) > 2) problem(`${label}: stores hold ${(tot[k] ?? 0).toFixed(1)} ${k} but the stock says ${purse.stock[k]}`);
-  }
+  if (purse.money < 0) problem(`${label}: gold is ${purse.money}`);
+  if (purse.stock !== undefined) problem(`${label}: the purse still carries goods`);
+  const t = purse.trade;
+  if (t) for (const k of ["ports", "stations", "ships", "trains", "perMinute", "total"]) { bad(t[k], `trade ${k}`); if (t[k] < 0) problem(`${label}: trade ${k} is ${t[k]}`); }
   for (const s of w.stacks.values()) if (!Number.isFinite(s.troops) || s.troops < 0) problem(`${label}: stack ${s.id} has ${s.troops} troops`);
 }
 
@@ -135,7 +129,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
   if (rounds % 25 === 1) {
     for (const p of [A, B]) {
       const nid = p.cw.you;
-      for (const [what, amount] of [["money", 3000], ["wood", 300], ["stone", 200], ["food", 300], ["iron", 100]]) note("admin give", await A.send({ t: "admin", op: "give", nation: nid, what, amount }));
+      note("admin give", await A.send({ t: "admin", op: "give", nation: nid, what: "money", amount: 3000 }));
     }
   }
   await Promise.all([act(A), act(B)]);
