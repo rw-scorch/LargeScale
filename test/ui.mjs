@@ -1663,6 +1663,52 @@ const boatGone = await gp.waitForFunction(() => ![...window.__ls.game.world.mach
 const heldThere = await gp.evaluate(t => window.__ls.game.world.owner[t] === window.__ls.game.world.you, overseas);
 check(/by boat to take unclaimed land, losing about \d+% as they land/.test(boatToast) && boatAt !== null && /troops landed/.test(landedLine) && boatGone && heldThere,
   `Attack on land across water sends a free boat from the start ("${boatToast}"); it lands ("${landedLine}"), takes the land and the boat is gone`);
+await gp.waitForTimeout(4000);
+const ports = await gp.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, you = w.you, n = w.nations.get(you), { isLand } = await import("/js/shared/terrain.js");
+  for (const [what, amount] of [["money", 300], ["wood", 200]]) await g.conn.request({ t: "admin", op: "give", nation: you, what, amount });
+  const home = new Uint8Array(w.w * w.h), todo = [n.capital];
+  home[n.capital] = 1;
+  while (todo.length) {
+    const i = todo.pop(), x = i % w.w;
+    for (const j of [i - w.w, i + w.w, x > 0 ? i - 1 : -1, x < w.w - 1 ? i + 1 : -1]) if (j >= 0 && j < home.length && !home[j] && isLand(w.terrain[j])) { home[j] = 1; todo.push(j); }
+  }
+  const coast = [];
+  for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === you && isLand(w.terrain[i]) && !w.buildingAt(i) && [i - 1, i + 1, i - w.w, i + w.w].some(j => w.terrain[j] <= 2)) coast.push(i);
+  const d = (i, j) => Math.hypot((i % w.w) - (j % w.w), ((i / w.w) | 0) - ((j / w.w) | 0));
+  const build = async list => { for (const i of list.slice(0, 40)) { const r = await g.conn.request({ t: "build", type: "jetty", at: i }); if (r.ok) return r.building; } return null; };
+  const mine = await build(coast.filter(i => home[i]).sort((i, j) => d(i, n.capital) - d(j, n.capital)));
+  const far = coast.filter(i => !home[i]);
+  return { mine, far, capital: n.capital };
+});
+const homeJetty = await gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", ports.mine, { timeout: 30000 }).then(() => true, () => false);
+const farJetty = await gp.evaluate(async far => {
+  const g = window.__ls.game;
+  for (const i of far.slice(0, 40)) { const r = await g.conn.request({ t: "build", type: "jetty", at: i }); if (r.ok) return r.building; }
+  return null;
+}, ports.far);
+const merchant = await gp.waitForFunction(() => [...window.__ls.game.world.machines.values()].find(u => u.type === "merchant_ship")?.id ?? null, null, { timeout: 30000 }).then(h => h.jsonValue(), () => null);
+let shipCard = "", shipOrders = -1, cartHidden = false;
+if (merchant !== null) {
+  shipCard = await gp.evaluate(id => {
+    const g = window.__ls.game, u = g.world.machines.get(id);
+    g.focus(u.at, 20);
+    g.selectMachine(id);
+    return "";
+  }, merchant);
+  shipCard = await gp.waitForFunction(() => { const t = document.querySelector("#machine-cargo")?.textContent ?? ""; return /aboard/.test(t) ? `${document.querySelector("#machine-cargo").textContent} ${document.querySelector("#machine-hint").textContent}` : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+  shipOrders = await gp.locator("#machine-move").count();
+  cartHidden = await gp.evaluate(id => { const g = window.__ls.game, c = g.world.cargoOf(id); return !!c && !g.view.convoyFigures(null).some(f => f.convoy === c); }, merchant);
+  await gp.waitForTimeout(300);
+  await gp.screenshot({ path: `${OUT}/59-merchant-ship.png` });
+}
+const farBuilt = farJetty !== null && await gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", farJetty, { timeout: 60000 }).then(() => true, () => false);
+await gp.keyboard.press("Escape");
+await gp.keyboard.press("l");
+const seaLine = await gp.waitForFunction(() => { const t = document.querySelector("#logistics-panel")?.textContent ?? ""; return /2 ports send goods/.test(t) ? t.match(/2 ports send goods[^.]*\./)[0] : null; }, null, { timeout: 8000 }).then(h => h.jsonValue(), () => "");
+await gp.keyboard.press("l");
+check(homeJetty && farJetty !== null && merchant !== null && /wood aboard, for your port over the water/.test(shipCard) && shipOrders === 0 && cartHidden && farBuilt && seaLine,
+  `a jetty on the land taken across the water gets its wood by merchant ship ("${shipCard.trim()}"), with no orders on the ship and no cart drawn at sea, and it is built; the Logistics panel says "${seaLine}"`);
 
 await gp.bringToFront();
 await gp.goto(BASE + "/");
