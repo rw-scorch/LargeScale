@@ -92,6 +92,7 @@ export function createMachinePanel(root, game) {
       if (ship && onLand && u.cargo) items.push({ id: "land", label: "Land troops", note: fmt(u.cargo), icon: "ui_flag", run: () => land(u, plot) });
       if (ship !== onLand) items.push({ id: "move", label: ship ? "Sail here" : "Move here", icon: "cursor_move", run: () => order({ t: "machine", machine: u.id, do: "move", to: plot }) });
       items.push({ id: "stop", label: "Stop", icon: "ui_pause", run: () => act.stop() });
+      items.push({ id: "pilot", label: "Pilot", icon: "cursor_attack", run: () => game.startPilot("m", u.id) });
       return items;
     },
     update() {
@@ -126,6 +127,7 @@ export function createMachinePanel(root, game) {
           ? el("button", { id: "machine-land", text: "Land troops", disabled: !u.cargo, title: "click the coast to put the troops ashore", onclick: () => act.land() })
           : el("button", { id: "machine-follow", text: "Follow a stack", title: "keeps beside the stack and adds its attack in battle", onclick: () => act.follow() }),
         el("button", { id: "machine-stop", text: "Stop", onclick: () => act.stop() }),
+        el("button", { id: "machine-pilot", title: "steer it yourself, aim and fire", onclick: () => game.startPilot("m", u.id) }, "Pilot ", keyTag("pilot")),
       ];
       actions.replaceChildren(...list, el("button", { text: "Close", onclick: () => game.selectMachine(null) }));
     },

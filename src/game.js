@@ -10,6 +10,7 @@ import { sendByBoat, boatPlan, boatsAtSea, crossingOf } from "./sim/boats.js";
 import { coarseRoute } from "./shared/pathfind.js";
 import { trainRow, tradePerSecond } from "./sim/trade.js";
 import { fieldError, companyError, detachSoldiers } from "./sim/soldiers.js";
+import { takeControl, release, pilotOf } from "./sim/pilot.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -25,9 +26,15 @@ function living(sim, nation) {
   return n?.spawned && n.alive ? n : null;
 }
 
+function letGo(sim, kind, id) {
+  const P = sim.pilot?.list.get(`${kind}:${id}`);
+  if (P) release(sim, P);
+}
+
 function ownStack(sim, nation, id) {
   const s = Number.isInteger(id) ? sim.stacks.get(id) : null;
   if (!s || s.owner !== nation) return null;
+  if (s.pilot) letGo(sim, "s", s.id);
   delete s.guard;
   s.sail = null;
   s.follow = null;
@@ -36,6 +43,7 @@ function ownStack(sim, nation, id) {
 
 function ownMachine(sim, nation, id) {
   const u = Number.isInteger(id) ? sim.units?.list.get(id) : null;
+  if (u?.pilot && u.owner === nation) letGo(sim, "m", u.id);
   return u && u.owner === nation ? u : null;
 }
 
@@ -324,6 +332,21 @@ export const ORDERS = {
     const g = sim.grid, plots = [];
     for (let yy = Math.max(0, y); yy < Math.min(g.h, y + h); yy++) for (let xx = Math.max(0, x); xx < Math.min(g.w, x + w); xx++) plots.push(g.idx(xx, yy));
     return { ok: true, plots: zonePlots(sim, nation, plots, m.zone) };
+  },
+  pilot(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.pilot) return fail("piloting is not running in this world");
+    if (m.op === "release") {
+      const P = pilotOf(sim, nation);
+      if (P) release(sim, P);
+      return { ok: true, released: !!P };
+    }
+    if (m.op !== "take") return fail("op is take or release");
+    const kind = Number.isInteger(m.stack) ? "s" : Number.isInteger(m.machine) ? "m" : null;
+    if (!kind) return fail("pick a company or a machine");
+    const follow = Array.isArray(m.follow) ? m.follow.filter(Number.isInteger).slice(0, MAX_GROUP) : [];
+    const r = takeControl(sim, nation, kind, kind === "s" ? m.stack : m.machine, follow);
+    return r.error ? fail(r.error) : { ok: true, ...r };
   },
   detach(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");

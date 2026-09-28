@@ -48,6 +48,10 @@ export class ClientWorld {
     this.powerRules = hello.powerRules ?? null;
     this.goldRules = hello.goldRules ?? null;
     this.soldierRules = hello.soldierRules ?? null;
+    this.pilotRules = hello.pilotRules ?? null;
+    this.pilots = new Map();
+    this.shots = [];
+    this.setPilots(hello.pilots ?? [], []);
     this.terrain = null;
     this.parts = new PartCollector();
     this.queue = [];
@@ -104,6 +108,25 @@ export class ClientWorld {
     this.convoys.set(id, { id, owner, pos, kind, amount, era, dest, ship: ship || null, train: !!train, prev: moved ? old.pos : old && !!old.ship !== !!ship ? pos : old?.prev ?? pos, movedAt: moved ? Date.now() : old?.movedAt ?? 0 });
   }
 
+
+  setPilots(rows, shots) {
+    const now = Date.now(), seen = new Set();
+    for (const [kind, id, owner, x, y, heading] of rows) {
+      const key = `${kind ? "m" : "s"}:${id}`, old = this.pilots.get(key);
+      seen.add(key);
+      this.pilots.set(key, { key, kind: kind ? "m" : "s", id, owner, x, y, heading, px: old ? old.x : x, py: old ? old.y : y, at: now });
+    }
+    for (const key of [...this.pilots.keys()]) if (!seen.has(key)) this.pilots.delete(key);
+    for (const [x0, y0, x1, y1, shell, by, hit] of shots ?? []) this.shots.push({ x0, y0, x1, y1, shell: !!shell, by, hit, at: now });
+    if (this.shots.length) this.shots = this.shots.filter(s => now - s.at < 1000);
+  }
+
+  pilotAt(key) {
+    const p = this.pilots.get(key);
+    if (!p) return null;
+    const t = Math.min(1, (Date.now() - p.at) / (this.pilotRules?.sendEvery ?? 100));
+    return [p.px + (p.x - p.px) * t, p.py + (p.y - p.py) * t, p.heading];
+  }
 
   powerOf(s, holding = false) { return powerOf(this.unitTypes, s.troops, s.mix, holding ? "defence" : "attack", this.troopRules.xpBonus[s.xp] ?? 0); }
 
@@ -270,6 +293,7 @@ export class ClientWorld {
     }
     if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
+    if (m.t === "pilots") this.setPilots(m.p ?? [], m.shots ?? []);
     if (m.t === "schedule") { this.schedule = m.schedule ?? {}; if (m.info) this.info = m.info; }
     if (m.t === "phase") this.lastPhase = m;
     if (m.t === "joined") {

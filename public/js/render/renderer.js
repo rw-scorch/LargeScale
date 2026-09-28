@@ -424,6 +424,7 @@ export class MapRenderer {
     this.drawRoadPlan();
     this.drawGhost();
     this.drawEffects();
+    this.drawShots();
     this.drawRoute();
     this.drawSwipe();
     this.drawFortRing();
@@ -605,6 +606,32 @@ export class MapRenderer {
     ctx.globalAlpha = 1;
   }
 
+  drawShots() {
+    const s = this.state, now = Date.now(), ctx = this.ctx, R = this.ratio ?? 1;
+    if (!s.shots?.length) return;
+    ctx.save();
+    ctx.lineCap = "round";
+    for (const sh of s.shots) {
+      const age = (now - sh.at) / 1000;
+      if (age > 0.35) continue;
+      const [ax, ay] = this.plotToScreen(sh.x0, sh.y0), [bx, by] = this.plotToScreen(sh.x1, sh.y1), fade = 1 - age / 0.35;
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = sh.shell ? "#ff9a3c" : "#ffe27a";
+      ctx.lineWidth = (sh.shell ? 3 : 1.6) * R;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      if (sh.hit) {
+        ctx.fillStyle = sh.shell ? "rgba(255,120,40,.8)" : "rgba(255,230,140,.8)";
+        ctx.beginPath();
+        ctx.arc(bx, by, (sh.shell ? 7 : 4) * R * (1.4 - fade * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
   drawSwipe() {
     const sw = this.swipe;
     if (!sw?.line?.length) return;
@@ -781,17 +808,23 @@ export class MapRenderer {
     return u.state === "wreck" && this.atlas.has(`${base}_wreck`) ? `${base}_wreck` : base;
   }
 
+  machinePoint(u) {
+    const s = this.state, p = s.pilotAt?.(`m:${u.id}`);
+    return p ? [p[0], p[1]] : [(u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5];
+  }
+
   machineBox(u, k) {
     const s = this.state, sp = this.atlas.get(this.machineSprite(u));
     if (!sp) return null;
-    const [sx, sy] = this.plotToScreen((u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5);
+    const [sx, sy] = this.plotToScreen(...this.machinePoint(u));
     if (sx < -80 || sy < -80 || sx > this.canvas.width + 80 || sy > this.canvas.height + 80) return null;
     return { sx, sy, w: sp.w * k, h: sp.h * k };
   }
 
   drawMachine(u, k) {
     const m = this.machineBox(u, k);
-    if (m) this.atlas.draw(this.ctx, this.machineSprite(u), m.sx - m.w / 2, m.sy - m.h / 2, k, this.state.nations.get(u.owner)?.colour, u.face < 0);
+    const p = this.state.pilotAt?.(`m:${u.id}`), left = p ? Math.cos(p[2]) < 0 : u.face < 0;
+    if (m) this.atlas.draw(this.ctx, this.machineSprite(u), m.sx - m.w / 2, m.sy - m.h / 2, k, this.state.nations.get(u.owner)?.colour, left);
   }
 
   machineOverlay(u, k) {
@@ -844,7 +877,7 @@ export class MapRenderer {
     for (const u of s.machines?.values() ?? []) {
       const sp = this.atlas.get(this.machineSprite(u));
       if (!sp) continue;
-      const [mx, my] = this.plotToScreen((u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5);
+      const [mx, my] = this.plotToScreen(...this.machinePoint(u));
       if (Math.abs(sx - mx) > Math.max((sp.w * k) / 2, 8 * R) || Math.abs(sy - my) > Math.max((sp.h * k) / 2, 8 * R)) continue;
       const d = Math.hypot(sx - mx, sy - my);
       if (d < bd) { bd = d; best = u.id; }
@@ -905,6 +938,8 @@ export class MapRenderer {
   }
 
   stackPoint(st) {
+    const piloted = this.state.pilotAt?.(`s:${st.id}`);
+    if (piloted) return [piloted[0], piloted[1]];
     const w = this.state.w, t = st.movedAt && st.prev != null ? Math.min(1, (Date.now() - st.movedAt) / 1000) : 1, a = st.prev ?? st.pos;
     return [(a % w) + ((st.pos % w) - (a % w)) * t + 0.5, ((a / w) | 0) + (((st.pos / w) | 0) - ((a / w) | 0)) * t + 0.5];
   }
@@ -954,13 +989,15 @@ export class MapRenderer {
         seen.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? "e" : "w") : dy > 0 ? "s" : "n";
         seen.pos = st.pos;
       }
+      const pl = s.pilots?.get(`s:${st.id}`), steering = !!pl && (pl.x !== pl.px || pl.y !== pl.py);
+      if (steering) { const c = Math.cos(pl.heading), sn = Math.sin(pl.heading); this.facing.get(st.id).dir = Math.abs(c) >= Math.abs(sn) ? (c > 0 ? "e" : "w") : sn > 0 ? "s" : "n"; }
       const dir = this.facing.get(st.id).dir;
       let main = "levy", most = st.troops - Object.values(st.mix ?? {}).reduce((a, b) => a + b, 0);
       for (const [id, n] of Object.entries(st.mix ?? {})) if (n > most) { most = n; main = id; }
       const base = types.table[main]?.sprite ?? "hunter";
       const fighting = near.some(o => o.owner !== st.owner && Math.max(Math.abs((o.pos % s.w) - x), Math.abs(((o.pos / s.w) | 0) - y)) <= 1);
       if (lines.has(st)) {
-        const rules = s.soldierRules, kinds = soldierTypes(st.troops, st.mix, rules.troopsEach), walking = st.order !== "hold" || (st.movedAt && Date.now() - st.movedAt < 1000);
+        const rules = s.soldierRules, kinds = soldierTypes(st.troops, st.mix, rules.troopsEach), walking = pl ? steering : st.order !== "hold" || (st.movedAt && Date.now() - st.movedAt < 1000);
         const whole = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id), picked = this.picked?.get(st.id);
         for (const p of this.soldierSpots(st, share)) {
           const kind = typeOfSlot(kinds, p.slot) ?? "levy", sprite = types.table[kind]?.sprite ?? "hunter", beat = Math.floor(this.time * 4 + p.slot * 0.37 + st.id) % 2;

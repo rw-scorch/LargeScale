@@ -15,6 +15,7 @@ export const ACTIONS = {
   upgrade: { key: "y", label: "Upgrade buildings in bulk" },
   army: { key: "k", label: "Army: train soldiers and see your reserve" },
   armies: { key: "v", label: "Armies: a swipe picks your soldiers one by one" },
+  pilot: { key: "p", label: "Pilot the selected company or machine: WASD to move, the mouse to aim" },
   logistics: { key: "l", label: "Trade: ports, stations, and what trade earns" },
   info: { key: "i", label: "World info: schedule, how to win and settings" },
   admin: { key: "`", label: "Admin panel (host only)" },

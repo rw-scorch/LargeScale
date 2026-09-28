@@ -286,6 +286,22 @@ Evidence: unit tests for range, rearming, bombing and the limit; a smoke world w
       - no soldier stands on water;
       - a moving company glides between plots.
     - The browser and smoke checks for Armies mode and `detach` are written, but not run until the dev server is started.
+- **Part D (29 September 2026, branch `m7-pilot`, stacked on `m7-soldiers`).** Built as described under "How it is built on companies", with one gap: there is no local prediction yet.
+  - The camera follows the server's position, which arrives every 100 ms and is glided between samples. Input therefore shows after one round trip.
+  - Prediction can come later if it feels slow in play.
+  - **Evidence:**
+    - `npm test`: 237 of 237. Five piloting tests cover:
+      - speed and the speed cap;
+      - taking land;
+      - the shore;
+      - firing, the reload and range;
+      - a ship's throttle and turn, staying on water, and shells;
+      - followers, and release when idle.
+    - A client test covers pilot positions and shots.
+    - The renderer run in Node: a piloted company stands where the pilot message puts it, and faces and walks the way it moves.
+    - Written but not run until the dev server is started:
+      - the smoke check: steer, the friend sees it, let go;
+      - the browser checks: P, holding a key, Esc; on a phone, Pilot, the stick and Let go.
 
 ## Ryan's checks
 

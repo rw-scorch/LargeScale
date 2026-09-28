@@ -50,6 +50,14 @@ export function createSoldiersPanel(root, game) {
     move: () => { mode = mode === "move" ? null : "move"; key = ""; game.updatePanels(); },
     target: () => { mode = mode === "nation" ? null : "nation"; key = ""; game.updatePanels(); },
     halt: () => order({ do: "halt" }, (r, n) => game.toast(`${fmt(n)} soldiers stop where they are.`)),
+    pilot: async () => {
+      const list = picks();
+      if (!list.length) return game.toast("Pick some soldiers first.");
+      const d = await game.conn.request({ t: "detach", picks: list });
+      if (!d.ok) return game.toast(d.error ?? "those soldiers could not be picked out");
+      game.pickSoldiers(null);
+      await game.startPilot("s", d.stacks[0], d.stacks.slice(1));
+    },
     disband: () => {
       if (performance.now() - disbandAt > 4000) { disbandAt = performance.now(); key = ""; game.updatePanels(); return game.toast("Press Disband again to send the picked soldiers home. A quarter of them are lost."); }
       disbandAt = -Infinity;
@@ -83,6 +91,7 @@ export function createSoldiersPanel(root, game) {
       if (land && o && o !== w.you) items.push({ id: "attack", label: `Attack ${w.nations.get(o)?.name ?? "them"}`, icon: "dip_war", run: () => order({ do: "advance", only: o }, (r, n) => game.toast(`${fmt(n)} soldiers attack.`)) });
       if (land && !o) items.push({ id: "take", label: "Take unclaimed", icon: "ui_flag", run: act.claim });
       items.push({ id: "halt", label: "Stop", icon: "ui_pause", run: act.halt });
+      items.push({ id: "pilot", label: "Pilot", icon: "cursor_attack", run: act.pilot });
       return items;
     },
     update() {
@@ -103,6 +112,7 @@ export function createSoldiersPanel(root, game) {
         b("soldiers-move", mode === "move" ? "Pick a spot" : "Move", act.move, mode === "move" ? "on" : ""),
         b("soldiers-target", mode === "nation" ? "Pick a nation" : "Attack a nation", act.target, mode === "nation" ? "on" : ""),
         b("soldiers-halt", "Stop", act.halt),
+        b("soldiers-pilot", "Pilot", act.pilot),
         b("soldiers-disband", performance.now() - disbandAt < 4000 ? "Disband: sure?" : "Disband", act.disband, "danger"));
     },
   };

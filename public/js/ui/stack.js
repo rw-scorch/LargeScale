@@ -157,6 +157,7 @@ export function createStackPanel(root, game) {
       button("stack-move", "Move", "move"),
       button("stack-draw", "Draw path", "draw", { title: "drag along the way the stack should go; with a mouse, right-drag does this without the button" }),
       button("stack-split", "Split half", "split"),
+      el("button", { id: "stack-pilot", title: "steer this company yourself: WASD or a stick to move, aim and fire", onclick: () => game.startPilot("s", s.id) }, "Pilot ", keyTag("pilot")),
       button("stack-merge", "Merge nearby", "merge", { disabled: !adjacent(s).length }),
       ...(ships().length ? [el("button", { id: "stack-board", text: "Board a ship", title: "click one of your ships; the stack marches to the coast beside it and goes aboard", onclick: () => act.board() })] : []),
       button("stack-disband", confirming() ? "Sure? Disband" : "Disband", "disband", { class: confirming() ? "danger" : "", title: `send the troops home; ${Math.round(game.world.disbandLoss * 100)}% of them are lost` }),
@@ -195,6 +196,7 @@ export function createStackPanel(root, game) {
       if (onLand) items.push({ id: "move", label: "Move here", icon: "cursor_move", run: () => act.moveNow(plot) });
       if (onLand && o && o !== w.you) items.push({ id: "attack", label: `Attack ${w.nations.get(o)?.name ?? "them"}`, icon: "dip_war", run: () => order({ t: "advance", stack: s.id, only: o }) });
       if (onLand && !o) items.push({ id: "take", label: "Take unclaimed", icon: "ui_flag", run: () => order({ t: "advance", stack: s.id, only: "free" }) });
+      items.push({ id: "pilot", label: "Pilot", icon: "cursor_attack", run: () => game.startPilot("s", s.id) });
       return items;
     },
     async pickTarget(plot, sx, sy) {

@@ -93,3 +93,16 @@ test("a stack that moves keeps where it was, so the client can walk its soldiers
   assert.equal(c.stacks.get(7).prev, 44, "losing troops in place keeps the last move");
   assert.equal(c.stacks.get(7).movedAt, s.movedAt);
 });
+
+test("pilot positions glide between samples, and shots are kept for a second", () => {
+  const c = new ClientWorld(hello({ pilotRules: { sendEvery: 100 }, pilots: [[0, 7, 1, 44.5, 1.5, 0]] }));
+  assert.deepEqual(c.pilotAt("s:7"), [44.5, 1.5, 0]);
+  c.message({ v: PROTOCOL, t: "pilots", p: [[0, 7, 1, 45.5, 1.5, 0], [1, 3, 2, 10.2, 5.7, 1.57]], shots: [[45.5, 1.5, 47.5, 1.5, 0, 1, 6.2]] });
+  const p = c.pilots.get("s:7");
+  assert.deepEqual([p.px, p.x], [44.5, 45.5], "it glides from the last sample");
+  assert.ok(c.pilotAt("m:3"));
+  assert.deepEqual(c.shots.map(s => [s.x1, s.shell, s.hit]), [[47.5, false, 6.2]]);
+  c.message({ v: PROTOCOL, t: "pilots", p: [], shots: [] });
+  assert.equal(c.pilots.size, 0, "let go: nothing piloted");
+  assert.equal(c.shots.length, 1, "the shot still shows for a moment");
+});
