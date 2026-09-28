@@ -333,6 +333,7 @@ Evidence: unit tests for range, rearming, bombing and the limit; a smoke world w
       - rows reaching the client.
     - Reference: 95 of 95.
     - Earth bench with 100 planes per player on top of 1,000 soldiers each: PASS, worst tick 41.3 ms (p99 30.1). The planes flew 7,010 missions, made 4,151 bombing runs and lost 9 to fighters and flak.
+    - Fine Europe, the same load: PASS, worst tick 44.1 ms (p99 31.3), with 5,785 missions, 3,426 bombing runs and 198 planes shot down.
     - Written but not run until the dev server is started:
       - the smoke check: after Flight, a bomber from a new airfield bombs the friend's company;
       - the browser check: an airfield bases a fighter, and Patrol sends it up.
