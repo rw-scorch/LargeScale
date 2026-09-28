@@ -52,7 +52,7 @@ export function createGroupPanel(root, game) {
       }
       if (!isLand(w.terrain[plot])) return game.toast("Pick a spot on land.");
       mode = null;
-      return order({ do: "move", to: plot }, r => game.toast(`${r.done} stacks are on their way, keeping their places around that spot.`));
+      return order({ do: "move", to: plot }, r => game.toast(r.boat ? `${r.done} stacks are on their way. There is no way by land, so they cross together by boat and keep their places on the far side.` : `${r.done} stacks are on their way, keeping their places around that spot.`));
     },
     ringFor(plot) {
       const w = game.world, o = w.owner[plot], land = isLand(w.terrain[plot]), items = [];

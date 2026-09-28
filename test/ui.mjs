@@ -1663,6 +1663,32 @@ const boatGone = await gp.waitForFunction(() => ![...window.__ls.game.world.mach
 const heldThere = await gp.evaluate(t => window.__ls.game.world.owner[t] === window.__ls.game.world.you, overseas);
 check(/by boat to take unclaimed land, losing about \d+% as they land/.test(boatToast) && boatAt !== null && /troops landed/.test(landedLine) && boatGone && heldThere,
   `Attack on land across water sends a free boat from the start ("${boatToast}"); it lands ("${landedLine}"), takes the land and the boat is gone`);
+const moveBoat = await gp.evaluate(async t => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, { isLand } = await import("/js/shared/terrain.js");
+  const st = await g.conn.request({ t: "stack", share: 0.3, at: cap });
+  if (!st.ok) return null;
+  const seen = new Set([t]), todo = [t], near = i => w.myStacks().some(s => Math.max(Math.abs((s.pos % w.w) - (i % w.w)), Math.abs(((s.pos / w.w) | 0) - ((i / w.w) | 0))) <= 3);
+  let to = null;
+  while (todo.length && to === null) {
+    const i = todo.shift();
+    if (!near(i) && !w.buildingAt(i)) to = i;
+    const x = i % w.w;
+    for (const j of [i - w.w, i + w.w, x > 0 ? i - 1 : -1, x < w.w - 1 ? i + 1 : -1]) if (j >= 0 && j < w.terrain.length && !seen.has(j) && isLand(w.terrain[j])) { seen.add(j); todo.push(j); }
+  }
+  g.select(st.stack);
+  g.focus(((((cap / w.w) | 0) + ((to / w.w) | 0)) >> 1) * w.w + (((cap % w.w) + (to % w.w)) >> 1), 8);
+  return { stack: st.stack, to };
+}, overseas);
+await gp.waitForSelector("#stack-move", { timeout: 5000 }).catch(() => {});
+await gp.keyboard.press("m");
+await gp.waitForTimeout(300);
+const islandAt = await toScreen(gp, moveBoat?.to ?? overseas);
+await gp.mouse.click(islandAt.x, islandAt.y);
+const boatHint = await gp.waitForSelector("#move-go", { timeout: 5000 }).then(() => gp.textContent("#stack-hint"), () => "");
+await gp.screenshot({ path: `${OUT}/49b-move-boat.png` });
+await gp.click("#move-go").catch(() => {});
+const sailed = await gp.waitForFunction(() => [...window.__ls.game.world.machines.values()].some(u => u.type === "transport_boat"), null, { timeout: 30000 }).then(() => true, () => false);
+check(/cross \d+ plots of water in a free boat, losing about \d+%/.test(boatHint) && sailed, `M and a click on another island preview the crossing ("${boatHint.split(".")[0]}.") and Go sends a boat`);
 await gp.waitForTimeout(4000);
 const ports = await gp.evaluate(async () => {
   const g = window.__ls.game, w = g.world, you = w.you, n = w.nations.get(you), { isLand } = await import("/js/shared/terrain.js");

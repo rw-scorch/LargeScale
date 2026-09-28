@@ -247,8 +247,8 @@ export function createStackPanel(root, game) {
       }
       const r = await game.conn.request({ t: "route", stack: s.id, to: plot });
       if (!r.ok) return game.toast(r.error ?? "no route");
-      preview = { to: plot, plots: r.plots, seconds: r.seconds };
-      view().route = { points: [[s.pos % w.w, (s.pos / w.w) | 0], ...r.points, [plot % w.w, (plot / w.w) | 0]], label: `about ${r.seconds} s` };
+      preview = { to: plot, plots: r.plots, seconds: r.seconds, boat: r.boat ? { crossing: r.crossing, loss: r.loss } : null };
+      view().route = { points: [[s.pos % w.w, (s.pos / w.w) | 0], ...r.points, [plot % w.w, (plot / w.w) | 0]], label: r.boat ? `by boat, about ${r.seconds} s` : `about ${r.seconds} s` };
       key = "";
     },
     update() {
@@ -273,7 +273,8 @@ export function createStackPanel(root, game) {
       away.hidden = !yours || w.frozen;
       if (yours && document.activeElement !== standing) standing.value = orderOf(s)?.standing ?? "hold";
       info.textContent = ` ${statusOf(s, w)}`;
-      hint.textContent = preview ? `About ${preview.plots} plots and ${preview.seconds} s. Stacks take neutral and enemy land on the way.`
+      hint.textContent = preview?.boat ? `No way by land: they walk to your coast and cross ${preview.boat.crossing} plots of water in a free boat, losing about ${Math.round(preview.boat.loss * 100)}% as they land. About ${preview.seconds} s in all.`
+        : preview ? `About ${preview.plots} plots and ${preview.seconds} s. Stacks take neutral and enemy land on the way.`
         : mode === "follow" ? "Click one of your stacks for the wagon to follow."
         : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "board" ? "Click one of your ships." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."
         : yours && !w.frozen ? "Right-click the map for its orders, or right-drag to draw its way." : "";
