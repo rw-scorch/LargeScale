@@ -27,6 +27,7 @@ import { installBoats } from "./sim/boats.js";
 import { installTrade, tradeView } from "./sim/trade.js";
 import { installPower, powerView } from "./sim/power.js";
 import { installAutoRoads } from "./sim/autoroads.js";
+import { installPlanner, planSummary, planQueue, takePlanNews, PLAN_RULES } from "./sim/planner.js";
 import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS, DEPOSIT_TABLE } from "./sim/resources.js";
 import { installResearch, researchView, TREE } from "./sim/research.js";
 import { installMachines, saveMachines, machineOrdersOf } from "./sim/units.js";
@@ -185,6 +186,7 @@ export class World extends DurableObject {
     installTrade(this.sim, { scale: info.map.scale ?? 1, seed: (info.seed ?? 1) + 15485863 + Math.floor(this.sim.time) });
     installPower(this.sim, { scale: info.map.scale ?? 1 });
     installAutoRoads(this.sim);
+    installPlanner(this.sim, { run: (nid, m) => runOrder(this.sim, nid, m), scale: info.map.scale ?? 1 });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
     installOvertime(this.sim, { every: this.schedule().shrinkEvery ?? rules.schedule.shrinkEvery });
@@ -416,6 +418,7 @@ export class World extends DurableObject {
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, soldierRules: this.sim.soldiers?.rules ?? null, pilotRules: this.sim.pilot?.rules ?? null, pilots: this.sim.pilot ? pilotRows(this.sim) : [], time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
+      plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
     }));
     for (const f of terrainFrames) server.send(f);
     for (const f of ownerFrames) server.send(f);
@@ -574,7 +577,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n) });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n) });
   }
 
   sendState() {
@@ -589,6 +592,12 @@ export class World extends DurableObject {
       if (this.purses.get(me.account) === key) continue;
       this.purses.set(me.account, key);
       try { ws.send(JSON.stringify({ v: PROTOCOL, t: "purse", ...p })); } catch {}
+    }
+    const planNews = takePlanNews(this.sim);
+    if (planNews) for (const ws of this.sockets()) {
+      const me = ws.deserializeAttachment();
+      if (!planNews.includes(me?.nation)) continue;
+      try { ws.send(JSON.stringify({ v: PROTOCOL, t: "plan", queue: planQueue(this.sim.nations.get(me.nation)) })); } catch {}
     }
   }
 

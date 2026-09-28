@@ -12,6 +12,7 @@ import { trainRow, tradePerSecond } from "./sim/trade.js";
 import { fieldError, companyError, detachSoldiers } from "./sim/soldiers.js";
 import { takeControl, release, pilotOf } from "./sim/pilot.js";
 import { orderPlane, planeRow } from "./sim/air.js";
+import { planOrder } from "./sim/planner.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -320,6 +321,12 @@ export const ORDERS = {
     const r = m.dry ? connectPlan(sim, nation, kind) : connectStores(sim, nation, kind);
     const info = { plots: r.plots?.length ?? 0, cost: r.cost ?? {}, bridges: r.bridges ?? 0, stores: r.stores ?? 0, joined: r.joined ?? 0, already: r.already ?? 0, unreachable: r.unreachable ?? 0, keep: n.autoRoads ?? null, laid: r.laid ?? 0 };
     return r.error ? { ok: false, error: r.error, ...info } : { ok: true, dry: !!m.dry, ...info };
+  },
+  plan(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.planner) return fail("the planner is not running in this world");
+    const r = planOrder(sim, nation, m);
+    return r.error ? fail(r.error) : { ok: true, op: m.op, ...r };
   },
   zone(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
