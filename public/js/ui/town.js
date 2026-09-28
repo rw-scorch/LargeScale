@@ -52,6 +52,10 @@ export function nextStep(w) {
     if (!play && !mine("theatre")) return "Your people lack goods, which holds back home upgrades: a Theatre (Build, Civic) supplies them.";
     if (play && p.era === "G") return `Your people lack goods, which holds back home upgrades. Theatres supply them: ${researching(play.id)}.`;
   }
+  if (p.era === "I" && !mine("steel_mill")) {
+    const mill = nodeFor(w, "steel_mill");
+    return mill ? `Industrial buildings, soldiers and machines need steel. Steel mills need ${mill.name}: ${researching(mill.id)}.` : "Industrial buildings, soldiers and machines need steel: build a steel mill (Build, Industry) near a store, and mine iron and coal to feed it.";
+  }
   if (r && !r.queue.length) return "Your research queue is empty: pick what to research next (U).";
   return "Your town is growing. Zone more homes when Homes demand is up, and keep food ahead of it.";
 }

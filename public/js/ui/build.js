@@ -113,7 +113,7 @@ export function createBuildMenu(root, game) {
           el("span", { class: "row spread" }, el("b", { text: d.name }), el("span", { class: "muted", text: `${d.time} s` })),
           d.description ? el("span", { class: "desc", text: d.description }) : null,
           el("span", { class: "muted", text: `${costText(d.cost)}, ${d.footprint[0]} by ${d.footprint[1]}` }),
-          d.producer ? el("span", { class: "muted", text: `Makes ${d.producer.rate} ${d.producer.out ?? "ore"} a second${d.producer.kind === "farm" ? " times fertility and season" : ""}, ${d.jobs} workers` }) : null,
+          d.producer ? el("span", { class: "muted", text: `Makes ${d.producer.rate} ${d.producer.out ?? "ore"} a second${d.producer.kind === "farm" ? " times fertility and season" : d.producer.kind === "convert" ? ` from ${Object.entries(d.producer.in).map(([k, v]) => `${v} ${k}`).join(" and ")} each` : ""}, ${d.jobs} workers` }) : null,
           reason ? el("span", { class: "why", text: reason }) : null);
       }));
     },

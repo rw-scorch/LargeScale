@@ -10,6 +10,7 @@ const list = parts => parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and $
 
 function workText(def, town) {
   const out = [];
+  if (def.producer?.kind === "convert") out.push(`Each ${def.producer.out} takes ${list(Object.entries(def.producer.in).map(([k, v]) => `${v} ${k}`))} from its store, and its store asks for more.`);
   if (def.gathers) out.push(`Gathers ${list(Object.entries(def.gathers).map(([k, v]) => `${v} ${k}`))} a second, no workers needed.`);
   if (def.producer && town) {
     const staffed = Math.round(Math.max(0.25, town.worked ?? 0) * 100);

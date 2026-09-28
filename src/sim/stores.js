@@ -235,6 +235,14 @@ export function deliver(world, b, kind, v) {
   }
 }
 
+export function setShort(world, b, list) {
+  const st = world.stores, was = st.stuck.get(b.id);
+  const why = list === null ? "reach" : list.length ? `short:${list.join(",")}` : null;
+  if (why === was) return;
+  if (why) st.stuck.set(b.id, why);
+  else if (was === "reach" || was?.startsWith("short:")) st.stuck.delete(b.id);
+}
+
 function flushHeld(world, nid = null) {
   const st = world.stores;
   for (const id of st.held) {

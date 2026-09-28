@@ -13,7 +13,7 @@
   "guard": { "every": 2, "ratio": 1.5, "reach": 6, "keepHome": 0.25, "lead": 4, "retarget": 3, "cell": 16 },
   "policy": { "taxSteps": [0, 0.5, 1, 1.5, 2], "taxNames": ["None", "Low", "Normal", "High", "Very high"], "taxUnrest": 0.3, "taxGrowth": 0.5, "conscriptMin": 0.1, "conscriptMax": 0.6, "conscriptStep": 0.05, "conscriptWorkLoss": 1 },
   "buildings": { "capturedResidentsKept": 1 },
-  "resources": { "forestWood": 250, "regrowPerMinute": 0.002, "regrowStart": 0.3, "regrowMinutes": 60, "minWorkforce": 0.25, "speed": 1, "seasonYield": {"spring": 0.8, "summer": 1.2, "autumn": 1, "winter": 0.2, "dry": 0.6}, "winterPasture": 0.5 },
+  "resources": { "forestWood": 250, "regrowPerMinute": 0.002, "regrowStart": 0.3, "regrowMinutes": 60, "minWorkforce": 0.25, "speed": 1, "seasonYield": {"spring": 0.8, "summer": 1.2, "autumn": 1, "winter": 0.2, "dry": 0.6}, "winterPasture": 0.5, "convertStock": 60 },
   "market": { "fee": 0.03, "deliverySeconds": 60, "listingLifeSeconds": 86400 },
   "engineering": { "baseHp": {"rock": 300, "hard": 180, "soft": 90, "made": 40}, "digRate": 6, "blastPower": 150, "chargeCost": {"money": 200} },
   "cbd": { "radius": 14, "maxBonus": 0.5, "attackShare": 0.6 },
