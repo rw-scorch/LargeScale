@@ -1,5 +1,5 @@
 import { ClientWorld } from "./shared/client.js";
-import { loadAtlas } from "./render/atlas.js";
+import { loadAssets, terrainGz, depositsGz } from "./assets.js";
 import { MapRenderer } from "./render/renderer.js";
 import { attachInput } from "./input.js";
 import { Connection } from "./net.js";
@@ -7,6 +7,7 @@ import { keyMap, actionFor, loadKeys } from "./keys.js";
 import { api, session } from "./api.js";
 import { showLogin } from "./ui/login.js";
 import { showWorlds } from "./ui/worlds.js";
+import { createMenu } from "./ui/menu.js";
 import { createHud } from "./ui/hud.js";
 import { createSpawnHint } from "./ui/spawn.js";
 import { createNations } from "./ui/nations.js";
@@ -47,27 +48,6 @@ const gameRoot = document.getElementById("game");
 const overlay = document.getElementById("overlay");
 const canvas = document.getElementById("map");
 
-let assets = null;
-const loadAssets = async () => (assets ??= await Promise.all([
-  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects", "people", "units", "vehicles", "ships"]),
-  fetch("/assets/terrain/palettes.json").then(r => r.json()),
-]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
-const gzCache = new Map(), depCache = new Map();
-const depositsGz = async (dir, hash) => {
-  if (!depCache.has(hash)) {
-    const r = await fetch(`/${dir}/deposits.bin.gz?v=${hash}`);
-    depCache.set(hash, r.ok ? new Uint8Array(await r.arrayBuffer()) : null);
-  }
-  return depCache.get(hash);
-};
-const terrainGz = async (dir, hash) => {
-  if (!gzCache.has(hash)) {
-    const r = await fetch(`/${dir}/terrain.bin.gz?v=${hash}`);
-    if (!r.ok) throw new Error(`The map file ${dir}/terrain.bin.gz is missing on the server.`);
-    gzCache.set(hash, new Uint8Array(await r.arrayBuffer()));
-  }
-  return gzCache.get(hash);
-};
 
 class Game {
   constructor(worldId, name, onLeave, account = null) {
@@ -220,8 +200,9 @@ class Game {
   async onHello(m) {
     const world = new ClientWorld(m);
     this.world = world;
+    let art;
     try {
-      await loadAssets();
+      art = await loadAssets();
       await world.loadBase(() => terrainGz(m.map.dir ?? "map", m.map.baseHash ?? "test"));
       if (m.map.kind !== "test") {
         const gz = await depositsGz(m.map.dir ?? "map", m.map.baseHash);
@@ -233,7 +214,7 @@ class Game {
     }
     if (this.world !== world) return;
     const cam = this.view?.cam;
-    this.view = new MapRenderer(canvas, assets.atlas, world, assets.palettes);
+    this.view = new MapRenderer(canvas, art.atlas, world, art.palettes);
     world.takeChanged();
     this.view.selected = this.selected;
     this.view.selectedBuilding = this.selectedBuilding;
@@ -1060,16 +1041,23 @@ function showScreen(which) {
   gameRoot.hidden = which !== "game";
 }
 
+let menu = null;
+const menuShell = () => (menu ??= createMenu(screen));
+
 async function worlds(account) {
   showScreen("screen");
   history.replaceState(null, "", location.pathname);
-  await showWorlds(screen, account, {
+  const m = menuShell();
+  await showWorlds(m.body, account, {
+    live: m.live,
     onOpen: (id, name) => enter(id, name, account),
     onLogout: async () => { await api("/api/logout", {}); session.token = ""; start(); },
   });
 }
 
 function enter(id, name, account) {
+  menu?.stop();
+  menu = null;
   showScreen("game");
   history.replaceState(null, "", `#w=${id}`);
   new Game(id, name, () => worlds(account), account);
@@ -1089,7 +1077,9 @@ async function start() {
     }
   }
   showScreen("screen");
-  showLogin(screen, account => worlds(account));
+  const m = menuShell();
+  m.live.scenery();
+  showLogin(m.body, account => worlds(account));
 }
 
 start();
