@@ -224,6 +224,18 @@ Evidence: unit tests for range, rearming, bombing and the limit; a smoke world w
     - Reference: 95 of 95.
     - `npm run ui` on the test map: 167 of 167, including M and a click on another island (`49b-move-boat.png`).
     - `npm run smoke`: 111 of 111.
+- **Part B (29 September 2026, branch `m7-gold`, stacked on `m7-boats`).** Built as planned, with these differences:
+  - **Kept.** The gas plant and the textile mill are not retired. The gas plant earns gold on a gas deposit like any mine, and the textile mill is a zone building like the factory.
+  - **Market.** The market board was never installed in `world.js`, so nothing had to go.
+  - **Trade ships.** A trade ship between two of your own ports needs them at least `trade.minPlots` apart. Foreign ports are picked `foreignWeight` (3) times as often as your own.
+  - **While away,** trade is paid as an estimate per port and per station.
+  - **Unknown orders.** They now get an "unknown order" answer. Before, an old client's wagon order got no answer at all.
+  - **Evidence:**
+    - `npm test`: 223 of 223. The count was 242: the stores, supply and sea-route tests went, and five trade tests came.
+    - Reference: 95 of 95.
+    - Earth bench: PASS, worst tick 34.9 ms (p99 17.8), with 24 ports, 8 trade ships at sea, 6 stations and 2 joined pairs.
+    - Fine Europe bench (25 bots): PASS, worst tick 30.6 ms (p99 13.8), with 32 ports, 14 trade ships at sea and 2 trains. Peak memory was 89 MB.
+    - Smoke, soak and `npm run ui` are rewritten for gold: trade ships between jetties, the Trade panel, rail at 12 gold a plot, and a vehicle factory on the grid. They have not been run yet, because the dev server stays off until Ryan asks for it.
 
 ## Ryan's checks
 
