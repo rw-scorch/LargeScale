@@ -17,13 +17,11 @@ import { installOvertime } from "./sim/overtime.js";
 import { cleanSchedule, phaseAt, EVENTS, EVENT_NAMES } from "./shared/schedule.js";
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
 import { installConstruction } from "./sim/construction.js";
-import { installEconomy } from "./sim/economy.js";
+import { installEconomy, convertToGold } from "./sim/economy.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { installRoads, restoreRoads, takeRoadNews } from "./sim/logistics.js";
 import { installBoats } from "./sim/boats.js";
-import { installSupply, supplyView } from "./sim/supply.js";
-import { installStores, restoreStores, encodeStores, logisticsView, sync } from "./sim/stores.js";
-import { installSeaRoutes } from "./sim/sea.js";
+import { installTrade, tradeView } from "./sim/trade.js";
 import { installPower, powerView } from "./sim/power.js";
 import { installAutoRoads } from "./sim/autoroads.js";
 import { installResources, restoreLand, encodeLand, takeTerrainNews, depletedPlots, generateDeposits, DEPOSIT_IDS, DEPOSIT_TABLE } from "./sim/resources.js";
@@ -39,8 +37,8 @@ import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { runAdmin, parseSpeed, cleanName, ADMIN_RULES } from "./admin.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
-const SAVE_VERSION = 3;
-const LOADS = [2, 3];
+const SAVE_VERSION = 4;
+const LOADS = [2, 3, 4];
 const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
 const SEASON_SECONDS = rules.seasons.dayLengthMinutes * 60 * rules.seasons.daysPerSeason;
@@ -174,10 +172,8 @@ export class World extends DurableObject {
     installEffects(this.sim);
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
     installBoats(this.sim, { scale: info.map.scale ?? 1 });
-    installSupply(this.sim, { scale: info.map.scale ?? 1 });
-    installStores(this.sim, { scale: info.map.scale ?? 1 });
-    this.storesLoaded = restoreStores(this.sim, this.readRows("stores"));
-    installSeaRoutes(this.sim);
+    if (this.upgradedFrom && this.upgradedFrom < 4) this.goldLoaded = convertToGold(this.sim);
+    installTrade(this.sim, { scale: info.map.scale ?? 1, seed: (info.seed ?? 1) + 15485863 + Math.floor(this.sim.time) });
     installPower(this.sim, { scale: info.map.scale ?? 1 });
     installAutoRoads(this.sim);
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
@@ -199,7 +195,7 @@ export class World extends DurableObject {
     this.present = new Set();
     this.sim.dirty.clear();
     this.loadMs = Date.now() - t0;
-    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, roads: this.roadsLoaded, stores: this.storesLoaded, ...this.landLoaded };
+    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, roads: this.roadsLoaded, ...(this.goldLoaded ? { gold: this.goldLoaded } : {}), ...this.landLoaded };
   }
 
   currentHashes() {
@@ -209,7 +205,7 @@ export class World extends DurableObject {
 
   layerHashes(terrain = this.sim.terrain) {
     const bld = this.sim.bld;
-    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)), land: hashBytes(encodeLand(this.sim)), road: hashRuns(this.sim.log.road), stores: hashBytes(encodeStores(this.sim)) };
+    return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)), land: hashBytes(encodeLand(this.sim)), road: hashRuns(this.sim.log.road) };
   }
 
   async init(config) {
@@ -568,8 +564,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    if (n) sync(this.sim, n);
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), supply: supplyView(this.sim, n), logistics: logisticsView(this.sim, n), power: powerView(this.sim, n) });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n) });
   }
 
   sendState() {

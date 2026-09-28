@@ -43,6 +43,7 @@ export const keyPlot = (terrain, plots) => plots.find(i => TERRAIN[terrain[i]].l
 
 export function placeError(v, nation, def, anchor, self = 0) {
   if (!def || def.civilian) return "unknown building";
+  if (def.retired) return "no longer built: every cost is in gold now";
   if (eraIdx(def.era) > eraIdx(nation.era ?? "T")) return `needs the ${ERA_NAMES[def.era]} era`;
   const locked = v.lockOf?.(def.id);
   if (locked) return locked;

@@ -20,7 +20,6 @@ function field(w = 60, h = 30, scale = 1) {
   world.spawn(a, 5, 15);
   for (let y = 0; y < h; y++) for (let x = 0; x < w - 10; x++) world.claim(g.idx(x, y), a);
   n.money = 1000;
-  n.stock = { stone: 100 };
   n.human = true;
   world.events.length = 0;
   return { world, g, a, n };
@@ -69,7 +68,7 @@ test("laying a road charges for new plots only, cobble waits for research, and r
   assert.equal(layRoad(world, a, [g.idx(5, 10), g.idx(9, 10)], "cobble").error, "research Paved roads first");
   world.lockReason = () => null;
   const cob = layRoad(world, a, [g.idx(5, 10), g.idx(9, 10)], "cobble");
-  assert.deepEqual([cob.laid, cob.cost, n.stock.stone], [5, { money: 15, stone: 5 }, 95]);
+  assert.deepEqual([cob.laid, cob.cost, n.money], [5, { money: 30 }, 1000 - 20 - 5 - 30]);
   n.money = 3;
   assert.match(layRoad(world, a, [g.idx(5, 20), g.idx(14, 20)], "dirt").error, /^you need 10 gold/);
   const gone = layRoad(world, a, [g.idx(5, 10), g.idx(29, 10)], "none");
@@ -166,21 +165,22 @@ test("a routed road goes around buildings and rivers to the point you pick, reus
   assert.match(layRoute(world, a, g.idx(10, 15), g.idx(55, 15), "dirt").error, /no way to lay a road/, "the far end is not your land");
 });
 
-test("Connect stores links every store to the capital's roads, and the standing order connects new ones", () => {
+test("Connect links barracks, ports and stations to the capital's roads, and the standing order connects new ones", () => {
   const { world, g, a, n } = field();
   installAutoRoads(world);
   n.capital = g.idx(5, 15);
   const hut = addBuilding(world, { type: "chieftain_hut", owner: a, anchor: g.idx(5, 15), state: "active", progress: 1 });
-  const yard = addBuilding(world, { type: "storage_yard", owner: a, anchor: g.idx(25, 5), state: "active", progress: 1 });
+  const yard = addBuilding(world, { type: "barracks", owner: a, anchor: g.idx(25, 5), state: "active", progress: 1 });
+  addBuilding(world, { type: "watchtower_wood", owner: a, anchor: g.idx(15, 25), state: "active", progress: 1 });
   const dry = connectPlan(world, a, "dirt");
   assert.equal(dry.joined, 1);
-  assert.ok(dry.plots.length >= 25 && dry.plots.length <= 32, `${dry.plots.length} plots from the yard to the hut`);
+  assert.ok(dry.plots.length >= 25 && dry.plots.length <= 32, `${dry.plots.length} plots from the barracks to the hut; the watchtower is left alone`);
   const r = connectStores(world, a, "dirt");
   assert.equal(r.laid, dry.plots.length);
   assert.equal(connectPlan(world, a, "dirt").already, 1, "now it is on the network");
   assert.equal(connectPlan(world, a, "dirt").plots.length, 0);
   n.autoRoads = "dirt";
-  const jetty = addBuilding(world, { type: "storage_yard", owner: a, anchor: g.idx(40, 25), state: "active", progress: 1 });
+  const jetty = addBuilding(world, { type: "war_camp", owner: a, anchor: g.idx(40, 25), state: "active", progress: 1 });
   for (let t = 0; t < 21; t++) world.tick(1);
   assert.ok(world.events.some(e => e.type === "roads_connected" && e.nation === a), "the standing order laid roads by itself");
   assert.equal(connectPlan(world, a, "dirt").already, 2);

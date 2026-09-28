@@ -114,7 +114,7 @@ function raidBoats(world, dt) {
   for (const u of world.units.list.values()) {
     const d = UNIT_TYPES[u.type];
     if (u.wreck || d?.domain !== "sea") continue;
-    if (d.transport || d.freight) boats.push(u);
+    if (d.transport) boats.push(u);
     else if (d.attack > 0) ships.push(u);
   }
   if (!boats.length || !ships.length) return;

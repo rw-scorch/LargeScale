@@ -4,12 +4,13 @@ import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
 import { installTroops, trainTick } from "../src/sim/troops.js";
 import { addBuilding } from "../src/sim/buildings.js";
-import { installConstruction } from "../src/sim/construction.js";
-import { installResources, productionTick } from "../src/sim/resources.js";
+import { installConstruction, canPlace } from "../src/sim/construction.js";
+import { installResources } from "../src/sim/resources.js";
 import { installRoads } from "../src/sim/logistics.js";
 import { installMachines, queueMachines, produce } from "../src/sim/units.js";
 import { installEffects } from "../src/sim/effects.js";
-import { installStores, sync, putInto, storesTick, logisticsView, STORE_RULES } from "../src/sim/stores.js";
+import { installTrade, tripPay } from "../src/sim/trade.js";
+import { ROAD_TYPES } from "../src/shared/roads.js";
 import { TREE } from "../src/sim/research.js";
 import { lockMap, planPath } from "../src/shared/research.js";
 import { makeRng } from "../src/shared/rng.js";
@@ -31,14 +32,13 @@ function field() {
   installResources(w, undefined, { rng: makeRng(3), hook: false });
   installMachines(w);
   installEffects(w);
-  installStores(w);
+  installTrade(w);
   const g = w.grid, a = w.addNation({ name: "A", human: true });
   w.spawn(a, 3, 10);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) w.claim(g.idx(x, y), a);
   const n = w.nations.get(a);
-  Object.assign(n, { troops: 3000, money: 50000, era: "I", pop: 0, stock: { food: 500, iron: 100, coal: 150, steel: 200, oil: 100 } });
+  Object.assign(n, { troops: 3000, money: 50000, era: "I", pop: 0 });
   const hut = addBuilding(w, { type: "parliament", owner: a, anchor: g.idx(2, 8), state: "active", progress: 1 });
-  sync(w, n);
   w.events.length = 0;
   const put = (type, x, y, state = "active") => addBuilding(w, { type, owner: a, anchor: g.idx(x, y), state, progress: state === "active" ? 1 : 0 });
   return { w, g, a, n, hut, put };
@@ -48,8 +48,8 @@ test("Age of Industry needs ten Gunpowder nodes in all four branches, and each I
   const era = TREE.nodes.find(t => t.id === "age_industry");
   assert.deepEqual([era.advances, era.need, era.requires], ["I", { nodes: 10, branches: 4 }, ["star_forts", "navigation", "schools", "courts"]]);
   const locks = lockMap(TREE), b = id => locks.buildings.get(id), u = id => locks.units.get(id);
-  assert.deepEqual(["steel_mill", "station_large", "oil_derrick", "factory_early", "textile_mill", "bunker", "vehicle_factory", "naval_dock", "university", "clinic", "tax_office", "parliament"].map(b),
-    ["steelmaking", "railways", "oil", "mass_production", "mass_production", "trench_warfare", "field_guns", "steam_navy", "universities", "medicine", "bureaucracy", "bureaucracy"]);
+  assert.deepEqual(["station_large", "oil_derrick", "factory_early", "textile_mill", "bunker", "vehicle_factory", "naval_dock", "university", "clinic", "tax_office", "parliament"].map(b),
+    ["railways", "oil", "mass_production", "mass_production", "trench_warfare", "field_guns", "steam_navy", "universities", "medicine", "bureaucracy", "bureaucracy"]);
   assert.deepEqual(["rifleman", "machine_gunner", "mortar_team", "stormtrooper", "field_artillery", "early_tank", "steamship", "ironclad", "destroyer"].map(u),
     ["rifling", "machine_guns", "trench_warfare", "trench_warfare", "field_guns", "armour", "steam_navy", "steam_navy", "destroyers"]);
   const costs = TREE.nodes.filter(t => t.era === "I").map(t => t.cost);
@@ -58,30 +58,11 @@ test("Age of Industry needs ten Gunpowder nodes in all four branches, and each I
   assert.ok(path.includes("age_industry") && path.indexOf("age_industry") < path.indexOf("armour"), `the way to Armour goes through the era: ${path.join(", ")}`);
 });
 
-test("a steel mill turns 1 iron and 1.5 coal from its store into 1 steel, and says what it waits for when an input runs out", () => {
-  const { w, g, a, n, hut, put } = field();
-  const mill = put("steel_mill", 6, 8);
-  const steel = hut.goods.steel;
-  productionTick(w, 10);
-  assert.ok(near(hut.goods.steel - steel, 2), `0.2 steel a second: ${hut.goods.steel - steel}`);
-  assert.ok(near(hut.goods.iron, 98) && near(hut.goods.coal, 147));
-  assert.ok(near(n.stock.steel, 202), "the nation's stock follows the store");
-  hut.goods.coal = 0;
-  sync(w, n);
-  productionTick(w, 10);
-  assert.ok(near(hut.goods.steel - steel, 2), "no coal, no steel");
-  assert.deepEqual(logisticsView(w, n).stuck, [[mill.id, "short:coal"]]);
-  assert.ok(w.stores.asks.get(`${hut.id}:coal`)?.amount >= 1.5 * 0.2 * 60, "its store asks for a minute of coal");
-  const yard = put("warehouse", 40, 8);
-  w.stores.rescan = true;
-  sync(w, n);
-  putInto(w, n, yard, "coal", 100);
-  storesTick(w, STORE_RULES.every);
-  assert.ok([...w.stores.convoys.values()].some(c => c.to === hut.id && c.kind === "coal"), "carts bring coal from the warehouse");
-  hut.goods.coal = 30;
-  sync(w, n);
-  productionTick(w, 10);
-  assert.deepEqual(logisticsView(w, n).stuck, [], "working again");
+test("with gold the only currency the steel mill is retired, and Steelmaking gives income instead", () => {
+  const { w, g, a } = field();
+  assert.equal(canPlace(w, a, "steel_mill", g.idx(20, 8)), "no longer built: every cost is in gold now");
+  assert.deepEqual(TREE.nodes.find(t => t.id === "steelmaking").unlocks, { buildings: [], effects: { income: 0.05 } });
+  for (const d of unitData.units) assert.deepEqual(Object.keys(d.cost).filter(k => k !== "money"), [], `${d.id} costs gold only`);
 });
 
 test("universities, clinics, tax offices and bunkers change the numbers they name", () => {
@@ -98,14 +79,14 @@ test("universities, clinics, tax offices and bunkers change the numbers they nam
   assert.equal(w.fortAt(a, g.idx(34, 14)), 1, "3 plots, no further");
 });
 
-test("riflemen train at the barracks with steel from its store, and the new troops keep the plan's numbers", () => {
-  const { w, g, n, hut, put } = field();
+test("riflemen train at the barracks for gold, and the new troops keep the plan's numbers", () => {
+  const { w, g, n, put } = field();
   put("barracks", 8, 12);
   n.drill = { keep: { rifleman: 50 } };
-  const steel = hut.goods.steel;
+  const money = n.money;
   trainTick(w, 60);
   assert.equal(Math.round(n.mix.rifleman), 50);
-  assert.ok(near(steel - hut.goods.steel, 50 * 0.2, 1e-3), `0.2 steel each: ${steel - hut.goods.steel}`);
+  assert.ok(near(money - n.money, 50 * unit("rifleman").cost.money, 1e-3), `${unit("rifleman").cost.money} gold each: ${money - n.money}`);
   const row = id => [unit(id).attack, unit(id).defence, unit(id).speed, unit(id).capture];
   assert.deepEqual(["rifleman", "machine_gunner", "mortar_team", "stormtrooper"].map(row), [[4.5, 4, 1, 1.3], [3, 7, 0.8, 0.8], [5, 3, 0.9, 1.4], [6, 3, 1.2, 1.8]]);
   const s = w.createStack(n.id, g.idx(10, 10), 100);
@@ -115,43 +96,40 @@ test("riflemen train at the barracks with steel from its store, and the new troo
   assert.ok(near(w.powerOf(s, false) / w.powerOf(m, false), 4.5 / 3.5), "a rifleman attacks at 4.5 against a musketeer's 3.5");
 });
 
-test("a vehicle factory builds an early tank with steel and oil from its store", () => {
-  const { w, g, a, n, hut, put } = field();
+test("a vehicle factory builds an early tank for gold, and waits when the gold runs out", () => {
+  const { w, g, a, n, put } = field();
   const f = put("vehicle_factory", 8, 12);
   assert.ok(!queueMachines(w, a, f.id, "early_tank").error);
-  const oil = hut.goods.oil, steel = hut.goods.steel;
+  const money = n.money;
   for (let k = 0; k < 200 && ![...w.units.list.values()].some(u => u.type === "early_tank"); k++) produce(w, 1);
   assert.ok([...w.units.list.values()].some(u => u.type === "early_tank" && u.owner === a), "the tank rolls out");
-  assert.deepEqual([oil - hut.goods.oil, steel - hut.goods.steel], [30, 80]);
-  hut.goods.oil = 0;
-  sync(w, n);
+  assert.ok(near(money - n.money, unit("early_tank").cost.money), `${money - n.money} gold`);
+  n.money = 0;
   queueMachines(w, a, f.id, "early_tank");
   produce(w, 1);
-  assert.match(w.machines.queues.get(f.id).why, /oil/);
+  assert.equal(w.machines.queues.get(f.id).why, "not enough gold");
 });
 
-test("rail needs Railways, costs 4 gold and 1 steel a plot, and carts between two stations joined by rail run as trains carrying 5 times as much", () => {
-  const { w, g, a, n, hut, put } = field();
+test("rail needs Railways and costs 12 gold a plot; trains run between two stations joined by rail and earn gold for each trip", () => {
+  const { w, g, a, n, put } = field();
   assert.equal(lockMap(TREE).buildings.get("rail"), "railways");
-  const steel = n.stock.steel, money = n.money;
+  const money = n.money;
   const r = runOrder(w, a, { t: "road", kind: "rail", via: [g.idx(13, 8), g.idx(39, 8)] });
   assert.ok(r.ok, r.error);
-  assert.deepEqual([r.laid, money - n.money, steel - n.stock.steel], [27, 27 * 4, 27]);
+  assert.deepEqual([r.laid, money - n.money], [27, 27 * 12]);
   const A = put("station_large", 10, 8), B = put("station_large", 40, 8);
-  w.stores.rescan = true;
-  sync(w, n);
-  putInto(w, n, A, "coal", 2000);
-  assert.ok(runOrder(w, a, { t: "store", building: B.id, kind: "coal", keep: 1000, want: 1000 }).ok);
-  storesTick(w, STORE_RULES.every);
-  const trains = [...w.stores.convoys.values()].filter(c => c.to === B.id);
-  assert.ok(trains.length && trains.every(c => c.train && c.from === A.id), "trains from the other station");
-  assert.equal(trains[0].amount, 150 * 5, "an Industrial cart carries 150; a train 750");
-  const taken = [...w.stores.convoys.values()].find(c => c.to === hut.id);
-  assert.ok(!taken, "nothing else moves");
-  const far = put("warehouse", 40, 14);
-  w.stores.rescan = true;
-  sync(w, n);
-  assert.ok(runOrder(w, a, { t: "store", building: far.id, kind: "coal", keep: 100, want: 100 }).ok);
-  storesTick(w, STORE_RULES.every * 2);
-  assert.ok([...w.stores.convoys.values()].filter(c => c.to === far.id).every(c => !c.train), "a warehouse is not a station: carts, not trains");
+  w.tick(1.01);
+  w.tick(1);
+  const trains = [...w.trade.trains.values()];
+  assert.equal(trains.length, 2, "each station sends a train to the other, one rail search a second");
+  const rail = ROAD_TYPES.indexOf("rail"), ends = new Set([...A.plots, ...B.plots]);
+  assert.ok(trains.every(c => c.path.every(i => w.log.road[i] === rail || ends.has(i))), "the trains keep to the rail");
+  const pay = trains.reduce((s, c) => s + c.pay, 0), before = n.money;
+  assert.ok(near(trains[0].pay, Math.round(tripPay(w, trains[0].path.length) * rules.trade.train.payMult * 10) / 10));
+  for (let k = 0; k < 20 && w.trade.trains.size; k++) w.tick(1);
+  assert.equal(w.trade.trains.size, 0, "both arrived");
+  assert.ok(n.money - before >= pay - 1e-6, `they earned ${Math.round(n.money - before)} gold, the trips were worth ${pay}`);
+  w.claim(g.idx(25, 8), w.addNation({ name: "C", human: true }));
+  for (let k = 0; k < 40; k++) w.tick(1);
+  assert.equal(w.trade.trains.size, 0, "rail cut by another nation stops the trains");
 });

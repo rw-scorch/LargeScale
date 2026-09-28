@@ -24,17 +24,16 @@ function setup() {
   return { w, a, bot, late, n: w.nations.get(a) };
 }
 
-test("give adds gold, goods or troops to a living nation, never below zero", () => {
+test("give adds gold or troops to a living nation, never below zero; goods are gone", () => {
   const { w, a, bot, late, n } = setup();
   const money = n.money;
   assert.deepEqual(runAdmin(w, { op: "give", nation: a, what: "money", amount: 1000 }), { ok: true, nation: a, name: "A", what: "money", amount: 1000, now: Math.floor(money + 1000) });
-  assert.equal(runAdmin(w, { op: "give", nation: a, what: "wood", amount: 500 }).now, 540);
-  assert.equal(runAdmin(w, { op: "give", nation: a, what: "food", amount: -1e6 }).now, 0, "taking more than there is leaves none");
+  assert.equal(runAdmin(w, { op: "give", nation: a, what: "money", amount: -1e6 }).now, 0, "taking more than there is leaves none");
   const troops = w.nations.get(bot).troops;
   assert.equal(runAdmin(w, { op: "give", nation: bot, what: "troops", amount: 250 }).now, Math.floor(troops + 250), "bots can be given troops");
   assert.equal(runAdmin(w, { op: "give", nation: bot, what: "money", amount: 5 }).error, "Bot has no economy");
   assert.equal(runAdmin(w, { op: "give", nation: late, what: "money", amount: 5 }).error, "pick a living nation", "not spawned yet");
-  assert.equal(runAdmin(w, { op: "give", nation: a, what: "gems", amount: 5 }).error, "give one of money, food, wood, stone, clay, iron, coal, steel, oil, troops, unit, machine");
+  assert.equal(runAdmin(w, { op: "give", nation: a, what: "wood", amount: 5 }).error, "give one of money, troops, unit, machine");
   for (const amount of [0, 1.5, "10", ADMIN_RULES.maxGive + 1, NaN]) assert.match(runAdmin(w, { op: "give", nation: a, what: "money", amount }).error, /whole number/);
 });
 

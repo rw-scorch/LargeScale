@@ -4,7 +4,6 @@ import { TERRAIN, isLand } from "../shared/terrain.js";
 import { buildRegions, coarseRoute, planSegment } from "../shared/pathfind.js";
 import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
 import { nationBuildings } from "./buildings.js";
-import { sync, poolOf } from "./stores.js";
 
 export const UNIT_TYPES = Object.fromEntries(unitData.units.filter(d => d.kind === "machine").map(d => [d.id, d]));
 
@@ -477,7 +476,7 @@ function boardShips(world) {
 
 function shipBattles(world, dt) {
   const r = world.machines.rules, g = world.grid, ships = [];
-  for (const u of world.units.list.values()) if (!u.wreck && UNIT_TYPES[u.type]?.domain === "sea") ships.push(u);
+  for (const u of world.units.list.values()) if (!u.wreck && UNIT_TYPES[u.type]?.domain === "sea" && !UNIT_TYPES[u.type].freight) ships.push(u);
   if (ships.length < 2) return;
   const byPlot = new Map();
   for (const u of ships) byPlot.set(u.at, [...(byPlot.get(u.at) ?? []), u]);
@@ -529,17 +528,16 @@ export function machineLock(world, nid, type) {
   return world.lockReason?.(nid, type, "units") ?? null;
 }
 
-const have = (n, res, pool) => (res === "money" ? n.money ?? 0 : pool ? pool.have(res) : n.stock?.[res] ?? 0);
+const have = (n, res) => (res === "money" ? n.money ?? 0 : n.stock?.[res] ?? 0);
 
-function shortOf(n, cost, pool = null) {
-  for (const [res, v] of Object.entries(cost)) if (have(n, res, pool) < v) return res === "money" ? "gold" : res;
+function shortOf(n, cost) {
+  for (const [res, v] of Object.entries(cost)) if (have(n, res) < v) return res === "money" ? "gold" : res;
   return null;
 }
 
-function pay(n, cost, k = 1, pool = null) {
+function pay(n, cost, k = 1) {
   for (const [res, v] of Object.entries(cost)) {
     if (res === "money") n.money += -v * k;
-    else if (pool) pool.take(res, v * k);
     else n.stock[res] = (n.stock[res] ?? 0) - v * k;
   }
 }
@@ -601,14 +599,9 @@ export function produce(world, dt) {
     if (b.state !== "active") { q.why = "the building is being worked on"; continue; }
     const def = UNIT_TYPES[q.items[0]], n = world.nations.get(q.owner);
     if (!q.paid) {
-      const pool = world.stores && n?.human ? (sync(world, n), poolOf(world, n, [b])) : null;
-      const short = shortOf(n, def.cost, pool);
-      if (short) {
-        if (pool) for (const [res, v] of Object.entries(def.cost)) if (res !== "money" && pool.have(res) < v) pool.ask(res, v);
-        q.why = pool && short !== "gold" && !pool.stores.length ? "no store within reach" : `not enough ${short}${pool && short !== "gold" ? " in its store yet" : ""}`;
-        continue;
-      }
-      pay(n, def.cost, 1, pool);
+      const short = shortOf(n, def.cost);
+      if (short) { q.why = `not enough ${short}`; continue; }
+      pay(n, def.cost);
       q.paid = true;
       q.progress = 0;
     }

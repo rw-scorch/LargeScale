@@ -26,11 +26,10 @@ function setup() {
   return { w, a, b, g: w.grid, n: w.nations.get(a) };
 }
 
-test("the starting kit: gold, food, wood and a finished chieftain hut at the capital, for players only", () => {
+test("the starting kit: gold and a finished chieftain hut at the capital, for players only", () => {
   const { w, a, b, n } = setup();
   w.tick(1);
-  assert.equal(n.stock.food, 50);
-  assert.equal(n.stock.wood, 40);
+  assert.equal(n.stock, undefined, "no goods, only gold");
   assert.equal(Math.round(n.money), 101, "100 to start, then 1 gold a second");
   const hut = [...w.bld.list.values()].find(x => x.owner === a);
   assert.equal(hut.type, "chieftain_hut");
@@ -44,13 +43,14 @@ test("the starting kit: gold, food, wood and a finished chieftain hut at the cap
 
 test("every placement rule gives a readable reason", () => {
   const { w, a, g, n } = setup();
-  Object.assign(n, { era: "T", money: 1e6, stock: { wood: 1e6, stone: 1e6, steel: 1e6, concrete: 1e6 } });
+  Object.assign(n, { era: "T", money: 1e6 });
   const tower = place(w, a, "watchtower_wood", g.idx(20, 10));
   assert.ok(tower.id);
   n.era = "M";
   const reasons = {
     "unknown building": canPlace(w, a, "hut_grass", g.idx(20, 12)),
-    "needs the Industrial era": canPlace(w, a, "warehouse", g.idx(20, 12)),
+    "needs the Industrial era": canPlace(w, a, "university", g.idx(20, 12)),
+    "no longer built: every cost is in gold now": canPlace(w, a, "storage_yard", g.idx(20, 12)),
     "off the edge of the map": canPlace(w, a, "barracks", g.idx(39, 5)),
     "something is already there": canPlace(w, a, "barracks", g.idx(19, 10)),
     "cannot build on water": canPlace(w, a, "barracks", g.idx(31, 10)),
@@ -64,11 +64,9 @@ test("every placement rule gives a readable reason", () => {
   for (const [want, got] of Object.entries(reasons)) assert.equal(got, want);
   assert.equal(canPlace(w, a, "harbour", g.idx(29, 14)), null);
   assert.equal(canPlace(w, a, "offshore_rig", g.idx(30, 14)), null);
-  Object.assign(n, { money: 10, stock: { wood: 3 } });
+  Object.assign(n, { money: 10 });
   n.era = "T";
-  assert.equal(place(w, a, "watchtower_wood", g.idx(25, 10)).error, "needs 15 wood, you have 3");
-  n.stock.wood = 100;
-  assert.equal(place(w, a, "watchtower_wood", g.idx(25, 10)).error, "needs 20 gold, you have 10");
+  assert.equal(place(w, a, "watchtower_wood", g.idx(25, 10)).error, "needs 50 gold, you have 10");
 });
 
 test("coast buildings: a jetty sits on your shore, and a harbour half in the sea changes hands with its land", () => {
@@ -80,7 +78,7 @@ test("coast buildings: a jetty sits on your shore, and a harbour half in the sea
   for (let x = 4; x < 20; x++) for (let y = 6; y < 16; y++) w.claim(g.idx(x, y), a);
   installConstruction(w);
   const n = w.nations.get(a);
-  Object.assign(n, { era: "M", money: 1e6, stock: { wood: 1e6, stone: 1e6 } });
+  Object.assign(n, { era: "M", money: 1e6 });
   assert.equal(canPlace(w, a, "jetty", g.idx(10, 6)), null, "own land touching the sea");
   assert.equal(canPlace(w, a, "jetty", g.idx(10, 8)), "must sit on the coast");
   assert.equal(canPlace(w, a, "jetty", g.idx(10, 5)), "must sit on the coast", "not out on the water");
@@ -96,24 +94,25 @@ test("coast buildings: a jetty sits on your shore, and a harbour half in the sea
 
 test("the upgrade order: 20 watchtowers cost exactly 20 x 1.5 x a stone tower, lowest first, and the rest are explained", () => {
   const { w, a, g, n } = setup();
-  Object.assign(n, { era: "M", money: 1e6, stock: { wood: 1e6, stone: 1e6 } });
+  Object.assign(n, { era: "M", money: 1e6 });
   const towers = [];
   for (let k = 0; k < 24; k++) towers.push(place(w, a, "watchtower_wood", g.idx(19 + (k % 6) * 2, [8, 10, 12, 20][Math.floor(k / 6)])));
   assert.ok(towers.every(t => t.id), towers.find(t => !t.id)?.error);
   for (let t = 0; t < 31; t++) w.tick(1);
   assert.ok(towers.every(t => t.state === "active"));
   const stone = data.buildings.find(d => d.id === "tower_stone").cost;
-  Object.assign(n, { money: 20 * 1.5 * stone.money, stock: { stone: 20 * stone.stone } });
+  assert.deepEqual(Object.keys(stone), ["money"], "costs are gold only");
+  const all = 20 * 1.5 * stone.money;
+  Object.assign(n, { money: all });
   const plan = planBatch(Array(20).fill(stone), n, 1.5, 4);
   const r = runOrder(w, a, { t: "upgrade", picks: [["watchtower_wood", 20]] });
-  assert.deepEqual({ ok: r.ok, done: r.done, spent: r.spent, skipped: r.skipped }, { ok: true, done: 20, spent: 2400, skipped: {} });
-  assert.deepEqual({ done: plan.done, spent: plan.spent, used: plan.used }, { done: 20, spent: 2400, used: { stone: 600 } }, "the client's plan matches the server's charge");
+  assert.deepEqual({ ok: r.ok, done: r.done, spent: r.spent, skipped: r.skipped }, { ok: true, done: 20, spent: all, skipped: {} });
+  assert.deepEqual({ done: plan.done, spent: plan.spent, used: plan.used }, { done: 20, spent: all, used: {} }, "the client's plan matches the server's charge");
   assert.equal(n.money, 0);
-  assert.equal(n.stock.stone, 0);
   assert.ok(towers.slice(0, 20).every(t => t.type === "tower_stone") && towers.slice(20).every(t => t.type === "watchtower_wood"), "the lowest ids go first");
   n.money = 700;
-  const each = 1.5 * (stone.money + stone.stone * 4);
-  assert.equal(planBatch(Array(4).fill(stone), n, 1.5, 4).done, 2, "with no stone, each costs 300 gold, so 700 gold does two");
+  const each = 1.5 * stone.money;
+  assert.equal(planBatch(Array(4).fill(stone), n, 1.5, 4).done, 2, `each costs ${each} gold, so 700 gold does two`);
   const short = runOrder(w, a, { t: "upgrade", picks: [["watchtower_wood", 99]] });
   assert.deepEqual({ done: short.done, spent: short.spent, skipped: short.skipped, missing: short.missing }, { done: 2, spent: 2 * each, skipped: { "not enough money": 2 }, missing: 95 });
   assert.ok(w.events.some(e => e.type === "upgraded" && e.nation === a && e.count === 2));
@@ -121,7 +120,7 @@ test("the upgrade order: 20 watchtowers cost exactly 20 x 1.5 x a stone tower, l
 
 test("the upgrade order checks its picks, the filter, research and the era", () => {
   const { w, a, g, n } = setup();
-  Object.assign(n, { era: "T", money: 1e6, stock: { wood: 1e6, stone: 1e6 } });
+  Object.assign(n, { era: "T", money: 1e6 });
   const t = place(w, a, "watchtower_wood", g.idx(20, 10));
   for (let k = 0; k < 31; k++) w.tick(1);
   const up = m => runOrder(w, a, { t: "upgrade", ...m });
@@ -138,7 +137,7 @@ test("the upgrade order checks its picks, the filter, research and the era", () 
 
 test("the upgrade order can name the buildings to upgrade, for the building card", () => {
   const { w, a, g, n } = setup();
-  Object.assign(n, { era: "M", money: 1e6, stock: { wood: 1e6, stone: 1e6 } });
+  Object.assign(n, { era: "M", money: 1e6 });
   const towers = [0, 1, 2].map(k => place(w, a, "watchtower_wood", g.idx(20 + 2 * k, 10)));
   for (let t = 0; t < 31; t++) w.tick(1);
   const up = m => runOrder(w, a, { t: "upgrade", ...m });
@@ -154,11 +153,10 @@ test("the upgrade order can name the buildings to upgrade, for the building card
 test("the build order pays up front, and the site finishes over its build time", () => {
   const { w, a, g, n } = setup();
   w.tick(1);
-  const money = n.money, wood = n.stock.wood;
+  const money = n.money;
   const r = runOrder(w, a, { t: "build", type: "watchtower_wood", at: g.idx(20, 10) });
   assert.equal(r.ok, true, r.error);
-  assert.equal(n.stock.wood, wood - 15);
-  assert.ok(Math.abs(n.money - (money - 20)) < 1e-9);
+  assert.ok(Math.abs(n.money - (money - 50)) < 1e-9);
   const b = w.bld.list.get(r.building);
   assert.equal(b.state, "construction");
   for (let t = 0; t < 29; t++) w.tick(1);
@@ -175,16 +173,14 @@ test("demolish refunds half, leaves rubble that clears, and the plot can be buil
   const { w, a, g, n } = setup();
   w.tick(1);
   n.money = 100;
-  n.stock.wood = 100;
   const tower = place(w, a, "watchtower_wood", g.idx(20, 10));
   for (let t = 0; t < 31; t++) w.tick(1);
   assert.equal(tower.state, "active");
-  const before = { money: n.money, wood: n.stock.wood };
+  const before = n.money;
   const r = runOrder(w, a, { t: "demolish", building: tower.id });
   assert.ok(r.ok);
-  assert.deepEqual(r.refund, { money: 10, wood: 7 });
-  assert.equal(Math.round(n.money - before.money), 10);
-  assert.equal(n.stock.wood - before.wood, 7);
+  assert.deepEqual(r.refund, { money: 25 });
+  assert.equal(Math.round(n.money - before), 25);
   assert.equal(tower.state, "rubble");
   assert.equal(runOrder(w, a, { t: "demolish", building: tower.id }).error, "that is already rubble");
   assert.equal(canPlace(w, a, "watchtower_wood", g.idx(20, 10)), null, "rubble does not block building");
@@ -206,7 +202,7 @@ test("demolish refunds half, leaves rubble that clears, and the plot can be buil
 test("building rows round trip, and a client mirror follows the snapshot and the changes", () => {
   const { w, a, g, n } = setup();
   w.tick(1);
-  Object.assign(n, { money: 1000, stock: { wood: 1000 } });
+  Object.assign(n, { money: 1000 });
   place(w, a, "watchtower_wood", g.idx(20, 10));
   const feed = new BuildingFeed();
   feed.delta(w);
@@ -252,6 +248,6 @@ test("the client greys out what the player cannot afford, with the reason", () =
   w.tick(1);
   const client = new ClientWorld({ w: 40, h: 30, you: a, map: { kind: "test" }, hashes: {}, nations: [...w.nations.values()], defs: data.buildings, purse: purseOf(n) });
   assert.equal(client.costError("watchtower_wood"), null);
-  assert.equal(client.costError("harbour"), "needs 80 wood, you have 40");
+  assert.equal(client.costError("harbour"), "needs 580 gold, you have 101");
   assert.equal(TERRAIN[TID.grassland].build, true);
 });

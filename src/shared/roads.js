@@ -6,7 +6,7 @@ export const ROAD_MULT = [1, 0.6, 0.45, 0.3, 0.2, 0.12];
 export const ROAD_NAMES = { dirt: "Dirt road", cobble: "Cobbled road", paved: "Paved road", highway: "Highway", rail: "Railway" };
 export const BRIDGE_NAMES = { dirt: "Wooden bridge", cobble: "Stone bridge", rail: "Railway bridge" };
 export const ROAD_RULES = {
-  types: { dirt: { cost: { money: 1 } }, cobble: { cost: { money: 3, stone: 1 }, needs: "road_cobble" }, rail: { cost: { money: 4, steel: 1 }, needs: "rail" } },
+  types: { dirt: { cost: { money: 1 } }, cobble: { cost: { money: 6 }, needs: "road_cobble" }, rail: { cost: { money: 12 }, needs: "rail" } },
   bridge: 5, rough: 4, roughMove: 3, maxPoints: 64, maxPlots: 400, routeNodes: 40000, connectMax: 2000, autoEvery: 20,
 };
 

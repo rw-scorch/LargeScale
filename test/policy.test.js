@@ -28,7 +28,7 @@ function town(policy = null) {
   return { w, a, n };
 }
 
-const grow = (w, n, seconds) => { for (let t = 0; t < seconds; t++) { n.stock.food = 500; n.stock.wood = 400; w.tick(1); } };
+const grow = (w, n, seconds) => { for (let t = 0; t < seconds; t++) w.tick(1); };
 
 test("the policy order checks its values and the purse reports them", () => {
   const { w, a, n } = town();

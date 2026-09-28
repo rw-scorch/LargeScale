@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { World } from "../../src/sim/territory.js";
-import { generateDeposits, installResources, addProducer, produce, DEPOSITS, DEPOSIT_IDS } from "../../src/sim/resources.js";
+import { generateDeposits, installResources, addProducer, produce, goldOf, DEPOSITS, DEPOSIT_IDS } from "../../src/sim/resources.js";
 import { makeRng } from "../../src/shared/rng.js";
 import { makeTestMap } from "../../src/shared/testmap.js";
 import { TERRAIN, TID } from "../../src/shared/terrain.js";
@@ -36,8 +36,8 @@ test("a mine empties a finite deposit and then goes idle", () => {
   const m = addProducer(w, a, "mine_pit", at);
   assert.ok(m.id, m.error);
   let total = 0;
-  for (let i = 0; i < 200; i++) { const o = produce(w, 1).get(a); total += o?.iron ?? 0; }
-  assert.ok(Math.abs(total - 10) < 1e-3, `total ${total}`);
+  for (let i = 0; i < 200; i++) total += produce(w, 1).get(a) ?? 0;
+  assert.ok(Math.abs(total - goldOf("iron", 10)) < 1e-3, `total ${total}`);
   assert.equal(m.idle, true);
   assert.ok(w.events.some(e => e.type === "deposit_depleted"));
 });
@@ -48,12 +48,10 @@ test("a mine needs a deposit", () => {
   assert.equal(addProducer(w, a, "mine_pit", w.grid.idx(15, 15)).error, "must sit on an ore deposit");
 });
 
-test("woodcutters clear forest into cleared land", () => {
+test("woodcutters are retired with the other material buildings", () => {
   const { w, a } = oneNation("forest");
   installResources(w, none(), { hook: false });
-  addProducer(w, a, "woodcutter_camp", w.grid.idx(15, 15));
-  for (let i = 0; i < 2000; i++) produce(w, 1);
-  assert.equal(w.terrain[w.grid.idx(15, 15)], TID.cleared);
+  assert.equal(addProducer(w, a, "woodcutter_camp", w.grid.idx(15, 15)).error, "no longer built: every cost is in gold now");
 });
 
 test("farm yield follows fertility and season", () => {
@@ -61,9 +59,9 @@ test("farm yield follows fertility and season", () => {
   let season = "summer";
   installResources(w, none(), { hook: false, seasonOf: () => season });
   addProducer(w, a, "crop_wheat", w.grid.idx(15, 15));
-  const summer = produce(w, 10).get(a).food;
+  const summer = produce(w, 10).get(a);
   season = "winter";
-  const winter = produce(w, 10).get(a).food;
-  assert.ok(Math.abs(summer - 0.04 * 10 * 1.1 * 1.2) < 1e-9);
+  const winter = produce(w, 10).get(a);
+  assert.ok(Math.abs(summer - goldOf("food", 0.04 * 10 * 1.1 * 1.2)) < 1e-9);
   assert.ok(winter < summer / 5);
 });
