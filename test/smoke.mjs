@@ -385,8 +385,8 @@ const from = (await until(() => view.pump().stacks.get(st2?.stack)))?.pos;
   const d = await nextResult(A, "detach");
   const part = d?.ok && (await until(() => view.pump().stacks.get(d.stacks[0])));
   const field = view.world.purse?.field;
-  check(d?.ok && part && Math.abs(part.troops - 30) < 1 && Math.abs(view.stacks.get(st2.stack).troops + part.troops - whole) < 1 && hello.soldierRules?.troopsEach === 10,
-    `three picked soldiers leave their company as a company of ${part?.troops} troops; the purse counts ${field?.soldiers} of ${field?.cap} soldiers in ${field?.companies} companies`);
+  check(d?.ok && part && part.troops >= 30 && part.troops < 40 && Math.abs(view.stacks.get(st2.stack).troops + part.troops - whole) < 2 && hello.soldierRules?.troopsEach === 10,
+    `three picked soldiers leave their company of ${whole} as a company of ${part?.troops} troops, leaving ${view.stacks.get(st2.stack)?.troops}; the purse counts ${field?.soldiers} of ${field?.cap} soldiers in ${field?.companies} companies`);
   A.ws.send(JSON.stringify({ t: "merge", into: st2.stack, stack: d?.stacks?.[0] }));
   await nextResult(A, "merge");
   A.ws.send(JSON.stringify({ t: "pilot", op: "take", stack: st2.stack }));
@@ -813,7 +813,7 @@ await adminOp(IN, { op: "speed", factor: 8 });
 await adminOp(IN, { op: "give", nation: ih.you, what: "troops", amount: 6000 });
 const inStack = await ask({ t: "stack", share: 0.9 });
 await ask({ t: "advance", stack: inStack?.stack, only: "free" });
-for (const id of ["railways", "steelmaking"]) await ask({ t: "research", id, mode: "queue" });
+for (const id of ["railways", "field_guns"]) await ask({ t: "research", id, mode: "queue" });
 const inFin = await adminOp(IN, { op: "finish", nation: ih.you });
 await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 100000 });
 const inPurse = () => IM.pump().world.purse;

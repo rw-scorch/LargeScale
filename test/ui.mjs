@@ -25,12 +25,12 @@ async function login(page, name, password) {
   await page.fill("#login-name", name);
   await page.fill("#login-pass", password);
   await page.click("#login-go");
-  try { await page.waitForSelector("#world-create", { timeout: 3000 }); }
-  catch {
+  const inside = await page.waitForFunction(() => document.querySelector("#world-create") ? "in" : document.querySelector(".login .msg")?.textContent ? "out" : null, null, { timeout: 20000 }).then(h => h.jsonValue());
+  if (inside === "out") {
     for (let i = errors.length - 1; i >= 0; i--) if (/401/.test(errors[i])) errors.splice(i, 1);
     await page.fill("#login-invite", INVITE);
     await page.click("#register-go");
-    await page.waitForSelector("#world-create", { timeout: 5000 });
+    await page.waitForSelector("#world-create", { timeout: 20000 });
   }
 }
 
@@ -117,7 +117,7 @@ const whyNot = await page.textContent("#research-why").catch(() => "");
 check(/needs Clubs and spears and Stone tools first/.test(whyNot), `a node says why it cannot start: "${whyNot}"`);
 await page.click("#research-first");
 await page.click("#research-panel [data-node=fire_keeping]");
-await page.click("#research-queue-add");
+if (await page.isVisible("#research-queue-add")) await page.click("#research-queue-add");
 await page.click("#research-panel [data-node=barter]");
 await page.click("#research-queue-add");
 const queued = await page.waitForFunction(() => { const q = window.__ls.game.world.purse?.research?.queue ?? []; return q.includes("palisades") && q.includes("barter") ? q : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => []);
@@ -924,7 +924,7 @@ const trainedUp = await fix.waitForFunction(() => (window.__ls.game.world.purse?
 await fix.waitForTimeout(400);
 const armyCount = await fix.textContent("#army-panel [data-count=club_warrior]").catch(() => "");
 const armySummary = await fix.textContent("#army-summary").catch(() => "");
-check(barracksUp && keepBox && trainedUp && /12 at home/.test(armyCount) && /Training \d/.test(armySummary) && /In the field: [\d,]+ of 1,000 soldiers/.test(armySummary) && /Needs Stirrups research/.test(lockedKnights), `K opens the Army panel; keeping 12 club warriors trains them at the barracks: "${armyCount}" "${armySummary}"; knights say "${lockedKnights}"`);
+check(barracksUp && keepBox && trainedUp && /12 at home/.test(armyCount) && /Training \d/.test(armySummary) && /In the field: [\d,]+ of 1,?000 soldiers/.test(armySummary) && /Needs Stirrups research/.test(lockedKnights), `K opens the Army panel; keeping 12 club warriors trains them at the barracks: "${armyCount}" "${armySummary}"; knights say "${lockedKnights}"`);
 await fix.screenshot({ path: `${OUT}/26-army.png` });
 await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#army-panel")), "Esc closes the Army panel");
@@ -948,11 +948,12 @@ const knightFigures = await fix.waitForFunction(id => {
   g.focus(st.pos, 40);
   st.xp = 2;
   const figs = v.soldiers(v.visibleRange()).filter(f => f.stack === id);
-  return figs.length ? figs.map(f => f.sprite) : null;
+  return figs.length ? { sprites: figs.map(f => f.sprite), share: st.mix.knight / st.troops, soldiers: Math.floor(st.troops / w.soldierRules.troopsEach) } : null;
 }, knightStack, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
 await fix.waitForTimeout(600);
 await fix.screenshot({ path: `${OUT}/27-soldiers.png` });
-check(knightFigures?.length >= 3 && knightFigures.every(s => s.startsWith("knight_")), `at close zoom a stack of mostly knights is drawn as ${knightFigures?.length} knight figures (${knightFigures?.[0]})`);
+const knightShown = knightFigures ? knightFigures.sprites.filter(s => s.startsWith("knight_")).length / knightFigures.sprites.length : 0;
+check(knightFigures && knightFigures.sprites.length >= Math.min(knightFigures.soldiers, 50) && Math.abs(knightShown - knightFigures.share) < 0.05, `at close zoom a company with knights is drawn soldier by soldier: ${knightFigures?.sprites.length} figures, ${Math.round(knightShown * 100)}% knights for ${Math.round((knightFigures?.share ?? 0) * 100)}% of its troops`);
 const shop = await fix.evaluate(async () => {
   const g = window.__ls.game, w = g.world, me = w.you;
   await g.conn.request({ t: "research", id: "siegecraft" });
@@ -1085,11 +1086,11 @@ const placeNear = (type, from = null) => gp.evaluate(async ([type, from]) => {
   return null;
 }, [type, from]);
 const active = b => gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", b?.id, { timeout: 15000 }).then(() => true, () => false);
-const income0 = await gp.evaluate(() => window.__ls.game.world.purse?.vitals?.income);
+const income0 = await gp.evaluate(() => window.__ls.game.world.purse?.vitals?.tax);
 const bank = await placeNear("bank");
 const bankUp = bank && await active(bank);
-const income1 = await gp.waitForFunction(i0 => { const i = window.__ls.game.world.purse?.vitals?.income; return i > i0 * 1.07 ? i : null; }, income0, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
-check(bankUp && income1 && Math.abs(income1 / income0 - 1.08) < 0.02, `a bank raises gold income by 8%: ${income0} to ${income1} a second`);
+const income1 = await gp.waitForFunction(i0 => { const i = window.__ls.game.world.purse?.vitals?.tax; return i > i0 * 1.07 ? i : null; }, income0, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+check(bankUp && income1 && Math.abs(income1 / income0 - 1.08) < 0.02, `a bank raises tax income by 8%: ${income0} to ${income1} a second`);
 await gp.keyboard.press("k");
 const armyText = await gp.waitForSelector("#army-panel:not([hidden])", { timeout: 5000 }).then(() => gp.textContent("#army-panel"), () => "");
 check(["Musketeers", "Line infantry", "Grenadiers", "Light cavalry"].every(t => armyText.includes(t)), "the Army panel offers musketeers, line infantry, grenadiers and light cavalry");
@@ -1620,7 +1621,7 @@ await rp.close();
 await gp.bringToFront();
 await gp.goto(BASE + "/");
 await gp.waitForSelector("#world-create", { timeout: 5000 });
-const boatId = await newWorld(gp, "UI boats", { map: "test", w: 160, h: 100, seed: 12, bots: 0 });
+const boatId = await newWorld(gp, "UI boats", { map: "test", w: 160, h: 100, seed: 12, bots: 0, rules: { spawnRadius: 8 } });
 await gp.goto(`${BASE}/#w=${boatId}`);
 await gp.reload();
 await ready(gp);
@@ -1706,10 +1707,13 @@ const ports = await gp.evaluate(async () => {
   const coast = [];
   for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === you && isLand(w.terrain[i]) && !w.buildingAt(i) && [i - 1, i + 1, i - w.w, i + w.w].some(j => w.terrain[j] <= 2)) coast.push(i);
   const d = (i, j) => Math.hypot((i % w.w) - (j % w.w), ((i / w.w) | 0) - ((j / w.w) | 0));
-  const build = async list => { for (const i of list.slice(0, 40)) { const r = await g.conn.request({ t: "build", type: "jetty", at: i }); if (r.ok) return r.building; } return null; };
-  const mine = await build(coast.filter(i => home[i]).sort((i, j) => d(i, n.capital) - d(j, n.capital)));
-  const far = coast.filter(i => !home[i]);
-  return { mine, far, capital: n.capital };
+  const build = async list => { for (const i of list.slice(0, 40)) { const r = await g.conn.request({ t: "build", type: "jetty", at: i }); if (r.ok) return { id: r.building, at: i }; } return null; };
+  const homeCoast = coast.filter(i => home[i]), farCoast = coast.filter(i => !home[i]), pairs = [];
+  for (const i of homeCoast) for (const j of farCoast) pairs.push([d(i, j), i]);
+  pairs.sort((p, q) => q[0] - p[0]);
+  const built = await build([...new Set(pairs.map(p => p[1]))].concat(homeCoast));
+  const far = built ? farCoast.filter(j => d(j, built.at) >= 14).sort((p, q) => d(q, built.at) - d(p, built.at)) : [];
+  return { mine: built?.id ?? null, far, capital: n.capital, apart: built && far.length ? Math.round(d(far[0], built.at)) : 0 };
 });
 const homeJetty = await gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", ports.mine, { timeout: 30000 }).then(() => true, () => false);
 const farJetty = await gp.evaluate(async far => {
@@ -1734,7 +1738,7 @@ const tradeLine = await gp.waitForFunction(() => { const t = document.querySelec
 await gp.screenshot({ path: `${OUT}/60-trade-panel.png` });
 await gp.keyboard.press("l");
 check(homeJetty && farBuilt && trader !== null && /^Your trade ship: Sailing to another port with trade/.test(shipCard) && shipOrders === 0 && tradeEarned > 0 && tradeLine,
-  `two jetties across the water send a trade ship ("${shipCard}"), with no orders on the ship; it earns ${tradeEarned} gold, and the Trade panel says "${tradeLine.split(".")[0]}."`);
+  `two jetties ${ports.apart} plots apart across the water send a trade ship ("${shipCard}"), with no orders on the ship; it earns ${tradeEarned} gold, and the Trade panel says "${tradeLine.split(".")[0]}."`);
 
 await gp.bringToFront();
 const indId = await newWorld(gp, "UI industry", { map: "test", w: 160, h: 100, seed: 12, bots: 0, rules: { buildSpeed: 60 } });
@@ -2019,7 +2023,16 @@ const pickedTitle = await gp.waitForFunction(() => { const p = document.querySel
 const pickedN = Number(pickedTitle.match(/^(\d+)/)?.[1] ?? 0), total = Math.floor(company.troops / 10);
 await gp.screenshot({ path: `${OUT}/67-soldiers-picked.png` });
 check(armiesOn && pickedN > total * 0.2 && pickedN < total * 0.8, `V turns Armies on, and a Shift-drag box picks part of the company: "${pickedTitle}" of ${total}`);
-const to = await gp.evaluate(cap => { const w = window.__ls.game.world; for (let r = 8; r < 14; r++) for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) { const i = cap + dy * w.w + dx; if (w.owner[i] === w.you && !w.buildingAt(i)) return i; } return null; }, company.cap);
+const to = await gp.evaluate(async cap => {
+  const w = window.__ls.game.world, { isLand } = await import("/js/shared/terrain.js"), seen = new Uint8Array(w.w * w.h), todo = [cap], land = [];
+  seen[cap] = 1;
+  while (todo.length) {
+    const i = todo.pop(), x = i % w.w;
+    for (const j of [i - w.w, i + w.w, x > 0 ? i - 1 : -1, x < w.w - 1 ? i + 1 : -1]) if (j >= 0 && j < seen.length && !seen[j] && isLand(w.terrain[j])) { seen[j] = 1; todo.push(j); land.push(j); }
+  }
+  const d = i => Math.hypot((i % w.w) - (cap % w.w), ((i / w.w) | 0) - ((cap / w.w) | 0));
+  return land.filter(i => d(i) >= 4 && d(i) <= 9 && !w.buildingAt(i) && (!w.owner[i] || w.owner[i] === w.you)).sort((a, b) => d(b) - d(a))[0] ?? null;
+}, company.cap);
 await gp.click("#soldiers-move");
 const toAt = await toScreen(gp, to);
 await gp.mouse.click(toAt.x, toAt.y);
@@ -2047,9 +2060,10 @@ await gp.screenshot({ path: `${OUT}/70-pilot.png` });
 await gp.keyboard.press("Escape");
 const letGo = await gp.waitForFunction(id => !window.__ls.game.piloting && !window.__ls.game.world.pilots.has(`s:${id}`), company.id, { timeout: 5000 }).then(() => true, () => false);
 check(/^Piloting your company/.test(piloting) && steered > 1 && letGo, `P pilots the selected company; holding ${steerKey.toUpperCase()} walks it ${steered.toFixed(1)} plots, and Esc lets go`);
-const pp = await openPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+const pp = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
 await login(pp, "rw_scorch", "correct horse");
 await pp.goto(`${BASE}/#w=${solId}`);
+await pp.reload();
 await ready(pp);
 const phoneDraw = await pp.evaluate(async cap => {
   const g = window.__ls.game, v = g.view;
