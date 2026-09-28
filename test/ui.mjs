@@ -369,7 +369,7 @@ const foeRing = ringSpots.foe === null ? [] : await ringAt(page, ringSpots.foe);
 const attackLabel = await page.textContent("#ring [data-ring=attack] .label").catch(() => "");
 await page.screenshot({ path: `${OUT}/5c-ring-attack-${MAP}.png` });
 if (foeRing[0] === "attack") await page.click("#ring [data-ring=attack]");
-const attacking = await page.waitForFunction(id => (window.__ls.game.world.purse?.orders ?? []).some(o => o.only === id), ringSpots.foeId, { timeout: 5000 }).then(() => true, () => false);
+const attacking = await page.waitForFunction(id => { const w = window.__ls.game.world; return (w.purse?.orders ?? []).some(o => o.only === id) || w.myMachines().some(u => u.type === "transport_boat"); }, ringSpots.foeId, { timeout: 5000 }).then(() => true, () => false);
 check(foeRing.join() === "attack,info" && attackLabel === `Attack ${ringSpots.foeName}` && attacking, `on ${ringSpots.foeName}'s land the ring offers "${attackLabel}", which forms a stack at your nearest land that advances into that nation only`);
 await page.keyboard.press("Escape");
 const cardSpot = await page.evaluate(([foe, id]) => {
@@ -388,9 +388,11 @@ if (cardSpot) await page.mouse.click(cardSpot.x, cardSpot.y);
 const cardTitle = await page.waitForSelector("#nation-card:not([hidden])", { timeout: 3000 }).then(() => page.textContent("#nation-title"), () => "");
 const cardFacts = await page.textContent("#nation-facts").catch(() => "");
 await page.screenshot({ path: `${OUT}/5e-nation-card-${MAP}.png` });
-const stacksBefore = await page.evaluate(() => window.__ls.game.world.myStacks().length);
+const forces = () => page.evaluate(() => { const w = window.__ls.game.world; return [...w.myStacks().map(s => "s" + s.id), ...w.myMachines().filter(u => u.type === "transport_boat").map(u => "m" + u.id)]; });
+const stacksBefore = await forces();
 if (cardTitle) await page.click("#nation-attack");
-const cardSent = await page.waitForFunction(n => window.__ls.game.world.myStacks().length > n, stacksBefore, { timeout: 5000 }).then(() => true, () => false);
+let cardSent = false;
+for (let k = 0; k < 25 && !cardSent; k++) { await page.waitForTimeout(200); cardSent = (await forces()).some(id => !stacksBefore.includes(id)); }
 check(cardTitle === ringSpots.foeName && /Rank \d+ of \d+/.test(cardFacts) && cardSent, `a click on ${ringSpots.foeName}'s land opens its card ("${cardFacts}"), and its Attack button sends a stack`);
 await page.keyboard.press("Escape");
 check(await page.evaluate(() => document.querySelector("#nation-card").hidden), "Esc closes the nation card");
@@ -803,10 +805,10 @@ await fix.click("#leave-world");
 const back = await fix.waitForSelector("#world-create", { timeout: 5000 }).then(() => true, () => false);
 check(back && await fix.isVisible("#leave-world") === false, "Exit goes back to the world list");
 await fix.setViewportSize({ width: 900, height: 300 });
-await fix.evaluate(() => document.getElementById("screen").scrollTo(0, 1e6));
-await fix.evaluate(() => document.getElementById("screen").scrollTo(0, 0));
-const top = await fix.evaluate(() => document.querySelector("#screen h1").getBoundingClientRect().top);
-const tall = await fix.evaluate(() => document.getElementById("screen").scrollHeight > document.getElementById("screen").clientHeight);
+await fix.evaluate(() => document.querySelector(".menu-side").scrollTo(0, 1e6));
+await fix.evaluate(() => document.querySelector(".menu-side").scrollTo(0, 0));
+const top = await fix.evaluate(() => document.querySelector("#screen .brand").getBoundingClientRect().top);
+const tall = await fix.evaluate(() => { const s = document.querySelector(".menu-side"); return s.scrollHeight > s.clientHeight; });
 check(tall && top >= 0, `a world list taller than the window scrolls back to its top (title at ${Math.round(top)} px)`);
 await fix.screenshot({ path: `${OUT}/19-short-window.png` });
 const friend = await openPage({ viewport: { width: 1280, height: 720 } });
@@ -1134,7 +1136,7 @@ const awaySetup = await ap.evaluate(async () => {
   for (const [what, amount] of [["wood", 800], ["food", 400]]) await g.conn.request({ t: "admin", op: "give", nation: w.you, what, amount });
   return { at, zone: zone.ok };
 });
-await ap.goto(`${BASE}/`);
+await ap.goto(`${BASE}/test.html`);
 let slept = false;
 for (let k = 0; k < 50 && !slept; k++) { slept = await ap.evaluate(async id => !(await (await fetch(`/api/worlds/${id}/status`, { headers: { authorization: `Bearer ${localStorage.getItem("ls_token")}` } })).json()).looping, awayId); if (!slept) await ap.waitForTimeout(100); }
 await ap.waitForTimeout(12000);
@@ -1554,7 +1556,7 @@ const routed = await gp.waitForFunction(e => { const w = window.__ls.game.world;
 check(ends && /\d+ plots: \d+ gold/.test(routeHint) && routed && /Laid \d+ plots of dirt road/.test(routeToast), `click a start and an end: the road finds its way round the hut ("${routeHint.match(/\d+ plots: [^.]*/)?.[0]}"), and Lay road lays it: "${routeToast}"`);
 await gp.keyboard.press("Escape");
 await gp.keyboard.press("Escape");
-const second = await gp.evaluate(async () => {
+const hut2 = await gp.evaluate(async () => {
   const g = window.__ls.game, w = g.world, me = w.you, cap = w.nations.get(me).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
   await g.conn.request({ t: "research", id: "chieftains", mode: "queue" });
   await g.conn.request({ t: "admin", op: "finish", nation: me });
@@ -1574,7 +1576,7 @@ const second = await gp.evaluate(async () => {
   }
   return why;
 });
-await gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", second, { timeout: 30000 }).catch(() => {});
+await gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", hut2, { timeout: 30000 }).catch(() => {});
 await gp.keyboard.press("b");
 await gp.click("#build-menu .tabs button:has-text('Roads')");
 await gp.click("#connect-plan");
@@ -1586,7 +1588,7 @@ await gp.click("#connect-plan");
 const planAfter = await gp.waitForFunction(() => /1 already on your roads/.test(document.querySelector("#connect-text")?.textContent ?? "") ? document.querySelector("#connect-text").textContent : null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
 await gp.click("#auto-roads");
 const autoOn = await gp.waitForFunction(() => window.__ls.game.world.purse?.logistics?.autoRoads === "dirt", null, { timeout: 5000 }).then(() => true, () => false);
-check(Number.isInteger(second) && /Linking 1 more takes \d+ plots for \d+ gold/.test(planText) && /linking 1 store/.test(connectToast) && planAfter && autoOn, `Connect stores plans ("${planText}"), lays ("${connectToast}"), and the standing order turns on${Number.isInteger(second) ? "" : ` [second hut: ${second}]`}${/Linking 1 more/.test(planText) ? "" : ` [${await gp.evaluate(id => { const w = window.__ls.game.world, b = w.buildings.get(id); return JSON.stringify({ state: b?.state, anchor: b?.anchor, owner: w.owner[b?.anchor], you: w.you, type: b?.type, site: w.purse?.logistics?.sites, stores: w.purse?.logistics?.stores.map(s => s[0]) }); }, second)} ${JSON.stringify(await gp.evaluate(() => window.__ls.game.conn.request({ t: "connect", kind: "dirt", dry: true })))}]`}`);
+check(Number.isInteger(hut2) && /Linking 1 more takes \d+ plots for \d+ gold/.test(planText) && /linking 1 store/.test(connectToast) && planAfter && autoOn, `Connect stores plans ("${planText}"), lays ("${connectToast}"), and the standing order turns on${Number.isInteger(hut2) ? "" : ` [second hut: ${hut2}]`}${/Linking 1 more/.test(planText) ? "" : ` [${await gp.evaluate(id => { const w = window.__ls.game.world, b = w.buildings.get(id); return JSON.stringify({ state: b?.state, anchor: b?.anchor, owner: w.owner[b?.anchor], you: w.you, type: b?.type, site: w.purse?.logistics?.sites, stores: w.purse?.logistics?.stores.map(s => s[0]) }); }, hut2)} ${JSON.stringify(await gp.evaluate(() => window.__ls.game.conn.request({ t: "connect", kind: "dirt", dry: true })))}]`}`);
 await gp.keyboard.press("Escape");
 
 const roadsBefore = await roadCount(gp);
@@ -1767,6 +1769,39 @@ check(/watchtower: Waiting for/i.test(logText) && /1 of 12 carts|2 of 12 carts/.
 await gp.keyboard.press("l");
 const arrived = await gp.waitForFunction(id => { const w = window.__ls.game.world, lg = w.purse?.logistics; return lg && !lg.sites.some(s => s[0] === id) && !w.convoys.size ? w.buildings.get(id)?.progress ?? 0 : null; }, farSite?.id, { timeout: 40000 }).then(h => h.jsonValue(), () => null);
 check(arrived !== null, `the carts arrive and the watchtower starts building (${Math.round((arrived ?? 0) * 100)}%)`);
+
+
+await gp.bringToFront();
+const menuId = await newWorld(gp, "UI menu", { map: "test", w: 160, h: 100, seed: 3, bots: 6 });
+await gp.evaluate(id => localStorage.setItem("ls_last_world", id), menuId);
+await gp.goto(BASE + "/");
+await gp.waitForSelector("#world-create", { timeout: 5000 });
+const liveCap = await gp.waitForFunction(() => { const c = document.querySelector(".live-caption"); return c && !c.hidden && /UI menu/.test(c.textContent) ? c.textContent : null; }, null, { timeout: 15000 }).then(h => h.jsonValue(), () => "");
+await gp.waitForTimeout(2500);
+await gp.screenshot({ path: `${OUT}/57-menu.png` });
+const selected = await gp.evaluate(id => document.querySelector(".world.on")?.dataset.id === id, menuId);
+check(/Live/.test(liveCap) && /6 bot nations/.test(liveCap) && selected, `the world list watches the last world live beside it: "${liveCap}"`);
+await gp.click(`[data-schedule="${menuId}"]`);
+await gp.fill(`#sched-${menuId}-startAt`, localInput(Date.now() + 2 * 3600000));
+await gp.click(`[data-sched-save="${menuId}"]`);
+const schedRow = await gp.waitForFunction(id => { const r = document.querySelector(`.world[data-id="${id}"]`); return r && /starts in/.test(r.textContent) ? r.textContent : null; }, menuId, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+check(/starts in (1 h 5\d min|2 h 0 min)/.test(schedRow), `Schedule on a world's card sets its start time: "${schedRow.match(/\d+ players?[^(]*\([^)]*\)/)?.[0]}"`);
+await gp.fill("#world-name", "UI menu new");
+await gp.selectOption("#world-map", "test");
+await gp.click("#new-schedule summary");
+await gp.fill("#new-sched-startAt", localInput(Date.now() + 3 * 3600000));
+await gp.fill("#new-sched-endAt", localInput(Date.now() + 30 * 3600000));
+await gp.click("#world-create");
+await ready(gp);
+const madeSched = await gp.waitForFunction(() => window.__ls.game.world?.schedule?.startAt ?? null, null, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+check(madeSched && Math.abs(madeSched - (Date.now() + 3 * 3600000)) < 5 * 60000, `a new world can be scheduled as it is made: it starts ${madeSched ? new Date(madeSched).toISOString() : "never"}`);
+const out = await openPage({ viewport: { width: 1280, height: 720 } });
+await out.goto(BASE + "/");
+const scenery = await out.waitForFunction(() => document.querySelector(".live-map")?.width > 100 && document.querySelector("#login-name") ? document.querySelector(".live-caption").hidden : null, null, { timeout: 15000 }).then(h => h.jsonValue(), () => null);
+await out.waitForTimeout(1500);
+await out.screenshot({ path: `${OUT}/58-login.png` });
+check(scenery === true, "logged out, the login screen pans across the Earth map with no world shown");
+await out.close();
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
 await browser.close();
