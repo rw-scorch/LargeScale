@@ -21,6 +21,8 @@ import { installRoads, setRoad, ROADS } from "../src/sim/logistics.js";
 import { installBoats } from "../src/sim/boats.js";
 import { installSupply, supplyTick } from "../src/sim/supply.js";
 import { installStores, storesOf, setStore, sync, homeAt } from "../src/sim/stores.js";
+import { installSeaRoutes, docksOf, seaPlan } from "../src/sim/sea.js";
+import { waterOk } from "../src/sim/units.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
@@ -43,6 +45,7 @@ const { values: a } = parseArgs({ options: {
   catchup: { type: "string", default: "12" },
   roads: { type: "string", default: "1500" },
   supply: { type: "string", default: "1" },
+  ports: { type: "string", default: "4" },
   stores: { type: "string", default: "1" },
 }});
 
@@ -136,6 +139,27 @@ installRoads(w, { scale, rules: allRules.roads });
 installBoats(w, { scale });
 if (a.supply !== "0") installSupply(w, { scale });
 if (a.stores !== "0") installStores(w, { scale });
+let seaSetup = null;
+if (a.stores !== "0" && Number(a.ports) > 0) {
+  installSeaRoutes(w);
+  const coast = new Map(players.map(id => [id, []]));
+  for (let i = 0; i < w.grid.size; i++) {
+    const list = coast.get(w.owner[i]);
+    if (!list || !isLand(terrain[i]) || bld.at.has(i)) continue;
+    if (w.grid.neighbours4(i).some(j => waterOk(terrain[j]))) list.push(i);
+  }
+  let placed = 0;
+  for (const [id, list] of coast) for (let k = 0; k < Number(a.ports) && list.length; k++) {
+    const i = list[Math.floor(((k + 0.5) * list.length) / Number(a.ports))];
+    if (bld.at.has(i)) continue;
+    addBuilding(w, { type: "jetty", owner: id, anchor: i, plots: [i], state: "active", progress: 1 });
+    placed++;
+  }
+  w.stores.rescan = true;
+  const t0 = performance.now();
+  const docks = players.reduce((t, id) => t + docksOf(w, id).length, 0);
+  seaSetup = { ports: placed, docks, docksMs: +(performance.now() - t0).toFixed(1) };
+}
 let roadPlots = 0;
 for (const id of players) {
   const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
@@ -188,8 +212,10 @@ if (a.stores !== "0") {
     sync(w, n);
     const list = storesOf(w, id).filter(s => !s.camp).sort((p, q) => w.grid.dist(q.anchor, n.capital) - w.grid.dist(p.anchor, n.capital));
     count += list.length;
-    asking.set(id, list.slice(0, 6));
+    const ports = w.stores.sea ? docksOf(w, id).map(d => d.store) : [];
+    asking.set(id, [...list.slice(0, 6), ...ports]);
     for (const s of list.slice(0, 6)) setStore(w, id, s.id, "wood", 500, 500);
+    for (const s of ports) setStore(w, id, s.id, "wood", 200, 200);
   }
   w.stores.fields.clear();
   const t0 = performance.now();
@@ -355,6 +381,24 @@ const report = {
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
   supply: a.supply === "0" ? null : (() => { const t0 = performance.now(); supplyTick(w, 3); const ms = performance.now() - t0; const reach = [...w.supply.fields.values()].reduce((t, f) => t + f.size, 0); w.supply.fields.clear(); const stacks = [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human); return { passMs: +ms.toFixed(1), playerStacks: stacks.length, reachPlots: reach, outOfReach: stacks.filter(s => (s.carry ?? 600) < 600).length }; })(),
+  sea: seaSetup && (() => {
+    const st = w.stores, t0 = performance.now(), searches = st.counts.searches;
+    st.paths.clear();
+    st.whole = true;
+    let plans = 0, found = 0, worst = 0;
+    for (const id of players) {
+      const n = w.nations.get(id), seat = storesOf(w, id).find(s => w.bld.table[s.type]?.store?.seat);
+      if (!seat) continue;
+      for (const s of asking.get(id) ?? []) {
+        const t1 = performance.now(), p = seaPlan(w, n, seat, s, null);
+        worst = Math.max(worst, performance.now() - t1);
+        plans++;
+        if (p) found++;
+      }
+    }
+    st.whole = false;
+    return { ...seaSetup, plans, found, searches: st.counts.searches - searches, planMs: +(performance.now() - t0).toFixed(1), worstPlanMs: +worst.toFixed(1) };
+  })(),
   stores: storeSetup && { ...storeSetup, carts: w.stores.counts, convoysOnRoad: w.stores.convoys.size, stuckProducers: w.stores.stuck.size, fieldsKept: w.stores.fields.size },
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
