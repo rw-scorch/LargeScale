@@ -332,6 +332,18 @@ export class MapRenderer {
     ctx.restore();
   }
 
+  drawPowerCover() {
+    const cover = this.powerCover, s = this.state, ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height, v = this.visibleRange(1);
+    if (!cover) return;
+    ctx.save();
+    ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
+    for (const [mark, colour] of [[1, "rgba(240,200,70,.22)"], [2, "rgba(170,170,170,.22)"]]) {
+      ctx.fillStyle = colour;
+      for (let y = Math.max(0, v.y0); y <= Math.min(s.h - 1, v.y1); y++) for (let x = Math.max(0, v.x0); x <= Math.min(s.w - 1, v.x1); x++) if (cover[y * s.w + x] === mark) ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.restore();
+  }
+
   drawSupplyReach() {
     const reach = this.supplyReach, s = this.state, ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height, v = this.visibleRange(1);
     if (!reach?.size) return;
@@ -352,6 +364,8 @@ export class MapRenderer {
     ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
     ctx.fillStyle = p.ok ? "rgba(111,207,122,.72)" : "rgba(224,106,90,.72)";
     for (const i of p.line) ctx.fillRect(i % s.w, (i / s.w) | 0, 1, 1);
+    ctx.fillStyle = "rgba(30,30,30,.9)";
+    for (const i of p.poles ?? []) ctx.fillRect((i % s.w) + 0.3, ((i / s.w) | 0) + 0.3, 0.4, 0.4);
     ctx.restore();
   }
 
@@ -412,6 +426,7 @@ export class MapRenderer {
     if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
     this.drawZoneRect();
+    this.drawPowerCover();
     this.drawSupplyReach();
     this.drawRoadPlan();
     this.drawGhost();
@@ -814,7 +829,7 @@ export class MapRenderer {
       const px = c.prev % s.w, py = (c.prev / s.w) | 0, qx = c.pos % s.w, qy = (c.pos / s.w) | 0;
       const x = px + (qx - px) * t, y = py + (qy - py) * t;
       if (r && (x < r.x0 - 2 || x > r.x1 + 2 || y < r.y0 - 2 || y > r.y1 + 2)) continue;
-      out.push({ x: x + 0.5, y: y + 0.8, sprite: WAGON[c.era] ?? "hand_cart", flip: qx < px, owner: c.owner, size: 0.9, convoy: c });
+      out.push({ x: x + 0.5, y: y + 0.8, sprite: c.train ? "loco_steam" : WAGON[c.era] ?? "hand_cart", flip: qx < px, owner: c.owner, size: 0.9, convoy: c });
     }
     return out;
   }

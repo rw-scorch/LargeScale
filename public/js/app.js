@@ -18,6 +18,7 @@ import { createBuildMenu, costText } from "./ui/build.js";
 import { roadPlan, routePlan, roadLine, ROAD_NAMES } from "./shared/roads.js";
 import { simplifyPath } from "./shared/pathfind.js";
 import { reachMap } from "./shared/supply.js";
+import { polePlan, coverOf, gridsOf } from "./shared/power.js";
 import { Grid } from "./shared/grid.js";
 import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel, nodeFor } from "./ui/town.js";
@@ -569,6 +570,12 @@ class Game {
     const w = this.world;
     if (!w || this.routeFrom === null || to === null) { this.roadPreview = null; if (this.view) this.view.roadPlan = null; return null; }
     const blocked = i => { const b = w.buildingAt(i); return !!b && b.state !== "rubble"; };
+    if (this.roading === "pole") {
+      const plan = to === this.routeFrom ? { plots: [], line: [to], cost: {}, start: true } : this.planPoles([this.routeFrom, to]);
+      this.roadPreview = plan;
+      if (this.view) this.view.roadPlan = { line: plan.line ?? [this.routeFrom], ok: !plan.error, poles: plan.plots };
+      return plan;
+    }
     const plan = to === this.routeFrom ? { plots: [], line: [to], cost: {}, start: true } : routePlan({ w: w.w, terrain: w.terrain, road: w.roads, owner: w.owner, blocked }, w.you, this.routeFrom, to, this.roading, w.roadRules ?? undefined, w.roadRules?.scale ?? 1);
     this.roadPreview = plan;
     if (this.view) this.view.roadPlan = { line: plan.line ?? [this.routeFrom], ok: !plan.error };
@@ -584,10 +591,25 @@ class Game {
     this.updatePanels();
   }
 
+  planPoles(pts) {
+    const w = this.world, pole = w.defs.table.power_pole;
+    const blocked = i => { const b = w.buildingAt(i); return !!b && b.state !== "rubble"; };
+    const plan = polePlan({ w: w.w, terrain: w.terrain, owner: w.owner, road: w.roads, blocked }, w.you, pts, w.powerRules);
+    if (plan.error) return { ...plan, plots: [], cost: {}, pts, line: plan.line ?? roadLine(w.w, pts) };
+    return { plots: plan.poles, gaps: plan.gaps, cost: Object.fromEntries(Object.entries(pole.cost).map(([k, v]) => [k, v * plan.poles.length])), pts, line: plan.line };
+  }
+
+  async layPoles(pts) {
+    const r = await this.conn.request({ t: "poles", via: pts });
+    if (!r.ok) return this.toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + "." : "Could not place the poles.");
+    this.toast(`Placed ${r.placed} power ${r.placed === 1 ? "pole" : "poles"}${r.skipped ? ` (${r.of - r.placed} could not go up: ${r.skipped})` : ""}${r.gaps ? `; the line has ${r.gaps} ${r.gaps === 1 ? "gap" : "gaps"} where no pole fits` : ""}.`);
+  }
+
   async layRouted(to) {
     const from = this.routeFrom, kind = this.roading, plan = this.previewRoute(to);
     this.clearRoute();
     if (!plan || from === null) return;
+    if (kind === "pole") return plan.error ? this.toast(plan.error[0].toUpperCase() + plan.error.slice(1) + ".") : this.layPoles([from, to]);
     if (plan.error) return this.toast(plan.error[0].toUpperCase() + plan.error.slice(1) + ".");
     if (!plan.plots.length) return this.toast("That road is already there.");
     const r = await this.conn.request({ t: "road", kind, from, to });
@@ -609,13 +631,14 @@ class Game {
     if (p !== null && this.roadStroke[this.roadStroke.length - 1] !== p) this.roadStroke.push(p);
     if (this.roadStroke.length > 1 && this.routeFrom !== null) { this.routeFrom = null; this.routeTo = null; }
     this.roadPreview = this.planRoad();
-    this.view.roadPlan = this.roadPreview && { line: this.roadPreview.line, ok: !this.roadPreview.error };
+    this.view.roadPlan = this.roadPreview && { line: this.roadPreview.line, ok: !this.roadPreview.error, poles: this.roading === "pole" ? this.roadPreview.plots : null };
   }
 
   planRoad() {
     const w = this.world, stroke = this.roadStroke;
     if (!stroke?.length) return null;
     const pts = simplifyPath(stroke.map(i => [i % w.w, (i / w.w) | 0]), w.roadRules?.maxPoints ?? 64).map(([x, y]) => y * w.w + x);
+    if (this.roading === "pole") return this.planPoles(pts);
     const blocked = i => { const b = w.buildingAt(i); return !!b && b.state !== "rubble"; };
     const plan = roadPlan({ w: w.w, terrain: w.terrain, road: w.roads, owner: w.owner, blocked }, w.you, pts, this.roading, w.roadRules ?? undefined, w.roadRules?.scale ?? 1);
     return { ...plan, pts, line: roadLine(w.w, pts) };
@@ -629,6 +652,7 @@ class Game {
     this.updatePanels();
     if (!plan) return;
     if (plan.error) return this.toast(plan.error[0].toUpperCase() + plan.error.slice(1) + ".");
+    if (kind === "pole") return this.layPoles(plan.pts);
     if (!plan.plots.length) return this.toast(kind === "none" ? "There is no road of yours there." : "That road is already there.");
     const r = await this.conn.request({ t: "road", kind, via: plan.pts });
     if (!r.ok) return this.toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + "." : "Could not lay the road.");
@@ -1015,9 +1039,27 @@ class Game {
     v.supplyReach = reachMap(this.grid, { terrain: w.terrain, owner: w.owner, road: w.roads }, w.you, sources, sup.range);
   }
 
+  powerOverlay() {
+    const w = this.world, v = this.view;
+    if (!v || !w?.powerRules) return;
+    const sel = this.selectedBuilding !== null ? w.buildings.get(this.selectedBuilding) : null, d = sel?.def;
+    const show = this.roading === "pole" || (this.buildMenu?.open && this.buildMenu.tab === "energy") || (sel?.owner === w.you && !!(d?.power || d?.pole || d?.uses));
+    if (!show) { v.powerCover = null; this.powerAt = 0; return; }
+    if (performance.now() - (this.powerAt ?? 0) < 2000) return;
+    this.powerAt = performance.now();
+    this.grid ??= new Grid(w.w, w.h);
+    const scale = w.powerRules.scale ?? 1, plants = w.purse?.power?.plants ?? {};
+    const nodes = [...w.buildings.values()].filter(b => b.owner === w.you && b.state === "active" && (b.def?.power || b.def?.pole) && w.owner[b.anchor] === w.you)
+      .map(b => ({ id: b.id, at: b.anchor, reach: (b.def.power?.reach ?? b.def.pole.reach) * scale, make: b.def.power?.make ?? 0 }));
+    const { grids } = gridsOf(this.grid, nodes, []), on = new Set();
+    for (const g of grids) if (g.nodes.some(n => n.make > 0 && plants[n.id]?.[0])) for (const n of g.nodes) on.add(n.id);
+    v.powerCover = coverOf(this.grid, nodes, n => on.has(n.id));
+  }
+
   updatePanels() {
     if (this.left) return;
     this.supplyOverlay();
+    this.powerOverlay();
     for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 

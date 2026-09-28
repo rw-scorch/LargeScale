@@ -19,6 +19,21 @@ function workText(def, town) {
   return out.join(" ");
 }
 
+export function powerText(w, b) {
+  const d = b.def, p = w.purse?.power;
+  if (!p || b.owner !== w.you || b.state !== "active") return "";
+  if (d.power) {
+    const [fuel, load] = p.plants?.[b.id] ?? [0, 0];
+    return fuel ? `Makes ${d.power.make} power, ${load}% of it used, burning up to ${d.power.burn} coal a second.` : "No coal in its store, so it makes no power. Carts bring coal from your other stores; mine more if none have any.";
+  }
+  if (d.pole) return `Carries your grid ${w.powerRules?.reach ?? d.pole.reach} plots further.`;
+  if (!d.uses) return "";
+  const k = p.users?.[b.id];
+  if (k === undefined || k < 0) return `No power: it works at half rate. Build a coal plant within ${(w.powerRules?.scale ?? 1) * 6} plots, or run power poles to it (Build, Power).`;
+  const [make, need, share] = p.grids[k] ?? [0, 0, 0];
+  return share >= 100 ? `Powered: it uses ${d.uses} of the ${make} its grid makes.` : make ? `Short of power: its grid makes ${make} for ${need} wanted, so everything on it works at ${50 + share / 2}%.` : "Its grid has no coal, so it works at half rate.";
+}
+
 function queueText(w, q) {
   if (!q?.items.length) return "Nothing in the queue.";
   const d = w.unitTypes.table[q.items[0]], name = d?.name.toLowerCase() ?? q.items[0], rest = q.items.length - 1;
@@ -124,7 +139,7 @@ export function createBuildingPanel(root, game) {
       desc.textContent = b.def.description ?? "";
       desc.hidden = !desc.textContent;
       info.textContent = ` ${yours ? "yours" : owner}, ${b.state === "construction" ? `being built, ${Math.floor(b.progress * 100)}%` : b.state === "rubble" ? "rubble, clears soon" : b.state}`;
-      work.textContent = yours ? workText(b.def, w.purse?.town) : "";
+      work.textContent = yours ? [workText(b.def, w.purse?.town), powerText(w, b)].filter(Boolean).join(" ") : "";
       work.hidden = !work.textContent;
       waiting.textContent = yours ? (b.state === "construction" ? siteText(w, b.id) : stuckText(w, b.id)) : "";
       waiting.hidden = !waiting.textContent;

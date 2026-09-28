@@ -163,14 +163,17 @@ export function createHud(root, game) {
       paint.classList.toggle("on", !!game.prefs.paint);
       const mode = game.roading ? "road" : !def ? "zone" : game.prefs.paint ? "paint" : game.placeMode() === "click" ? "click" : game.pinned !== null ? "pinned" : "confirm";
       const rp = game.roadPreview, rr = w?.roadRules;
-      const roadCost = mode !== "road" || rp?.start ? "" : rp?.error ? `${rp.error[0].toUpperCase()}${rp.error.slice(1)}.` : rp ? (rp.plots.length ? `${rp.plots.length} plots: ${costText(rp.cost)}.` : "Already there.") : "";
+      const pole = game.roading === "pole";
+      const roadCost = mode !== "road" || rp?.start ? "" : rp?.error ? `${rp.error[0].toUpperCase()}${rp.error.slice(1)}.` : rp ? (rp.plots.length ? `${rp.plots.length} ${pole ? (rp.plots.length === 1 ? "pole" : "poles") : "plots"}: ${costText(rp.cost)}${rp.gaps ? `, ${rp.gaps} ${rp.gaps === 1 ? "gap" : "gaps"}` : ""}.` : "Already there.") : "";
       const route = mode === "road" && game.roading !== "none" ? (game.routeTo !== null ? "pinned" : game.routeFrom !== null ? "from" : "start") : "";
       const k = `${mode}:${def?.id}:${game.zoning}:${game.roading}:${roadCost}:${route}`;
       if (k !== hintKey) {
         hintKey = k;
         const price = c => `${costText(c.cost)} a plot`;
-        const lay = el("button", { id: "road-lay", class: "primary", text: "Lay road", onclick: () => game.layRouted(game.routeTo) });
+        const lay = el("button", { id: "road-lay", class: "primary", text: pole ? "Place poles" : "Lay road", onclick: () => game.layRouted(game.routeTo) });
+        const pp = w?.powerRules;
         const roadText = mode !== "road" ? [] : game.roading === "none" ? ["Removing roads: drag along the roads to take up. "]
+          : pole ? [route === "pinned" ? "Poles to the marked end: " : route === "from" ? "Poles from the marked point: " : "Laying power poles: ", ...(route === "start" ? both("click where the line starts and where it ends, or drag to draw it. ", "tap where the line starts and where it ends, or drag to draw it. ") : route === "from" ? both("click where the line ends. ", "tap where it ends. ") : []), route === "start" && pp ? `A pole every ${pp.spacing} plots, each carrying the grid ${pp.reach} plots. ` : ""]
           : route === "pinned" ? ["Road to the marked end: "]
           : route === "from" ? ["Road from the marked point: ", ...both("move to see the way it takes, and click where it ends. ", "tap where it ends. ")]
           : [`Laying ${ROAD_NAMES[game.roading].toLowerCase()}: `, ...both("click where it starts and where it ends, and it finds its own way round buildings; or drag to draw it. ", "tap where it starts and where it ends, and it finds its own way; or drag to draw it. "), `${rr?.types[game.roading] ? `${price(rr.types[game.roading])}, ${rr.bridge} times over rivers, ${rr.rough} times on mountains. ` : ""}`];
