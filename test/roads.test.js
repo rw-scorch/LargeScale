@@ -55,7 +55,7 @@ test("roads go on your own land, cost more over rivers and mountains, and less a
   assert.equal(roadPlan(view, a, [g.idx(45, 5), g.idx(55, 5)], "dirt", rules.roads).error, "roads go on your own land");
   t[g.idx(20, 8)] = TID.lake;
   assert.match(roadPlan(view, a, [g.idx(18, 8), g.idx(22, 8)], "dirt", rules.roads).error, /cannot cross water/);
-  assert.equal(roadPlan(view, a, [g.idx(1, 1)], "rail", rules.roads).error, "that road comes with a later era");
+  assert.equal(roadPlan(view, a, [g.idx(1, 1)], "highway", rules.roads).error, "that road comes with a later era");
 });
 
 test("laying a road charges for new plots only, cobble waits for research, and removing is free", () => {

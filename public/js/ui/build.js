@@ -2,11 +2,11 @@ import { el } from "./dom.js";
 import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
 import { ROAD_NAMES } from "../shared/roads.js";
 
-const ROAD_TOOLS = [["dirt", "Tracks anyone can lay from the start. Troops, machines and carts cross them faster."], ["cobble", "Faster than dirt. Needs Paved roads research and stone."], ["none", "Takes up your roads. Nothing is refunded."]];
+const ROAD_TOOLS = [["dirt", "Tracks anyone can lay from the start. Troops, machines and carts cross them faster."], ["cobble", "Faster than dirt. Needs Paved roads research and stone."], ["rail", "The fastest of all. Carts between two railway stations joined by rail run as trains carrying 5 times as much. Needs Railways research and steel."], ["none", "Takes up your roads. Nothing is refunded."]];
 
 const ZONE_TOOLS = [["res", "Residential", "Homes. Huts go up while people want them."], ["com", "Commercial", "Shops and stalls give jobs."], ["ind", "Industrial", "Workshops, from the Medieval era."], ["none", "Erase", "Removes zoning. Buildings stay."]];
 
-const CATEGORY_NAMES = { resources: "Resources", farming: "Farming", civic: "Civic", military: "Military", infrastructure: "Storage", transport: "Water", industry: "Industry" };
+const CATEGORY_NAMES = { resources: "Resources", farming: "Farming", civic: "Civic", military: "Military", infrastructure: "Storage", transport: "Water", industry: "Industry", energy: "Power" };
 
 export const costText = cost => Object.entries(cost).map(([k, v]) => `${v} ${k === "money" ? "gold" : k}`).join(", ");
 
@@ -109,11 +109,12 @@ export function createBuildMenu(root, game) {
       }
       list.replaceChildren(...rows.map(d => {
         const reason = why(w, d);
-        return el("button", { class: `build-item${game.building === d.id ? " on" : ""}`, "data-type": d.id, title: d.description ?? "", disabled: !!reason, onclick: () => game.startBuild(d.id) },
+        const line = !!d.pole;
+        return el("button", { class: `build-item${game.building === d.id || (line && game.roading === "pole") ? " on" : ""}`, "data-type": d.id, title: d.description ?? "", disabled: !!reason, onclick: () => (line ? game.startRoad("pole") : game.startBuild(d.id)) },
           el("span", { class: "row spread" }, el("b", { text: d.name }), el("span", { class: "muted", text: `${d.time} s` })),
           d.description ? el("span", { class: "desc", text: d.description }) : null,
           el("span", { class: "muted", text: `${costText(d.cost)}, ${d.footprint[0]} by ${d.footprint[1]}` }),
-          d.producer ? el("span", { class: "muted", text: `Makes ${d.producer.rate} ${d.producer.out ?? "ore"} a second${d.producer.kind === "farm" ? " times fertility and season" : ""}, ${d.jobs} workers` }) : null,
+          d.producer ? el("span", { class: "muted", text: `Makes ${d.producer.rate} ${d.producer.out ?? "ore"} a second${d.producer.kind === "farm" ? " times fertility and season" : d.producer.kind === "convert" ? ` from ${Object.entries(d.producer.in).map(([k, v]) => `${v} ${k}`).join(" and ")} each` : ""}, ${d.jobs} workers` }) : null,
           reason ? el("span", { class: "why", text: reason }) : null);
       }));
     },

@@ -4,9 +4,9 @@ import { MinHeap } from "./heap.js";
 export const ROAD_TYPES = ["none", "dirt", "cobble", "paved", "highway", "rail"];
 export const ROAD_MULT = [1, 0.6, 0.45, 0.3, 0.2, 0.12];
 export const ROAD_NAMES = { dirt: "Dirt road", cobble: "Cobbled road", paved: "Paved road", highway: "Highway", rail: "Railway" };
-export const BRIDGE_NAMES = { dirt: "Wooden bridge", cobble: "Stone bridge" };
+export const BRIDGE_NAMES = { dirt: "Wooden bridge", cobble: "Stone bridge", rail: "Railway bridge" };
 export const ROAD_RULES = {
-  types: { dirt: { cost: { money: 1 } }, cobble: { cost: { money: 3, stone: 1 }, needs: "road_cobble" } },
+  types: { dirt: { cost: { money: 1 } }, cobble: { cost: { money: 3, stone: 1 }, needs: "road_cobble" }, rail: { cost: { money: 4, steel: 1 }, needs: "rail" } },
   bridge: 5, rough: 4, roughMove: 3, maxPoints: 64, maxPlots: 400, routeNodes: 40000, connectMax: 2000, autoEvery: 20,
 };
 
@@ -125,8 +125,9 @@ export function roadSprite(road, terrain, w, i) {
   if (i + w < road.length && road[i + w]) m |= 4;
   if (x > 0 && road[i - 1]) m |= 8;
   const kind = ROAD_TYPES[road[i]];
-  if (kind === "rail") return `rail_${maskName(m)}`;
-  if (terrain[i] === TID.river) return `bridge_${road[i] >= 2 ? "stone" : "wood"}_${m & 10 && !(m & 5) ? "h" : "v"}`;
+  const across = m & 10 && !(m & 5) ? "h" : "v";
+  if (kind === "rail") return terrain[i] === TID.river ? `bridge_steel_${across}` : `rail_${maskName(m)}`;
+  if (terrain[i] === TID.river) return `bridge_${road[i] >= 2 ? "stone" : "wood"}_${across}`;
   if (TERRAIN[terrain[i]].move >= ROAD_RULES.roughMove) return `road_mountain_${maskName(m)}`;
   return `road_${kind}_${maskName(m)}`;
 }

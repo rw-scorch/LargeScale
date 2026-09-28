@@ -4,7 +4,7 @@ import { depositIndex, emptyDeposits } from "../shared/deposits.js";
 import { areaAround } from "../shared/buildings.js";
 import { installBuildings, addBuilding, footprint, WOOD_FULL } from "./buildings.js";
 import { canPlace } from "./construction.js";
-import { roomFor, deliver } from "./stores.js";
+import { roomFor, deliver, homeOf, takeNear, askFor, setShort } from "./stores.js";
 import rules from "../../data/rules.json" with { type: "json" };
 import depositData from "../../data/deposits.json" with { type: "json" };
 import { makeRng } from "../shared/rng.js";
@@ -132,6 +132,26 @@ function gather(world, b, rates, k, out) {
   b.made = (b.made ?? 0) + got;
 }
 
+function convert(world, b, n, p, want, r) {
+  const stored = !!world.stores && !!n?.human, home = stored ? homeOf(world, b) : null;
+  const have = g => (stored ? home?.goods[g] ?? 0 : n?.stock?.[g] ?? 0);
+  let k = want;
+  const short = [];
+  for (const [g, per] of Object.entries(p.in)) {
+    const can = have(g) / per;
+    if (can < want - 1e-9) short.push(g);
+    k = Math.min(k, can);
+  }
+  if (home) for (const [g, per] of Object.entries(p.in)) askFor(world, home, g, per * p.rate * (r.speed ?? 1) * r.convertStock);
+  if (stored) setShort(world, b, home ? (k > 1e-9 ? [] : short) : null);
+  if (!(k > 1e-9)) return 0;
+  for (const [g, per] of Object.entries(p.in)) {
+    if (stored) takeNear(world, b, g, per * k);
+    else n.stock[g] = Math.max(0, (n.stock[g] ?? 0) - per * k);
+  }
+  return k;
+}
+
 export function produce(world, dt) {
   const res = world.res, bld = world.bld, dep = res.dep, r = res.rules, out = new Map();
   out.drops = [];
@@ -141,7 +161,7 @@ export function produce(world, dt) {
     if (!p || b.state !== "active" || world.owner[b.anchor] !== b.owner) continue;
     const n = world.nations.get(b.owner);
     const staffed = Math.max(r.minWorkforce, n?.stats?.worked ?? 1);
-    let want = p.rate * dt * staffed * (r.speed ?? 1) * (n?.outputMult ?? 1), got = 0, kind = p.out, capped = !!p.out;
+    let want = p.rate * dt * staffed * (r.speed ?? 1) * (n?.outputMult ?? 1) * (b.power ?? 1), got = 0, kind = p.out, capped = !!p.out;
     if (p.out) want = Math.min(want, roomFor(world, b, p.out));
     if (p.kind === "deposit") {
       for (const i of nearestFirst(world, b, p.radius ?? 0)) {
@@ -183,6 +203,8 @@ export function produce(world, dt) {
       got = want * fert * (SEASON_YIELD[res.seasonOf(b.anchor)] ?? 1) * (b.weatherMult ?? 1);
     } else if (p.kind === "pasture") {
       got = want * (res.seasonOf(b.anchor) === "winter" ? r.winterPasture : 1);
+    } else if (p.kind === "convert") {
+      got = convert(world, b, n, p, want, r);
     }
     got *= 1 + effectOf(world, n, `${kind}_rate`);
     if (kind) got = Math.min(got, roomFor(world, b, kind));
