@@ -9,7 +9,7 @@ import { unitTable, mixFromRow, mixParts, powerOf } from "./units.js";
 
 const LEVY_ONLY = [{ id: "levy", num: 1, name: "Levies", kind: "troop", era: "T", attack: 1, defence: 1, speed: 1, capture: 1 }];
 
-const stackFromRow = ([id, owner, pos, troops, order, mix, xp, kind, supplies], units) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold", mix: mixFromRow(units, mix), xp: xp ?? 0, kind: kind === 1 ? "supply" : null, supplies: supplies ?? 0 });
+const stackFromRow = ([id, owner, pos, troops, order, mix, xp], units) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold", mix: mixFromRow(units, mix), xp: xp ?? 0 });
 
 const MACHINE_STATES = ["idle", "moving", "wreck"];
 
@@ -46,6 +46,7 @@ export class ClientWorld {
     this.roads = new Uint8Array(this.w * this.h);
     this.roadRules = hello.roadRules ?? null;
     this.powerRules = hello.powerRules ?? null;
+    this.goldRules = hello.goldRules ?? null;
     this.terrain = null;
     this.parts = new PartCollector();
     this.queue = [];
@@ -102,10 +103,6 @@ export class ClientWorld {
     this.convoys.set(id, { id, owner, pos, kind, amount, era, dest, ship: ship || null, train: !!train, prev: moved ? old.pos : old && !!old.ship !== !!ship ? pos : old?.prev ?? pos, movedAt: moved ? Date.now() : old?.movedAt ?? 0 });
   }
 
-  cargoOf(shipId) {
-    for (const c of this.convoys.values()) if (c.ship === shipId) return c;
-    return null;
-  }
 
   powerOf(s, holding = false) { return powerOf(this.unitTypes, s.troops, s.mix, holding ? "defence" : "attack", this.troopRules.xpBonus[s.xp] ?? 0); }
 
@@ -181,13 +178,13 @@ export class ClientWorld {
     const def = this.defs.table[type], me = this.nations.get(this.you);
     if (!def || !me) return "unknown building";
     const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id), road: this.roads };
-    const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} };
+    const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0 };
     return placeError(view, nation, def, anchor) ?? costError(def, nation);
   }
 
   costError(type) {
     const def = this.defs.table[type];
-    return def ? costError(def, { money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} }) : "unknown building";
+    return def ? costError(def, { money: this.purse?.money ?? 0 }) : "unknown building";
   }
 
   takeChanged() { return this.changed.splice(0); }
@@ -265,7 +262,7 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, supply: m.supply ?? null, logistics: m.logistics ?? null, power: m.power ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "schedule") { this.schedule = m.schedule ?? {}; if (m.info) this.info = m.info; }
     if (m.t === "phase") this.lastPhase = m;

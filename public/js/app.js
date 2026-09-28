@@ -17,7 +17,6 @@ import { createNotices } from "./ui/notice.js";
 import { createBuildMenu, costText } from "./ui/build.js";
 import { roadPlan, routePlan, roadLine, ROAD_NAMES } from "./shared/roads.js";
 import { simplifyPath } from "./shared/pathfind.js";
-import { reachMap } from "./shared/supply.js";
 import { polePlan, coverOf, gridsOf } from "./shared/power.js";
 import { Grid } from "./shared/grid.js";
 import { createBuildingPanel } from "./ui/building.js";
@@ -296,18 +295,10 @@ class Game {
     if (e.type === "machine_destroyed" && e.nation === you) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
     if (e.type === "machine_captured" && e.nation === you) say(`mc${e.machine}`, `${name(e.by)} captured your ${machine}. Keep a stack beside your machines.`, 0, "danger");
     if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0, "good");
-    if (e.type === "out_of_supply" && e.nation === you) say(`oos${e.stack}`, "A stack is out of supply: it weakens and troops desert. Bring it back near a store, or send a supply wagon.", 0, "danger", stackAt(e.stack));
-    if (e.type === "supplies_low" && e.nation === you) say(`low${e.stack}`, `A stack beyond supply has about ${Math.max(1, Math.ceil(e.left / 60))} min of supplies left.`, 0, "warn", stackAt(e.stack));
-    if (e.type === "resupplied" && e.nation === you) say(`res${e.stack}`, "A stack is back in supply.", 0, "good", stackAt(e.stack));
-    if (e.type === "wagon_empty" && e.nation === you) say(`we${e.stack}`, "A supply wagon has run out of food.", 0, "warn", stackAt(e.stack));
-    if (e.type === "roads_connected" && e.nation === you) say(`rc${e.plots}${e.stores}`, `Roads laid by themselves: ${fmt(e.plots)} plots for ${costText(e.cost)}, linking ${e.stores} new ${e.stores === 1 ? "store" : "stores"} to your capital.`, 0, "built");
-    if (e.type === "roads_waiting" && e.nation === you) say("rwait", `New stores are waiting for roads: they need ${costText(e.cost)}.`, 60000, "warn");
-    if (e.type === "convoy_taken" && e.nation === you) say(`ct${e.convoy}`, `${name(e.by)} took a cart of yours with ${fmt(e.amount)} ${e.kind}. Keep enemy stacks away from your roads.`, 0, "danger");
-    if (e.type === "convoy_taken" && e.by === you) say(`ct${e.convoy}`, `You took a cart of ${name(e.nation)}'s with ${fmt(e.amount)} ${e.kind}.`, 0, "good");
-    if (e.type === "convoy_lost" && e.nation === you) say(`cl${e.convoy}`, e.why === "sunk" ? `${e.by ? `${name(e.by)} sank` : "A warship sank"} a merchant ship of yours with ${fmt(e.amount)} ${e.kind}. Keep warships near your sea routes.` : `A ${e.ship ? "merchant ship" : "cart"} with ${fmt(e.amount)} ${e.kind} was cut off and lost.`, 0, e.why === "sunk" ? "danger" : "warn", e.at);
-    if (e.type === "convoy_lost" && e.why === "sunk" && e.by === you) say(`cl${e.convoy}`, `You sank a merchant ship of ${name(e.nation)}'s with ${fmt(e.amount)} ${e.kind}.`, 0, "good", e.at);
-    if (e.type === "store_captured" && e.nation === you) say(`sc${e.building}`, `${name(e.by)} took your ${w.defs.table[e.kind]?.name.toLowerCase() ?? "store"} with ${fmt(e.goods)} goods in it.`, 0, "danger");
-    if (e.type === "store_captured" && e.by === you) say(`sc${e.building}`, `You took ${name(e.nation)}'s ${w.defs.table[e.kind]?.name.toLowerCase() ?? "store"} with ${fmt(e.goods)} goods in it.`, 0, "good");
+    if (e.type === "roads_connected" && e.nation === you) say(`rc${e.plots}${e.stores}`, `Roads laid by themselves: ${fmt(e.plots)} plots for ${costText(e.cost)}, linking ${e.stores} more ${e.stores === 1 ? "building" : "buildings"} to your capital.`, 0, "built");
+    if (e.type === "roads_waiting" && e.nation === you) say("rwait", `New buildings are waiting for roads: they need ${costText(e.cost)}.`, 60000, "warn");
+    if (e.type === "trade_captured" && e.nation === you) say(`tc${e.machine}`, `${name(e.by)} captured a trade ship of yours, worth ${fmt(e.pay)} gold. Warships near your sea lanes keep them safe.`, 0, "danger", e.at);
+    if (e.type === "trade_captured" && e.by === you) say(`tc${e.machine}`, `Your warship captured a trade ship of ${name(e.nation)}'s. It sails for your nearest port, worth ${fmt(e.pay)} gold.`, 0, "good", e.at);
     if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);
     if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
     if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0, "warn", stackAt(e.stack));
@@ -482,7 +473,7 @@ class Game {
   toggleLogistics(on = !this.logistics.open) {
     if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
-    this.logistics.show(on && !!this.world?.purse?.logistics && !!me?.spawned);
+    this.logistics.show(on && !!this.world?.purse?.trade && !!me?.spawned);
     this.updatePanels();
   }
 
@@ -620,7 +611,7 @@ class Game {
   async connectStores(kind, dry, keep) {
     const r = await this.conn.request({ t: "connect", kind, dry, ...(keep !== undefined ? { keep } : {}) });
     if (!r.ok) { this.toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + "." : "Could not plan the roads."); return r; }
-    if (!dry) this.toast(r.laid ? `Laid ${r.laid} plots of road for ${costText(r.cost)}, linking ${r.joined} ${r.joined === 1 ? "store" : "stores"} to your capital.` : "Every store you can reach is already on your roads.");
+    if (!dry) this.toast(r.laid ? `Laid ${r.laid} plots of road for ${costText(r.cost)}, linking ${r.joined} ${r.joined === 1 ? "building" : "buildings"} to your capital.` : "Your barracks, ports and stations are already on your roads.");
     return r;
   }
 
@@ -1025,20 +1016,6 @@ class Game {
 
   toast(text) { this.notices?.toast(text); }
 
-  supplyOverlay() {
-    const w = this.world, v = this.view, sup = w?.purse?.supply;
-    if (!v || !sup) return;
-    v.starving = new Set(sup.stacks.filter(r => r[1] <= 0).map(r => r[0]));
-    const s = w.stacks.get(this.selected), show = s && s.owner === w.you;
-    if (!show) { v.supplyReach = null; this.reachAt = 0; return; }
-    if (performance.now() - (this.reachAt ?? 0) < 2000) return;
-    this.reachAt = performance.now();
-    const cap = w.nations.get(w.you)?.capital;
-    const sources = (w.purse.stock?.food ?? 0) > 0 ? [...w.buildings.values()].filter(b => b.owner === w.you && b.state === "active" && b.def?.store && w.owner[b.anchor] === w.you).map(b => b.anchor).concat(cap != null && w.owner[cap] === w.you ? [cap] : []) : [];
-    this.grid ??= new Grid(w.w, w.h);
-    v.supplyReach = reachMap(this.grid, { terrain: w.terrain, owner: w.owner, road: w.roads }, w.you, sources, sup.range);
-  }
-
   powerOverlay() {
     const w = this.world, v = this.view;
     if (!v || !w?.powerRules) return;
@@ -1058,7 +1035,6 @@ class Game {
 
   updatePanels() {
     if (this.left) return;
-    this.supplyOverlay();
     this.powerOverlay();
     for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }

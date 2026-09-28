@@ -244,6 +244,12 @@ export function takeTrainNews(world) {
   return { up, gone };
 }
 
+export function tradePerSecond(world, nid) {
+  const t = world.trade;
+  if (!t) return 0;
+  return (t.earned.get(nid) ?? []).filter(([at]) => at >= world.time - 300).reduce((s, [, g]) => s + g, 0) / 300;
+}
+
 export function tradeView(world, n) {
   const t = world.trade;
   if (!t || !n?.human) return null;

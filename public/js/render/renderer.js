@@ -8,7 +8,6 @@ import { roadSprite } from "../shared/roads.js";
 export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
-const WAGON = { T: "hand_cart", M: "horse_wagon", G: "supply_wagon", I: "supply_truck", Mo: "supply_truck", F: "supply_truck" };
 const FORMATION = [[0, 0], [-0.32, 0.12], [0.32, 0.12], [-0.18, -0.2], [0.18, -0.2]];
 const ROAD_COLOUR = [null, "#e2c38a", "#d9d4c8", "#b8b8b8", "#f0f0f0", "#8a6a4a"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
@@ -289,7 +288,7 @@ export class MapRenderer {
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
       const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) ? "selected" : st.order === "hold" ? "idle" : "moving";
-      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0, wagon: st.kind === "supply", supplies: st.supplies ?? 0, starving: !!this.starving?.has(st.id) });
+      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
     }
     return out;
   }
@@ -340,19 +339,6 @@ export class MapRenderer {
     for (const [mark, colour] of [[1, "rgba(255,236,120,.42)"], [2, "rgba(200,200,200,.38)"]]) {
       ctx.fillStyle = colour;
       for (let y = Math.max(0, v.y0); y <= Math.min(s.h - 1, v.y1); y++) for (let x = Math.max(0, v.x0); x <= Math.min(s.w - 1, v.x1); x++) if (cover[y * s.w + x] === mark) ctx.fillRect(x, y, 1, 1);
-    }
-    ctx.restore();
-  }
-
-  drawSupplyReach() {
-    const reach = this.supplyReach, s = this.state, ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height, v = this.visibleRange(1);
-    if (!reach?.size) return;
-    ctx.save();
-    ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
-    ctx.fillStyle = "rgba(111,207,122,.2)";
-    for (const i of reach.keys()) {
-      const x = i % s.w, y = (i / s.w) | 0;
-      if (x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1) ctx.fillRect(x, y, 1, 1);
     }
     ctx.restore();
   }
@@ -427,7 +413,6 @@ export class MapRenderer {
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
     this.drawZoneRect();
     this.drawPowerCover();
-    this.drawSupplyReach();
     this.drawRoadPlan();
     this.drawGhost();
     this.drawEffects();
@@ -829,7 +814,7 @@ export class MapRenderer {
       const px = c.prev % s.w, py = (c.prev / s.w) | 0, qx = c.pos % s.w, qy = (c.pos / s.w) | 0;
       const x = px + (qx - px) * t, y = py + (qy - py) * t;
       if (r && (x < r.x0 - 2 || x > r.x1 + 2 || y < r.y0 - 2 || y > r.y1 + 2)) continue;
-      out.push({ x: x + 0.5, y: y + 0.8, sprite: c.train ? "loco_steam" : WAGON[c.era] ?? "hand_cart", flip: qx < px, owner: c.owner, size: 0.9, convoy: c });
+      out.push({ x: x + 0.5, y: y + 0.8, sprite: "loco_steam", flip: qx < px, owner: c.owner, size: 0.9, convoy: c });
     }
     return out;
   }
@@ -871,9 +856,8 @@ export class MapRenderer {
     const [sx, sy0] = this.plotToScreen(m.x, m.y);
     const size = Math.max(16 * (this.ratio ?? 1), 16 * px);
     const k = size / 16, sy = sy0 - this.markerLift(px);
-    a.draw(ctx, m.wagon ? `supply_${m.era}` : `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
-    this.label(m.wagon ? `${Math.round(m.supplies)} food` : String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
-    if (m.starving) a.draw(ctx, "alert_starving", sx + size / 4, sy - size / 2 - 4 * k, k * 0.8);
+    a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
+    this.label(String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
     if (m.xp) this.rank(sx, sy - size / 2 - 2 * k, m.xp, Math.max(this.ratio ?? 1, k * 0.6));
   }
 
@@ -916,10 +900,6 @@ export class MapRenderer {
         seen.pos = st.pos;
       }
       const dir = this.facing.get(st.id).dir;
-      if (st.kind === "supply") {
-        out.push({ x: x + 0.5, y: y + 0.75, sprite: WAGON[s.nations.get(st.owner)?.era ?? "T"] ?? "hand_cart", flip: dir === "w", owner: st.owner, stack: st.id, size: 1 });
-        continue;
-      }
       let main = "levy", most = st.troops - Object.values(st.mix ?? {}).reduce((a, b) => a + b, 0);
       for (const [id, n] of Object.entries(st.mix ?? {})) if (n > most) { most = n; main = id; }
       const base = types.table[main]?.sprite ?? "hunter";

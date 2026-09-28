@@ -4,7 +4,6 @@ import { icon } from "./icons.js";
 import { nextLine, when } from "./worldinfo.js";
 import { costText } from "./build.js";
 import { ROAD_NAMES } from "../shared/roads.js";
-import { stuckCount } from "./logistics.js";
 
 const STATUS = { online: "Online", connecting: "Connecting", reconnecting: "Reconnecting", waiting: "Offline", replaced: "Opened elsewhere", outdated: "Needs reload", closed: "Closed", removed: "Removed", deleted: "Deleted" };
 const RES_ICON = { gold: "res_money", concrete: "res_stone" };
@@ -78,7 +77,7 @@ export function createHud(root, game) {
   const research = action("open-research", "res_research", "Research", "research", () => game.toggleResearch());
   const upgrade = action("open-upgrade", "upg_upgrade", "Upgrade", "upgrade", () => game.toggleUpgrade());
   const army = action("open-army", "ui_army", "Army", "army", () => game.toggleArmy());
-  const logistics = action("open-logistics", "ui_map_supply", "Logistics", "logistics", () => game.toggleLogistics());
+  const logistics = action("open-logistics", "res_trade", "Trade", "logistics", () => game.toggleLogistics());
   const deposits = action("show-deposits", "ui_map_resources", "Deposits", "deposits", () => game.toggleDeposits());
   const bar = el("nav", { id: "action-bar", class: "panel" }, build, town, research, upgrade, army, logistics, deposits);
 
@@ -124,8 +123,7 @@ export function createHud(root, game) {
       troops.textContent = n?.spawned ? (v ? `${fmt(n.troops)} / ${fmt(v.cap)}` : fmt(n.troops)) : "-";
       troopRate.textContent = v ? (v.grow ? rate(v.grow) : "full") : "";
       fill.style.width = v?.cap ? `${Math.min(100, (n.troops / v.cap) * 100)}%` : "0";
-      const stock = p ? Object.entries(p.stock).filter(([k, x]) => x > 0 || k === "food" || k === "wood") : [];
-      const list = p ? [["gold", p.money, v?.income ?? 0], ...(p.town ? [["population", p.town.pop, 0, "people"]] : []), ...stock.map(([k, x]) => [k, x, (p.making?.[k] ?? 0) - (k === "food" ? p.town?.foodUse ?? 0 : 0)])] : [];
+      const list = p ? [["gold", p.money, v?.income ?? 0], ...(p.town ? [["population", p.town.pop, 0, "people"]] : [])] : [];
       const sig = list.map(([k, x, r]) => `${k}${fmt(x)}${rate(r)}`).join();
       if (purse.dataset.sig !== sig) { purse.dataset.sig = sig; purse.replaceChildren(...list.map(a => chip(...a))); }
       shareLabel.textContent = `${share.value}%${n?.spawned ? ` (${fmt(n.troops * readShare())})` : ""}`;
@@ -148,11 +146,10 @@ export function createHud(root, game) {
       upgrade.classList.toggle("on", !!game.upgrade?.open);
       army.disabled = !p?.army || !n?.spawned;
       army.classList.toggle("on", !!game.army?.open);
-      const stuck = w ? stuckCount(w) : 0;
-      logistics.disabled = !p?.logistics || !n?.spawned;
+      logistics.disabled = !p?.trade || !n?.spawned;
       logistics.classList.toggle("on", !!game.logistics?.open);
-      logistics.querySelector(".alert").hidden = !stuck;
-      logistics.title = stuck ? `Logistics: ${stuck} ${stuck === 1 ? "thing is" : "things are"} stuck (${keyTag("logistics").textContent})` : `Logistics (${keyTag("logistics").textContent})`;
+      logistics.querySelector(".alert").hidden = true;
+      logistics.title = p?.trade ? `Trade: ${fmt(p.trade.perMinute)} gold a minute (${keyTag("logistics").textContent})` : `Trade (${keyTag("logistics").textContent})`;
       deposits.classList.toggle("on", !!game.view?.showDeposits);
 
       placeHint.hidden = !game.placing;

@@ -8,7 +8,7 @@ export function upgradeLock(w, next) {
   return eraIdx(next.era) > eraIdx(w.purse?.era ?? "T") ? `needs the ${ERA_NAMES[next.era]} era` : w.lockOf(next.id);
 }
 
-export function upgradePrice(w, cost, stock = w.purse?.stock) {
+export function upgradePrice(w, cost, stock = {}) {
   const r = w.consRules;
   return priceOf(cost, stock, r.instantPremium, r.moneyForMissing);
 }
@@ -102,11 +102,10 @@ export function createUpgradePanel(root, game) {
     } else if (!p.done) {
       const need = Math.ceil(upgradePrice(w, p.first).money - money);
       go.textContent = "Not enough gold";
-      total.textContent = `Even one costs ${fmt(Math.ceil(upgradePrice(w, p.first).money))} gold with the materials you lack; you have ${fmt(money)}. ${fmt(need)} more gold needed.`;
+      total.textContent = `Even one costs ${fmt(Math.ceil(upgradePrice(w, p.first).money))} gold; you have ${fmt(money)}. ${fmt(need)} more gold needed.`;
     } else {
-      const used = costText(p.used), bought = p.bought >= 1 ? ` ${fmt(p.bought)} of that gold buys materials you lack.` : "";
       go.textContent = p.short ? `Upgrade ${p.done} of ${p.count}` : `Upgrade ${p.count}`;
-      total.textContent = `${p.short ? `You can afford ${p.done} of the ${p.count} you picked: ` : ""}${fmt(p.spent)} gold${used ? ` and ${used}` : ""}.${bought}`;
+      total.textContent = `${p.short ? `You can afford ${p.done} of the ${p.count} you picked: ` : ""}${fmt(p.spent)} gold.`;
     }
   };
 

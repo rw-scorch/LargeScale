@@ -2,13 +2,21 @@ import { el } from "./dom.js";
 import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
 import { ROAD_NAMES } from "../shared/roads.js";
 
-const ROAD_TOOLS = [["dirt", "Tracks anyone can lay from the start. Troops, machines and carts cross them faster."], ["cobble", "Faster than dirt. Needs Paved roads research and stone."], ["rail", "The fastest of all. Carts between two railway stations joined by rail run as trains carrying 5 times as much. Needs Railways research and steel."], ["none", "Takes up your roads. Nothing is refunded."]];
+const ROAD_TOOLS = [["dirt", "Tracks anyone can lay from the start. Troops and machines cross them faster."], ["cobble", "Faster than dirt. Needs Paved roads research."], ["rail", "The fastest of all. Trains between two railway stations joined by rail earn gold for each trip. Needs Railways research."], ["none", "Takes up your roads. Nothing is refunded."]];
 
 const ZONE_TOOLS = [["res", "Residential", "Homes. Huts go up while people want them."], ["com", "Commercial", "Shops and stalls give jobs."], ["ind", "Industrial", "Workshops, from the Medieval era."], ["none", "Erase", "Removes zoning. Buildings stay."]];
 
-const CATEGORY_NAMES = { resources: "Resources", farming: "Farming", civic: "Civic", military: "Military", infrastructure: "Storage", transport: "Water", industry: "Industry", energy: "Power" };
+const CATEGORY_NAMES = { resources: "Resources", farming: "Farming", civic: "Civic", military: "Military", infrastructure: "Rail", transport: "Water", industry: "Industry", energy: "Power" };
 
 export const costText = cost => Object.entries(cost).map(([k, v]) => `${v} ${k === "money" ? "gold" : k}`).join(", ");
+
+export function earnText(w, d) {
+  const p = d.producer, g = w.goldRules;
+  if (!p || !g) return "";
+  const worth = k => (g.worth[k] ?? 1) * g.yield, most = p.out ? worth(p.out) : Math.max(...p.deposits.map(worth));
+  const each = (p.rate * most).toFixed(2);
+  return p.out ? `Earns ${each} gold a second${p.kind === "farm" ? " times fertility and season" : p.kind === "pasture" ? ", less in winter" : ""}, with ${d.jobs} workers` : `Earns up to ${each} gold a second, by what the deposit holds, with ${d.jobs} workers`;
+}
 
 function laterNote(w, z) {
   const era = eraIdx(w.purse?.era ?? "T");
@@ -29,7 +37,7 @@ export function createBuildMenu(root, game) {
 
   const connectText = r => {
     if (!r) return "Plan first to see what it costs.";
-    const parts = [`${r.stores} ${r.stores === 1 ? "store" : "stores"}, ${r.already} already on your roads.`];
+    const parts = [`${r.stores} ${r.stores === 1 ? "building" : "buildings"} to join, ${r.already} already on your roads.`];
     parts.push(r.plots ? `Linking ${r.joined} more takes ${r.plots} plots for ${costText(r.cost)}${r.bridges ? `, with ${r.bridges} bridge plots` : ""}.` : "Nothing more to lay.");
     if (r.unreachable) parts.push(`${r.unreachable} cannot be reached over your own land.`);
     return parts.join(" ");
@@ -37,22 +45,22 @@ export function createBuildMenu(root, game) {
 
   const connectBox = w => {
     const r = w.roadRules, cobble = r.types.cobble, kind = cobble && !(cobble.needs && w.lockOf(cobble.needs)) ? "cobble" : "dirt";
-    const auto = w.purse?.logistics?.autoRoads ?? null;
+    const auto = w.purse?.autoRoads ?? null;
     const lay = el("button", { id: "connect-lay", class: "primary", text: "Lay them", hidden: !plan?.plots, onclick: async () => { const res = await game.connectStores(kind, false); plan = null; key = ""; if (res.ok) game.updatePanels(); } });
     const box = el("input", { id: "auto-roads", type: "checkbox", checked: !!auto });
     box.addEventListener("change", async () => {
       const res = await game.connectStores(kind, true, box.checked);
       if (!res.ok) { box.checked = !box.checked; return; }
-      game.toast(box.checked ? `New stores will be linked to your roads with ${ROAD_NAMES[kind].toLowerCase()}s, paid as they are laid.` : "New stores are no longer linked by themselves.");
+      game.toast(box.checked ? `New barracks, ports and stations will be linked to your roads with ${ROAD_NAMES[kind].toLowerCase()}s, paid as they are laid.` : "New buildings are no longer linked by themselves.");
       plan = res;
       key = "";
     });
     return el("div", { id: "connect-box", class: "connect-box" },
-      el("b", { text: "Connect stores" }),
-      el("span", { class: "desc", text: `Lays ${ROAD_NAMES[kind].toLowerCase()}s from every store to your capital's roads along the cheapest way round buildings and water, so carts and armies move faster.` }),
+      el("b", { text: "Connect buildings" }),
+      el("span", { class: "desc", text: `Lays ${ROAD_NAMES[kind].toLowerCase()}s from every barracks, port, station and town hall to your capital's roads along the cheapest way round buildings and water, so armies move faster.` }),
       el("div", { class: "row wrap" }, el("button", { id: "connect-plan", text: "Plan the roads", onclick: async () => { const res = await game.connectStores(kind, true); if (res.ok) { plan = res; key = ""; game.updatePanels(); } } }), lay),
       el("span", { id: "connect-text", class: "muted", text: connectText(plan) }),
-      el("label", { class: "row" }, box, el("span", { text: "Keep new stores connected: roads are laid and paid for by themselves." })));
+      el("label", { class: "row" }, box, el("span", { text: "Keep new ones connected: roads are laid and paid for by themselves." })));
   };
 
 
@@ -76,11 +84,11 @@ export function createBuildMenu(root, game) {
     update() {
       const w = game.world;
       if (box.hidden || !w?.defs) return;
-      const defs = Object.values(w.defs.table).filter(d => !d.civilian);
+      const defs = Object.values(w.defs.table).filter(d => !d.civilian && !d.retired);
       const cats = ["zones", ...(w.roadRules ? ["roads"] : []), ...new Set(defs.map(d => d.category))];
       tab ??= "zones";
       const rows = defs.filter(d => d.category === tab).sort((a, b) => eraIdx(a.era) - eraIdx(b.era) || a.num - b.num);
-      const k = `${tab}:${game.building}:${game.zoning}:${game.roading}:${rows.map(d => why(w, d)).join("|")}:${[...w.known()].join()}:${w.purse?.logistics?.autoRoads}`;
+      const k = `${tab}:${game.building}:${game.zoning}:${game.roading}:${rows.map(d => why(w, d)).join("|")}:${[...w.known()].join()}:${w.purse?.autoRoads}`;
       if (k === key) return;
       key = k;
       tabs.replaceChildren(...cats.map(c => el("button", { class: c === tab ? "on" : "", text: c === "zones" ? "Zones" : c === "roads" ? "Roads" : CATEGORY_NAMES[c] ?? c, onclick: () => { tab = c; key = ""; this.update(); } })));
@@ -114,7 +122,7 @@ export function createBuildMenu(root, game) {
           el("span", { class: "row spread" }, el("b", { text: d.name }), el("span", { class: "muted", text: `${d.time} s` })),
           d.description ? el("span", { class: "desc", text: d.description }) : null,
           el("span", { class: "muted", text: `${costText(d.cost)}, ${d.footprint[0]} by ${d.footprint[1]}` }),
-          d.producer ? el("span", { class: "muted", text: `Makes ${d.producer.rate} ${d.producer.out ?? "ore"} a second${d.producer.kind === "farm" ? " times fertility and season" : d.producer.kind === "convert" ? ` from ${Object.entries(d.producer.in).map(([k, v]) => `${v} ${k}`).join(" and ")} each` : ""}, ${d.jobs} workers` }) : null,
+          d.producer ? el("span", { class: "muted", text: earnText(w, d) }) : null,
           reason ? el("span", { class: "why", text: reason }) : null);
       }));
     },

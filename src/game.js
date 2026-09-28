@@ -8,7 +8,7 @@ import { polePlan } from "./shared/power.js";
 import { connectPlan, connectStores } from "./sim/autoroads.js";
 import { sendByBoat, boatPlan, boatsAtSea, crossingOf } from "./sim/boats.js";
 import { coarseRoute } from "./shared/pathfind.js";
-import { trainRow } from "./sim/trade.js";
+import { trainRow, tradePerSecond } from "./sim/trade.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -630,7 +630,8 @@ export function vitalsOf(sim, n) {
   if (!n?.spawned) return null;
   const r = sim.rules, cap = sim.maxTroops(n), e = sim.econ?.rules;
   const grow = n.alive && n.troops < cap ? r.growthFloor + r.growthRate * n.troops * (1 - n.troops / cap) : 0;
-  const income = e && n.money !== undefined ? ((n.income ?? e.baseIncome) + (n.pop ?? 0) * e.taxPerResident * (n.taxLevel ?? 1)) * (1 + (sim.effectOf?.(n, "income") ?? 0)) * (n.outputMult ?? 1) : 0;
+  const tax = e && n.money !== undefined ? ((n.income ?? e.baseIncome) + (n.pop ?? 0) * e.taxPerResident * (n.taxLevel ?? 1)) * (1 + (sim.effectOf?.(n, "income") ?? 0)) * (n.outputMult ?? 1) : 0;
+  const income = tax ? tax + (typeof n.made === "number" ? n.made / (n.madeEvery ?? 5) : 0) + (n.stats?.trade ?? 0) + tradePerSecond(sim, n.id) : 0;
   return { troops: Math.floor(n.troops), cap: Math.floor(cap), grow: r2(grow), income: r2(income) };
 }
 
@@ -645,7 +646,7 @@ export function purseOf(n, extra = {}) {
   const s = n.stats ?? {};
   const town = { pop: Math.round(n.pop ?? 0), housing: s.housing ?? 0, jobs: s.jobs ?? 0, workers: Math.round(s.workers ?? 0), staff: Math.round(s.staff ?? s.workers ?? 0), mood: r2(s.mood ?? 1), needs: r2(s.needs ?? 1), worked: r2(s.worked ?? 0), zoned: s.zoned ?? [0, 0, 0, 0], jobSat: r2(s.jobSat ?? 1), trade: r2(s.trade), demand: { res: r2(s.demand?.res), com: r2(s.demand?.com), ind: r2(s.demand?.ind) } };
   const making = { producers: r2((typeof n.made === "number" ? n.made : 0) / (n.madeEvery ?? 5)), town: r2(s.trade) };
-  return { money: Math.floor(n.money), era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, ...extra };
+  return { money: Math.floor(n.money), era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, autoRoads: n.autoRoads ?? null, ...extra };
 }
 
 const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink"]);

@@ -106,8 +106,7 @@ export function createMachinePanel(root, game) {
       const yours = u.owner === world.you, owner = world.nations.get(u.owner)?.name ?? "someone", name = u.def.name.toLowerCase();
       title.textContent = yours ? `Your ${name}` : `${owner}'s ${name}`;
       info.textContent = ` ${u.state === "wreck" ? "" : `${Math.ceil(u.hp)} of ${u.def.hp} health, `}${statusOf(u)}`;
-      const goods = u.def.freight && u.state !== "wreck" ? world.cargoOf(u.id) : null;
-      cargo.textContent = goods ? `${fmt(goods.amount)} ${goods.kind} aboard, for your port over the water.` : u.def.transport && u.state !== "wreck" ? `${fmt(u.cargo)} troops aboard.` : isShip(u) && u.def.capacity && u.state !== "wreck" ? `${fmt(u.cargo)} of ${u.def.capacity} troops aboard.` : "";
+      cargo.textContent = u.def.freight && u.state !== "wreck" ? "Sailing to another port with trade: both ends earn gold when it arrives." : u.def.transport && u.state !== "wreck" ? `${fmt(u.cargo)} troops aboard.` : isShip(u) && u.def.capacity && u.state !== "wreck" ? `${fmt(u.cargo)} of ${u.def.capacity} troops aboard.` : "";
       cargo.hidden = !cargo.textContent;
       desc.textContent = u.def.description ?? "";
       hint.textContent = mode === "move" ? (isShip(u) ? "Click the water to sail to." : "Click where it should go.")

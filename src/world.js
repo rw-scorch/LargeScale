@@ -404,7 +404,7 @@ export class World extends DurableObject {
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, road: roadFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       watch, defs: buildingData.buildings, purse: nation === null ? null : this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale }, powerRules: this.sim.power ? { ...this.sim.power.rules, reach: buildingData.buildings.find(d => d.id === "power_pole").pole.reach * this.sim.power.scale, scale: this.sim.power.scale } : null,
-      units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, time: Math.floor(this.sim.time),
+      units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));
@@ -665,7 +665,7 @@ export class World extends DurableObject {
         const startAt = this.schedule().startAt;
         if (startAt && Date.now() < startAt && m.t !== "spawn") return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: `the world starts at ${new Date(startAt).toISOString().slice(0, 16).replace("T", " ")} UTC; until then you can only pick where to start` });
         const r = runOrder(this.sim, me.nation, m);
-        if (r) reply(r);
+        reply(r ?? { t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "unknown order" });
       }
     }
   }

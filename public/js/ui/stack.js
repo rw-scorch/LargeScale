@@ -13,7 +13,6 @@ export function createStackPanel(root, game) {
   const title = el("b", { id: "stack-title" });
   const info = el("span", { id: "stack-info", class: "muted" });
   const mixLine = el("span", { id: "stack-mix", class: "muted" });
-  const supplyLine = el("span", { id: "stack-supply", class: "muted" });
   const hint = el("span", { id: "stack-hint" });
   const actions = el("div", { class: "row wrap" });
   const STANDING = { hold: "take only unclaimed land and start no fights while you are away", fallback: "fall back when outnumbered while you are away", guard: "guard your land: they go to meet enemies inside it" };
@@ -23,7 +22,7 @@ export function createStackPanel(root, game) {
     el("option", { value: "guard", text: "guards your land: meets enemies inside it" }));
   const away = el("div", { class: "row wrap", id: "stack-away" }, el("span", { class: "muted", text: "Standing order: this stack" }), standing,
     el("button", { class: "ghost", id: "stack-standing-all", text: "Same for all my stacks", onclick: () => order({ t: "standing", mode: standing.value, all: true }, r => game.toast(`All ${r.stacks} of your stacks, and new ones, now ${STANDING[r.mode]}.`)) }));
-  const box = el("section", { id: "stack-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), mixLine, supplyLine, away, hint, actions);
+  const box = el("section", { id: "stack-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), mixLine, away, hint, actions);
   root.append(box);
   let mode = null, preview = null, key = "", trip = null, asking = false, drawn = null, disbandAt = -Infinity;
   const confirming = () => performance.now() - disbandAt < 4000;
@@ -45,7 +44,7 @@ export function createStackPanel(root, game) {
     key = "";
     return r;
   };
-  const adjacent = s => s.kind === "supply" ? [] : game.world.myStacks().filter(o => o.id !== s.id && o.kind !== "supply" && Math.max(Math.abs((o.pos % game.world.w) - (s.pos % game.world.w)), Math.abs(((o.pos / game.world.w) | 0) - ((s.pos / game.world.w) | 0))) <= 1);
+  const adjacent = s => game.world.myStacks().filter(o => o.id !== s.id && Math.max(Math.abs((o.pos % game.world.w) - (s.pos % game.world.w)), Math.abs(((o.pos / game.world.w) | 0) - ((s.pos / game.world.w) | 0))) <= 1);
   const orderOf = s => game.world.purse?.orders?.find(o => o.id === s.id) ?? null;
   standing.addEventListener("change", () => { const s = mine(); if (s) order({ t: "standing", stack: s.id, mode: standing.value }); });
 
@@ -70,24 +69,16 @@ export function createStackPanel(root, game) {
       if (!confirming()) {
         disbandAt = performance.now();
         key = "";
-        return game.toast(s.kind === "supply" ? `Disband again to confirm: on your land the wagon's ${fmt(s.supplies)} food goes back to your stock.` : `Disband again to confirm: ${share}% of the ${fmt(s.troops)} troops are lost, and only as many go home as your troop cap has room for.`);
+        return game.toast(`Disband again to confirm: ${share}% of the ${fmt(s.troops)} troops are lost, and only as many go home as your troop cap has room for.`);
       }
       disbandAt = -Infinity;
       order({ t: "disband", stack: s.id }, r => {
-        if (r.food) game.toast(`The wagon's ${fmt(r.food)} food went back to your stock.`);
-        else game.toast(r.left ? `${fmt(r.back)} troops went home and ${fmt(r.lost)} were lost. ${fmt(r.left)} stay in the stack: your troops are at their cap.` : `${fmt(r.back)} troops went home and ${fmt(r.lost)} were lost.`);
+        game.toast(r.left ? `${fmt(r.back)} troops went home and ${fmt(r.lost)} were lost. ${fmt(r.left)} stay in the stack: your troops are at their cap.` : `${fmt(r.back)} troops went home and ${fmt(r.lost)} were lost.`);
         if (!r.left) game.select(null);
       });
     },
     go() { const s = mine(); if (s && preview) order({ t: "move", stack: s.id, to: preview.to }, cancel); },
     board() { if (mine()) { cancel(); mode = "board"; } },
-    follow() { if (mine()?.kind === "supply") { cancel(); mode = "follow"; } },
-    followNow(target) {
-      const s = mine();
-      if (!s) return;
-      cancel();
-      return order({ t: "follow", stack: s.id, target }, () => game.toast("The wagon follows that stack and feeds it."));
-    },
     boardNow(ship) {
       const s = mine();
       if (!s) return;
@@ -120,16 +111,6 @@ export function createStackPanel(root, game) {
       drawn.plots.push(i);
     }
     return drawn.plots;
-  };
-
-  const supplyText = (s, w) => {
-    const sup = w.purse?.supply;
-    if (s.kind === "supply") return s.owner === w.you && sup ? `It feeds your stacks within ${sup.radius} plots while its food lasts.` : "";
-    if (s.owner !== w.you || !sup) return "";
-    const row = sup.stacks.find(r => r[0] === s.id);
-    if (!row) return "In supply.";
-    const [, carry, pct] = row;
-    return carry > 0 ? `Beyond supply: about ${Math.ceil(carry / 60)} min of supplies left.` : `Out of supply: ${pct}% strength, and troops are deserting. Bring it back near a store, or send a supply wagon.`;
   };
 
   const aimOf = (o, w) => (o?.only === 0 ? "unclaimed land" : o?.only ? `${w.nations.get(o.only)?.name ?? "one nation"}'s land` : null);
@@ -168,11 +149,6 @@ export function createStackPanel(root, game) {
       el("button", { text: "Cancel", onclick: cancel }),
     ];
     if (mode) return [el("button", { text: "Cancel", onclick: cancel })];
-    if (s.kind === "supply") return [
-      button("stack-move", "Move", "move"),
-      el("button", { id: "stack-follow", class: "primary", text: "Follow a stack", title: "click one of your stacks; the wagon keeps beside it and feeds it", onclick: () => act.follow() }),
-      button("stack-disband", confirming() ? "Sure? Disband" : "Disband", "disband", { class: confirming() ? "danger" : "", title: "on your land its food goes back to your stock" }),
-    ];
     return [
       button("stack-advance", "Advance", "advance", { class: "primary", title: "take any land; with nothing near, the stack goes to the nearest border" }),
       button("stack-claim", "Unclaimed only", "claim", { title: "take only land nobody owns; the stack goes looking for it, but never through another nation" }),
@@ -213,12 +189,6 @@ export function createStackPanel(root, game) {
       const s = mine(), w = game.world;
       if (!s) return [];
       const o = w.owner[plot], onLand = isLand(w.terrain[plot]), items = [];
-      if (s.kind === "supply") {
-        const t = w.stacks.get(game.view?.stackAt(sx, sy));
-        if (t && t.owner === w.you && t.kind !== "supply") items.push({ id: "follow", label: "Follow this stack", note: fmt(t.troops), icon: "ui_map_supply", run: () => act.followNow(t.id) });
-        if (onLand) items.push({ id: "move", label: "Move here", icon: "cursor_move", run: () => act.moveNow(plot) });
-        return items;
-      }
       const ship = w.machines.get(game.view?.machineAt(sx, sy));
       if (ship && ship.owner === w.you && ship.def.capacity && ship.state !== "wreck") items.push({ id: "board", label: "Board ship", note: `${fmt(ship.cargo)} of ${ship.def.capacity}`, icon: "ui_map_supply", run: () => act.boardNow(ship.id) });
       if (onLand) items.push({ id: "move", label: "Move here", icon: "cursor_move", run: () => act.moveNow(plot) });
@@ -233,11 +203,6 @@ export function createStackPanel(root, game) {
         const u = w.machines.get(game.view?.machineAt(sx, sy));
         if (!u || u.owner !== w.you || !u.def.capacity) return game.toast("Click one of your ships.");
         return act.boardNow(u.id);
-      }
-      if (mode === "follow") {
-        const t = w.stacks.get(game.view?.stackAt(sx, sy));
-        if (!t || t.owner !== w.you || t.kind === "supply") return game.toast("Click one of your stacks of troops.");
-        return act.followNow(t.id);
       }
       if (mode === "nation") {
         const o = w.owner[plot];
@@ -263,10 +228,7 @@ export function createStackPanel(root, game) {
       drawRoute(s, w);
       const owner = w.nations.get(s.owner), yours = s.owner === w.you;
       const rank = s.xp ? `, ${XP_NAMES[s.xp] ?? "Veteran"}` : "";
-      const wagon = s.kind === "supply";
-      title.textContent = wagon ? (yours ? `Your supply wagon, ${fmt(s.supplies)} food` : `${owner?.name ?? "Unknown"}'s supply wagon, ${fmt(s.supplies)} food`) : yours ? `Your stack, ${fmt(s.troops)} troops${rank}` : `${owner?.name ?? "Unknown"}'s stack, ${fmt(s.troops)} troops${rank}`;
-      supplyLine.textContent = supplyText(s, w);
-      supplyLine.hidden = !supplyLine.textContent;
+      title.textContent = yours ? `Your stack, ${fmt(s.troops)} troops${rank}` : `${owner?.name ?? "Unknown"}'s stack, ${fmt(s.troops)} troops${rank}`;
       const parts = w.mixOf(s);
       mixLine.textContent = parts.length > 1 || parts[0]?.id !== "levy" ? parts.map(p => `${fmt(p.count)} ${p.name.toLowerCase()}`).join(", ") : "";
       mixLine.hidden = !mixLine.textContent;
@@ -275,7 +237,6 @@ export function createStackPanel(root, game) {
       info.textContent = ` ${statusOf(s, w)}`;
       hint.textContent = preview?.boat ? `No way by land: they walk to your coast and cross ${preview.boat.crossing} plots of water in a free boat, losing about ${Math.round(preview.boat.loss * 100)}% as they land. About ${preview.seconds} s in all.`
         : preview ? `About ${preview.plots} plots and ${preview.seconds} s. Stacks take neutral and enemy land on the way.`
-        : mode === "follow" ? "Click one of your stacks for the wagon to follow."
         : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "board" ? "Click one of your ships." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."
         : yours && !w.frozen ? "Right-click the map for its orders, or right-drag to draw its way." : "";
       hint.classList.toggle("fine-only", !preview && !mode);
