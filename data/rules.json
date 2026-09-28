@@ -1,5 +1,5 @@
 {
-  "territory": { "spawnRadius": 4, "troopBase": 1000, "growthRate": 0.03, "stackSpeed": 1.5, "advanceRate": 6, "advanceRadius": 5, "pathCell": 16, "pathAhead": 8, "pathLookahead": 24, "legAhead": 2, "pathMaxNodes": 60000, "seekMaxNodes": 60000, "disbandLoss": 0.25 },
+  "territory": { "spawnRadius": 4, "troopBase": 1000, "growthRate": 0.03, "stackSpeed": 1.5, "advanceRate": 6, "advanceRadius": 5, "pathCell": 16, "pathAhead": 8, "pathLookahead": 24, "legAhead": 2, "pathMaxNodes": 60000, "seekMaxNodes": 60000, "seeksPerTick": 8, "extendsPerTick": 12, "disbandLoss": 0.25 },
   "combat": { "lethality": 0.08, "holdBonus": 1.25, "ownLandBonus": 1.1 },
   "civilians": { "econEvery": 5, "growth": 0.02, "workerShare": 0.5, "comPerPerson": 0.08, "indPerPerson": 0.15, "buildTriesPerTick": 6, "upgradeChance": 0.03, "conscriptShare": 0.35, "conscriptCost": 0.25, "startResidents": 3, "upgradeOccupancy": 0.9, "resDemandAt": 0.75, "upgradeNeeds": 0.5, "settleStep": 60 },
   "construction": { "instantPremium": 1.5, "moneyForMissing": 4, "refundOnCancel": 0.5, "demolishRefund": 0.5, "rubbleSeconds": 120, "speed": 1 },
@@ -9,6 +9,7 @@
   "roads": { "types": { "dirt": { "cost": { "money": 1 } }, "cobble": { "cost": { "money": 6 }, "needs": "road_cobble" }, "rail": { "cost": { "money": 12 }, "needs": "rail" } }, "bridge": 5, "rough": 4, "roughMove": 3, "maxPoints": 64, "maxPlots": 400, "routeNodes": 40000, "connectMax": 2000, "autoEvery": 20 },
   "schedule": { "maxDays": 60, "shrinkEvery": 120, "shrinkMin": 30, "shrinkMax": 3600, "remind": [3600, 600, 60] },
   "overtime": { "every": 120, "perTick": 4000 },
+  "soldiers": { "troopsEach": 10, "fieldCap": 1000, "maxCompanies": 100, "spacing": 0.34, "drawZoom": 14, "drawArea": 900 },
   "guard": { "every": 2, "ratio": 1.5, "reach": 6, "keepHome": 0.25, "lead": 4, "retarget": 3, "cell": 16 },
   "policy": { "taxSteps": [0, 0.5, 1, 1.5, 2], "taxNames": ["None", "Low", "Normal", "High", "Very high"], "taxUnrest": 0.3, "taxGrowth": 0.5, "conscriptMin": 0.1, "conscriptMax": 0.6, "conscriptStep": 0.05, "conscriptWorkLoss": 1 },
   "buildings": { "capturedResidentsKept": 1 },

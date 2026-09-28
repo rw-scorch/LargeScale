@@ -9,6 +9,7 @@ import { connectPlan, connectStores } from "./sim/autoroads.js";
 import { sendByBoat, boatPlan, boatsAtSea, crossingOf } from "./sim/boats.js";
 import { coarseRoute } from "./shared/pathfind.js";
 import { trainRow, tradePerSecond } from "./sim/trade.js";
+import { fieldError, companyError, detachSoldiers } from "./sim/soldiers.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -106,6 +107,8 @@ export const ORDERS = {
     const home = sim.owner[n.capital] === nation ? n.capital : sim.borderOf(nation).values().next().value;
     const at = m.at === undefined ? home : m.at;
     if (!isPlot(sim, at) || sim.owner[at] !== nation) return fail("stacks form on your own land");
+    const full = fieldError(sim, nation);
+    if (full) return fail(full);
     const s = sim.createStack(nation, at, n.troops * share);
     if (s && n.standing) s.standing = n.standing;
     return s ? { ok: true, stack: s.id } : fail("not enough troops");
@@ -124,6 +127,8 @@ export const ORDERS = {
     }
     let from = sim.nearestOwned(nation, m.at);
     if (from === null) return fail("you hold no land");
+    const full = fieldError(sim, nation);
+    if (full) return fail(full);
     const share = Number.isFinite(m.share) ? Math.min(1, Math.max(0.05, m.share)) : 0.3;
     const overseas = sim.boats && !sim.route(from, m.at);
     if (overseas) {
@@ -196,6 +201,8 @@ export const ORDERS = {
     if (!s) return fail("not your stack");
     const amount = Number.isInteger(m.amount) ? m.amount : Number.isFinite(m.share) ? Math.floor(s.troops * Math.min(1, Math.max(0, m.share))) : NaN;
     if (!(amount > 0)) return fail("give amount or share");
+    const crowded = companyError(sim, nation);
+    if (crowded) return fail(crowded);
     const c = sim.splitStack(s.id, amount);
     return c ? { ok: true, stack: c.id } : fail(`both halves need at least ${sim.rules.minStack} troops`);
   },
@@ -317,6 +324,20 @@ export const ORDERS = {
     const g = sim.grid, plots = [];
     for (let yy = Math.max(0, y); yy < Math.min(g.h, y + h); yy++) for (let xx = Math.max(0, x); xx < Math.min(g.w, x + w); xx++) plots.push(g.idx(xx, yy));
     return { ok: true, plots: zonePlots(sim, nation, plots, m.zone) };
+  },
+  detach(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.soldiers) return fail("soldiers are not running in this world");
+    if (!Array.isArray(m.picks) || !m.picks.length || m.picks.length > MAX_GROUP) return fail(`pick soldiers from 1 to ${MAX_GROUP} companies`);
+    const picks = [];
+    for (const p of m.picks) {
+      if (!p || !Number.isInteger(p.stack) || !p.take || typeof p.take !== "object") return fail("each pick is a company and how many of each type");
+      const take = {};
+      for (const [id, n] of Object.entries(p.take).slice(0, 24)) if (typeof id === "string" && id.length <= 40 && Number.isInteger(n) && n > 0) take[id] = n;
+      picks.push({ stack: p.stack, take });
+    }
+    const r = detachSoldiers(sim, nation, picks);
+    return r.stacks.length ? { ok: true, ...r } : fail(r.error);
   },
   research(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
