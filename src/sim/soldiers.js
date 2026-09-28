@@ -20,10 +20,7 @@ export function companiesOf(world, nid) {
 
 export function fieldOf(world, nid) {
   const R = world.soldiers.rules;
-  let soldiers = 0;
-  for (const s of world.stacks.values()) if (s.owner === nid) soldiers += soldierCount(s.troops, R.troopsEach);
-  for (const u of world.units?.list.values() ?? []) if (!u.wreck && u.cargo?.owner === nid) soldiers += soldierCount(u.cargo.troops ?? 0, R.troopsEach);
-  return { soldiers, cap: R.fieldCap, companies: companiesOf(world, nid), maxCompanies: R.maxCompanies, troopsEach: R.troopsEach };
+  return { soldiers: soldierCount(fieldTroops(world, nid), R.troopsEach), cap: R.fieldCap, companies: companiesOf(world, nid), maxCompanies: R.maxCompanies, troopsEach: R.troopsEach };
 }
 
 export function fieldRoom(world, nid) {
