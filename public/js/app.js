@@ -602,7 +602,7 @@ class Game {
   async layPoles(pts) {
     const r = await this.conn.request({ t: "poles", via: pts });
     if (!r.ok) return this.toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + "." : "Could not place the poles.");
-    this.toast(`Placed ${r.placed} power ${r.placed === 1 ? "pole" : "poles"}${r.skipped ? ` (${r.of - r.placed} could not go up: ${r.skipped})` : ""}${r.gaps ? `; the line has ${r.gaps} ${r.gaps === 1 ? "gap" : "gaps"} where no pole fits` : ""}.`);
+    this.toast(`Placed ${r.placed} power ${r.placed === 1 ? "pole" : "poles"}${r.skipped ? ` (${r.total - r.placed} could not go up: ${r.skipped})` : ""}${r.gaps ? `; the line has ${r.gaps} ${r.gaps === 1 ? "gap" : "gaps"} where no pole fits` : ""}.`);
   }
 
   async layRouted(to) {

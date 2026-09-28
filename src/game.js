@@ -250,7 +250,7 @@ export const ORDERS = {
       placed++;
     }
     if (!placed) return fail(error ?? "no poles could go there");
-    return { ok: true, placed, of: plan.poles.length, gaps: plan.gaps, ...(error ? { skipped: error } : {}) };
+    return { ok: true, placed, total: plan.poles.length, gaps: plan.gaps, ...(error ? { skipped: error } : {}) };
   },
   connect(sim, nation, m) {
     const n = living(sim, nation);

@@ -330,15 +330,16 @@ export function pathBetween(world, nid, a, b) {
 
 const isStation = (world, b) => !!b && !b.camp && !!defOf(world, b)?.station;
 
-export function railAll(world, path, a, b) {
-  const road = world.log?.road, rail = ROAD_TYPES.indexOf("rail"), ends = new Set([...(a.plots ?? []), ...(b.plots ?? [])]);
-  let any = false;
-  for (const i of path) {
-    if (ends.has(i)) continue;
-    if (road?.[i] !== rail) return false;
-    any = true;
-  }
-  return any;
+export function railPath(world, nid, a, b) {
+  const st = world.stores, key = `rail:${nid}:${a.id}:${b.id}`, ver = world.log?.ver ?? 0, hit = st.paths.get(key);
+  if (hit && hit.ver === ver && (!hit.path || hit.path.every(i => ownOrAlly(world, nid, i)))) return hit.path;
+  const road = world.log?.road, rail = ROAD_TYPES.indexOf("rail"), ends = new Set([...(a.plots ?? [a.anchor]), ...(b.plots ?? [b.anchor])]);
+  const cost = (p, i) => (ends.has(i) || (road?.[i] === rail && ownOrAlly(world, nid, i)) ? ROAD_MULT[rail] : Infinity);
+  cost.minStep = ROAD_MULT[rail];
+  const path = road ? findPath(world.grid, a.anchor, b.anchor, cost, st.rules.pathNodes) : null;
+  const ok = path && path.some(i => !ends.has(i)) ? path : null;
+  st.paths.set(key, { path: ok, ver, at: world.time });
+  return ok;
 }
 
 function launch(world, n, from, to, k, amount) {
@@ -352,11 +353,11 @@ function launch(world, n, from, to, k, amount) {
     if (sea === false) return null;
   }
   if (!path && !sea) return null;
-  const train = !sea && isStation(world, from) && isStation(world, to) && railAll(world, path, from, to);
+  const rails = !sea && isStation(world, from) && isStation(world, to) ? railPath(world, n.id, from, to) : null, train = !!rails;
   const load = Math.min(amount, spec.capacity * (train ? st.rules.train.load : 1), surplus(world, from, k));
   if (!(load > EPS)) return null;
   take(world, n, from, k, load);
-  const leg = sea ? sea.leg : path;
+  const leg = sea ? sea.leg : rails ?? path;
   const c = { id: st.next++, owner: n.id, kind: k, amount: load, from: from.id, to: to.id, dest: to.anchor, pos: leg[0], path: leg.slice(1), progress: 0, era: n.era ?? "T" };
   if (sea) { Object.assign(c, { sea: sea.route, goal: sea.goal }); st.counts.sea++; }
   if (train) { c.train = true; st.counts.trains++; }

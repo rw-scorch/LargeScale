@@ -337,7 +337,7 @@ export class MapRenderer {
     if (!cover) return;
     ctx.save();
     ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
-    for (const [mark, colour] of [[1, "rgba(240,200,70,.22)"], [2, "rgba(170,170,170,.22)"]]) {
+    for (const [mark, colour] of [[1, "rgba(255,236,120,.42)"], [2, "rgba(200,200,200,.38)"]]) {
       ctx.fillStyle = colour;
       for (let y = Math.max(0, v.y0); y <= Math.min(s.h - 1, v.y1); y++) for (let x = Math.max(0, v.x0); x <= Math.min(s.w - 1, v.x1); x++) if (cover[y * s.w + x] === mark) ctx.fillRect(x, y, 1, 1);
     }

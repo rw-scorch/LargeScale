@@ -24,7 +24,8 @@ export function powerText(w, b) {
   if (!p || b.owner !== w.you || b.state !== "active") return "";
   if (d.power) {
     const [fuel, load] = p.plants?.[b.id] ?? [0, 0];
-    return fuel ? `Makes ${d.power.make} power, ${load}% of it used, burning up to ${d.power.burn} coal a second.` : "No coal in its store, so it makes no power. Carts bring coal from your other stores; mine more if none have any.";
+    if (fuel) return `Makes ${d.power.make} power, ${load}% of it used, burning up to ${d.power.burn} coal a second.`;
+    return w.purse?.logistics?.stuck.some(r => r[0] === b.id && r[1] === "reach") ? `No store within ${w.purse.logistics.reach} plots of travel, so it has no coal and makes no power. Build a store nearby.` : "No coal in its store, so it makes no power. Carts bring coal from your other stores; mine more if none have any.";
   }
   if (d.pole) return `Carries your grid ${w.powerRules?.reach ?? d.pole.reach} plots further.`;
   if (!d.uses) return "";

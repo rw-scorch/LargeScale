@@ -68,7 +68,7 @@ export function polePlan(view, nid, points, rules = POWER_DEFAULTS) {
   const { w, terrain, owner } = view;
   if (!Array.isArray(points) || points.length < 1 || points.length > 64) return { error: "a line of poles needs 1 to 64 points" };
   if (points.some(p => !Number.isInteger(p) || p < 0 || p >= terrain.length)) return { error: "a point is off the map" };
-  const line = roadLine(w, points), free = i => TERRAIN[terrain[i]].land && TERRAIN[terrain[i]].move < Infinity && owner[i] === nid && !view.blocked?.(i) && !view.road?.[i];
+  const line = roadLine(w, points), free = i => TERRAIN[terrain[i]].land && TERRAIN[terrain[i]].build && owner[i] === nid && !view.blocked?.(i) && !view.road?.[i];
   const poles = [], taken = new Set(), dist = (a, b) => Math.hypot((a % w) - (b % w), ((a / w) | 0) - ((b / w) | 0));
   let last = null, gaps = 0;
   const ok = j => free(j) && !taken.has(j) && (last === null || dist(last, j) <= rules.reach);
