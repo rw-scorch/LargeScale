@@ -13,7 +13,7 @@ import { installEconomy } from "../src/sim/economy.js";
 import { installCivilians } from "../src/sim/civilians.js";
 import { installResources } from "../src/sim/resources.js";
 import { installResearch, orderResearch } from "../src/sim/research.js";
-import { installMachines, giveMachine, orderUnit, UNIT_TYPES } from "../src/sim/units.js";
+import { installMachines, giveMachine, orderUnit, spawnUnit, UNIT_TYPES } from "../src/sim/units.js";
 import { installEffects } from "../src/sim/effects.js";
 import { installGuard, guardTick } from "../src/sim/guard.js";
 import { installOvertime } from "../src/sim/overtime.js";
@@ -32,6 +32,7 @@ import { planCatchUp, runCatchUp } from "../src/sim/offline.js";
 import allRules from "../data/rules.json" with { type: "json" };
 import { encodeRows } from "../src/shared/buildings.js";
 import { installSoldiers, fieldOf } from "../src/sim/soldiers.js";
+import { installAir, orderPlane, planeOf } from "../src/sim/air.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -49,6 +50,7 @@ const { values: a } = parseArgs({ options: {
   power: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
   companies: { type: "string", default: "100" },
+  planes: { type: "string", default: "100" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -141,6 +143,22 @@ const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
 installBoats(w, { scale });
 const soldiers = Number(a.companies) > 0 ? installSoldiers(w) : null;
+const air = Number(a.planes) > 0 ? installAir(w) : null;
+const airSetup = { fields: 0, planes: 0 };
+if (air) for (const id of players) {
+  const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
+  let field = null;
+  for (let r = 3; r < 40 && !field; r++) for (let dy = -r; dy <= r && !field; dy++) for (let dx = -r; dx <= r && !field; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !w.grid.inside(cx + dx, cy + dy)) continue;
+    const at = w.grid.idx(cx + dx, cy + dy), plots = footprint(w, at, bld.table.airfield.fp);
+    if (!plots || plots.some(p => w.owner[p] !== id || bld.at.has(p) || !isLand(terrain[p]))) continue;
+    field = addBuilding(w, { type: "airfield", owner: id, anchor: at, plots, state: "active", progress: 1 });
+  }
+  if (!field) continue;
+  airSetup.fields++;
+  for (let k = 0; k < Number(a.planes); k++) { const u = spawnUnit(w, id, k % 2 ? "early_bomber" : "biplane", field.anchor); if (u) { planeOf(w, u); airSetup.planes++; } }
+}
+const airOrders = { issued: 0, ok: 0 };
 let fieldPeak = { soldiers: 0, companies: 0 };
 const trade = installTrade(w, { scale, seed: Number(a.seed) + 11 });
 let seaSetup = null;
@@ -288,6 +306,19 @@ function playerOrders() {
         break;
       }
     }
+    if (air) for (const u of w.units.list.values()) {
+      if (u.owner !== id || !u.air || !u.air.landed || u.air.rearm > 0 || u.air.mission) continue;
+      const bx = u.air.x, by = u.air.y, rad = UNIT_TYPES[u.type].radius * scale * 0.8;
+      for (let tries = 0; tries < 20; tries++) {
+        const x = Math.floor(bx + (rng.next() * 2 - 1) * rad), y = Math.floor(by + (rng.next() * 2 - 1) * rad);
+        if (!w.grid.inside(x, y)) continue;
+        const at = w.grid.idx(x, y);
+        if (UNIT_TYPES[u.type].bomb && !(w.owner[at] && w.owner[at] !== id)) continue;
+        airOrders.issued++;
+        if (orderPlane(w, u, UNIT_TYPES[u.type].bomb ? "bomb" : "patrol", at).ok) airOrders.ok++;
+        break;
+      }
+    }
     for (const s of mine) {
       if (s.order !== "hold" || s.path.length) continue;
       if (soldiers && s.id % 2) { w.orderAdvance(s.id, null, true); continue; }
@@ -309,7 +340,7 @@ for (const [name, key] of [["seek", "seek"], ["extendPath", "extend"]]) {
 }
 const feed = new StateFeed(0.01, 5);
 feed.delta(w);
-let maxEvents = 0, maxDiffBytes = 0, blocked = 0;
+let maxEvents = 0, maxDiffBytes = 0, blocked = 0, airBombs = 0, airDowns = 0;
 for (let i = 0; i < Number(a.ticks); i++) {
   if (i % 20 === 0) {
     playerOrders();
@@ -330,6 +361,7 @@ for (let i = 0; i < Number(a.ticks); i++) {
     const d = feed.delta(w);
     stateSizes.push(d ? Buffer.byteLength(JSON.stringify({ v: 2, t: "state", time: Math.floor(w.time), ...d })) : 0);
   }
+  for (const e of w.events) { if (e.type === "bombed") airBombs++; if (e.type === "plane_down") airDowns++; }
   const shown = publicEvents(w, w.events);
   eventSizes.push(shown.length ? Buffer.byteLength(JSON.stringify({ v: 2, t: "events", events: shown })) : 0);
   maxEvents = Math.max(maxEvents, w.events.length);
@@ -412,6 +444,7 @@ const report = {
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
   worstTickParts: worstParts,
+  air: air && { ...airSetup, orders: airOrders, flyingNow: [...w.units.list.values()].filter(u => u.air && !u.air.landed).length, planesNow: [...w.units.list.values()].filter(u => u.air).length, bombRuns: airBombs, shotDown: airDowns },
   soldiers: soldiers && { perPlayerPeak: fieldPeak, cap: soldiers.rules.fieldCap, stacksNow: w.stacks.size, playerStacksNow: [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human).length, battlesNow: [...w.stacks.values()].filter(s => s.engaged).length },
   rail: { plots: railPlots, stations, trainsNow: trade.trains.size, railSearch: (() => { const list = [...bld.list.values()].filter(b => b.type === "station_large"), t0 = performance.now(); trade.paths.clear(); let found = 0; for (const b of list) for (const c of list) if (b !== c && b.owner === c.owner && railPath(w, b.owner, b, c)) found++; return { pairs: found, ms: +(performance.now() - t0).toFixed(1) }; })() },
   power: power && (() => {

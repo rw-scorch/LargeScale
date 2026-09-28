@@ -17,6 +17,7 @@ export function createMachinePanel(root, game) {
 
   const w = () => game.world;
   const isShip = u => u.def.domain === "sea";
+  const isPlane = u => u.def.domain === "air";
   const mine = () => {
     const u = w()?.machines.get(game.selectedMachine);
     return u && u.owner === w().you && u.state !== "wreck" && !w().frozen ? u : null;
@@ -37,7 +38,11 @@ export function createMachinePanel(root, game) {
   const follow = (u, s) => order({ t: "machine", machine: u.id, do: "follow", stack: s.id }, () => game.toast(`The ${u.def.name.toLowerCase()} follows that stack.`));
   const land = (u, plot) => order({ t: "machine", machine: u.id, do: "land", at: plot }, () => game.toast(`The ${u.def.name.toLowerCase()} sails there to land ${fmt(u.cargo)} troops.`));
 
+  const fly = (u, what, plot) => order({ t: "air", plane: u.id, do: what, ...(plot === undefined ? {} : { at: plot }) }, r => game.toast(what === "return" ? `The ${u.def.name.toLowerCase()} flies home.` : `The ${u.def.name.toLowerCase()} ${what === "bomb" ? "flies to bomb that spot" : "flies to patrol there"}${r.rearming ? ` once it has rearmed, in ${r.rearming} s` : ""}.`));
   const act = {
+    patrol() { const u = mine(); if (u && isPlane(u) && u.def.attack > 0) { cancel(); mode = "patrol"; } },
+    bomb() { const u = mine(); if (u && isPlane(u) && u.def.bomb) { cancel(); mode = "bomb"; } },
+    home() { const u = mine(); if (u && isPlane(u)) fly(u, "return"); },
     move() { if (mine()) { cancel(); mode = "move"; } },
     follow() { const u = mine(); if (u && !isShip(u)) { cancel(); mode = "follow"; } },
     land() { const u = mine(); if (u && isShip(u) && u.cargo) { cancel(); mode = "land"; } },
@@ -46,6 +51,11 @@ export function createMachinePanel(root, game) {
 
   const statusOf = u => {
     if (u.state === "wreck") return STATE_TEXT.wreck;
+    if (u.air) {
+      const A = u.air, fuel = `${fmt(A.fuel)} s of fuel`;
+      if (A.landed) return A.rearm > 0 ? `at its airfield, rearming: ready in ${fmt(A.rearm)} s` : "at its airfield, ready";
+      return A.mission === "patrol" ? `patrolling, ${fuel}` : A.mission === "bomb" ? `flying to bomb, ${fuel}` : `flying home, ${fuel}`;
+    }
     const o = u.owner === w().you ? orderOf(u) : null;
     if (o?.land !== null && o?.land !== undefined) return "sailing to land its troops";
     if (u.follow) {
@@ -81,11 +91,18 @@ export function createMachinePanel(root, game) {
         return s ? follow(u, s) : game.toast("Click one of your stacks.");
       }
       if (m === "land") return land(u, plot);
+      if (m === "patrol" || m === "bomb") return fly(u, m, plot);
       return order({ t: "machine", machine: u.id, do: "move", to: plot });
     },
     ringFor(plot, sx, sy) {
       const u = mine();
       if (!u || u.def.transport || u.def.freight) return [];
+      if (isPlane(u)) return [
+        ...(u.def.attack > 0 ? [{ id: "patrol", label: "Patrol here", icon: "ui_air_defence", run: () => fly(u, "patrol", plot) }] : []),
+        ...(u.def.bomb ? [{ id: "bomb", label: "Bomb here", icon: "ui_blast_radius", run: () => fly(u, "bomb", plot) }] : []),
+        { id: "home", label: "Fly home", icon: "ui_flag", run: () => fly(u, "return") },
+        { id: "pilot", label: "Pilot", icon: "cursor_attack", run: () => game.startPilot("m", u.id) },
+      ];
       const onLand = isLand(w().terrain[plot]), ship = isShip(u), items = [];
       const s = ship ? null : ownStackAt(sx, sy);
       if (s) items.push({ id: "follow", label: "Follow stack", note: fmt(s.troops), icon: "ui_eye", run: () => follow(u, s) });
@@ -107,21 +124,28 @@ export function createMachinePanel(root, game) {
       const yours = u.owner === world.you, owner = world.nations.get(u.owner)?.name ?? "someone", name = u.def.name.toLowerCase();
       title.textContent = yours ? `Your ${name}` : `${owner}'s ${name}`;
       info.textContent = ` ${u.state === "wreck" ? "" : `${Math.ceil(u.hp)} of ${u.def.hp} health, `}${statusOf(u)}`;
-      cargo.textContent = u.def.freight && u.state !== "wreck" ? "Sailing to another port with trade: both ends earn gold when it arrives." : u.def.transport && u.state !== "wreck" ? `${fmt(u.cargo)} troops aboard.` : isShip(u) && u.def.capacity && u.state !== "wreck" ? `${fmt(u.cargo)} of ${u.def.capacity} troops aboard.` : "";
+      cargo.textContent = u.air && u.def.bomb && u.state !== "wreck" ? (u.air.bombs ? "Bombs aboard: it drops them where it is sent." : "No bombs aboard: it rearms at its airfield.") : u.def.freight && u.state !== "wreck" ? "Sailing to another port with trade: both ends earn gold when it arrives." : u.def.transport && u.state !== "wreck" ? `${fmt(u.cargo)} troops aboard.` : isShip(u) && u.def.capacity && u.state !== "wreck" ? `${fmt(u.cargo)} of ${u.def.capacity} troops aboard.` : "";
       cargo.hidden = !cargo.textContent;
       desc.textContent = u.def.description ?? "";
-      hint.textContent = mode === "move" ? (isShip(u) ? "Click the water to sail to." : "Click where it should go.")
+      hint.textContent = mode === "patrol" ? "Click where it should patrol." : mode === "bomb" ? "Click what it should bomb."
+        : isPlane(u) && yours && u.state !== "wreck" && !world.frozen ? "Right-click the map for its orders. It flies home by itself when its fuel runs low."
+        : mode === "move" ? (isShip(u) ? "Click the water to sail to." : "Click where it should go.")
         : mode === "follow" ? "Click one of your stacks."
         : mode === "land" ? "Click the coast to land the troops on."
         : u.def.transport ? "It sails on its own and lands where the troops were sent."
         : u.def.freight ? "It sails on its own between your ports."
         : yours && u.state !== "wreck" && !world.frozen ? (isShip(u) ? "Right-click the map for its orders: sail, or land the troops aboard on a coast." : "Right-click the map for its orders: move, or follow one of your stacks.") : "";
       hint.classList.toggle("fine-only", !mode);
-      const k = `${u.id}:${yours}:${mode}:${u.state}:${!!u.cargo}:${world.frozen}`;
+      const k = `${u.id}:${yours}:${mode}:${u.state}:${!!u.cargo}:${world.frozen}:${u.air?.bombs ?? ""}`;
       if (k === key) return;
       key = k;
       const can = yours && u.state !== "wreck" && !world.frozen && !u.def.transport && !u.def.freight;
-      const list = !can ? [] : mode ? [el("button", { text: "Cancel", onclick: cancel })] : [
+      const list = !can ? [] : mode ? [el("button", { text: "Cancel", onclick: cancel })] : isPlane(u) ? [
+        ...(u.def.attack > 0 ? [el("button", { id: "plane-patrol", class: "primary", text: "Patrol", title: "click a spot: it circles there and shoots down enemy planes", onclick: () => act.patrol() })] : []),
+        ...(u.def.bomb ? [el("button", { id: "plane-bomb", class: "primary", text: "Bomb", title: "click a spot: it flies there, drops its bombs and comes home", onclick: () => act.bomb() })] : []),
+        el("button", { id: "plane-home", text: "Fly home", onclick: () => act.home() }),
+        el("button", { id: "machine-pilot", title: "fly it yourself", onclick: () => game.startPilot("m", u.id) }, "Pilot ", keyTag("pilot")),
+      ] : [
         el("button", { id: "machine-move", onclick: () => act.move() }, "Move ", keyTag("move")),
         isShip(u)
           ? el("button", { id: "machine-land", text: "Land troops", disabled: !u.cargo, title: "click the coast to put the troops ashore", onclick: () => act.land() })

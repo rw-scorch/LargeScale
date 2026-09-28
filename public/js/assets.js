@@ -2,7 +2,7 @@ import { loadAtlas } from "./render/atlas.js";
 
 let assets = null;
 export const loadAssets = async () => (assets ??= await Promise.all([
-  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects", "people", "units", "vehicles", "ships", "energy"]),
+  loadAtlas("/assets/sheets", ["markers", "mapicons", "terrain", "overlays", "civic", "military", "industry", "transport", "housing", "commercial", "resources", "agriculture", "effects", "people", "units", "vehicles", "ships", "energy", "aircraft"]),
   fetch("/assets/terrain/palettes.json").then(r => r.json()),
 ]).then(([atlas, pal]) => ({ atlas, palettes: pal.seasons })));
 

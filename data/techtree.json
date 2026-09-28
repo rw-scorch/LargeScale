@@ -58,6 +58,8 @@
     {"id":"armour","name":"Armour","branch":"military","era":"I","cost":960,"requires":["field_guns","oil"],"unlocks":{"units":["early_tank"]}},
     {"id":"steam_navy","name":"Steam navy","branch":"military","era":"I","cost":720,"requires":["steam_power","navigation"],"unlocks":{"buildings":["naval_dock"],"units":["steamship","ironclad"]}},
     {"id":"destroyers","name":"Destroyers","branch":"military","era":"I","cost":840,"requires":["steam_navy"],"unlocks":{"units":["destroyer"]}},
+    {"id":"flight","name":"Flight","branch":"military","era":"I","cost":900,"requires":["steam_power"],"unlocks":{"buildings":["airfield"],"units":["biplane","early_bomber"]}},
+    {"id":"anti_aircraft","name":"Anti-aircraft guns","branch":"military","era":"I","cost":620,"requires":["flight"],"unlocks":{"buildings":["flak_tower"]}},
     {"id":"universities","name":"Universities","branch":"civic","era":"I","cost":520,"requires":["age_industry"],"unlocks":{"buildings":["university"],"effects":{"research":0.1}}},
     {"id":"medicine","name":"Medicine","branch":"civic","era":"I","cost":600,"requires":["universities"],"unlocks":{"buildings":["clinic"]}},
     {"id":"bureaucracy","name":"Bureaucracy","branch":"government","era":"I","cost":500,"requires":["age_industry"],"unlocks":{"buildings":["tax_office","parliament"]}}

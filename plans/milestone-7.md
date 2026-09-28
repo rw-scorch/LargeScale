@@ -302,6 +302,41 @@ Evidence: unit tests for range, rearming, bombing and the limit; a smoke world w
     - Written but not run until the dev server is started:
       - the smoke check: steer, the friend sees it, let go;
       - the browser checks: P, holding a key, Esc; on a phone, Pilot, the stick and Let go.
+- **Part E (29 September 2026, branch `m7-air`, stacked on `m7-pilot`).** Built as planned, with these specifics:
+  - **Research and content.**
+    - Flight (Industrial, after Steam power, 900 points) unlocks the airfield (building 67), the biplane fighter (unit 33) and the bomber (unit 34).
+    - Anti-aircraft guns (after Flight) unlock the flak tower (building 68).
+    - Modern planes wait for the Modern era.
+  - **Flying** (`src/sim/air.js`, `installAir`).
+    - Planes fly straight at their speed, within their `radius` of an airfield, and burn `endurance` seconds of fuel.
+    - They turn home when the fuel left is 1.25 times the way back, land, and rearm for 20 s.
+    - A plane over a lost airfield is lost with it, and one that runs dry goes down.
+  - **Fighters** on patrol circle the spot and chase any hostile plane within `air.detect` (6 plots) of their patrol area. They shoot at the machine battle rate times `air.dogfight`.
+  - **Bombs.** A bomber's load hits everything hostile within 1.5 plots:
+    - 90 troops from each company or stack;
+    - 45 health from each land machine;
+    - active buildings are damaged, and repair by themselves after 120 s;
+    - the land hit costs half as much to take for 90 s.
+  - **Anti-aircraft.** Flak towers hit hostile planes within 4 plots for 6 health a second; airfields for 2 within 2 plots.
+  - **Orders.** The `air` order (patrol, bomb, return) takes one plane or several. The `machine` order refuses planes.
+  - **Piloting.** Planes fly with the Part D controls, never slower than 30% of their speed, and a bomber's bomb input drops its load where it is.
+  - **Client.**
+    - The aircraft sheet is loaded. Planes are drawn turned to their heading, with shadows. Flak bursts and bomb blasts are shown.
+    - The plane card and the ring have Patrol, Bomb, Fly home and Pilot. The feed reports bombings and planes shot down.
+  - **Evidence:**
+    - `npm test`: 243 of 243, with six air tests:
+      - unlocks and basing;
+      - range, the bombing run and all its effects, rearming and repair;
+      - fuel and turning home;
+      - a dogfight and flak;
+      - the plane limit, catch-up and a piloted bomb;
+      - rows reaching the client.
+    - Reference: 95 of 95.
+    - Earth bench with 100 planes per player on top of 1,000 soldiers each: PASS, worst tick 41.3 ms (p99 30.1). The planes flew 7,010 missions, made 4,151 bombing runs and lost 9 to fighters and flak.
+    - Fine Europe, the same load: PASS, worst tick 44.1 ms (p99 31.3), with 5,785 missions, 3,426 bombing runs and 198 planes shot down.
+    - Written but not run until the dev server is started:
+      - the smoke check: after Flight, a bomber from a new airfield bombs the friend's company;
+      - the browser check: an airfield bases a fighter, and Patrol sends it up.
 
 ## Ryan's checks
 

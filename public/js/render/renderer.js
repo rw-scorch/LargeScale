@@ -424,6 +424,7 @@ export class MapRenderer {
     this.drawRoadPlan();
     this.drawGhost();
     this.drawEffects();
+    this.drawFlak();
     this.drawShots();
     this.drawRoute();
     this.drawSwipe();
@@ -507,6 +508,13 @@ export class MapRenderer {
     const now = Date.now(), R = this.ratio ?? 1, s = this.state;
     for (let k = list.length - 1; k >= 0; k--) if (now - list[k].at > 4000) list.splice(k, 1);
     for (const fx of list) {
+      if (fx.kind === "bomb") {
+        const age = now - fx.at;
+        if (age > 1200) continue;
+        const frame = `flak_burst_${Math.min(2, Math.floor(age / 400))}`, size = Math.max(40 * R, this.cam.scale * 3.2), [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5, ((fx.plot / s.w) | 0) + 0.5);
+        this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, size / 16);
+        continue;
+      }
       if (fx.kind !== "era_up") continue;
       const frame = `era_up_${Math.floor((now - fx.at) / 180) % 3}`;
       const size = Math.max(48 * R, this.cam.scale * 3), k = size / 32;
@@ -723,7 +731,7 @@ export class MapRenderer {
       const x = u.at % s.w, y = (u.at / s.w) | 0;
       if (x < r.x0 - 2 || x > r.x1 + 2 || y < r.y0 - 2 || y > r.y1 + 2) continue;
       shown.push(u);
-      items.push({ key: y + 0.95, x, draw: () => this.drawMachine(u, px) });
+      items.push({ key: u.air ? 1e9 + y : y + 0.95, x, draw: () => this.drawMachine(u, px) });
     }
     for (const u of s.units) {
       if (u.x < r.x0 - 4 || u.x > r.x1 + 4 || u.y < r.y0 - 4 || u.y > r.y1 + 4) continue;
@@ -809,8 +817,37 @@ export class MapRenderer {
   }
 
   machinePoint(u) {
-    const s = this.state, p = s.pilotAt?.(`m:${u.id}`);
+    const s = this.state, p = s.pilotAt?.(`m:${u.id}`) ?? s.planeAt?.(u);
     return p ? [p[0], p[1]] : [(u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5];
+  }
+
+  drawPlane(u, k) {
+    const s = this.state, sp = this.atlas.get(this.machineSprite(u)), p = s.pilotAt?.(`m:${u.id}`) ?? s.planeAt?.(u);
+    if (!sp || !p) return;
+    const [sx, sy] = this.plotToScreen(p[0], p[1]), R = this.ratio ?? 1, landed = u.air?.landed && !s.pilots?.has(`m:${u.id}`), size = landed ? 0.8 : 1.2;
+    if (sx < -80 || sy < -80 || sx > this.canvas.width + 80 || sy > this.canvas.height + 80) return;
+    const ctx = this.ctx, kk = Math.max(k, R) * size, lift = landed ? 0 : 10 * R;
+    const off = landed ? ((u.id % 5) - 2) * 6 * R : 0, shadow = `${this.machineSprite(u)}_shadow`;
+    ctx.save();
+    ctx.translate(sx + off, sy);
+    ctx.rotate(p[2]);
+    if (!landed && this.atlas.has(shadow)) { ctx.globalAlpha = 0.35; this.atlas.draw(ctx, shadow, (-sp.w * kk) / 2 + lift * 0.4, (-sp.h * kk) / 2 + lift, kk); ctx.globalAlpha = 1; }
+    this.atlas.draw(ctx, this.machineSprite(u), (-sp.w * kk) / 2, (-sp.h * kk) / 2, kk, s.nations.get(u.owner)?.colour);
+    ctx.restore();
+  }
+
+  drawFlak() {
+    const s = this.state, now = Date.now(), R = this.ratio ?? 1;
+    let sites = null;
+    for (const u of s.machines?.values() ?? []) {
+      if (!u.air || u.air.landed || u.state === "wreck") continue;
+      sites ??= [...s.buildings.values()].filter(b => b.def?.antiAir && b.state === "active");
+      const [x, y] = this.machinePoint(u);
+      if (!sites.some(b => b.owner !== u.owner && Math.hypot((b.anchor % s.w) + b.fp[0] / 2 - x, ((b.anchor / s.w) | 0) + b.fp[1] / 2 - y) <= b.def.antiAir.radius * (s.map?.scale ?? 1))) continue;
+      const beat = Math.floor(now / 150 + u.id), frame = `flak_burst_${beat % 3}`, size = Math.max(14 * R, this.cam.scale * 0.9);
+      const [sx, sy] = this.plotToScreen(x + Math.sin(beat * 1.7) * 0.7, y + Math.cos(beat * 2.3) * 0.7);
+      this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, size / 16);
+    }
   }
 
   machineBox(u, k) {
@@ -822,6 +859,7 @@ export class MapRenderer {
   }
 
   drawMachine(u, k) {
+    if (u.air) return this.drawPlane(u, k);
     const m = this.machineBox(u, k);
     const p = this.state.pilotAt?.(`m:${u.id}`), left = p ? Math.cos(p[2]) < 0 : u.face < 0;
     if (m) this.atlas.draw(this.ctx, this.machineSprite(u), m.sx - m.w / 2, m.sy - m.h / 2, k, this.state.nations.get(u.owner)?.colour, left);
