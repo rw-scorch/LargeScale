@@ -83,9 +83,15 @@ function earn(world, n, gold) {
   return g;
 }
 
-function launchShip(world, b, dock) {
+function partnersOf(world, b, dock) {
   const t = world.trade, r = t.rules, g = world.grid, from = dockOf(world, b);
-  const list = portsIn(world, from.body).filter(p => p.b.id !== b.id && friendly(world, b.owner, p.b.owner) && (p.b.owner !== b.owner || g.dist(p.dock, dock) >= r.minPlots * t.scale));
+  if (!from) return [];
+  return portsIn(world, from.body).filter(p => p.b.id !== b.id && friendly(world, b.owner, p.b.owner) && (p.b.owner !== b.owner || g.dist(p.dock, dock) >= r.minPlots * t.scale));
+}
+
+function launchShip(world, b, dock) {
+  const t = world.trade, r = t.rules, g = world.grid;
+  const list = partnersOf(world, b, dock);
   if (!list.length) return null;
   const weight = p => (p.b.owner === b.owner ? 1 : r.foreignWeight);
   let pick = t.rng.next() * list.reduce((s, p) => s + weight(p), 0), to = list[0];
@@ -220,14 +226,16 @@ function awayTrade(world, dt) {
   const t = world.trade, r = t.rules;
   for (const n of world.nations.values()) {
     if (!n.human || !n.alive || n.money === undefined) continue;
-    let ports = 0, stations = 0;
+    let ports = 0;
+    const stations = [];
     for (const id of world.bld.mine.get(n.id) ?? []) {
-      const d = live(world, world.bld.list.get(id));
-      if (d?.port && dockOf(world, world.bld.list.get(id))) ports++;
-      if (d?.station) stations++;
+      const b = world.bld.list.get(id), d = live(world, b);
+      if (d?.port) { const k = dockOf(world, b); if (k && partnersOf(world, b, k.water).length) ports++; }
+      if (d?.station) stations.push(b);
     }
+    const railed = stations.filter(s => stations.some(o => o !== s && railPath(world, n.id, s, o))).length;
     const pay = tripPay(world, r.minPlots * t.scale * 2);
-    earn(world, n, ports * pay * (dt / (r.every * 2)) + (stations > 1 ? stations * pay * r.train.payMult * (dt / (r.train.every * 2)) : 0));
+    earn(world, n, ports * pay * (dt / (r.every * 2)) + railed * pay * r.train.payMult * (dt / (r.train.every * 2)));
   }
 }
 

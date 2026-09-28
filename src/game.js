@@ -697,7 +697,7 @@ export function vitalsOf(sim, n) {
   const grow = n.alive && n.troops < cap ? r.growthFloor + r.growthRate * n.troops * (1 - n.troops / cap) : 0;
   const tax = e && n.money !== undefined ? ((n.income ?? e.baseIncome) + (n.pop ?? 0) * e.taxPerResident * (n.taxLevel ?? 1)) * (1 + (sim.effectOf?.(n, "income") ?? 0)) * (n.outputMult ?? 1) : 0;
   const income = tax ? tax + (typeof n.made === "number" ? n.made / (n.madeEvery ?? 5) : 0) + (n.stats?.trade ?? 0) + tradePerSecond(sim, n.id) : 0;
-  return { troops: Math.floor(n.troops), cap: Math.floor(cap), grow: r2(grow), income: r2(income) };
+  return { troops: Math.floor(n.troops), cap: Math.floor(cap), grow: r2(grow), income: r2(income), tax: r2(tax) };
 }
 
 export function policyOf(n) {

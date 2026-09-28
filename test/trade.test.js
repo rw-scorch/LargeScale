@@ -138,3 +138,15 @@ test("old worlds turn their goods into gold, and retired buildings, carts and wa
   assert.ok(!w.stacks.has(wagon.id) && s.supplyMult === undefined, "the wagon is gone and no stack stays weakened by supply");
   assert.ok(!w.units.list.has(old.id));
 });
+
+test("while away, only ports and stations with somewhere to trade earn", () => {
+  const { w, a, b, port, na } = sea();
+  port(a, 19, 10);
+  port(a, 19, 15);
+  const before = na.money;
+  w.catchUp(600);
+  assert.equal(na.money, before, "two of your own jetties 5 plots apart have no trade to estimate");
+  port(b, 80, 15);
+  w.catchUp(600);
+  assert.ok(na.money > before, `with a partner across the water they earn while away: ${Math.round(na.money - before)} gold`);
+});
