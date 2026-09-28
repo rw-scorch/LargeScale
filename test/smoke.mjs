@@ -863,6 +863,37 @@ const train = await until(() => IN.json.filter(m => m.t === "state").flatMap(m =
 const earned = await until(() => (inPurse()?.trade?.total ?? 0) > trade0 ? inPurse().trade : null, 30000);
 check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   `rail between two railway stations (${rail?.laid} plots for ${JSON.stringify(rail?.cost)}) runs trains worth ${train?.[4]} gold a trip, and trade has earned ${earned?.total} gold${rail?.ok ? "" : ` (${rail?.error})`}`);
+{
+  await ask({ t: "research", id: "flight", mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  await until(() => !IM.pump().world.lockOf("airfield"), 5000);
+  const fieldId = await buildAt("airfield", spotFor("airfield", inCap, 3, 14));
+  const fieldUp = await until(() => IM.pump().world.buildings.get(fieldId)?.state === "active", 20000);
+  const gift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "early_bomber", amount: 1 });
+  const bomberId = gift?.machines?.[0];
+  await api(`/api/worlds/${indWorld.body.id}/join`, {}, tb);
+  const FR = await connect(indWorld.body.id, tb);
+  const fh = await waitFor(FR, m => m.t === "hello");
+  const cx = inCap % ih.w, cy = Math.floor(inCap / ih.w);
+  let fSpawn = null;
+  for (let r = 30; r <= 60 && !fSpawn; r += 6) for (let k = 0; k < 16 && !fSpawn; k++) {
+    const x = Math.round(cx + Math.cos((k * Math.PI) / 8) * r), y = Math.round(cy + Math.sin((k * Math.PI) / 8) * r);
+    if (x < 3 || y < 3 || x >= ih.w - 3 || y >= ih.h - 3) continue;
+    FR.ws.send(JSON.stringify({ t: "spawn", x, y }));
+    if ((await nextResult(FR, "spawn"))?.ok) fSpawn = y * ih.w + x;
+  }
+  await adminOp(IN, { op: "give", nation: fh.you, what: "troops", amount: 3000 });
+  FR.ws.send(JSON.stringify({ t: "stack", share: 0.5, at: fSpawn }));
+  const fStack = await nextResult(FR, "stack");
+  await adminOp(IN, { op: "speed", factor: 4 });
+  const sent = bomberId ? await ask({ t: "air", plane: bomberId, do: "bomb", at: fSpawn }) : null;
+  const hitEvent = await until(() => IN.json.filter(m => m.t === "events").flatMap(m => m.events).find(e => e.type === "bombed" && e.by === ih.you), 40000);
+  const friendHeard = FR.json.some(m => m.t === "events" && m.events.some(e => e.type === "bombed" && e.nation === fh.you));
+  check(fieldUp && bomberId && fSpawn !== null && fStack?.ok && sent?.ok && hitEvent?.stacks >= 1 && hitEvent.troops > 0 && friendHeard,
+    `after Flight, an airfield's bomber flies ${Math.round(Math.hypot((fSpawn % ih.w) - cx, Math.floor(fSpawn / ih.w) - cy))} plots and bombs the friend's company: ${hitEvent?.troops} troops lost, ${hitEvent?.buildings} buildings damaged${sent?.ok ? "" : ` (${sent?.error ?? "no bomber"})`}`);
+  await adminOp(IN, { op: "speed", factor: 1 });
+  FR.ws.close();
+}
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);

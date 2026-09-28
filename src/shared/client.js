@@ -13,9 +13,14 @@ const stackFromRow = ([id, owner, pos, troops, order, mix, xp], units) => ({ id,
 
 const MACHINE_STATES = ["idle", "moving", "wreck"];
 
-const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face], units) => {
+const MISSIONS = [null, "patrol", "bomb", "return"];
+
+const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air], units) => {
   const def = units.byNum[num];
-  return def ? { id, owner, type: def.id, def, at, hp, state: MACHINE_STATES[state] ?? "idle", cargo, follow: follow || null, face: face ?? 1 } : null;
+  if (!def) return null;
+  const u = { id, owner, type: def.id, def, at, hp, state: MACHINE_STATES[state] ?? "idle", cargo, follow: follow || null, face: face ?? 1 };
+  if (air) u.air = { x: air[0] / 10, y: air[1] / 10, heading: air[2] / 100, landed: !!air[3], bombs: air[4], fuel: air[5], mission: MISSIONS[air[6]] ?? null, rearm: air[7] ?? 0 };
+  return u;
 };
 
 export class ClientWorld {
@@ -97,8 +102,16 @@ export class ClientWorld {
   mixOf(s) { return mixParts(this.unitTypes, s.troops, s.mix); }
 
   setMachine(r) {
-    const u = machineFromRow(r, this.unitTypes);
+    const u = machineFromRow(r, this.unitTypes), old = u && this.machines.get(u.id);
+    if (u?.air) { u.air.px = old?.air ? old.air.x : u.air.x; u.air.py = old?.air ? old.air.y : u.air.y; u.air.at = Date.now(); }
     if (u) this.machines.set(u.id, u);
+  }
+
+  planeAt(u) {
+    const A = u.air;
+    if (!A) return null;
+    const t = Math.min(1, (Date.now() - A.at) / 1000);
+    return [A.px + (A.x - A.px) * t, A.py + (A.y - A.py) * t, A.heading];
   }
 
   myMachines() { return [...this.machines.values()].filter(u => u.owner === this.you); }
@@ -305,6 +318,7 @@ export class ClientWorld {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
         if (e.type === "capital_moved" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.to;
         if (e.type === "deposit_depleted") this.depleted.add(e.at);
+        if (e.type === "bombed") this.effects.push({ kind: "bomb", plot: e.at, at: Date.now() });
         if (e.type === "era_up" && this.nations.has(e.nation)) {
           const n = this.nations.get(e.nation);
           n.era = e.era;

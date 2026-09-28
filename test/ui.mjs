@@ -1865,6 +1865,40 @@ await gp.keyboard.press("Escape");
 const railN = Number(railToast.match(/^Laid (\d+) plots of railway/)?.[1] ?? 0);
 const railPrice = Number(railToast.match(/for ([\d,]+) gold/)?.[1].replace(/,/g, "") ?? 0);
 check(railRow && !railRow.disabled && /Railway12 gold a plot/.test(railRow.text) && railN >= 9 && railPrice >= 12 * railN, `once Railways is known, the Roads tab lays rail: "${railToast}"`);
+{
+  const planes = await gp.evaluate(async () => {
+    const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital;
+    await g.conn.request({ t: "research", id: "flight", mode: "queue" });
+    await g.conn.request({ t: "admin", op: "finish", nation: w.you });
+    const known = Date.now() + 4000;
+    while (w.lockOf("airfield") && Date.now() < known) await new Promise(r => setTimeout(r, 100));
+    let field = null;
+    for (let r = 3; r < 16 && !field; r++) for (let dy = -r; dy <= r && !field; dy++) for (let dx = -r; dx <= r && !field; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const at = cap + dy * w.w + dx;
+      if (w.placeError("airfield", at)) continue;
+      const res = await g.conn.request({ t: "build", type: "airfield", at });
+      if (res.ok) field = res.building;
+    }
+    const up = Date.now() + 20000;
+    while (field && w.buildings.get(field)?.state !== "active" && Date.now() < up) await new Promise(r => setTimeout(r, 100));
+    const gift = await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit: "biplane", amount: 1 });
+    const id = gift.machines?.[0], seen = Date.now() + 4000;
+    while (id && !w.machines.has(id) && Date.now() < seen) await new Promise(r => setTimeout(r, 100));
+    return { field, id, menu: w.defs.table.airfield?.name };
+  });
+  await gp.evaluate(id => { const g = window.__ls.game, u = g.world.machines.get(id); g.selectMachine(id); g.focus(u.at, 20); }, planes.id);
+  const card = await gp.waitForFunction(() => { const t = document.querySelector("#machine-info")?.textContent ?? ""; return /at its airfield/.test(t) && document.querySelector("#plane-patrol") ? `${document.querySelector("#machine-title").textContent}${t}` : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+  await gp.click("#plane-patrol").catch(() => {});
+  const spot = await gp.evaluate(id => { const w = window.__ls.game.world, u = w.machines.get(id); return u.at + 12; }, planes.id);
+  const spotAt = await toScreen(gp, spot);
+  await gp.mouse.click(spotAt.x, spotAt.y);
+  const flying = await gp.waitForFunction(id => { const u = window.__ls.game.world.machines.get(id); return u?.air && !u.air.landed && u.air.mission === "patrol" ? u.air.fuel : null; }, planes.id, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+  await gp.waitForTimeout(800);
+  await gp.screenshot({ path: `${OUT}/72-plane.png` });
+  check(planes.field && planes.id && /^Your biplane fighter/.test(card) && flying !== null, `after Flight, an airfield bases a fighter ("${card}"), and Patrol and a click send it up (${flying} s of fuel)`);
+  await gp.keyboard.press("Escape");
+}
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await login(ip, "rw_scorch", "correct horse");
 await ip.goto(`${BASE}/#w=${indId}`);

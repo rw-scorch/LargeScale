@@ -305,7 +305,11 @@ class Game {
     }
     const machine = e.kind && w.unitTypes.table[e.kind]?.name.toLowerCase();
     if (e.type === "machine_built" && e.nation === you) say(`mb${e.machine}`, `A ${machine} is ready.`, 0, "built", machineAt(e.machine));
-    if (e.type === "machine_destroyed" && e.nation === you) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
+    if (e.type === "machine_destroyed" && e.nation === you && !w.unitTypes.table[e.kind]?.domain?.startsWith("air")) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
+    if (e.type === "bombed" && e.nation === you) say(`bomb${e.at}`, `${name(e.by)} bombed your land: ${e.troops ? `${fmt(e.troops)} troops lost` : "no troops lost"}${e.buildings ? `, ${e.buildings} ${e.buildings === 1 ? "building" : "buildings"} damaged` : ""}. Flak towers and fighters on patrol stop bombers.`, 0, "danger", e.at);
+    if (e.type === "bombed" && e.by === you) say(`bomb${e.at}`, `Your bomber hit its target: ${fmt(e.troops)} troops lost there, ${e.buildings} ${e.buildings === 1 ? "building" : "buildings"} damaged.`, 0, "good", e.at);
+    if (e.type === "plane_down" && e.nation === you) say(`pd${e.machine}`, `Your ${machine} went down: ${e.why}.`, 0, "danger", e.at);
+    if (e.type === "plane_down" && e.by === you && e.nation !== you) say(`pd${e.machine}`, `You shot down a ${machine} of ${name(e.nation)}'s.`, 0, "good", e.at);
     if (e.type === "machine_captured" && e.nation === you) say(`mc${e.machine}`, `${name(e.by)} captured your ${machine}. Keep a stack beside your machines.`, 0, "danger");
     if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0, "good");
     if (e.type === "roads_connected" && e.nation === you) say(`rc${e.plots}${e.stores}`, `Roads laid by themselves: ${fmt(e.plots)} plots for ${costText(e.cost)}, linking ${e.stores} more ${e.stores === 1 ? "building" : "buildings"} to your capital.`, 0, "built");
@@ -1011,6 +1015,8 @@ class Game {
     const dir = { w: "up", ArrowUp: "up", s: "down", ArrowDown: "down", a: "left", ArrowLeft: "left", d: "right", ArrowRight: "right" }[k];
     if (dir) { if (down) this.pilotKeys.add(dir); else this.pilotKeys.delete(dir); return true; }
     if (k === " ") { this.keyFire = down; return true; }
+    if (k === "b" && down) { this.pilotBomb = true; return true; }
+    if (k === "b") return true;
     if (down && (k === "Escape" || actionFor(this.keys, e) === "pilot")) { this.stopPilot(); return true; }
     return false;
   }
@@ -1098,9 +1104,10 @@ class Game {
     if (this.mouseFire || this.keyFire) fire = true;
     const r2 = x => Math.round(x * 100) / 100;
     const msg = { move: [r2(mx), r2(my)], aim: aim ? [r2(aim[0]), r2(aim[1])] : null, fire };
-    const json = JSON.stringify(msg), since = now - this.pilotSent.at;
-    if ((json !== this.pilotSent.json && since >= 50) || ((mx || my || fire) && since >= 250) || since >= 5000) {
-      this.conn.send({ t: "pilot", op: "input", ...msg });
+    const json = JSON.stringify(msg), since = now - this.pilotSent.at, bomb = this.pilotBomb || this.pilotPanel.takeBomb();
+    this.pilotBomb = false;
+    if (bomb || (json !== this.pilotSent.json && since >= 50) || ((mx || my || fire) && since >= 250) || since >= 5000) {
+      this.conn.send({ t: "pilot", op: "input", ...msg, ...(bomb ? { bomb: true } : {}) });
       this.pilotSent = { json, at: now };
     }
   }
