@@ -89,7 +89,7 @@ function release(world, g) {
 }
 
 export function guardNation(world, n, r = GUARD) {
-  const guards = [...world.stacks.values()].filter(s => s.owner === n.id && s.standing === "guard");
+  const guards = [...world.stacks.values()].filter(s => s.owner === n.id && s.standing === "guard" && !s.pilot);
   if (!guards.length && !n.guard) return;
   const threats = findThreats(world, n.id, r), live = new Set(threats.map(t => t.s.id));
   for (const g of guards) {

@@ -19,6 +19,7 @@ import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./
 import { installConstruction } from "./sim/construction.js";
 import { installEconomy, convertToGold } from "./sim/economy.js";
 import { installSoldiers, trimField, fieldOf } from "./sim/soldiers.js";
+import { installPilot, pilotStep, pilotRows, takeShots, steer, pilotOf, release as releasePilot } from "./sim/pilot.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { installRoads, restoreRoads, takeRoadNews } from "./sim/logistics.js";
 import { installBoats } from "./sim/boats.js";
@@ -54,6 +55,7 @@ export class World extends DurableObject {
     this.accounts = new Map();
     this.queue = new NotifyQueue();
     this.limiter = new RateLimit(rules.world.messagesPerSecond, rules.world.messageBurst);
+    this.pilotLimiter = new RateLimit(rules.pilot.inputsPerSecond, rules.pilot.inputsPerSecond);
     this.feed = new StateFeed(rules.world.botTroopShare, rules.world.botStateEvery);
     this.bfeed = new BuildingFeed();
     this.purses = new Map();
@@ -174,6 +176,7 @@ export class World extends DurableObject {
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
     installBoats(this.sim, { scale: info.map.scale ?? 1 });
     installSoldiers(this.sim);
+    installPilot(this.sim);
     const trimmed = trimField(this.sim);
     if (trimmed.size) this.fieldTrimmed = Object.fromEntries(trimmed);
     if (this.upgradedFrom && this.upgradedFrom < 4) this.goldLoaded = convertToGold(this.sim);
@@ -408,7 +411,7 @@ export class World extends DurableObject {
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, road: roadFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       watch, defs: buildingData.buildings, purse: nation === null ? null : this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale }, powerRules: this.sim.power ? { ...this.sim.power.rules, reach: buildingData.buildings.find(d => d.id === "power_pole").pole.reach * this.sim.power.scale, scale: this.sim.power.scale } : null,
-      units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, soldierRules: this.sim.soldiers?.rules ?? null, time: Math.floor(this.sim.time),
+      units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, soldierRules: this.sim.soldiers?.rules ?? null, pilotRules: this.sim.pilot?.rules ?? null, pilots: this.sim.pilot ? pilotRows(this.sim) : [], time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));
@@ -540,6 +543,7 @@ export class World extends DurableObject {
   }
 
   stopLoop() {
+    if (this.pilotLoop) { clearInterval(this.pilotLoop); this.pilotLoop = null; }
     if (!this.loop) return;
     clearInterval(this.loop);
     this.loop = null;
@@ -645,6 +649,10 @@ export class World extends DurableObject {
     try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m !== "object") return;
     const reply = (x) => ws.send(JSON.stringify({ v: PROTOCOL, ...x }));
+    if (m.t === "pilot" && m.op === "input") {
+      if (!this.frozen && this.sim?.pilot && this.pilotLimiter.take(me.account, Date.now())) steer(this.sim, me.nation, m);
+      return;
+    }
     if (!this.limiter.take(me.account, Date.now())) return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "slow down" });
     switch (m.t) {
       case "ping": return reply({ t: "pong", at: m.at });
@@ -670,6 +678,7 @@ export class World extends DurableObject {
         if (startAt && Date.now() < startAt && m.t !== "spawn") return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: `the world starts at ${new Date(startAt).toISOString().slice(0, 16).replace("T", " ")} UTC; until then you can only pick where to start` });
         const r = runOrder(this.sim, me.nation, m);
         reply(r ?? { t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "unknown order" });
+        if (m.t === "pilot" && r?.ok) this.startPilots();
       }
     }
   }
@@ -801,7 +810,38 @@ export class World extends DurableObject {
     return { ok: true };
   }
 
+  startPilots() {
+    if (this.pilotLoop || !this.sim?.pilot?.list.size) return;
+    let last = Date.now(), sent = 0;
+    this.pilotLoop = setInterval(() => {
+      const now = Date.now(), T = this.sim?.pilot;
+      if (!T || this.frozen || !T.list.size) {
+        clearInterval(this.pilotLoop);
+        this.pilotLoop = null;
+        this.broadcast({ t: "pilots", p: [], shots: T ? takeShots(this.sim) ?? [] : [] });
+        return;
+      }
+      try {
+        if (!this.catching) pilotStep(this.sim, Math.min(0.2, (now - last) / 1000) * this.speed);
+      } catch (e) {
+        this.errors = (this.errors ?? 0) + 1;
+        this.lastError = { message: e.message, stack: String(e.stack).split(/\r?\n/).slice(0, 6).join(" | "), at: now };
+      }
+      last = now;
+      if (now - sent >= T.rules.sendEvery) {
+        sent = now;
+        this.broadcast({ t: "pilots", p: pilotRows(this.sim), shots: takeShots(this.sim) ?? [] });
+      }
+    }, rules.pilot.every);
+  }
+
   async webSocketClose(ws, code, reason) {
+    const gone = ws.deserializeAttachment?.();
+    if (gone?.nation != null && !gone.watch && this.sim?.pilot) {
+      const still = this.sockets().some(s => s !== ws && s.deserializeAttachment()?.nation === gone.nation && !s.deserializeAttachment()?.watch);
+      const P = still ? null : pilotOf(this.sim, gone.nation);
+      if (P) releasePilot(this.sim, P);
+    }
     try { ws.close(code, reason); } catch {}
     this.updatePresence(ws);
     if (this.sockets().filter(s => s !== ws).length === 0) this.stopLoop();
