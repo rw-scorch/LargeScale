@@ -185,6 +185,44 @@ Ryan: "some things dont work, can you add a auto road lay button? also I cant sc
 - Hostile warships near the route can sink it.
 - This part can wait until after Ryan's check of parts A to C, if play shows it isn't needed yet.
 
+#### Part D, how it is built (28 September 2026)
+
+Ryan asked for the next step after PR 27. These are the choices made while building it; each can change after his check.
+
+- **Ports.** A port is a store building with `port` in `data/buildings.json`: the jetty (300 of each good), the harbour (1,500), the shipyard (1,500) and the Industrial commercial port (8,000, now marked as a port). Its dock is a water plot beside it.
+- **When a convoy goes by sea.** Most convoys never look at the sea. A convoy looks for a sea route only when:
+  - there is no way by land, or
+  - the way by land is over 40 plots (80 on fine maps).
+- **Choosing ports.** It tries your 2 ports nearest the store sending the goods, each with your 2 ports nearest the destination on the same water. It goes by sea when the land way is missing, or takes over 1.5 times as long as walking to the port, sailing and walking on.
+  - The sailing time is the straight distance times 1.3, at the ship's speed.
+  - Pairs are tried from the one that could be quickest, so when no pair could beat the land way it makes no path search at all.
+- **The trip.**
+  - The cart walks to the first port.
+  - A merchant ship (unit 23, free and never built) sails its load to the other port. It carries the cart's load, and counts against the 12 carts a nation can have out.
+  - The cart then walks on to the destination.
+  - If the far port is lost on the way, the ship makes for your nearest port on the same water. If it cannot board at the start, the goods go into the first port's store.
+- **Warships.** Hostile warships within range sink merchant ships as they sink transport boats. The goods go down with the ship, and the owner hears who sank it. Land stacks on the shore cannot raid a ship.
+- **No orders.** Merchant ships sail on their own. They are not listed with your machines in the Army panel.
+- **Looks.** A raft in the Tribal era, then a cog, galleon, steamship, cargo ship and container ship. The cart is hidden while its goods are at sea.
+- **Catch-up** delivers at once, as for carts on land, and the ship is removed.
+
+#### Part D progress (28 September 2026, branch `m5-sea`)
+
+- **Server.** `src/sim/sea.js` (`installSeaRoutes`, installed after the stores) plans routes, boards, sails and lands. `src/sim/stores.js` calls it through `world.stores.sea`, which avoids a circular import, since `units.js` already imports the stores. Rules are in `rules.json` `stores.sea`.
+  - Convoys keep `sea` (both ports, both docks, the water body and the stage), `ship` and `goal` (where the current land leg ends).
+  - These are saved in the `stores` row, still format 1, because old rows simply have no sea fields.
+  - Convoy rows gain the ship's id as an eighth field, so protocol stays 5.
+- **Client.**
+  - The cart is hidden while at sea.
+  - The merchant ship's card says what is aboard and has no orders.
+  - The Logistics panel counts your ports and the carts going by sea.
+  - The feed says who sank a ship.
+- **Evidence.**
+  - `npm test`: 226 of 226. `test/sea.test.js` has 7 tests: a site across the water fed through two jetties; sea chosen only when the land way is much longer (round a bay); no sea route with one port; a frigate sinking a ship; a save in mid-voyage, with the ship refusing orders; and catch-up. `test/client.test.js` checks convoy rows at sea.
+  - Reference: 95 of 95.
+  - `npm run bench` on the Earth with 4 jetties a player on their own coast (`--ports`, default 4): worst tick 34.7 ms. The worst-case probe planned 72 sea routes as if there were no land way: 65 path searches, 23 ms in all, 2.8 ms for the slowest.
+  - Fine Europe: worst tick 36.4 ms (40.3 in another run), against 33.9 ms with `--ports 0` on the same machine. 34 carts went by sea there.
+
 ### Showing it
 
 - The Roads tab, with the cost preview while drawing.

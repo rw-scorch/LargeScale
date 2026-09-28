@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (218)
+npm test                  # unit tests (226)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -39,7 +39,7 @@ $env:SOAK_SECONDS = "180"; npm run soak   # two players give random orders; repo
 
 `npm run ui` needs Playwright, which is not a project dependency: `npm install --no-save playwright` then `npx playwright install chromium`.
 
-`npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50 --buildings 2000`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
+`npm run bench` takes `-- --bots 200 --players 8 --ticks 2400 --budget 50 --buildings 2000 --ports 4`. Local secrets go in `.dev.vars` (copy `.dev.vars.example`, set `INVITE_CODE` and `PEPPER`). `wrangler dev` and `wrangler deploy` both run `tools/build_public.mjs` first, which writes `public/map/terrain.bin.gz` and copies `src/shared` to `public/js/shared`.
 
 ## Layout
 
@@ -48,7 +48,7 @@ src/index.js       Worker: routes, static files, websocket handover
 src/directory.js   Directory object: accounts, sessions, worlds, members
 src/world.js       World object: one per world. Sockets, tick loop, saving, catch-up
 src/worldconfig.js map choice (test, earth, europe, lat/long box) and bot count validation
-src/sim/           the simulation, 25 modules, plain JavaScript
+src/sim/           the simulation, 33 modules, plain JavaScript
 src/shared/        the only code both server and client import: protocol, codec, maps, pathfinding, terrain
 public/            the client: index.html, js/app.js, js/net.js, js/input.js, js/render/, js/ui/ (one file per panel);
                    test.html is the old server test page. public/map holds the gzipped maps and public/assets the art kit, both committed
@@ -265,11 +265,16 @@ Logistics, agreed 27 September 2026 (`plans/milestone-5.md`), in four parts: roa
   - **Soak test.** `npm run soak` (`test/soak.mjs`). It found purses sent straight after an admin gift running ahead of the stores; `purse()` now syncs first.
   - Asset loading moved to `public/js/assets.js`, shared by the game and the menu.
 
+- **Part D, sea routes (28 September 2026, branch `m5-sea`).** `src/sim/sea.js` (`installSeaRoutes`), called by the stores through `world.stores.sea`; rules in `rules.json` `stores.sea`; choices in `plans/milestone-5.md`.
+  - A convoy whose land way is missing, or over 40 plots and 1.5 times slower than going by water, walks to your port, crosses in a free merchant ship (unit 23, `freight`), and walks on from your far port. Ports are stores with `port`: jetty, harbour, shipyard and commercial port.
+  - Warships sink merchant ships and their cargo (`hitBy` names who). Merchant ships take no orders.
+  - Convoy rows carry the ship's id as an eighth field; the client hides the cart while it is at sea.
+
 Open items as of 28 September 2026, in order:
 
-1. PRs 14 to 26 are merged (roads, army supply, free boats, stores and carts, 28 September 2026). `m5-asks` (road tools, the new menu, scheduling from the list) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks roads, supply, boats, stores and carts together. Part D (sea routes) waits for that check.
+1. PRs 14 to 27 are merged (roads, army supply, free boats, stores and carts, road tools, the new menu, 28 September 2026). `m5-sea` (Part D, sea routes) waits for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks the whole of milestone five together.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
-3. The new main menu is built on `m5-asks`; Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
+3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
 5. Ryan registers `rw_scorch` on the live site himself (the assistant cannot create live accounts); `ADMIN_NAMES` makes it admin. If the name is taken, a one-time reset through a wrangler secret is the fallback.
 6. Milestone two, step 7 (economy while away) is built on `m2-step7-away`; step 8 is Ryan's check.
