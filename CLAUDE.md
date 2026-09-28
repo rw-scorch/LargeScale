@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (231)
+npm test                  # unit tests (237)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -315,10 +315,21 @@ Ryan's asks of 28 September 2026: one currency, individual soldiers, piloting, p
   - **Client.**
     - Above `soldiers.drawZoom`, companies are drawn soldier by soldier, on screen only, within a budget by screen size (`soldierSpots`, `soldiers` in the renderer). Stacks glide between plots (`prev`, `movedAt`).
     - Armies (V, `toggleArmies`) turns a swipe or a Shift-drag box into picking soldiers (`app.picked`). The soldiers panel is `public/js/ui/soldiers.js`.
+- **Part D, piloting (29 September 2026, branch `m7-pilot`, stacked on `m7-soldiers`).**
+  - **Server.** `src/sim/pilot.js` (`installPilot`) keeps a position inside the plot for each piloted company or machine (`s.pilot`, `u.pilot`).
+    - The normal stack stepping skips piloted stacks.
+    - The `pilot` order takes (`op: "take"`, with `follow`) or releases control. Any other order on the unit releases it too.
+    - `op: "input"` messages (move, aim, fire) skip the order limiter and have their own (`pilot.inputsPerSecond`).
+    - `World.startPilots` runs a 50 ms loop only while something is piloted, and broadcasts `pilots` (rows and shots) every 100 ms.
+  - **Client.**
+    - `ClientWorld.pilots` and `pilotAt`; the renderer's `stackPoint` and `machinePoint` use them, and `drawShots` draws tracers.
+    - `app.pilotFrame` sends input and follows the unit with the camera.
+    - `public/js/ui/pilot.js` has the banner, and the stick and Fire button on phones.
+    - P pilots; WASD or the arrows move, the mouse aims, a held click or Space fires.
 
 Open items as of 29 September 2026, in order:
 
-1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`, so `main` does not have milestone six yet. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B) and the Part C PR (`m7-soldiers`) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` for Parts B and C wait for a dev server run, which Ryan starts or asks for. Next: Part D (piloting), then Part E (planes).
+1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`, so `main` does not have milestone six yet. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C) and the Part D PR (`m7-pilot`) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` for Parts B, C and D wait for a dev server run, which Ryan starts or asks for. Next: Part E (planes and bombing).
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
