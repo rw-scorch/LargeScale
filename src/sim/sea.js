@@ -62,11 +62,12 @@ function nearest(world, list, plot, k) {
 
 export function seaPlan(world, n, from, to, landPath = null) {
   const st = world.stores, r = st.sea.rules, era = n.era ?? "T", docks = docksOf(world, n.id), g = world.grid;
-  if (docks.length < 2) return null;
+  const site = portSite(world, n.id, to);
+  if (docks.length + (site ? 1 : 0) < 2) return null;
   const perPlot = (world.pathMinStep?.() ?? 0.9) / (specOf(world, era).speed * st.scale);
   const pairs = [];
   for (const a of nearest(world, docks, from.anchor, r.ports))
-    for (const b of nearest(world, docks.filter(d => d !== a && d.body === a.body), to.anchor, r.ports))
+    for (const b of site ? (site.body === a.body ? [site] : []) : nearest(world, docks.filter(d => d !== a && d.body === a.body), to.anchor, r.ports))
       pairs.push({ a, b, low: (g.dist(from.anchor, a.store.anchor) + g.dist(b.store.anchor, to.anchor)) * perPlot + seaTime(world, a.water, b.water) });
   pairs.sort((p, q) => p.low - q.low);
   const land = landPath ? landTime(world, era, landPath) : Infinity;
@@ -87,9 +88,16 @@ export function seaPlan(world, n, from, to, landPath = null) {
   return { leg: best.leg1, goal: a.store.anchor, time: best.t, route: { p1: a.store.id, p2: b.store.id, w1: a.water, w2: b.water, body: a.body, stage: 0 } };
 }
 
+function portSite(world, nid, b) {
+  if (b.owner !== nid || b.state !== "construction" || !isPort(world, b) || world.bld.list.get(b.id) !== b) return null;
+  const d = dockOf(world, b);
+  return d && { store: b, water: d.water, body: d.body };
+}
+
 function port(world, nid, id) {
-  const s = storeById(world, nid, id);
-  return s && isPort(world, s) && dockOf(world, s) ? s : null;
+  const s = storeById(world, nid, id) ?? world.bld.list.get(id);
+  if (!s || s.owner !== nid || !isPort(world, s) || !dockOf(world, s)) return null;
+  return s.camp || s.state === "active" || portSite(world, nid, s) ? s : null;
 }
 
 function board(world, c) {

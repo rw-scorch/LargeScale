@@ -151,3 +151,16 @@ test("in catch-up a cart at sea arrives at once and its ship is gone", () => {
   assert.equal(ships(w).length, 0);
   assert.ok(!site.need, "the site was fed");
 });
+
+test("the first port on a new shore is built from the sea: its site takes goods straight off the ship", () => {
+  const { w, g, a, jetty, until, rescan } = islands();
+  const home = jetty(29, 15);
+  rescan();
+  const site = place(w, a, "jetty", g.idx(60, 15));
+  assert.ok(!site.error, site.error);
+  const carts = [...w.stores.convoys.values()];
+  assert.ok(carts.length && carts.every(c => c.sea?.p1 === home.id && c.sea?.p2 === site.id), "the carts head for your jetty, to sail to the new one");
+  assert.ok(until(() => !site.need) > 0, "the ship unloaded into the site");
+  assert.ok(until(() => site.state === "active") >= 0, "the new jetty is built");
+  assert.equal(ships(w).length, 0);
+});
