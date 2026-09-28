@@ -69,3 +69,16 @@ test("a frame or message from another protocol version marks the client stale", 
   d.message({ v: PROTOCOL - 1, t: "state", time: 1, n: [], s: [], gone: [] });
   assert.equal(d.stale, true);
 });
+
+test("a convoy row at sea names its ship, and the ship's cargo can be found", () => {
+  const c = new ClientWorld(hello());
+  c.setConvoy([4, 1, 50, "wood", 10, "T", 90]);
+  c.setConvoy([4, 1, 51, "wood", 10, "T", 90, 7]);
+  assert.equal(c.convoys.get(4).ship, 7);
+  assert.equal(c.cargoOf(7).amount, 10);
+  assert.equal(c.convoys.get(4).prev, 51, "boarding does not slide the cart out to sea");
+  c.setConvoy([4, 1, 60, "wood", 10, "T", 90, 0]);
+  assert.equal(c.convoys.get(4).ship, null);
+  assert.equal(c.convoys.get(4).prev, 60, "landing does not slide it back");
+  assert.equal(c.cargoOf(7), null);
+});

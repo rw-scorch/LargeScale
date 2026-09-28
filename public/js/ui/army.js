@@ -32,7 +32,7 @@ export function createArmyPanel(root, game) {
   };
 
   const showMachines = w => {
-    const mine = w.myMachines().filter(u => u.state !== "wreck");
+    const mine = w.myMachines().filter(u => u.state !== "wreck" && !u.def.freight);
     const next = mine.map(u => `${u.id}:${u.state}:${u.follow}:${u.cargo}`).join();
     if (next === fleet && machines.childElementCount) return;
     fleet = next;

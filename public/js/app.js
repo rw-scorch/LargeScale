@@ -303,7 +303,8 @@ class Game {
     if (e.type === "roads_waiting" && e.nation === you) say("rwait", `New stores are waiting for roads: they need ${costText(e.cost)}.`, 60000, "warn");
     if (e.type === "convoy_taken" && e.nation === you) say(`ct${e.convoy}`, `${name(e.by)} took a cart of yours with ${fmt(e.amount)} ${e.kind}. Keep enemy stacks away from your roads.`, 0, "danger");
     if (e.type === "convoy_taken" && e.by === you) say(`ct${e.convoy}`, `You took a cart of ${name(e.nation)}'s with ${fmt(e.amount)} ${e.kind}.`, 0, "good");
-    if (e.type === "convoy_lost" && e.nation === you) say(`cl${e.convoy}`, `A cart with ${fmt(e.amount)} ${e.kind} was cut off and lost.`, 0, "warn");
+    if (e.type === "convoy_lost" && e.nation === you) say(`cl${e.convoy}`, e.why === "sunk" ? `${e.by ? `${name(e.by)} sank` : "A warship sank"} a merchant ship of yours with ${fmt(e.amount)} ${e.kind}. Keep warships near your sea routes.` : `A ${e.ship ? "merchant ship" : "cart"} with ${fmt(e.amount)} ${e.kind} was cut off and lost.`, 0, e.why === "sunk" ? "danger" : "warn", e.at);
+    if (e.type === "convoy_lost" && e.why === "sunk" && e.by === you) say(`cl${e.convoy}`, `You sank a merchant ship of ${name(e.nation)}'s with ${fmt(e.amount)} ${e.kind}.`, 0, "good", e.at);
     if (e.type === "store_captured" && e.nation === you) say(`sc${e.building}`, `${name(e.by)} took your ${w.defs.table[e.kind]?.name.toLowerCase() ?? "store"} with ${fmt(e.goods)} goods in it.`, 0, "danger");
     if (e.type === "store_captured" && e.by === you) say(`sc${e.building}`, `You took ${name(e.nation)}'s ${w.defs.table[e.kind]?.name.toLowerCase() ?? "store"} with ${fmt(e.goods)} goods in it.`, 0, "good");
     if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);
