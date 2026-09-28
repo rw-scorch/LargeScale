@@ -1994,6 +1994,25 @@ await gp.waitForTimeout(1500);
 await gp.screenshot({ path: `${OUT}/68-soldiers-move.png` });
 check(split && Math.abs(split.reduce((a, b) => a + b, 0) - company.troops) < 2 && split.some(t => Math.abs(t - pickedN * 10) <= 10), `Move sends just the picked soldiers: the company splits into ${JSON.stringify(split)} troops and the new one marches`);
 await gp.keyboard.press("v");
+await gp.evaluate(id => window.__ls.game.select(id), company.id);
+await gp.waitForSelector("#stack-pilot", { timeout: 5000 }).catch(() => {});
+await gp.keyboard.press("p");
+const piloting = await gp.waitForFunction(id => { const g = window.__ls.game; return g.piloting?.id === id && !document.querySelector("#pilot-hint").hidden ? document.querySelector("#pilot-text").textContent : null; }, company.id, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+const startAt = await gp.evaluate(id => window.__ls.game.world.pilotAt(`s:${id}`), company.id);
+let steerKey = "d";
+for (const k of ["d", "a", "w", "s"]) {
+  await gp.keyboard.down(k);
+  await gp.waitForTimeout(1500);
+  await gp.keyboard.up(k);
+  const now = await gp.evaluate(id => window.__ls.game.world.pilotAt(`s:${id}`), company.id);
+  if (now && startAt && Math.hypot(now[0] - startAt[0], now[1] - startAt[1]) > 1) { steerKey = k; break; }
+}
+const endAt = await gp.evaluate(id => window.__ls.game.world.pilotAt(`s:${id}`), company.id);
+const steered = endAt && startAt ? Math.hypot(endAt[0] - startAt[0], endAt[1] - startAt[1]) : 0;
+await gp.screenshot({ path: `${OUT}/70-pilot.png` });
+await gp.keyboard.press("Escape");
+const letGo = await gp.waitForFunction(id => !window.__ls.game.piloting && !window.__ls.game.world.pilots.has(`s:${id}`), company.id, { timeout: 5000 }).then(() => true, () => false);
+check(/^Piloting your company/.test(piloting) && steered > 1 && letGo, `P pilots the selected company; holding ${steerKey.toUpperCase()} walks it ${steered.toFixed(1)} plots, and Esc lets go`);
 const pp = await openPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
 await login(pp, "rw_scorch", "correct horse");
 await pp.goto(`${BASE}/#w=${solId}`);
@@ -2010,6 +2029,29 @@ const phoneDraw = await pp.evaluate(async cap => {
 }, company.cap);
 await pp.screenshot({ path: `${OUT}/69-soldiers-phone.png` });
 check(phoneDraw.figs > 0 && phoneDraw.figs <= phoneDraw.budget + 5, `on a phone the soldiers drawn stay inside the screen's budget: ${phoneDraw.figs} of at most ${phoneDraw.budget}, a frame in ${phoneDraw.frameMs} ms`);
+await pp.evaluate(id => window.__ls.game.select(id), company.id);
+await pp.click("#stack-pilot", { timeout: 5000 }).catch(() => {});
+const padShown = await pp.waitForFunction(() => { const p = document.querySelector("#pilot-pad"); return p && !p.hidden && getComputedStyle(p).display !== "none" && window.__ls.game.piloting; }, null, { timeout: 5000 }).then(() => true, () => false);
+const phoneStart = await pp.evaluate(id => window.__ls.game.world.pilotAt(`s:${id}`), company.id);
+const box = await pp.locator("#pilot-stick").boundingBox().catch(() => null);
+let phoneMoved = 0;
+if (box) {
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, -1], [0, 1]]) {
+    await pp.mouse.move(cx, cy);
+    await pp.mouse.down();
+    await pp.mouse.move(cx + dx * box.width * 0.45, cy + dy * box.height * 0.45, { steps: 3 });
+    await pp.waitForTimeout(1500);
+    await pp.mouse.up();
+    const now = await pp.evaluate(id => window.__ls.game.world.pilotAt(`s:${id}`), company.id);
+    phoneMoved = now && phoneStart ? Math.hypot(now[0] - phoneStart[0], now[1] - phoneStart[1]) : 0;
+    if (phoneMoved > 1) break;
+  }
+}
+await pp.screenshot({ path: `${OUT}/71-pilot-phone.png` });
+await pp.click("#pilot-release").catch(() => {});
+const phoneLetGo = await pp.waitForFunction(() => !window.__ls.game.piloting, null, { timeout: 5000 }).then(() => true, () => false);
+check(padShown && phoneMoved > 1 && phoneLetGo, `on a phone, Pilot shows the stick and Fire; dragging the stick walks the company ${phoneMoved.toFixed(1)} plots, and Let go ends it`);
 await pp.close();
 }
 

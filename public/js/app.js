@@ -41,6 +41,7 @@ import { createAwayPanel, span } from "./ui/away.js";
 import { createLayout } from "./ui/layout.js";
 import { createGroupPanel } from "./ui/group.js";
 import { createSoldiersPanel } from "./ui/soldiers.js";
+import { createPilotPanel } from "./ui/pilot.js";
 import { createWorldInfo, phaseText } from "./ui/worldinfo.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
@@ -110,6 +111,12 @@ class Game {
     this.worldInfo = createWorldInfo(overlay, this);
     this.settings = createSettings(overlay, this);
     this.away = createAwayPanel(overlay, this);
+    this.pilotPanel = createPilotPanel(overlay, this, top);
+    this.piloting = null;
+    this.pilotKeys = new Set();
+    this.pilotSent = { json: "", at: 0 };
+    canvas.addEventListener("pointerdown", e => { this.lastPointer = e.pointerType; if (this.piloting && e.pointerType === "mouse" && e.button === 0) this.mouseFire = true; });
+    addEventListener("pointerup", e => { if (e.pointerType === "mouse") this.mouseFire = false; });
     this.layout = createLayout(overlay, this);
     const self = this;
     attachInput(canvas, {
@@ -142,6 +149,7 @@ class Game {
       const t = e.target;
       if (t.tagName === "SELECT" || t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && !["range", "checkbox", "radio"].includes(t.type))) return;
       if (t.tagName === "INPUT" && t.type === "range" && /^(Arrow|Home$|End$|Page)/.test(e.key)) return;
+      if (this.piloting && this.pilotKey(e, true)) { e.preventDefault(); return; }
       const action = actionFor(this.keys, e);
       if (!action || !this.world?.ready) return;
       e.preventDefault();
@@ -150,11 +158,12 @@ class Game {
     };
     addEventListener("keydown", this.onKey);
     this.onKeyUp = e => {
+      if (this.piloting && this.pilotKey(e, false)) return;
       const action = actionFor(this.keys, e);
       if (action?.startsWith("pan")) this.panKeys.delete(action);
       if (action === "select") this.aimUp();
     };
-    this.onBlur = () => { this.panKeys.clear(); this.aimUp(); };
+    this.onBlur = () => { this.panKeys.clear(); this.pilotKeys.clear(); this.mouseFire = this.keyFire = false; this.aimUp(); };
     addEventListener("keyup", this.onKeyUp);
     addEventListener("blur", this.onBlur);
     this.onWheel = e => { if (e.ctrlKey) e.preventDefault(); };
@@ -175,6 +184,7 @@ class Game {
         if (this.prefs.crosshair) this.hover = this.centre();
         if (this.aimHeld) this.aimMove();
         this.updateGhost();
+        this.pilotFrame();
         const t = performance.now();
         this.view.render(dt / 1000);
         this.place.position();
@@ -394,6 +404,7 @@ class Game {
     if (action === "logistics") return this.toggleLogistics();
     if (action === "deposits") return this.toggleDeposits();
     if (action === "armies") return this.toggleArmies();
+    if (action === "pilot") return this.pilotSelected();
     if (this.picked && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.soldiersPanel.act[action](); return this.updatePanels(); }
     if (this.group && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.groupPanel.act[action](); return this.updatePanels(); }
     if (["advance", "claim", "target", "move", "draw", "split", "merge", "disband"].includes(action)) act[action]();
@@ -883,6 +894,10 @@ class Game {
   }
 
   tap(sx, sy) {
+    if (this.piloting) {
+      if (this.lastPointer !== "mouse") { const [px, py] = this.view.screenToPlot(sx, sy); this.tapAim = [px, py]; this.tapFireUntil = performance.now() + 200; }
+      return;
+    }
     if (this.prefs.crosshair && !this.aimTap) return;
     const w = this.world, v = this.view;
     const plot = this.plotAt(sx, sy);
@@ -989,6 +1004,105 @@ class Game {
       return Math.hypot(px - p[0] - t * dx, py - p[1] - t * dy);
     };
     return this.soldierHit(0, 0, (px, py) => line.some((p, n) => (n ? seg(px, py, line[n - 1], p) : Math.hypot(px - p[0], py - p[1])) <= R));
+  }
+
+  pilotKey(e, down) {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const dir = { w: "up", ArrowUp: "up", s: "down", ArrowDown: "down", a: "left", ArrowLeft: "left", d: "right", ArrowRight: "right" }[k];
+    if (dir) { if (down) this.pilotKeys.add(dir); else this.pilotKeys.delete(dir); return true; }
+    if (k === " ") { this.keyFire = down; return true; }
+    if (down && (k === "Escape" || actionFor(this.keys, e) === "pilot")) { this.stopPilot(); return true; }
+    return false;
+  }
+
+  reachOf(kind, id) {
+    const w = this.world, scale = w.map?.scale ?? 1;
+    if (kind === "s") return (w.pilotRules?.range ?? 2) * scale;
+    return Math.max(1, Math.round((w.machines.get(id)?.def.range ?? 1) * scale));
+  }
+
+  async startPilot(kind, id, follow = []) {
+    const r = await this.conn.request({ t: "pilot", op: "take", [kind === "s" ? "stack" : "machine"]: id, follow });
+    if (!r.ok) return this.toast(r.error ?? "could not take control");
+    const w = this.world;
+    this.piloting = { kind, id, key: `${kind}:${id}`, since: performance.now(), reach: this.reachOf(kind, id) };
+    if (this.armies) this.toggleArmies(false);
+    this.pilotKeys.clear();
+    this.pilotSent = { json: "", at: 0 };
+    this.pilotPanel.show(true);
+    const at = kind === "s" ? w.stacks.get(id)?.pos : w.machines.get(id)?.at;
+    if (at !== undefined) this.focus(at, Math.max(this.view.cam.scale / (this.view.ratio ?? 1), 24));
+    if (r.followers) this.toast(`${r.followers} more ${r.followers === 1 ? "company follows" : "companies follow"} it.`);
+    this.updatePanels();
+  }
+
+  async stopPilot(send = true) {
+    if (!this.piloting) return;
+    this.piloting = null;
+    this.pilotKeys.clear();
+    this.mouseFire = this.keyFire = false;
+    this.pilotPanel.show(false);
+    this.updatePanels();
+    if (send) await this.conn.request({ t: "pilot", op: "release" });
+  }
+
+  pilotSelected() {
+    const w = this.world;
+    if (this.piloting) return this.stopPilot();
+    if (this.picked) return this.soldiersPanel.act.pilot();
+    const u = w.machines.get(this.selectedMachine);
+    if (u && u.owner === w.you) return this.startPilot("m", u.id);
+    if (this.group) {
+      const list = [...this.group].map(id => w.stacks.get(id)).filter(s => s && s.owner === w.you);
+      if (list.length) { const big = list.reduce((a, b) => (b.troops > a.troops ? b : a)); return this.startPilot("s", big.id, list.filter(s => s !== big).map(s => s.id)); }
+    }
+    const s = w.stacks.get(this.selected);
+    if (s && s.owner === w.you) return this.startPilot("s", s.id);
+    this.toast("Select one of your companies or machines to pilot.");
+  }
+
+  nearestAhead(pos, p) {
+    const w = this.world, v = this.view, head = w.pilots.get(p.key)?.heading ?? 0, hx = Math.cos(head), hy = Math.sin(head);
+    let best = null, bd = Infinity;
+    const consider = (x, y) => {
+      const dx = x - pos[0], dy = y - pos[1], d = Math.hypot(dx, dy);
+      if (d > p.reach + 0.5) return;
+      const score = d - ((dx * hx + dy * hy) / (d || 1)) * 2;
+      if (score < bd) { bd = score; best = [x, y]; }
+    };
+    for (const s of w.stacks.values()) if (s.owner !== w.you) consider(...v.stackPoint(s));
+    for (const u of w.machines.values()) if (u.owner !== w.you && u.state !== "wreck") consider(...v.machinePoint(u));
+    return best ?? [pos[0] + hx * p.reach, pos[1] + hy * p.reach];
+  }
+
+  pilotFrame() {
+    const p = this.piloting, w = this.world, v = this.view;
+    if (!p || !w || !v) return;
+    const unit = p.kind === "s" ? w.stacks.get(p.id) : w.machines.get(p.id), now = performance.now();
+    if (!unit || unit.state === "wreck" || (!w.pilots.has(p.key) && now - p.since > 2500)) {
+      this.stopPilot(false);
+      return this.toast(unit && unit.state !== "wreck" ? "You let go: it holds where it stands." : "What you were piloting is gone.");
+    }
+    const pos = w.pilotAt(p.key) ?? (p.kind === "s" ? v.stackPoint(unit) : v.machinePoint(unit));
+    v.cam.x += (pos[0] - v.cam.x) * 0.15;
+    v.cam.y += (pos[1] - v.cam.y) * 0.15;
+    v.clampCamera();
+    const k = this.pilotKeys, st = this.pilotPanel.state;
+    let mx = (k.has("right") ? 1 : 0) - (k.has("left") ? 1 : 0), my = (k.has("down") ? 1 : 0) - (k.has("up") ? 1 : 0);
+    if (st.move[0] || st.move[1]) [mx, my] = st.move;
+    let aim = null, fire = false;
+    if (st.aim) { const len = Math.hypot(st.aim[0], st.aim[1]) || 1; aim = [pos[0] + (st.aim[0] / len) * p.reach, pos[1] + (st.aim[1] / len) * p.reach]; fire = st.firing; }
+    else if (this.pilotPanel.takeTap()) { this.tapAim = this.nearestAhead(pos, p); this.tapFireUntil = now + 200; }
+    if (!aim && this.tapFireUntil > now) { aim = this.tapAim; fire = true; }
+    if (!aim && this.hover && !this.prefs.crosshair) aim = v.screenToPlot(...this.hover);
+    if (this.mouseFire || this.keyFire) fire = true;
+    const r2 = x => Math.round(x * 100) / 100;
+    const msg = { move: [r2(mx), r2(my)], aim: aim ? [r2(aim[0]), r2(aim[1])] : null, fire };
+    const json = JSON.stringify(msg), since = now - this.pilotSent.at;
+    if ((json !== this.pilotSent.json && since >= 50) || ((mx || my || fire) && since >= 250) || since >= 5000) {
+      this.conn.send({ t: "pilot", op: "input", ...msg });
+      this.pilotSent = { json, at: now };
+    }
   }
 
   toggleArmies(on = !this.armies) {
@@ -1132,7 +1246,7 @@ class Game {
       for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
       if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
     }
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

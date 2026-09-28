@@ -389,6 +389,19 @@ const from = (await until(() => view.pump().stacks.get(st2?.stack)))?.pos;
     `three picked soldiers leave their company as a company of ${part?.troops} troops; the purse counts ${field?.soldiers} of ${field?.cap} soldiers in ${field?.companies} companies`);
   A.ws.send(JSON.stringify({ t: "merge", into: st2.stack, stack: d?.stacks?.[0] }));
   await nextResult(A, "merge");
+  A.ws.send(JSON.stringify({ t: "pilot", op: "take", stack: st2.stack }));
+  const pt = await nextResult(A, "pilot");
+  let far = 0;
+  for (const move of [[1, 0], [0, -1], [-1, 0], [0, 1]]) for (let k = 0; k < 8; k++) {
+    A.ws.send(JSON.stringify({ t: "pilot", op: "input", move, aim: null, fire: false }));
+    await sleep(100);
+    for (const m of A.json) if (m.t === "pilots") for (const r of m.p) if (r[1] === st2.stack && pt?.ok) far = Math.max(far, Math.hypot(r[3] - pt.x, r[4] - pt.y));
+  }
+  const friendSaw = B.json.some(m => m.t === "pilots" && m.p.some(r => r[1] === st2.stack));
+  A.ws.send(JSON.stringify({ t: "pilot", op: "release" }));
+  const rel = await nextResult(A, "pilot");
+  const cleared = await waitFor(A, m => m.t === "pilots" && !m.p.length, 3000);
+  check(pt?.ok && far > 1 && friendSaw && rel?.released && cleared, `piloting: the host steers the company ${far.toFixed(1)} plots from where it stood, the friend sees it move, and letting go clears it`);
 }
 let moved = null;
 const far = Math.min(250 * K, Math.floor(hello.w / 3));
