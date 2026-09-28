@@ -14,7 +14,7 @@ export function installBoats(world, { scale = 1, rules: r = BOATS } = {}) {
     if (!s) return;
     const then = u.transport.then;
     if (then?.order === "advance") world.orderAdvance(s.id, then.only ?? null, true);
-    else if (then?.to !== undefined && then.to !== s.pos) world.orderMove(s.id, then.to, "move");
+    else if (then?.to !== undefined && (then.to !== s.pos || then.via?.length)) world.orderMove(s.id, then.to, "move", then.via ?? []);
   };
   return world.boats;
 }
@@ -33,11 +33,24 @@ function waterBeside(world, i, body = null) {
   return null;
 }
 
-export function boatsAtSea(world, nid) {
-  let n = 0;
-  for (const u of world.units.list.values()) if (u.owner === nid && !u.wreck && UNIT_TYPES[u.type]?.transport) n++;
-  for (const s of world.stacks.values()) if (s.owner === nid && s.sail) n++;
-  return n;
+function crossings(world, nid) {
+  const keys = new Set();
+  for (const u of world.units.list.values()) if (u.owner === nid && !u.wreck && UNIT_TYPES[u.type]?.transport) keys.add(u.transport?.group ?? `u${u.id}`);
+  for (const s of world.stacks.values()) if (s.owner === nid && s.sail) keys.add(s.sail.group ?? `s${s.id}`);
+  return keys;
+}
+
+export const boatsAtSea = (world, nid) => crossings(world, nid).size;
+
+export function crossingOf(world, from, via, to) {
+  const pts = [...via, to];
+  let at = from;
+  for (let k = 0; k < pts.length; k++) {
+    if (world.route(at, pts[k])) { at = pts[k]; continue; }
+    for (let j = k + 1; j < pts.length; j++) if (!world.route(pts[j - 1], pts[j])) return { error: "a drawn path can cross water only once" };
+    return { from: at, target: pts[k], before: pts.slice(0, k), then: pts.slice(k, -1) };
+  }
+  return null;
 }
 
 export function boatLoss(world, crossing, safe = false) {
@@ -83,17 +96,17 @@ export function boatPlan(world, nid, from, target) {
   return { embark: embarkAt, sea, landing, landSea, crossing, loss: boatLoss(world, crossing, ownsPort(world, nid, landing)) };
 }
 
-export function sendByBoat(world, sid, target, then = {}) {
+export function sendByBoat(world, sid, target, then = {}, { from = null, via = [], group = null } = {}) {
   const s = world.stacks.get(sid);
   if (!s || !world.boats) return { error: "no boats in this world" };
-  const r = world.boats.rules;
-  if (boatsAtSea(world, s.owner) >= r.maxBoats) return { error: `at most ${r.maxBoats} boats at sea at once` };
-  const plan = boatPlan(world, s.owner, s.pos, target);
+  const r = world.boats.rules, keys = crossings(world, s.owner);
+  if (keys.size >= r.maxBoats && !(group && keys.has(group))) return { error: `at most ${r.maxBoats} boats at sea at once` };
+  const plan = boatPlan(world, s.owner, from ?? s.pos, target);
   if (plan.error) return plan;
-  if (s.pos !== plan.embark && !world.orderMove(s.id, plan.embark, "move")) return { error: "no land route to your coast there" };
-  s.sail = { ...plan, target, then };
+  if ((s.pos !== plan.embark || via.length) && !world.orderMove(s.id, plan.embark, "move", via)) return { error: "no land route to your coast there" };
+  s.sail = { ...plan, target, then, group };
   s.board = null;
-  return { boat: true, crossing: plan.crossing, loss: plan.loss, landing: plan.landing };
+  return { boat: true, crossing: Math.round(plan.crossing), loss: plan.loss, landing: plan.landing };
 }
 
 function raidBoats(world, dt) {
@@ -128,7 +141,7 @@ function launchBoats(world) {
     const u = spawnUnit(world, s.owner, world.boats.rules.type, p.sea);
     if (!u) { world.emit("board_failed", { stack: s.id, nation: s.owner, why: "no water to launch from" }); continue; }
     const troops = s.troops;
-    u.transport = { then: p.then, target: p.target, crossing: p.crossing, loss: p.loss, home: p.embark, homeSea: p.sea };
+    u.transport = { then: p.then, target: p.target, crossing: p.crossing, loss: p.loss, home: p.embark, homeSea: p.sea, group: p.group ?? null };
     if (embark(world, s.id, u.id)) { world.units.list.delete(u.id); continue; }
     if (orderUnit(world, u.id, p.landSea)) { u.path = []; u.route = null; }
     u.land = p.landing;

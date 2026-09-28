@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-6.md`: the Industrial era (steel, rail, a power grid, new troops and machines), built 28 September 2026. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-7.md`: fighting first (gold as the only currency, individual soldiers, piloting, planes and bombing, easier crossings by sea), agreed 28 September 2026 and built in five parts. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (239)
+npm test                  # unit tests (242)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -280,6 +280,16 @@ The Industrial era, branch `m6-industry`, stacked on `m5-sea` (28 September 2026
 - **Rail and trains.** Rail is a road kind that needs Railways (`needs: "rail"`). A cart between two stations (`station` in `data/buildings.json`) with a rail-only path (`railPath`) runs as a train (`c.train`, `rules.json` `stores.train`). Convoy rows carry a ninth field for trains.
 - **Power.** `src/sim/power.js` (`installPower`, rank -2, every 5 s) and `src/shared/power.js` (`gridsOf`, `coverOf`, `polePlan`). Plants have `power`, poles `pole`, users `uses`; users get `b.power` (1 on a full grid, 0.5 off it), applied to producers, factory goods, machine building and building effects. The purse carries `power`, and `hello` carries `powerRules`. The `poles` order lays a line.
 - **Client.** The Power tab (with the pole line tool, `roading === "pole"`), rail in the Roads tab, the power overlay (`view.powerCover`), power lines on building cards, and trains drawn as `loco_steam`. The `energy` sheet is loaded.
+
+## Milestone seven progress
+
+Ryan's asks of 28 September 2026: one currency, individual soldiers, piloting, planes, and easier crossings. His decisions are in `plans/milestone-7.md`: gold only with old worlds converted, individual soldiers selected by an Armies button, up to 1,000 soldiers attacking with strength growing by era, at most 100 planes and 100 warships, no limit on trade, piloting of everything now, and the order boat fix, gold, soldiers, piloting, planes. The plan's reading of those answers (a soldier raised from 10 home troops, trade ships and trains that earn gold, bots keeping stacks) waits for Ryan's word.
+
+- **Part A, crossing by sea with Move (28 September 2026, branch `m7-boats`, stacked on `m6-industry`).**
+  - The `route` order answers a trip over water with the boat plan (`boatTrip` in `src/game.js`): the walk to the coast, the crossing, the landing, the loss and the time. Move (M) used to stop at "no land route there".
+  - A group crossing shares one key (`BOAT_GROUP`, a symbol clients cannot send), counted once against `boats.maxBoats`, and keeps its formation on the far side.
+  - A drawn path may cross water once (`crossingOf` in `src/sim/boats.js`); `sendByBoat` takes `from`, `via` and `group`.
+  - Selected stack, machine and group cards keep their room in the side column, and the folded feed stays inside its column on short screens.
 
 Open items as of 28 September 2026, in order:
 

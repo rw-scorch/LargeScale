@@ -5,7 +5,7 @@ import { installCombat } from "../src/sim/combat.js";
 import { installTroops } from "../src/sim/troops.js";
 import { installBuildings, addBuilding } from "../src/sim/buildings.js";
 import { installMachines, spawnUnit, UNIT_TYPES } from "../src/sim/units.js";
-import { installBoats, boatPlan, boatLoss } from "../src/sim/boats.js";
+import { installBoats, boatPlan, boatLoss, boatsAtSea } from "../src/sim/boats.js";
 import { runOrder } from "../src/game.js";
 import { TID } from "../src/shared/terrain.js";
 import rules from "../data/rules.json" with { type: "json" };
@@ -89,6 +89,59 @@ test("at most three boats at sea, no boarding or steering a transport, and no la
   const hostile = w2.hostile;
   w2.hostile = (x, y) => !((x === a2 && y === b2) || (x === b2 && y === a2)) && hostile(x, y);
   assert.equal(boatPlan(w2, a2, g2.idx(10, 15), g2.idx(80, 15)).landing % g2.w, 55, "it lands on the free shore, not on the nation at peace");
+});
+
+test("the Move preview plans the crossing: the walk to the coast, the water and the landing", () => {
+  const { w, g, a, order } = islands();
+  const s = w.createStack(a, g.idx(10, 15), 1000);
+  const r = order(a, { t: "route", stack: s.id, to: g.idx(62, 15) });
+  assert.ok(r.ok && r.boat, JSON.stringify(r));
+  assert.equal(r.crossing, 29);
+  assert.ok(Math.abs(r.loss - 0.039) < 1e-9);
+  assert.equal(g.x(r.embark), 24, "it embarks on the coast facing the island");
+  assert.equal(g.x(r.landing), 55);
+  assert.ok(r.points.some(([x]) => x > 25 && x < 55), "the line crosses the water");
+  assert.ok(r.points.some(([x, y]) => x === 55 && y === g.y(r.landing)), "and reaches the landing");
+  assert.ok(r.seconds > 29 / (UNIT_TYPES.transport_boat.speed * w.rules.stackSpeed), `${r.seconds} s`);
+  assert.ok(r.plots >= 14 + 29 + 7 && r.plots <= 14 + 29 + 7 + 4, `${r.plots} plots`);
+  const { w: w2, g: g2, a: a2, order: order2 } = islands();
+  for (let y = 0; y < 30; y++) for (let x = 15; x < 25; x++) w2.claim(g2.idx(x, y), 0);
+  const inland = w2.createStack(a2, g2.idx(10, 15), 100);
+  assert.equal(order2(a2, { t: "route", stack: inland.id, to: g2.idx(62, 15) }).error, "your land does not reach that sea yet; take land down to the coast first");
+});
+
+test("a group crossing sails as one boat against the limit, and keeps its formation on the far side", () => {
+  const { w, g, a, order } = islands();
+  const stacks = [0, 1, 2, 3, 4].map(k => w.createStack(a, g.idx(10, 11 + 2 * k), 200));
+  const r = order(a, { t: "group", stacks: stacks.map(s => s.id), do: "move", to: g.idx(64, 15) });
+  assert.ok(r.ok && r.done === 5 && !r.failed, JSON.stringify(r));
+  assert.equal(boatsAtSea(w, a), 1, "five stacks, one crossing");
+  assert.ok(order(a, { t: "attack", at: g.idx(75, 5), share: 0.1 }).ok);
+  assert.ok(order(a, { t: "attack", at: g.idx(75, 25), share: 0.1 }).ok);
+  assert.equal(order(a, { t: "attack", at: g.idx(75, 15), share: 0.1 }).error, "at most 3 boats at sea at once");
+  assert.ok(until(w, () => w.events.filter(e => e.type === "landed").length >= 5 && [...w.stacks.values()].filter(s => s.owner === a && g.x(s.pos) > 55 && g.x(s.pos) < 70).every(s => !s.path.length && s.order !== "move"), 4000) >= 0, "all five landed and stopped");
+  const ys = [...w.stacks.values()].filter(s => s.owner === a && g.x(s.pos) > 55 && g.x(s.pos) < 70).map(s => g.y(s.pos)).sort((p, q) => p - q);
+  assert.deepEqual(ys, [11, 13, 15, 17, 19], "each keeps its place in the line");
+});
+
+test("a drawn path may cross water once: walk the points, sail, and walk on", () => {
+  const { w, g, a, order } = islands();
+  const s = w.createStack(a, g.idx(5, 5), 500);
+  const via = [g.idx(15, 25), g.idx(60, 25)], to = g.idx(66, 10);
+  const pre = order(a, { t: "route", stack: s.id, to, via });
+  assert.ok(pre.ok && pre.boat, JSON.stringify(pre));
+  assert.ok(pre.points.some(([x, y]) => x === 15 && y === 25) || pre.points.some(([x, y]) => y > 20 && x < 25), "the preview goes by the first point");
+  const r = order(a, { t: "move", stack: s.id, to, via });
+  assert.ok(r.ok && r.boat, JSON.stringify(r));
+  let seen = false;
+  assert.ok(until(w, () => { const t = w.stacks.get(s.id); if (t && g.y(t.pos) >= 24) seen = true; return w.events.some(e => e.type === "boat_launched"); }) >= 0);
+  assert.ok(seen, "it walked down to the first point before embarking");
+  assert.ok(until(w, () => w.events.some(e => e.type === "landed")) >= 0);
+  const ashore = w.stacks.get(w.events.find(e => e.type === "landed").stack);
+  assert.ok(until(w, () => !ashore.path.length && !ashore.route && !ashore.via?.length && ashore.order !== "move", 600) >= 0);
+  assert.equal(ashore.pos, to, "it walked on to the end of the path");
+  const back = w.createStack(a, g.idx(5, 5), 100);
+  assert.equal(order(a, { t: "move", stack: back.id, to: g.idx(10, 10), via: [g.idx(60, 10)] }).error, "a drawn path can cross water only once");
 });
 
 test("a warship sinks a transport with everyone aboard, and landing by your own port loses nobody", () => {

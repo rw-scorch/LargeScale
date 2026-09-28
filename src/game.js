@@ -6,7 +6,8 @@ import { orderResearch } from "./sim/research.js";
 import { layRoad, layRoute, roadView } from "./sim/logistics.js";
 import { polePlan } from "./shared/power.js";
 import { connectPlan, connectStores } from "./sim/autoroads.js";
-import { sendByBoat, boatPlan, boatsAtSea } from "./sim/boats.js";
+import { sendByBoat, boatPlan, boatsAtSea, crossingOf } from "./sim/boats.js";
+import { coarseRoute } from "./shared/pathfind.js";
 import { formWagon, unloadWagon, isWagon } from "./sim/supply.js";
 import { convoyRow, setStore } from "./sim/stores.js";
 import { ERA_ORDER } from "./shared/buildings.js";
@@ -14,7 +15,7 @@ import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
 import { UNITS, xpLevelOf, setKeep } from "./sim/troops.js";
 import { mixRow } from "./shared/units.js";
-import { UNIT_TYPES, orderUnit, queueMachines, clearQueue, shoreNear, landingSpots } from "./sim/units.js";
+import { UNIT_TYPES, orderUnit, queueMachines, clearQueue, shoreNear, landingSpots, waterGraph } from "./sim/units.js";
 
 const isPlot = (sim, v) => Number.isInteger(v) && v >= 0 && v < sim.grid.size;
 const fail = error => ({ ok: false, error });
@@ -58,6 +59,39 @@ function legsOf(sim, from, via, to) {
     from = p;
   }
   return out;
+}
+
+const BOAT_GROUP = Symbol("boat group");
+
+const cellPoint = (co, g, c) => [Math.min(g.w - 1, (c % co.cw) * co.size + (co.size >> 1)), Math.min(g.h - 1, Math.floor(c / co.cw) * co.size + (co.size >> 1))];
+
+function walkOf(sim, legs) {
+  const co = sim.pathGraph(), g = sim.grid, points = [];
+  let plots = 0, cost = 0;
+  for (const { from, to, r } of legs) {
+    for (const k of r.regions) points.push(cellPoint(co, g, co.cellOfRegion[k]));
+    const straight = Math.abs(g.x(from) - g.x(to)) + Math.abs(g.y(from) - g.y(to));
+    cost += r.regions.length > 1 ? Math.max(r.cost, straight) : straight * co.mean[r.regions[0]];
+    plots += Math.max(r.plots ?? 0, straight);
+  }
+  return { plots, cost, points };
+}
+
+function boatTrip(sim, nation, s, via, to) {
+  const c = crossingOf(sim, s.pos, via, to);
+  if (!c) return { error: "no land route there" };
+  if (c.error) return c;
+  const plan = boatPlan(sim, nation, c.from, c.target);
+  if (plan.error) return plan;
+  const walk = legsOf(sim, s.pos, c.before, plan.embark);
+  if (!walk) return { error: "no land route to your coast there" };
+  const co = waterGraph(sim), g = sim.grid, r = coarseRoute(co, co.regionOf(plan.sea), co.regionOf(plan.landSea));
+  const boat = UNIT_TYPES[sim.boats.rules.type], sea = Math.max(r?.cost ?? 0, plan.crossing);
+  return {
+    plan, walk: walkOf(sim, walk), land: walkOf(sim, legsOf(sim, plan.landing, c.then, to) ?? []),
+    sea: r ? r.regions.map(k => cellPoint(co, g, co.cellOfRegion[k])) : [],
+    seaSeconds: sea / (boat.speed * (sim.rules.stackSpeed ?? 1)),
+  };
 }
 
 export const ORDERS = {
@@ -117,10 +151,17 @@ export const ORDERS = {
     const { via, error } = waypoints(sim, m);
     if (error) return fail(error);
     const none = via.length ? "no land route through those points" : "no land route there";
-    if (via.length && !legsOf(sim, s.pos, via, m.to)) return fail(none);
+    const group = m[BOAT_GROUP] ?? null;
+    if (via.length && !legsOf(sim, s.pos, via, m.to)) {
+      const c = sim.boats && isLand(sim.terrain[m.to]) ? crossingOf(sim, s.pos, via, m.to) : null;
+      if (!c) return fail(none);
+      if (c.error) return fail(c.error);
+      const b = sendByBoat(sim, s.id, c.target, { to: m.to, via: c.then }, { from: c.from, via: c.before, group });
+      return b.error ? fail(b.error) : { ok: true, ...b };
+    }
     if (!sim.orderMove(s.id, m.to, "move", via)) {
       if (via.length || !sim.boats || !isLand(sim.terrain[m.to]) || sim.route(s.pos, m.to)) return fail(none);
-      const b = sendByBoat(sim, s.id, m.to, { to: m.to });
+      const b = sendByBoat(sim, s.id, m.to, { to: m.to }, { group });
       return b.error ? fail(b.error) : { ok: true, ...b };
     }
     s.board = null;
@@ -331,19 +372,20 @@ export const ORDERS = {
       to = m.to;
       for (const s of mine) { cx += g.x(s.pos) / mine.length; cy += g.y(s.pos) / mine.length; }
     }
-    const results = [];
+    const results = [], boats = `${nation}:${Math.round(sim.time * 1000)}`;
     for (const s of mine) {
-      let msg = { stack: s.id, only: m.only, mode: m.mode };
+      let msg = { stack: s.id, only: m.only, mode: m.mode, [BOAT_GROUP]: boats };
       if (m.do === "gather") { if (s === big) { results.push(ORDERS.halt(sim, nation, msg)); continue; } msg.to = big.pos; }
       if (m.do === "move") {
         const x = Math.round(g.x(to) + g.x(s.pos) - cx), y = Math.round(g.y(to) + g.y(s.pos) - cy);
         const kept = x >= 0 && y >= 0 && x < g.w && y < g.h ? g.idx(x, y) : to;
-        msg.to = isLand(sim.terrain[kept]) && sim.route(s.pos, kept) ? kept : to;
+        msg.to = isLand(sim.terrain[kept]) && (sim.route(s.pos, kept) || (isLand(sim.terrain[to]) && sim.route(to, kept))) ? kept : to;
       }
       results.push(ORDERS[one](sim, nation, msg));
     }
     const done = results.filter(r => r.ok).length, error = results.find(r => !r.ok)?.error ?? null;
-    return done ? { ok: true, done, failed: results.length - done, error } : fail(error ?? "nothing to do");
+    const boat = results.some(r => r.boat);
+    return done ? { ok: true, done, failed: results.length - done, error, ...(boat ? { boat } : {}) } : fail(error ?? "nothing to do");
   },
   policy(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
@@ -456,20 +498,22 @@ export const ORDERS = {
     if (!isPlot(sim, m.to)) return fail("that plot is off the map");
     const { via, error } = waypoints(sim, m);
     if (error) return fail(error);
-    const legs = legsOf(sim, s.pos, via, m.to);
-    if (!legs) return fail(via.length ? "no land route through those points" : "no land route there");
-    const co = sim.pathGraph(), speed = sim.rules.stackSpeed * sim.speedOf(s), g = sim.grid, points = [];
-    let plots = 0, cost = 0;
-    for (const { from, to, r } of legs) {
-      for (const k of r.regions) {
-        const c = co.cellOfRegion[k];
-        points.push([Math.min(g.w - 1, (c % co.cw) * co.size + (co.size >> 1)), Math.min(g.h - 1, Math.floor(c / co.cw) * co.size + (co.size >> 1))]);
-      }
-      const straight = Math.abs(g.x(from) - g.x(to)) + Math.abs(g.y(from) - g.y(to));
-      cost += r.regions.length > 1 ? Math.max(r.cost, straight) : straight * co.mean[r.regions[0]];
-      plots += Math.max(r.plots ?? 0, straight);
+    const legs = legsOf(sim, s.pos, via, m.to), speed = sim.rules.stackSpeed * sim.speedOf(s), g = sim.grid;
+    if (legs) {
+      const t = walkOf(sim, legs);
+      return { ok: true, plots: t.plots, seconds: Math.max(1, Math.round(t.cost / speed)), points: t.points };
     }
-    return { ok: true, plots, seconds: Math.max(1, Math.round(cost / speed)), points };
+    const none = via.length ? "no land route through those points" : "no land route there";
+    if (!sim.boats || !isLand(sim.terrain[m.to])) return fail(none);
+    const b = boatTrip(sim, nation, s, via, m.to);
+    if (b.error) return fail(b.error);
+    const { plan, walk, land, sea } = b, xy = i => [g.x(i), g.y(i)];
+    return {
+      ok: true, boat: true, crossing: Math.round(plan.crossing), loss: plan.loss, embark: plan.embark, landing: plan.landing,
+      plots: walk.plots + plan.crossing + land.plots,
+      seconds: Math.max(1, Math.round((walk.cost + land.cost) / speed + b.seaSeconds)),
+      points: [...walk.points, xy(plan.embark), xy(plan.sea), ...sea, xy(plan.landSea), xy(plan.landing), ...land.points],
+    };
   },
 };
 
