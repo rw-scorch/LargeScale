@@ -680,6 +680,13 @@ export function machineOrdersOf(world, nid) {
 export function giveMachine(world, nid, type) {
   const def = UNIT_TYPES[type], n = world.nations.get(nid);
   if (!def || !n?.spawned || n.capital === undefined) return null;
+  if (def.domain === "air") {
+    for (const id of world.bld?.mine.get(nid) ?? []) {
+      const b = world.bld.list.get(id);
+      if (b?.state === "active" && world.bld.table[b.type]?.airbase && world.owner[b.anchor] === nid) return spawnUnit(world, nid, type, b.anchor);
+    }
+    return null;
+  }
   const g = world.grid, seen = new Set([n.capital]), todo = [n.capital];
   for (let k = 0; k < todo.length && k < 40000; k++) {
     const i = todo[k];

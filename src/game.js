@@ -11,6 +11,7 @@ import { coarseRoute } from "./shared/pathfind.js";
 import { trainRow, tradePerSecond } from "./sim/trade.js";
 import { fieldError, companyError, detachSoldiers } from "./sim/soldiers.js";
 import { takeControl, release, pilotOf } from "./sim/pilot.js";
+import { orderPlane, planeRow } from "./sim/air.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -333,6 +334,21 @@ export const ORDERS = {
     for (let yy = Math.max(0, y); yy < Math.min(g.h, y + h); yy++) for (let xx = Math.max(0, x); xx < Math.min(g.w, x + w); xx++) plots.push(g.idx(xx, yy));
     return { ok: true, plots: zonePlots(sim, nation, plots, m.zone) };
   },
+  air(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.air) return fail("planes are not flying in this world");
+    if (!["patrol", "bomb", "return"].includes(m.do)) return fail("the order is patrol, bomb or return");
+    if (m.do !== "return" && !isPlot(sim, m.at)) return fail("that spot is off the map");
+    const ids = Array.isArray(m.planes) ? m.planes.slice(0, MAX_GROUP) : [m.plane];
+    let done = 0, error = null, rearming = 0;
+    for (const id of ids) {
+      const u = ownMachine(sim, nation, id);
+      const r = u ? orderPlane(sim, u, m.do, m.at) : { error: "not your plane" };
+      if (r.error) error ??= r.error;
+      else { done++; rearming = Math.max(rearming, r.rearming ?? 0); }
+    }
+    return done ? { ok: true, done, failed: ids.length - done, error, rearming } : fail(error ?? "pick a plane");
+  },
   pilot(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
     if (!sim.pilot) return fail("piloting is not running in this world");
@@ -443,6 +459,7 @@ export const ORDERS = {
     const u = ownMachine(sim, nation, m.machine);
     if (!u) return fail("not your machine");
     if (u.wreck) return fail("that machine is a wreck");
+    if (UNITS.table[u.type]?.domain === "air") return fail("planes take patrol, bomb and return orders");
     const def = UNIT_TYPES[u.type];
     if (def.transport) return fail("transport boats sail on their own and land where they were sent");
     if (def.freight) return fail("trade ships sail on their own between ports");
@@ -568,7 +585,11 @@ const stackRow = s => {
   if (mix.length || lv) row.push(mix, lv);
   return row;
 };
-const machineRow = u => [u.id, u.owner, UNITS.table[u.type].num, u.at, Math.ceil(u.hp), u.wreck ? 2 : u.path.length || u.route ? 1 : 0, Math.floor(u.cargo?.troops ?? 0), u.follow ?? 0, u.face ?? 1];
+const machineRow = u => {
+  const row = [u.id, u.owner, UNITS.table[u.type].num, u.at, Math.ceil(u.hp), u.wreck ? 2 : u.path.length || u.route || (u.air && !u.air.landed) ? 1 : 0, Math.floor(u.cargo?.troops ?? 0), u.follow ?? 0, u.face ?? 1];
+  if (u.air) row.push(planeRow(u));
+  return row;
+};
 const NONE = [];
 const sameTypes = (p, q) => {
   const a = p[5] ?? NONE, b = q[5] ?? NONE;

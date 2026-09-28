@@ -20,6 +20,7 @@ import { installConstruction } from "./sim/construction.js";
 import { installEconomy, convertToGold } from "./sim/economy.js";
 import { installSoldiers, trimField, fieldOf } from "./sim/soldiers.js";
 import { installPilot, pilotStep, pilotRows, takeShots, steer, pilotOf, release as releasePilot } from "./sim/pilot.js";
+import { installAir } from "./sim/air.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { installRoads, restoreRoads, takeRoadNews } from "./sim/logistics.js";
 import { installBoats } from "./sim/boats.js";
@@ -177,6 +178,7 @@ export class World extends DurableObject {
     installBoats(this.sim, { scale: info.map.scale ?? 1 });
     installSoldiers(this.sim);
     installPilot(this.sim);
+    installAir(this.sim);
     const trimmed = trimField(this.sim);
     if (trimmed.size) this.fieldTrimmed = Object.fromEntries(trimmed);
     if (this.upgradedFrom && this.upgradedFrom < 4) this.goldLoaded = convertToGold(this.sim);

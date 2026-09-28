@@ -2,6 +2,7 @@ import rules from "../../data/rules.json" with { type: "json" };
 import { isLand } from "../shared/terrain.js";
 import { UNIT_TYPES, unitCost, wreck } from "./units.js";
 import { stackPower, COMBAT } from "./combat.js";
+import { drop } from "./air.js";
 
 export const PILOT_RULES = { every: 50, sendEvery: 100, idle: 30, range: 2, reload: 1.2, bonus: 1.5, aimRadius: 1.2, followEvery: 1, turnRate: 2.5, inputsPerSecond: 30, ...rules.pilot };
 
@@ -74,6 +75,7 @@ export function steer(world, nid, m) {
   P.move = [dx, dy];
   P.aim = Array.isArray(m.aim) && Number.isFinite(m.aim[0]) && Number.isFinite(m.aim[1]) ? [m.aim[0], m.aim[1]] : null;
   P.fire = m.fire === true;
+  if (m.bomb === true) P.bomb = true;
   P.last = world.time;
   return true;
 }
@@ -106,7 +108,7 @@ function move(world, P, u, def, dt) {
   if (turning(P, def)) {
     P.heading += P.move[0] * r.turnRate * dt;
     const top = speedOf(world, P, u, def, u.at);
-    P.speed = Math.max(0, Math.min(top, P.speed + P.move[1] * -top * dt));
+    P.speed = Math.max(def.domain === "air" ? top * 0.3 : 0, Math.min(top, P.speed + P.move[1] * -top * dt));
     vx = Math.cos(P.heading) * P.speed;
     vy = Math.sin(P.heading) * P.speed;
   } else {
@@ -190,6 +192,13 @@ export function pilotStep(world, dt) {
     P.reload = Math.max(0, P.reload - dt);
     move(world, P, u, def, dt);
     fire(world, P, u, def);
+    if (P.bomb) {
+      P.bomb = false;
+      if (P.kind === "m" && def?.bomb && world.air) {
+        const hit = drop(world, u, P.x, P.y);
+        if (hit) world.pilot.shots.push({ from: [P.x, P.y], to: [P.x, P.y], by: P.owner, kind: "shell", hit: hit.troops });
+      }
+    }
     P.followClock += dt;
     if (P.followers.length && P.followClock >= r.followEvery) { P.followClock = 0; follow(world, P); }
   }
