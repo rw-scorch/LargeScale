@@ -337,6 +337,37 @@ Evidence: unit tests for range, rearming, bombing and the limit; a smoke world w
     - Written but not run until the dev server is started:
       - the smoke check: after Flight, a bomber from a new airfield bombs the friend's company;
       - the browser check: an airfield bases a fighter, and Patrol sends it up.
+- **The dev server run (29 September 2026, on `m7-air`).** Ryan asked for `npm run dev` to run smoke, soak and the browser test for Parts B to E, on the test map.
+  - **Found and fixed in the game:**
+    - **Trade while away.** Every port on water was paid the away estimate, even one with no port to trade with. A lone pair of jetties 9 plots apart earned 289 gold in the test's catch-up. Now only ports with a partner (`partnersOf` in `src/sim/trade.js`) and stations joined by rail to another station count, and a unit test holds it.
+    - **Phone layout.** On a phone held sideways, the Armies button widened the action bar into the control panel and the feed. The action buttons are smaller on screens under 500 pixels high.
+    - **Tax.** The vitals now carry `tax`, the part of gold income a bank raises.
+    - **Admin gifts and the limit.** The admin's gift of machines skipped the limit, and the soak's host reached 106 planes. Gifts now stop at the limit and say so.
+  - **Test fixes.** These were wrong in the tests, not in the game:
+    - A soldier carries a share of the company's odd troops, so three levies are 30 to 39 troops.
+    - State rows round troops down, so a split shows up to 2 troops fewer than it had.
+    - The vehicle factory needs Field guns.
+    - Jetties must be at least 12 plots apart to trade. The test now picks the furthest pair.
+    - The soldier Move target may be unclaimed land.
+    - Research at 40 times speed can finish Fire keeping before the test queues it.
+    - The login helper waits for the world list or an error, not a fixed 3 seconds.
+  - **Evidence:**
+    - `npm test`: 244 of 244. Reference: 95 of 95.
+    - `npm run ui` on the test map: 168 of 168. Among them:
+      - two jetties 39 plots apart send a trade ship that earns 13 gold;
+      - a company of 1,757 troops is drawn as 175 soldiers, and a box picks 87;
+      - Move splits the company into 883 and 873;
+      - P and D walk a company 1.9 plots, and so does the phone stick;
+      - after Flight, an airfield bases a fighter and Patrol sends it up with 69 s of fuel.
+    - `npm run smoke` on the test map: 113 of 113. Among them:
+      - three picked soldiers leave a company of 186 as one of 31, leaving 154;
+      - the host pilots a company 6.3 plots, and the friend sees it move;
+      - rail between two stations runs trains worth 28.5 gold a trip;
+      - a bomber flies 30 plots from a new airfield and bombs the friend's company: 90 troops lost, 1 building damaged.
+    - `npm run soak` for 180 s now also sends `detach`, `pilot` (take, input, release) and `air` orders, and the host has Flight and an airfield. 1,111 rounds, 24 game minutes, 0 tick errors, no problems:
+      - 119 detaches, 84 pilot sessions with 452 inputs, 81 plane orders;
+      - planes held at 100 (the limit), soldiers in the field at most 999 of 1,000;
+      - 646 bombings and 8 planes shot down.
 
 ## Ryan's checks
 
