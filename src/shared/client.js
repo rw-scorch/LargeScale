@@ -47,6 +47,7 @@ export class ClientWorld {
     this.roadRules = hello.roadRules ?? null;
     this.powerRules = hello.powerRules ?? null;
     this.goldRules = hello.goldRules ?? null;
+    this.soldierRules = hello.soldierRules ?? null;
     this.terrain = null;
     this.parts = new PartCollector();
     this.queue = [];
@@ -253,7 +254,12 @@ export class ClientWorld {
         if (!this.nations.has(id)) this.nations.set(id, { id, name: `Nation ${id}`, colour: "#8a8a8a" });
         Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned, era: ERA_ORDER[era] ?? "T" });
       }
-      for (const r of m.s) this.stacks.set(r[0], stackFromRow(r, this.unitTypes));
+      for (const r of m.s) {
+        const old = this.stacks.get(r[0]), s = stackFromRow(r, this.unitTypes);
+        if (old && old.pos !== s.pos) { s.prev = old.pos; s.movedAt = Date.now(); }
+        else if (old) { s.prev = old.prev; s.movedAt = old.movedAt; }
+        this.stacks.set(r[0], s);
+      }
       for (const id of m.gone) this.stacks.delete(id);
       for (const r of m.m ?? []) this.setMachine(r);
       for (const id of m.mg ?? []) this.machines.delete(id);
@@ -262,7 +268,7 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "schedule") { this.schedule = m.schedule ?? {}; if (m.info) this.info = m.info; }
     if (m.t === "phase") this.lastPhase = m;

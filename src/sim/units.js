@@ -542,6 +542,36 @@ function pay(n, cost, k = 1) {
   }
 }
 
+const LIMIT_NAMES = { land: "tanks, guns and siege engines", sea: "warships", air: "planes" };
+
+export function limitClass(def) {
+  return def && !def.transport && !def.freight && LIMIT_NAMES[def.domain] ? def.domain : null;
+}
+
+export function fleetOf(world, nid) {
+  const out = { land: 0, sea: 0, air: 0 };
+  for (const u of world.units?.list.values() ?? []) {
+    if (u.owner !== nid || u.wreck) continue;
+    const c = limitClass(UNIT_TYPES[u.type]);
+    if (c) out[c]++;
+  }
+  return out;
+}
+
+function queuedOf(world, nid, cls) {
+  let n = 0;
+  for (const q of world.machines.queues.values()) if (q.owner === nid) for (const t of q.items) if (limitClass(UNIT_TYPES[t]) === cls) n++;
+  return n;
+}
+
+export function limitError(world, nid, def, adding = 1) {
+  const cls = limitClass(def), cap = world.machines?.rules.limits?.[cls];
+  if (!cls || !(cap >= 0)) return null;
+  const have = fleetOf(world, nid)[cls], queued = queuedOf(world, nid, cls);
+  if (have + queued + adding <= cap) return null;
+  return `at most ${cap} ${LIMIT_NAMES[cls]}: you have ${have}${queued ? ` and ${queued} queued` : ""}`;
+}
+
 export function queueMachines(world, nid, bid, type, count = 1) {
   const M = world.machines, b = world.bld?.list.get(bid), n = world.nations.get(nid);
   if (!n?.alive) return { error: "your nation is gone" };
@@ -555,6 +585,8 @@ export function queueMachines(world, nid, bid, type, count = 1) {
   if (!Number.isInteger(count) || count < 1) return { error: "build at least one" };
   const q = M.queues.get(bid) ?? { owner: nid, items: [], progress: 0, paid: false, why: null };
   if (q.items.length + count > M.rules.queueMax) return { error: `at most ${M.rules.queueMax} in a queue` };
+  const limit = limitError(world, nid, UNIT_TYPES[type], count);
+  if (limit) return { error: limit };
   for (let k = 0; k < count; k++) q.items.push(type);
   M.queues.set(bid, q);
   return { queued: q.items.length };
@@ -599,6 +631,8 @@ export function produce(world, dt) {
     if (b.state !== "active") { q.why = "the building is being worked on"; continue; }
     const def = UNIT_TYPES[q.items[0]], n = world.nations.get(q.owner);
     if (!q.paid) {
+      const cls = limitClass(def), cap = M.rules.limits?.[cls];
+      if (cls && cap >= 0 && fleetOf(world, q.owner)[cls] >= cap) { q.why = `you have ${cap} ${LIMIT_NAMES[cls]}, the most allowed`; continue; }
       const short = shortOf(n, def.cost);
       if (short) { q.why = `not enough ${short}`; continue; }
       pay(n, def.cost);
@@ -640,7 +674,7 @@ export function machineOrdersOf(world, nid) {
     orders.push({ id: u.id, to, land: u.land, follow: u.follow });
   }
   for (const [bid, q] of world.machines.queues) if (q.owner === nid) queues[bid] = { items: [...q.items], progress: Math.round(q.progress * 100) / 100, why: q.why };
-  return { orders, queues };
+  return { orders, queues, fleet: fleetOf(world, nid), limits: world.machines.rules.limits ?? null };
 }
 
 export function giveMachine(world, nid, type) {

@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (223)
+npm test                  # unit tests (231)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -304,10 +304,21 @@ Ryan's asks of 28 September 2026: one currency, individual soldiers, piloting, p
     - The purse carries `trade` (`tradeView`), and `hello` carries `goldRules`.
   - **Old worlds.** Save format 4. `convertToGold` in `src/sim/economy.js` turns stock, store goods, carts, wagons and retired buildings into gold on load.
   - **Client.** The Logistics panel (L) is now the Trade panel. The HUD shows gold and people, and the build menu hides retired buildings.
+- **Machine limits and Part C, soldiers (29 September 2026, branch `m7-soldiers`, stacked on `m7-gold`).** Details and the reasons for the design are in `plans/milestone-7.md`.
+  - **Machine limits.** `rules.json` `machines.limits` caps land machines, warships and planes at 100 each (`limitError`, `fleetOf` in `src/sim/units.js`).
+  - **Companies.** A player's stack is a company, and every 10 troops (`soldiers.troopsEach`) is a soldier.
+    - `src/shared/soldiers.js` counts soldiers by type (`soldierTypes`) and gives the formation (`formationSlot`), the same on both ends.
+    - `src/sim/soldiers.js` (`installSoldiers`) keeps a player to 1,000 soldiers and 100 companies in the field, and trims old worlds on load.
+    - The `detach` order takes picked soldiers, by type, out of their companies.
+    - Bots are not limited.
+  - **Path budgets.** Advancing stacks look for the border at most `seeksPerTick` (8) a tick. Stacks extend paths at most `extendsPerTick` (12) a tick while they still have plots left to walk.
+  - **Client.**
+    - Above `soldiers.drawZoom`, companies are drawn soldier by soldier, on screen only, within a budget by screen size (`soldierSpots`, `soldiers` in the renderer). Stacks glide between plots (`prev`, `movedAt`).
+    - Armies (V, `toggleArmies`) turns a swipe or a Shift-drag box into picking soldiers (`app.picked`). The soldiers panel is `public/js/ui/soldiers.js`.
 
 Open items as of 29 September 2026, in order:
 
-1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`, so `main` does not have milestone six yet. PR 30 (`m7-boats`, base `m6-industry`) and the Part B PR (`m7-gold`, stacked on it) wait for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` for Part B wait for a dev server run, which Ryan starts or asks for.
+1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`, so `main` does not have milestone six yet. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B) and the Part C PR (`m7-soldiers`) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` for Parts B and C wait for a dev server run, which Ryan starts or asks for. Next: Part D (piloting), then Part E (planes).
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.

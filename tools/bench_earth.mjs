@@ -31,6 +31,7 @@ import { StateFeed, BuildingFeed, publicEvents } from "../src/game.js";
 import { planCatchUp, runCatchUp } from "../src/sim/offline.js";
 import allRules from "../data/rules.json" with { type: "json" };
 import { encodeRows } from "../src/shared/buildings.js";
+import { installSoldiers, fieldOf } from "../src/sim/soldiers.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -47,6 +48,7 @@ const { values: a } = parseArgs({ options: {
   tanks: { type: "string", default: "4" },
   power: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
+  companies: { type: "string", default: "100" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -138,6 +140,8 @@ const guard = installGuard(w, { scale });
 const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
 installBoats(w, { scale });
+const soldiers = Number(a.companies) > 0 ? installSoldiers(w) : null;
+let fieldPeak = { soldiers: 0, companies: 0 };
 const trade = installTrade(w, { scale, seed: Number(a.seed) + 11 });
 let seaSetup = null;
 if (Number(a.ports) > 0) {
@@ -257,7 +261,14 @@ function playerOrders() {
     const n = w.nations.get(id);
     if (!n.alive) continue;
     const mine = [...w.stacks.values()].filter(s => s.owner === id);
-    if (mine.length < 2) {
+    if (soldiers) {
+      const want = Number(a.companies), each = Math.floor((soldiers.rules.fieldCap * soldiers.rules.troopsEach) / want);
+      for (let k = mine.length; k < want; k++) {
+        const s = w.createStack(id, n.capital, Math.min(each, n.troops * 0.5));
+        if (!s) break;
+        mine.push(s);
+      }
+    } else if (mine.length < 2) {
       const s = w.createStack(id, n.capital, n.troops * 0.4);
       if (s && mine.length === 0) w.orderAdvance(s.id);
       else if (s) mine.push(s);
@@ -279,6 +290,7 @@ function playerOrders() {
     }
     for (const s of mine) {
       if (s.order !== "hold" || s.path.length) continue;
+      if (soldiers && s.id % 2) { w.orderAdvance(s.id, null, true); continue; }
       const to = farLand(s.pos);
       if (to < 0) continue;
       const m0 = performance.now();
@@ -289,12 +301,23 @@ function playerOrders() {
 }
 
 const econTimes = [], plainTimes = [], times = [], saveTimes = [], stateSizes = [], eventSizes = [];
+const part = { seek: 0, seeks: 0, extend: 0, extends: 0 };
+let worstParts = null;
+for (const [name, key] of [["seek", "seek"], ["extendPath", "extend"]]) {
+  const f = w[name].bind(w);
+  w[name] = (...args) => { const t0 = performance.now(); try { return f(...args); } finally { part[key] += performance.now() - t0; part[key + "s"]++; } };
+}
 const feed = new StateFeed(0.01, 5);
 feed.delta(w);
 let maxEvents = 0, maxDiffBytes = 0, blocked = 0;
 for (let i = 0; i < Number(a.ticks); i++) {
-  if (i % 20 === 0) { playerOrders(); feed0(); }
+  if (i % 20 === 0) {
+    playerOrders();
+    feed0();
+    if (soldiers) for (const id of players) { const f = fieldOf(w, id); fieldPeak = { soldiers: Math.max(fieldPeak.soldiers, f.soldiers), companies: Math.max(fieldPeak.companies, f.companies) }; }
+  }
   const econDue = !!w.civ && w.civ.clock + DT >= w.civ.rules.econEvery;
+  part.seek = part.extend = part.seeks = part.extends = 0;
   const s = performance.now();
   w.tick(DT);
   const changes = w.takeDirty();
@@ -318,6 +341,7 @@ for (let i = 0; i < Number(a.ticks); i++) {
     saveTimes.push(performance.now() - s2);
   }
   times.push(performance.now() - s);
+  if (!worstParts || times.at(-1) > worstParts.ms) worstParts = { ms: +times.at(-1).toFixed(1), seekMs: +part.seek.toFixed(1), seeks: part.seeks, extendMs: +part.extend.toFixed(1), extends: part.extends };
   (econDue ? econTimes : plainTimes).push(times.at(-1));
   if (i % 40 === 0) peakIsolate = Math.max(peakIsolate, isolateMB());
 }
@@ -387,6 +411,8 @@ const report = {
   catchUp,
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
+  worstTickParts: worstParts,
+  soldiers: soldiers && { perPlayerPeak: fieldPeak, cap: soldiers.rules.fieldCap, stacksNow: w.stacks.size, playerStacksNow: [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human).length, battlesNow: [...w.stacks.values()].filter(s => s.engaged).length },
   rail: { plots: railPlots, stations, trainsNow: trade.trains.size, railSearch: (() => { const list = [...bld.list.values()].filter(b => b.type === "station_large"), t0 = performance.now(); trade.paths.clear(); let found = 0; for (const b of list) for (const c of list) if (b !== c && b.owner === c.owner && railPath(w, b.owner, b, c)) found++; return { pairs: found, ms: +(performance.now() - t0).toFixed(1) }; })() },
   power: power && (() => {
     const t0 = performance.now();

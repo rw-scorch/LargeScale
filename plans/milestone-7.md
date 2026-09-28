@@ -193,7 +193,26 @@ A player's stacks become soldiers at their mix and experience, up to the limit. 
 
 Evidence: unit tests for input checks (speed and terrain), and a browser test piloting a soldier with keys and with the touch stick.
 
-## Part E: planes and bombing
+### How it is built on companies (29 September 2026)
+
+Soldiers are companies (Part C as built), so piloting works on a company or a machine.
+
+- **Taking control.**
+  - Piloting one soldier first detaches it, as any order on picked soldiers does. It then becomes a company of one.
+  - The rest of the selection follows the piloted company: every second they are sent towards it, keeping their places.
+- **Moving.** A piloted company or machine gets a position within its plot (`src/sim/pilot.js`).
+  - When it crosses into another plot, a company enters it the way a walking stack does, so it takes land and pays for it.
+  - A machine enters only land or water, as it can move.
+  - The normal stack and machine movement leaves piloted ones alone.
+- **Firing.** One shot a reload, at the enemy company, stack or machine nearest the aimed point within range.
+  - A company's shot costs the target its power times `pilot.hit`.
+  - A machine's shot uses its own attack and range.
+- **Network.**
+  - While anything is piloted, a small `pilots` message goes out every `pilot.sendEvery` ms with each piloted unit's position.
+  - Shots go out as events, which clients draw as tracers.
+- **Letting go.**
+  - Esc, the button, leaving the game, or `pilot.idle` seconds without input hand the unit back.
+  - It then holds where it stands.
 
 - **Research.** Flight (Industrial), after Steam power. It unlocks the airfield, the biplane fighter and the bomber. Modern fighters and bombers come with the Modern era.
 - **The airfield** builds and bases planes. At most 100 planes per player.
@@ -236,6 +255,37 @@ Evidence: unit tests for range, rearming, bombing and the limit; a smoke world w
     - Earth bench: PASS, worst tick 34.9 ms (p99 17.8), with 24 ports, 8 trade ships at sea, 6 stations and 2 joined pairs.
     - Fine Europe bench (25 bots): PASS, worst tick 30.6 ms (p99 13.8), with 32 ports, 14 trade ships at sea and 2 trains. Peak memory was 89 MB.
     - Smoke, soak and `npm run ui` are rewritten for gold: trade ships between jetties, the Trade panel, rail at 12 gold a plot, and a vehicle factory on the grid. They have not been run yet, because the dev server stays off until Ryan asks for it.
+- **Machine limits (29 September 2026, branch `m7-soldiers`).**
+  - At most 100 land machines, 100 warships and 100 planes per player (`rules.json` `machines.limits`), counting machines built and queued. Transport boats and trade ships are not limited.
+  - A queue waits if captures or gifts have filled the limit, and the building card shows the count.
+- **Part C (29 September 2026, branch `m7-soldiers`, stacked on `m7-gold`).** Built with a different engine from the plan above, for the reasons below. What the player sees and does is as planned.
+  - **Companies, not a new simulation.**
+    - A player's stack is a company, and every 10 troops in it (`soldiers.troopsEach`) is a soldier.
+    - The server keeps companies as stacks, so combat, taking land, boats, guard, standing orders, catch-up and saving all work unchanged, and bots fight players by the same rules.
+    - The plan's own simulation would have needed all of those again for soldiers, side by side with bot stacks. It would also have needed a new network form.
+  - **What is built.**
+    - Soldiers are drawn one by one above `soldiers.drawZoom`, only on screen. At most one is drawn per `soldiers.drawArea` screen pixels, so a phone draws fewer.
+    - Armies (V) picks them by swipe, Shift-drag box or tap. A tap on a picked soldier picks all of its kind on screen.
+    - Orders on picked soldiers take exactly those soldiers, by type, out of their companies (the `detach` order).
+    - At most 1,000 soldiers in the field. Bots keep their stacks.
+    - Soldiers grow stronger by type, which rises by era (levy 1, knight 3, grenadier 5, stormtrooper 6), and by experience.
+  - **Not built from the plan:** health bars per soldier, ranged types shooting from a few plots, bulk retraining of old soldiers at the barracks, and raising soldiers only at barracks (companies still form on any plot you own).
+  - **Added:**
+    - At most 100 companies per player, which bounds path work and network use.
+    - Advancing stacks look for the border at most 8 a tick (`seeksPerTick`).
+    - Stacks extend their paths at most 12 a tick while they have plots left to walk (`extendsPerTick`).
+    - Without these, 100 companies ordered at once made an 84 ms tick.
+  - **Evidence:**
+    - `npm test`: 231 of 231, with six soldier tests, a machine limit test and a client test.
+    - Reference: 95 of 95.
+    - Earth bench, 8 players each with 1,000 soldiers in 100 companies, half advancing and half marching: PASS, worst tick 38.6 ms (p99 30.5). A state message is 17.8 KB at the median, sent once a second; peak memory is 126 MB.
+    - Fine Europe: PASS, worst tick 46.1 ms (p99 29).
+    - The renderer run in Node, with the numbers in the session notes:
+      - a 1280 by 720 screen with 2,100 soldiers in view draws 1,025, its budget;
+      - a phone draws 365;
+      - no soldier stands on water;
+      - a moving company glides between plots.
+    - The browser and smoke checks for Armies mode and `detach` are written, but not run until the dev server is started.
 
 ## Ryan's checks
 

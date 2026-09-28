@@ -19,6 +19,7 @@ import { roadPlan, routePlan, roadLine, ROAD_NAMES } from "./shared/roads.js";
 import { simplifyPath } from "./shared/pathfind.js";
 import { polePlan, coverOf, gridsOf } from "./shared/power.js";
 import { Grid } from "./shared/grid.js";
+import { soldierTypes, typeOfSlot } from "./shared/soldiers.js";
 import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel, nodeFor } from "./ui/town.js";
 import { createResearchPanel } from "./ui/research.js";
@@ -39,6 +40,7 @@ import { fmt } from "./ui/dom.js";
 import { createAwayPanel, span } from "./ui/away.js";
 import { createLayout } from "./ui/layout.js";
 import { createGroupPanel } from "./ui/group.js";
+import { createSoldiersPanel } from "./ui/soldiers.js";
 import { createWorldInfo, phaseText } from "./ui/worldinfo.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
@@ -89,6 +91,7 @@ class Game {
     this.attacks = createAttacks(overlay, side, this);
     this.stack = createStackPanel(side, this);
     this.groupPanel = createGroupPanel(side, this);
+    this.soldiersPanel = createSoldiersPanel(side, this);
     this.notices = createNotices(overlay, this, top);
     this.buildMenu = createBuildMenu(side, this);
     this.buildingPanel = createBuildingPanel(side, this);
@@ -123,7 +126,7 @@ class Game {
         if (this.roading && this.routeFrom !== null && this.routeTo === null && x !== null) { const p = this.plotAt(x, y); if (p !== this.routeHover) { this.routeHover = p; this.previewRoute(p); this.updatePanels(); } }
       },
       dragging: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting()),
-      rightPans: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting()),
+      rightPans: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting() || (this.armies && !this.picked)),
       swipeStart: (x, y, e) => this.swipeStart(x, y, e),
       onSwipe: (kind, line) => this.swiping(kind, line),
       onSwipeEnd: (kind, line) => this.swiped(kind, line),
@@ -390,6 +393,8 @@ class Game {
     if (action === "army") return this.toggleArmy();
     if (action === "logistics") return this.toggleLogistics();
     if (action === "deposits") return this.toggleDeposits();
+    if (action === "armies") return this.toggleArmies();
+    if (this.picked && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.soldiersPanel.act[action](); return this.updatePanels(); }
     if (this.group && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.groupPanel.act[action](); return this.updatePanels(); }
     if (["advance", "claim", "target", "move", "draw", "split", "merge", "disband"].includes(action)) act[action]();
     if (action === "next") this.nextStack();
@@ -415,6 +420,9 @@ class Game {
       else if (this.research.open) this.toggleResearch(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
+      else if (this.soldiersPanel.choosing) { this.soldiersPanel.cancel(); }
+      else if (this.picked) this.pickSoldiers(null);
+      else if (this.armies) this.toggleArmies(false);
       else if (this.groupPanel.choosing) { this.groupPanel.cancel(); }
       else if (this.group) this.selectGroup(null);
       else if (this.stack.choosing) this.stack.cancel();
@@ -850,7 +858,7 @@ class Game {
     const w = this.world, me = w.nations.get(w.you);
     if (!me?.spawned || !me.alive || w.frozen) return this.tip.pin(sx, sy);
     const u = w.machines.get(this.selectedMachine), s = w.stacks.get(this.selected);
-    const items = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
+    const items = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.picked ? this.soldiersPanel.ringFor(plot) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
     if (!items.length) return this.tip.pin(sx, sy);
     this.ring.show(sx, sy, [...items, { id: "info", label: "Info", icon: "ui_info", run: () => this.tip.pin(sx, sy, 5000) }]);
   }
@@ -888,6 +896,8 @@ class Game {
       if (w.owner[plot] !== w.you) return this.toast("Pick a plot of your own land.");
       return this.formAt(plot);
     }
+    if (this.soldiersPanel.choosing) return this.soldiersPanel.pick(plot);
+    if (this.armies) return this.armyTap(sx, sy);
     if (this.groupPanel.choosing) return this.groupPanel.pick(plot);
     if (this.stack.choosing) return this.stack.pickTarget(plot, sx, sy);
     if (this.machinePanel.choosing) return this.machinePanel.pick(plot, sx, sy);
@@ -934,7 +944,8 @@ class Game {
   }
 
   swipeStart(sx, sy, e) {
-    if (this.prefs.crosshair || this.building || this.zoning || this.roading || this.placing || this.stack.choosing || this.machinePanel.choosing || this.groupPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
+    if (this.prefs.crosshair || this.building || this.zoning || this.roading || this.placing || this.stack.choosing || this.machinePanel.choosing || this.groupPanel.choosing || this.soldiersPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
+    if (this.armies && this.world.soldierRules) return e.shiftKey && e.pointerType === "mouse" ? "soldierBox" : "soldiers";
     if (e.shiftKey && e.pointerType === "mouse") return "box";
     const id = this.view.stackAt(sx, sy);
     return id !== null && this.world.stacks.get(id)?.owner === this.world.you ? "swipe" : null;
@@ -955,14 +966,93 @@ class Game {
     }).map(s => s.id);
   }
 
+  soldierHit(sx, sy, test) {
+    const v = this.view, w = this.world, out = new Map();
+    for (const s of w.myStacks()) {
+      for (const p of v.soldierSpots(s)) {
+        const [px, py] = v.plotToScreen(p.x, p.y);
+        if (!test(px, py)) continue;
+        let set = out.get(s.id);
+        if (!set) out.set(s.id, (set = new Set()));
+        set.add(p.slot);
+      }
+    }
+    return out;
+  }
+
+  soldiersBy(kind, line) {
+    const v = this.view, R = Math.max(12 * (v.ratio ?? 1), v.cam.scale * 0.3), [a, b] = [line[0], line[line.length - 1]];
+    if (kind === "soldierBox") return this.soldierHit(0, 0, (px, py) => px >= Math.min(a[0], b[0]) && px <= Math.max(a[0], b[0]) && py >= Math.min(a[1], b[1]) && py <= Math.max(a[1], b[1]));
+    const seg = (px, py, p, q) => {
+      const dx = q[0] - p[0], dy = q[1] - p[1], len = dx * dx + dy * dy;
+      const t = len ? Math.max(0, Math.min(1, ((px - p[0]) * dx + (py - p[1]) * dy) / len)) : 0;
+      return Math.hypot(px - p[0] - t * dx, py - p[1] - t * dy);
+    };
+    return this.soldierHit(0, 0, (px, py) => line.some((p, n) => (n ? seg(px, py, line[n - 1], p) : Math.hypot(px - p[0], py - p[1])) <= R));
+  }
+
+  toggleArmies(on = !this.armies) {
+    const me = this.world?.nations.get(this.world.you);
+    this.armies = !!on && !!me?.spawned && me.alive && !this.world.frozen && !!this.world.soldierRules;
+    if (this.armies) { if (this.placing) this.togglePlacing(false); if (this.building || this.zoning || this.roading) this.stopBuild(); }
+    this.updatePanels();
+  }
+
+  pickSoldiers(map) {
+    this.picked = map && [...map.values()].some(s => s.size) ? map : null;
+    if (this.view) this.view.picked = this.picked;
+    this.soldiersPanel?.cancel();
+    if (this.picked) {
+      if (this.group) { this.group = null; if (this.view) this.view.group = null; }
+      if (this.selected !== null) { this.selected = null; if (this.view) this.view.selected = null; }
+      this.selectMachine(null);
+      this.selectBuilding(null);
+      this.nationCard?.show(null);
+    }
+    this.updatePanels();
+  }
+
+  armyTap(sx, sy) {
+    const v = this.view, w = this.world, R = Math.max(14 * (v.ratio ?? 1), v.cam.scale * 0.35);
+    let best = null, bd = R;
+    for (const s of w.myStacks()) for (const p of v.soldierSpots(s)) {
+      const [px, py] = v.plotToScreen(p.x, p.y), d = Math.hypot(px - sx, py - sy);
+      if (d < bd) { bd = d; best = { stack: s, slot: p.slot }; }
+    }
+    if (!best) return this.pickSoldiers(null);
+    const picked = new Map([...(this.picked ?? [])].map(([id, set]) => [id, new Set(set)]));
+    if (picked.get(best.stack.id)?.has(best.slot)) {
+      const kind = this.soldierKind(best.stack, best.slot), W = canvas.width, H = canvas.height;
+      const all = this.soldierHit(0, 0, (px, py) => px >= 0 && py >= 0 && px <= W && py <= H);
+      for (const [id, slots] of all) {
+        const s = w.stacks.get(id);
+        for (const k of slots) if (this.soldierKind(s, k) === kind) { if (!picked.has(id)) picked.set(id, new Set()); picked.get(id).add(k); }
+      }
+    } else {
+      if (!picked.has(best.stack.id)) picked.set(best.stack.id, new Set());
+      picked.get(best.stack.id).add(best.slot);
+    }
+    this.pickSoldiers(picked);
+  }
+
+  soldierKind(s, slot) {
+    return typeOfSlot(soldierTypes(s.troops, s.mix, this.world.soldierRules.troopsEach), slot);
+  }
+
   swiping(kind, line) {
     if (!this.view) return;
+    if (kind === "soldiers" || kind === "soldierBox") {
+      this.view.swipe = { kind: kind === "soldierBox" ? "box" : "swipe", line };
+      this.view.picked = this.soldiersBy(kind, line);
+      return;
+    }
     this.view.swipe = { kind, line };
     this.view.groupPreview = new Set(this.stacksBy(kind, line));
   }
 
   swiped(kind, line) {
     if (this.view) { this.view.swipe = null; this.view.groupPreview = null; }
+    if (kind === "soldiers" || kind === "soldierBox") return this.pickSoldiers(line && this.view ? this.soldiersBy(kind, line) : this.picked);
     if (!line || !this.view) return;
     const ids = this.stacksBy(kind, line);
     if (ids.length === 1) return this.select(ids[0]);
@@ -974,6 +1064,7 @@ class Game {
     if (this.view) this.view.group = this.group;
     this.groupPanel?.cancel();
     if (this.group) {
+      if (this.picked) { this.picked = null; if (this.view) this.view.picked = null; }
       this.select(null);
       this.selectMachine(null);
       this.selectBuilding(null);
@@ -984,6 +1075,7 @@ class Game {
 
   select(id) {
     if (id !== null && this.group) { this.group = null; if (this.view) this.view.group = null; }
+    if (id !== null && this.picked) { this.picked = null; if (this.view) this.view.picked = null; }
     if (id !== null) this.nationCard?.show(null);
     if (id !== null && this.selectedMachine !== null) { this.selectedMachine = null; if (this.view) this.view.selectedMachine = null; }
     if (id !== null && this.selectedBuilding !== null) { this.selectedBuilding = null; if (this.view) this.view.selectedBuilding = null; }
@@ -1036,7 +1128,11 @@ class Game {
   updatePanels() {
     if (this.left) return;
     this.powerOverlay();
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    if (this.picked && this.world) {
+      for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
+      if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
+    }
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

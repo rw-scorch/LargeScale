@@ -35,6 +35,13 @@ export function powerText(w, b) {
   return share >= 100 ? `Powered: it uses ${d.uses} of the ${make} its grid makes.` : make ? `Short of power: its grid makes ${make} for ${need} wanted, so everything on it works at ${50 + share / 2}%.` : "Its grid's plants cannot pay their upkeep, so it works at half rate.";
 }
 
+const LIMIT_NAMES = { land: "tanks, guns and siege engines", sea: "warships", air: "planes" };
+
+function limitText(w, builds) {
+  const m = w.purse?.machines, classes = [...new Set(builds.filter(d => !d.transport && !d.freight).map(d => d.domain))];
+  return classes.filter(c => m?.limits?.[c] >= 0).map(c => `You have ${m.fleet?.[c] ?? 0} of ${m.limits[c]} ${LIMIT_NAMES[c]}.`).join(" ");
+}
+
 function queueText(w, q) {
   if (!q?.items.length) return "Nothing in the queue.";
   const d = w.unitTypes.table[q.items[0]], name = d?.name.toLowerCase() ?? q.items[0], rest = q.items.length - 1;
@@ -104,7 +111,7 @@ export function createBuildingPanel(root, game) {
       work.hidden = !work.textContent;
       const builds = yours && b.state === "active" && !w.frozen ? (b.def.builds ?? []).map(t => w.unitTypes.table[t]).filter(Boolean) : [];
       const q = w.purse?.machines?.queues?.[b.id];
-      queue.textContent = builds.length ? queueText(w, q) : "";
+      queue.textContent = builds.length ? `${queueText(w, q)} ${limitText(w, builds)}`.trim() : "";
       queue.hidden = !queue.textContent;
       const next = yours && b.state === "active" && !w.frozen && b.def.next ? w.defs.table[b.def.next] : null;
       const lock = next && upgradeLock(w, next), price = next && !lock ? upgradePrice(w, next.cost) : null;

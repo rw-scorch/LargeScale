@@ -18,6 +18,7 @@ import { cleanSchedule, phaseAt, EVENTS, EVENT_NAMES } from "./shared/schedule.j
 import { installBuildings, saveLayers, restoreLayers, encodeBuildings } from "./sim/buildings.js";
 import { installConstruction } from "./sim/construction.js";
 import { installEconomy, convertToGold } from "./sim/economy.js";
+import { installSoldiers, trimField, fieldOf } from "./sim/soldiers.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { installRoads, restoreRoads, takeRoadNews } from "./sim/logistics.js";
 import { installBoats } from "./sim/boats.js";
@@ -172,6 +173,9 @@ export class World extends DurableObject {
     installEffects(this.sim);
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
     installBoats(this.sim, { scale: info.map.scale ?? 1 });
+    installSoldiers(this.sim);
+    const trimmed = trimField(this.sim);
+    if (trimmed.size) this.fieldTrimmed = Object.fromEntries(trimmed);
     if (this.upgradedFrom && this.upgradedFrom < 4) this.goldLoaded = convertToGold(this.sim);
     installTrade(this.sim, { scale: info.map.scale ?? 1, seed: (info.seed ?? 1) + 15485863 + Math.floor(this.sim.time) });
     installPower(this.sim, { scale: info.map.scale ?? 1 });
@@ -195,7 +199,7 @@ export class World extends DurableObject {
     this.present = new Set();
     this.sim.dirty.clear();
     this.loadMs = Date.now() - t0;
-    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, roads: this.roadsLoaded, ...(this.goldLoaded ? { gold: this.goldLoaded } : {}), ...this.landLoaded };
+    this.loaded = { buildings, upgradedFrom: this.upgradedFrom ?? null, deposits: this.sim.res.dep.plots.length, roads: this.roadsLoaded, ...(this.goldLoaded ? { gold: this.goldLoaded } : {}), ...(this.fieldTrimmed ? { fieldTrimmed: this.fieldTrimmed } : {}), ...this.landLoaded };
   }
 
   currentHashes() {
@@ -404,7 +408,7 @@ export class World extends DurableObject {
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, road: roadFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       watch, defs: buildingData.buildings, purse: nation === null ? null : this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale }, powerRules: this.sim.power ? { ...this.sim.power.rules, reach: buildingData.buildings.find(d => d.id === "power_pole").pole.reach * this.sim.power.scale, scale: this.sim.power.scale } : null,
-      units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, time: Math.floor(this.sim.time),
+      units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, soldierRules: this.sim.soldiers?.rules ?? null, time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen,
     }));
@@ -564,7 +568,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n) });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n) });
   }
 
   sendState() {

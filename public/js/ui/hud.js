@@ -79,15 +79,17 @@ export function createHud(root, game) {
   const army = action("open-army", "ui_army", "Army", "army", () => game.toggleArmy());
   const logistics = action("open-logistics", "res_trade", "Trade", "logistics", () => game.toggleLogistics());
   const deposits = action("show-deposits", "ui_map_resources", "Deposits", "deposits", () => game.toggleDeposits());
-  const bar = el("nav", { id: "action-bar", class: "panel" }, build, town, research, upgrade, army, logistics, deposits);
+  const armies = action("pick-armies", "cursor_select", "Armies", "armies", () => game.toggleArmies());
+  const bar = el("nav", { id: "action-bar", class: "panel" }, armies, build, town, research, upgrade, army, logistics, deposits);
 
+  const armiesHint = el("div", { id: "armies-hint", class: "banner", hidden: true }, "Armies: ", el("span", { class: "fine-only", text: "drag across your soldiers to pick them, or Shift and drag a box. Click one to add it, and click a picked one for all of its kind on screen. Right-drag or the arrow keys move the map. " }), el("span", { class: "coarse-only", text: "swipe across your soldiers to pick them. Tap one to add it, and tap a picked one for all of its kind on screen. Two fingers move the map. " }), "Esc or Armies again stops.");
   const placeHint = el("div", { id: "place-hint", class: "banner", hidden: true }, "Click your own land to place the stack. ", el("span", { class: "fine-only", text: "Or point and press F. " }), "Esc cancels.");
   const buildText = el("span", { id: "build-text" });
   const paint = el("button", { id: "paint-toggle", class: "chip", title: "Paint: drag to place one on every free spot you pass", onclick: () => game.setPref("paint", !game.prefs.paint) });
   const buildHint = el("div", { id: "build-hint", class: "banner", hidden: true }, buildText, paint);
   const both = (mouse, touch) => [el("span", { class: "fine-only", text: mouse }), el("span", { class: "coarse-only", text: touch })];
   let hintKey = "";
-  cols.top.append(pill, placeHint, buildHint);
+  cols.top.append(pill, placeHint, buildHint, armiesHint);
   root.append(cols.left, cols.side, cols.top, corner, bar);
 
   const readShare = () => Number(share.value) / 100;
@@ -151,6 +153,9 @@ export function createHud(root, game) {
       logistics.querySelector(".alert").hidden = true;
       logistics.title = p?.trade ? `Trade: ${fmt(p.trade.perMinute)} gold a minute (${keyTag("logistics").textContent})` : `Trade (${keyTag("logistics").textContent})`;
       deposits.classList.toggle("on", !!game.view?.showDeposits);
+      armies.disabled = !n?.spawned || !n.alive || !!w?.frozen;
+      armies.classList.toggle("on", !!game.armies);
+      armiesHint.hidden = !game.armies;
 
       placeHint.hidden = !game.placing;
       const def = game.building && w?.defs.table[game.building];

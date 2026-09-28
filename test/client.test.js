@@ -80,3 +80,16 @@ test("a train row carries its trip's gold and slides from plot to plot", () => {
   c.message({ v: PROTOCOL, t: "state", time: 1, n: [], s: [], gone: [], cg: [4] });
   assert.equal(c.convoys.has(4), false, "gone when it arrives");
 });
+
+test("a stack that moves keeps where it was, so the client can walk its soldiers between plots", () => {
+  const rules = { troopsEach: 10, fieldCap: 1000, maxCompanies: 100, spacing: 0.34, drawZoom: 14, drawArea: 900 };
+  const c = new ClientWorld(hello({ soldierRules: rules }));
+  assert.deepEqual(c.soldierRules, rules);
+  c.message({ v: PROTOCOL, t: "state", time: 1, n: [], s: [[7, 1, 45, 120, 2]], gone: [] });
+  const s = c.stacks.get(7);
+  assert.equal(s.prev, 44);
+  assert.ok(Date.now() - s.movedAt < 1000);
+  c.message({ v: PROTOCOL, t: "state", time: 2, n: [], s: [[7, 1, 45, 110, 2]], gone: [] });
+  assert.equal(c.stacks.get(7).prev, 44, "losing troops in place keeps the last move");
+  assert.equal(c.stacks.get(7).movedAt, s.movedAt);
+});
