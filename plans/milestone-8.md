@@ -1,6 +1,6 @@
-# Milestone 8: the Modern era
+# Milestone 8: the planner and the Modern era
 
-Drafted 29 September 2026, after milestone seven's dev server run. Nothing here is built yet. The choices at the end are Ryan's, and the parts change with his answers.
+Agreed 29 September 2026, after milestone seven's dev server run.
 
 The design already settled most of the Modern era (`reference/docs/design-decisions.md`, piece 16, rounds 2 to 4 of the questions):
 
@@ -15,6 +15,32 @@ Milestone seven changed three things that this plan follows:
 - Soldiers are companies of 10 troops a soldier, at most 1,000 a player.
 - There are at most 100 planes, 100 warships and 100 tanks and guns a player.
 
+## Decisions (29 September 2026)
+
+1. **Everything is in:** the Modern army, air power and SAMs, the Modern navy, nukes, and tourism and downtowns.
+2. **A planner, built first.** Ryan: "having all players manually build everything will be very tiresome, some sort of planning device, that is automatic, would be cool."
+   - It proposes and you approve: it draws a plan as outlines with a price, and nothing is built until you press Build.
+   - It looks after towns, the economy, civic buildings and upgrades, and defence.
+3. **Nukes cost gold only, and are very expensive.** There is no uranium rule.
+4. **Troops by air:** transport helicopters, and paratroopers dropped from transport planes.
+5. **Submarines.** Ryan: "It's hard to hit, and it can fire torpedoes, it can also sink deep into the water, depending on the depth of the water, if the water is deep enough, it can't be attacked." A deep submarine rises to fire.
+
+## What the decisions mean
+
+This is how the answers are read. Ryan corrects anything here that is wrong.
+
+- **The planner is a standing order, not a robot player.**
+  - Your approved projects go into one queue.
+  - The queue builds each piece in order when there is gold for it, and keeps building while you are away.
+  - A piece that has become impossible is dropped with the reason, for example land lost or the spot taken.
+- **Nukes are on by default in new worlds.** The design says the host can turn them off, so the switch defaults to on.
+- **Water depth** comes from the terrain the maps already have:
+  - shallows, lakes and reefs are shallow;
+  - ocean is open water;
+  - deep ocean is deep, and it is 54% of the Earth map.
+  - A submarine cannot dive in shallow water, dives in open water, and goes deep in deep water.
+- **Paratroopers are a soldier type.** Only paratroopers can jump from a plane. Any company can ride in a transport helicopter.
+
 ## What already exists
 
 - **Kit modules, not installed yet:**
@@ -22,6 +48,11 @@ Milestone seven changed three things that this plan follows:
   - `src/sim/tourism.js`: tourism value by building and season, raised by an airport, a port and rail.
   - `src/sim/cbd.js`: city cores, where defence and attack grow near a nation's densest buildings.
 - **Modern buildings in `data/buildings.json` that nobody can reach yet:** the concrete tower, apartment block, cafe, modern factory, open-pit mine, pumpjack, offshore rig and gas plant. There is no Modern research node, so the era never comes.
+- **Shared code the planner can use:**
+  - `placeError` and `producerError` in `src/shared/buildings.js`;
+  - `routePlan` in `src/shared/roads.js`;
+  - `polePlan`, `gridsOf` and `coverOf` in `src/shared/power.js`;
+  - the upgrade pricing in `src/shared/buildings.js`.
 - **Art in the kit:**
   - Planes: jet fighter, strategic bomber, attack and transport helicopters, transport plane, drones.
   - Vehicles: main battle tank, APC, rocket artillery, SAM truck.
@@ -30,19 +61,74 @@ Milestone seven changed three things that this plan follows:
   - Buildings: SAM sites, missile and ABM silos, the airport set (terminal, hangar, control tower, runway), nuclear plant, refinery, container terminal, skyscrapers, mall, stadium, hospital.
   - Tourism: parks, museums, zoo, stadium, resorts, casino, hotels and eleven wonders.
   - Effects: the nuke blast, craters and scorch, missile trails.
-- **The map has uranium deposits.**
 
-## Proposed parts
+## Part A: the planner
 
-Each part is its own branch and pull request, and Ryan checks it before the next, as in milestone seven.
+### How it plans
 
-### Part A: the Modern Age and its army
+- The plan is worked out in the browser, by shared code in `src/shared/planner.js`, from the client's copy of the world. The server spends nothing on proposals, and the same code is unit tested in Node.
+- It proposes **projects**. Each project has:
+  - a kind (towns, economy, civic, defence);
+  - a reason ("Iron ore at 412, 180 unworked");
+  - a price in gold;
+  - its pieces: buildings, zones, roads, poles or upgrades.
+- It uses the same placement rules as the build menu, so the server accepts what it proposes.
+- **What it proposes:**
+  - **Towns.**
+    - Zones ahead of demand around each town, in blocks with a street grid: housing near the centre, shops along the main streets, works on the far side.
+    - The block size follows the town panel's demand.
+    - Roads joining each town to the capital's roads.
+  - **Economy.**
+    - The best unlocked mine or well on each deposit you own that nothing works.
+    - Farms on fertile land near towns.
+    - A plant and a pole line for buildings off the grid.
+    - A port on each shore that has somewhere to trade.
+    - Once Railways is known, stations and rail between your biggest towns.
+  - **Civic and upgrades.**
+    - Libraries, schools, banks, hospitals and the like near town centres, up to the number that still adds anything (each type's `cap`).
+    - Upgrades you can afford, as one project.
+  - **Defence.**
+    - Towers and forts covering the border that faces your strongest neighbour.
+    - Once Flight is known, an airfield near that border.
+    - Later parts add SAM sites.
+
+### How you use it
+
+- **The Planner panel** (its own key, and a button in the action bar) lists the projects by kind, with the price and the reason. It shows the total and how long your income takes to pay for it.
+- **Outlines.** While the panel is open, every proposed piece is drawn on the map as an outline in the planner's colour. A hover or tap on a project highlights its pieces.
+- **Your choices.**
+  - Build one project, all of one kind, or everything.
+  - Skip a project, so the planner stops proposing it.
+  - Paint **keep clear** land where it never plans.
+- **The queue.**
+  - Approved projects go into your build queue: the `plan` order, at most 400 pieces.
+  - The queue appears on the map as blueprints, and in the panel with its progress, what it is waiting for, and a Cancel for each project.
+
+### On the server
+
+- `src/sim/planner.js` (`installPlanner`) keeps each nation's queue (`n.plan`) and keep-clear rectangles, and saves them.
+- Every second it builds the next pieces it can pay for, through the same code as the `build`, `zone`, `road`, `poles` and `upgrade` orders. A piece that fails for good is dropped and reported in the feed.
+- It runs in catch-up, so a queue keeps building while you are away, at the away rate.
+- The purse carries the queue's progress.
+
+### Evidence
+
+- Unit tests of the proposals on test maps:
+  - towns get blocks and streets;
+  - every unworked deposit gets its mine;
+  - nothing is proposed on keep-clear land;
+  - every proposed piece passes `placeError`.
+- A unit test of the queue: in order, as money allows, dropping what became impossible.
+- A browser test: open the planner, see outlines, approve all, and watch the town grow with nothing else pressed.
+- The bench with a queue per player.
+
+## Part B: the Modern Age and its army
 
 - **Research.**
   - The Modern Age node comes after Railways, Armour, Flight and Universities. It needs 12 Industrial upgrades across 4 branches, like the eras before it.
-  - About fifteen Modern nodes follow it. They unlock everything in parts B to E, and the Modern buildings listed above.
+  - About fifteen Modern nodes follow it. They unlock everything in parts C to F, and the Modern buildings listed above.
 - **Soldiers.**
-  - New types: soldier, special forces and anti-tank team.
+  - New types: soldier, special forces, anti-tank team and paratrooper.
   - They are stronger per soldier than stormtroopers, so 1,000 Modern soldiers hit harder than 1,000 Industrial ones.
   - They are trained at the barracks line, as now.
 - **Land machines.**
@@ -50,38 +136,50 @@ Each part is its own branch and pull request, and Ryan checks it before the next
   - The APC, which carries one company at vehicle speed and sets it down where it stops.
   - Rocket artillery, which cuts capture cost from 6 plots away, like siege.
   - All three count toward the 100 tanks and guns.
-- Every new unit can be piloted with the Part D controls.
+- Every new unit can be piloted with the milestone seven controls.
+- The planner learns the Modern buildings.
 
-### Part B: Modern air power and air defence
+## Part C: Modern air power and air defence
 
 - **Planes.**
   - The jet fighter: fast, with a long reach.
   - The strategic bomber: a big load and a long reach.
   - The attack helicopter: slow and low. It hovers over the front and shoots companies and machines instead of bombing.
-  - The transport helicopter: it lifts one company and lands it on any land within reach of its base. On enemy land it lands fighting, like a boat landing.
   - All of them count toward the 100 planes.
+- **Troops by air.**
+  - The transport helicopter lifts any one company of up to 20 soldiers. It lands it on any land within reach of its base, and on hostile land the company lands fighting, like a boat landing.
+  - The transport plane carries up to 50 paratroopers and drops them anywhere within its longer reach, with a small loss on landing.
 - **Air bases.** The airfield upgrades to an air base, drawn with the terminal, hangar and runway art: a longer reach and more planes rearming at once.
 - **Air defence.**
   - The SAM site replaces flak in the Modern era. It fires at planes within 8 plots and holds 4 missiles, which reload by themselves for gold.
   - The SAM truck is a mobile SAM that can follow a company.
   - Overlapping sites combine their fire, but with less added by each extra site, so several cheap sites do not beat one strong one (round 2, questions 4 and 7).
+  - The planner proposes SAM sites for defence.
 
-### Part C: the Modern navy
+## Part D: the Modern navy
 
 - **Cruiser.** It fires at planes within 3 plots as well as at ships.
 - **Battleship.** It shells the coast within 4 plots, which cuts capture cost and hits companies.
-- **Submarine.** It dives. While submerged, only destroyers, cruisers, other submarines and helicopters can hit it. It sinks trade ships rather than capturing them.
+- **Submarine.**
+  - It depends on the water it is in:
+    - **Shallow water:** it cannot dive, and anything can hit it.
+    - **Open ocean:** it runs submerged, and only destroyers, cruisers, other submarines and helicopters can hit it.
+    - **Deep ocean:** it can go deep, where nothing can hit it.
+  - It fires torpedoes at ships, and they hit harder than guns.
+  - Firing brings a deep submarine up to attack depth for about 20 seconds, so it can be answered.
+  - It sinks trade ships rather than capturing them.
+  - The submerged frame is drawn while it dives, and a deep one is drawn faint.
 - **Aircraft carrier.** A floating airfield for up to 12 planes, whose reach moves with it.
 - **Landing craft.** After Amphibious warfare, the free transport boats become landing craft: half the loss, and faster.
 - All of them count toward the 100 warships except landing craft, which are free like the boats they replace.
 
-### Part D: nukes and missile defence
+## Part E: nukes and missile defence
 
 This part builds on the kit's `nukes.js`.
 
 - **The missile silo.**
   - It builds one warhead at a time: atomic after Nuclear weapons, hydrogen after Thermonuclear weapons.
-  - A warhead is paid in gold, and the nation must own a working uranium mine (see choice 2).
+  - Warheads cost gold only, and a lot of it: about 40,000 for an atomic and 120,000 for a hydrogen warhead, with long build times. The numbers are in `rules.json`.
 - **Launching.**
   - Pick a warhead and a target. The launch screen shows the blast circle and the chance of interception, and asks to confirm twice.
   - Only hostile land can be targeted, and never during peace.
@@ -94,9 +192,10 @@ This part builds on the kit's `nukes.js`.
   - Buildings in the inner ring become rubble; in the outer ring they are damaged.
   - Companies die in the inner ring and lose 60% in the outer one.
   - Planes in the air and ships in the blast are hit too.
-- **The host switch.** A world setting, `nukes`, is shown in World info. It is off by default, and the host turns it on (see choice 2).
+- **The host switch.** A world setting, `nukes`, is on by default and shown in World info.
+- The planner proposes ABM silos for defence once they are known.
 
-### Part E: tourism and downtowns
+## Part F: tourism and downtowns
 
 This part builds on the kit's `tourism.js`.
 
@@ -107,13 +206,14 @@ This part builds on the kit's `tourism.js`.
   - Variety pays better than copies.
 - **Wonders.** One of each per world, and whoever finishes it first owns it. Each adds 10% to tourism, and their art is in the kit.
 - **Downtowns.** In the Modern era, shops in busy commercial zones with roads on two sides upgrade by themselves into office blocks and skyscrapers. That gives each nation a recognisable centre.
-- **City cores** (the kit's `cbd.js`, piece 19). Defence grows near the densest part of a nation. This is optional; see choice 1.
+- **City cores** (the kit's `cbd.js`, piece 19). Defence grows near the densest part of a nation.
+- The planner proposes tourism buildings as part of civic.
 
 ## Not in this milestone
 
 - The Future era: hover tanks, mechs, shields, drones and orbital strikes.
 - Engineers and terrain destruction, conventional cruise missiles, and the market board.
-- Bots stay as they are: they do not research, so they never reach Modern units.
+- Bots stay as they are. They could use the planner later, since it is shared code.
 
 ## Evidence for each part
 
@@ -122,9 +222,6 @@ This part builds on the kit's `tourism.js`.
 - `npm run soak` with the new orders.
 - The Earth and fine Europe benches with Modern units at the limits.
 
-## Choices for Ryan
+## Progress
 
-1. **Which parts, and in what order.** The draft order is A, B, C, D, E.
-2. **How scarce nukes are.** The draft: a warhead costs gold, the nation must own a working uranium mine, and the host switch is off by default.
-3. **Troops by air.** The draft: transport helicopters carry a company and land it within reach. Paratroopers, dropped from transport planes far behind the lines, could come too.
-4. **What makes a submarine different** when there is no fog of war. The draft: while submerged, only some units can hit it.
+Nothing is built yet.

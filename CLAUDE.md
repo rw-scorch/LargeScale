@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-7.md`: fighting first (gold as the only currency, individual soldiers, piloting, planes and bombing, easier crossings by sea), agreed 28 September 2026 and built in five parts. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-8.md`: the planner and the Modern era, agreed 29 September 2026 in six parts (the planner first, then the Modern army, air power, navy, nukes, and tourism and downtowns). Milestone seven (`plans/milestone-7.md`: gold only, individual soldiers, piloting, planes, easier crossings) is built, passed its dev server run, and waits for Ryan's check. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -337,6 +337,18 @@ Ryan's asks of 28 September 2026: one currency, individual soldiers, piloting, p
   - **Orders.** The `air` order: patrol, bomb or return. The admin's `give machine` places planes at an airfield.
   - **Rows.** A plane's machine row carries a tenth field (`planeRow`), which the client reads into `u.air`. `planeAt` glides planes between samples.
   - **Client.** `drawPlane` (rotated, with a shadow), `drawFlak`, and a bomb blast effect. The machine card has Patrol, Bomb and Fly home. B, or the Bomb button, drops bombs while piloting a bomber.
+
+## Milestone eight progress
+
+Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacked on `m7-air`. Ryan's decisions:
+
+- All of the Modern era is in: army, air power and SAMs, navy, nukes, and tourism and downtowns.
+- An automatic planner comes first. It proposes projects (towns, economy, civic and upgrades, defence) drawn as outlines with a price, and builds only what the player approves, from one queue.
+- Nukes cost gold only and are very expensive.
+- Troops go by air in transport helicopters and as paratroopers.
+- Submarines dive by water depth and cannot be hit in deep ocean, but rise to fire.
+
+Nothing is built yet.
 
 Open items as of 29 September 2026, in order:
 
