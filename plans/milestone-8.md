@@ -483,7 +483,7 @@ This part builds on the kit's `tourism.js`.
         | 2 | 12.5 ms | 37.9 ms | 54.5 ms (fail) | 0.7 ms |
 
         The worst ticks are economy ticks. Part C's run, before the navy, had a worst of 103.6 ms from path extension. Run 2's worst without the economy was 51.1 ms.
-    - Smoke, `npm run ui` and the soak have Part D checks written but not run yet; they need the dev server:
+    - The Part D checks passed in the dev server run of 30 September 2026, on `m8-nukes`, which has Parts D and E. The numbers are under Part E. The checks are:
       - smoke: a submarine reports its depth, and a jet bases on a carrier and lands on it;
       - UI: right-clicking the carrier with a jet selected, the carrier card's plane count, and the submarine card's depth text (screens `77-carrier` and `78-submarine`);
       - soak: ship gifts and base orders.
@@ -565,7 +565,20 @@ This part builds on the kit's `tourism.js`.
       - all 16 landed;
       - the nuke module's tick: 0.01 ms at the median, 2.1 ms at worst, blasts included;
       - the whole tick: 8.5 ms median, p99 30.2 ms, worst 42.6 ms. That passes the 50 ms budget.
-    - Smoke, `npm run ui` and the soak have Part E checks written but not run yet; they need the dev server:
+    - **Dev server run (30 September 2026, on `m8-nukes`).** Ryan said go ahead.
+      - **`npm run smoke`** on the test map: 119 of 119.
+        - The first run failed the nuke check because of the test. The air check before it sets the speed back to 1, so the 61 s flight had not landed within the 40 s wait. The world still showed the warhead in flight, due 21 game seconds later.
+        - The check now launches at 8 times speed. The rerun's warhead cleared 19 plots of the friend's land and left the capital.
+      - **`npm run ui`**: 188 of 188, after two fixes.
+        - The card only relabelled Launch as "Sure? Launch now" on its next refresh, so a quick second press launched before the player saw the question. It now redraws at once.
+        - A bot retook the cleared land within seconds at 8 times speed, so the check now reads the blast's own count of cleared land.
+        - Screens `79-nuke-aim` to `82-nuke-crater` show the circles, the alert, the blast and the crater.
+        - The Part D checks: a jet right-clicks its carrier and lands on it, and the card reads "1 of 12 planes aboard". A submarine's card reads "surfaced in shallow water: anything can hit it".
+      - **`npm run soak`**, 180 s: 1,155 rounds, 24 game minutes, no tick errors, no problems.
+        - The host built 17 warheads, took 3 apart and launched 11 at the friend, who had an ABM silo.
+        - Across both players' feeds there were 20 launch, 6 interception and 14 blast events: each saw 10 launches, 3 shot down and 7 blasts.
+      - The run also found that Take apart answered "holds no warhead" for a building that is not a silo. It now checks the silo first.
+    - The checks are:
       - **smoke:** a silo builds an atomic warhead, launches at the friend's land, everyone hears it, and the blast leaves a crater and clears the land but the capital;
       - **UI:** Aim and launch, the circles and chance, the second press, the alert and the blast (screens `79-nuke-aim` to `82-nuke-crater`);
       - **soak:** silos, ABM silos, builds, checks, launches and cancels.
