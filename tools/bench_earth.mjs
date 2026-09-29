@@ -37,6 +37,8 @@ import { installSoldiers, fieldOf } from "../src/sim/soldiers.js";
 import { installAir, orderPlane, planeOf } from "../src/sim/air.js";
 import { installNavy } from "../src/sim/navy.js";
 import { installNukes, launchWarhead } from "../src/sim/nukes.js";
+import { installTourism } from "../src/sim/tourism.js";
+import { installCbd, strengthAt } from "../src/sim/cbd.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -53,6 +55,7 @@ const { values: a } = parseArgs({ options: {
   tanks: { type: "string", default: "4" },
   navy: { type: "string", default: "20" },
   nukes: { type: "string", default: "2" },
+  tourism: { type: "string", default: "1" },
   plan: { type: "string", default: "1" },
   power: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
@@ -147,6 +150,34 @@ for (const id of players) {
   }
 }
 installEffects(w);
+const timeHook = box => { const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k]; const timed = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; box.ms.push(ms); box.worst = Math.max(box.worst, ms); }; timed.whole = hook.whole; w.hooks.postTick[k] = timed; };
+let tourPlaced = 0;
+if (Number(a.tourism)) for (const id of players) {
+  const cap = w.nations.get(id).capital, want = [["skyscraper", 10], ["park", 6], ["plaza", 4], ["museum", 3], ["zoo", 2], ["stadium", 2], ["casino", 2], ["beach_resort", 1], ["wonder_pyramid", 1]];
+  for (let r = 2; r < 60 && want.some(([, n]) => n > 0); r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    const pick = want.find(([, n]) => n > 0);
+    if (!pick) break;
+    const x = w.grid.x(cap) + dx, y = w.grid.y(cap) + dy;
+    if (!w.grid.inside(x, y)) continue;
+    const plots = footprint(w, w.grid.idx(x, y), bld.table[pick[0]].fp);
+    if (!plots || plots.some(i => w.owner[i] !== id || bld.at.has(i) || !isLand(terrain[i]))) continue;
+    addBuilding(w, { type: pick[0], owner: id, anchor: w.grid.idx(x, y), plots, state: "active", progress: 1 });
+    pick[1]--;
+    tourPlaced++;
+  }
+}
+if (Number(a.tourism)) installTourism(w);
+const countOf = f => [...w.bld.list.values()].filter(b => f(bld.table[b.type])).length;
+const tourismSetup = { attractions: countOf(d => d.tourism && !d.wonder), wonders: countOf(d => d.wonder), cores: countOf(d => d.core) };
+let tourismMid = null;
+const tourismTime = { ms: [], worst: 0 };
+if (w.tourism) timeHook(tourismTime);
+if (Number(a.tourism)) installCbd(w, { scale });
+const cbdTime = { ms: [], worst: 0 };
+if (w.cbd) timeHook(cbdTime);
+let captureCalls = 0;
+{ const f = w.captureCost; w.captureCost = (i, att) => { captureCalls++; return f(i, att); }; }
 const guard = installGuard(w, { scale });
 const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
@@ -424,7 +455,13 @@ feed.delta(w);
 let maxEvents = 0, maxDiffBytes = 0, blocked = 0, airBombs = 0, airDowns = 0, samShots = 0;
 for (let i = 0; i < Number(a.ticks); i++) {
   if (i % 800 === 400) queuePlans();
-  if (i === Math.floor(Number(a.ticks) / 2)) launchNukes();
+  if (i === Math.floor(Number(a.ticks) / 2) && w.tourism) {
+    const v = players.map(id => w.tourism.last.get(id)).filter(Boolean), t0 = performance.now();
+    w.cbd.field = null;
+    if (w.cbd.centres.length) strengthAt(w, w.cbd.centres[0].owner, w.cbd.centres[0].at);
+    tourismMid = { sites: v.reduce((t, x) => t + x.sites, 0), goldPerSecond: +v.reduce((t, x) => t + x.perSecond, 0).toFixed(1), wonders: countOf(d => d.wonder), cores: w.cbd.centres.length, coreFieldMs: +(performance.now() - t0).toFixed(1), corePlots: [...(w.cbd.field?.values() ?? [])].reduce((t, m) => t + m.size, 0) };
+    launchNukes();
+  } else if (i === Math.floor(Number(a.ticks) / 2)) launchNukes();
   if (i % 20 === 0) {
     playerOrders();
     feed0();
@@ -538,6 +575,9 @@ const report = {
     return { passMs: +ms.toFixed(1), grids: views.reduce((t, v) => t + v.grids.length, 0), plants: [...w.bld.list.values()].filter(b => b.type === "coal_plant").length, poles: [...w.bld.list.values()].filter(b => b.type === "power_pole").length, users: views.reduce((t, v) => t + Object.keys(v.users).length, 0), powered: views.reduce((t, v) => t + Object.values(v.users).filter(k => k >= 0).length, 0) };
   })(),
   tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
+  tourism: w.tourism && (() => { const v = players.map(id => w.tourism.last.get(id)).filter(Boolean); const p50 = x => (x.ms.length ? +[...x.ms].sort((a, b) => a - b)[x.ms.length >> 1].toFixed(3) : null), p99 = x => (x.ms.length ? +[...x.ms].sort((a, b) => a - b)[Math.floor(x.ms.length * 0.99)].toFixed(2) : null), busy = x => { const m = x.ms.filter(v => v > 0.05); return m.length ? +(m.reduce((t, v) => t + v, 0) / m.length).toFixed(2) : null; }; return { setup: tourismSetup, mid: tourismMid, sites: v.reduce((t, x) => t + x.sites, 0), goldPerSecond: +v.reduce((t, x) => t + x.perSecond, 0).toFixed(1), wonders: [...w.bld.list.values()].filter(b => b.type === "wonder_pyramid").length, tickMs: { p50: p50(tourismTime), p99: p99(tourismTime), everyFiveSecondsAvg: busy(tourismTime), worst: +tourismTime.worst.toFixed(1) } }; })(),
+  captureCallsPerTick: Math.round(captureCalls / Number(a.ticks)),
+  cbd: w.cbd && (() => { const t0 = performance.now(); w.cbd.field = null; let hits = 0; for (let i = 0; i < w.grid.size; i += 7) if (w.owner[i] && strengthAt(w, w.owner[i], i) > 0) hits++; return { centres: w.cbd.centres.length, rebuildAndLookupMs: +(performance.now() - t0).toFixed(1), plotsSampledInACore: hits, tickWorstMs: +cbdTime.worst.toFixed(1) }; })(),
   navy: { ships: [...w.units.list.values()].filter(u => ["cruiser", "battleship", "submarine", "aircraft_carrier"].includes(u.type) && !u.wreck).length, subsDeep: [...w.units.list.values()].filter(u => u.dive === 2).length, tickMs: navyTime.ms.length ? { p50: +[...navyTime.ms].sort((x, y) => x - y)[navyTime.ms.length >> 1].toFixed(2), worst: +navyTime.worst.toFixed(1) } : null },
   nukes: { launched: nukeTime.launched, detonated: nukeTime.detonated, intercepted: nukeTime.intercepted, tickMs: nukeTime.ms.length ? { p50: +[...nukeTime.ms].sort((x, y) => x - y)[nukeTime.ms.length >> 1].toFixed(2), worst: +nukeTime.worst.toFixed(1) } : null },
   planner: planSetup && { ...planSetup, piecesLeft: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.pieces.length, 0), 0), done: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.done, 0), 0) + planDone, dropped: planDropped },
