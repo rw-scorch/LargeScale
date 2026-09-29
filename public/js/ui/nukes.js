@@ -58,7 +58,7 @@ export function createNukePanel(top, game) {
 
   const launch = async () => {
     if (!aim?.check) return;
-    if (!aim.sure) { aim.sure = true; key = ""; return; }
+    if (!aim.sure) { aim.sure = true; key = ""; game.updatePanels(); return; }
     const { silo: id, plot } = aim;
     cancel();
     const r = await ask({ op: "launch", silo: id, at: plot });
