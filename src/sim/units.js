@@ -93,6 +93,15 @@ export function bodiesOf(co) {
   return body;
 }
 
+function bodySize(world, at) {
+  const co = waterGraph(world), body = bodiesOf(co), r = co.regionOf(at);
+  if (!co.bodySize) {
+    co.bodySize = new Int32Array(co.regions);
+    for (let k = 0; k < co.regions; k++) co.bodySize[body[k]]++;
+  }
+  return r < 0 ? 0 : co.bodySize[body[r]];
+}
+
 export function reachable(world, domain, from, to) {
   const co = domain === "sea" ? waterGraph(world) : world.pathGraph(), a = co.regionOf(from), b = co.regionOf(to);
   return a >= 0 && b >= 0 && bodiesOf(co)[a] === bodiesOf(co)[b];
@@ -718,16 +727,14 @@ export function giveMachine(world, nid, type) {
     return null;
   }
   if (def.domain === "sea") {
-    let port = null;
+    let best = null, most = -1;
     for (const id of world.bld?.mine.get(nid) ?? []) {
       const b = world.bld.list.get(id), t = b && world.bld.table[b.type];
       if (b?.state !== "active" || !(t?.port || def.builtAt.includes(b.type))) continue;
-      const at = spawnSpot(world, b, def);
-      if (at === null) continue;
-      if (def.builtAt.includes(b.type)) return spawnUnit(world, nid, type, at);
-      port ??= at;
+      const at = spawnSpot(world, b, def), size = at === null ? -1 : bodySize(world, at) * 2 + (def.builtAt.includes(b.type) ? 1 : 0);
+      if (size > most) { most = size; best = at; }
     }
-    if (port !== null) return spawnUnit(world, nid, type, port);
+    if (best !== null) return spawnUnit(world, nid, type, best);
   }
   const g = world.grid, seen = new Set([n.capital]), todo = [n.capital];
   for (let k = 0; k < todo.length && k < 40000; k++) {

@@ -151,14 +151,17 @@ test("after Amphibious warfare the free boats are landing craft: faster, and los
   assert.equal(b > 0, true);
 });
 
-test("a warship given by the admin comes out beside a naval dock, not in a lake by the capital", () => {
+test("a warship given by the admin comes out at a dock or port on the sea, not in a lake by the capital", () => {
   const { w, g, a } = world();
-  w.terrain[g.idx(10, 12)] = TID.lake;
+  for (let x = 10; x < 14; x++) w.terrain[g.idx(x, 12)] = TID.lake;
   const lake = giveMachine(w, a, "cruiser");
   assert.equal(lake.at, g.idx(10, 12), "with no dock or port it takes the nearest water");
   w.units.list.delete(lake.id);
-  addBuilding(w, { type: "naval_dock", owner: a, anchor: g.idx(18, 3), state: "active" });
+  addBuilding(w, { type: "jetty", owner: a, anchor: g.idx(9, 12), state: "active" });
+  addBuilding(w, { type: "jetty", owner: a, anchor: g.idx(19, 5), state: "active" });
   const ship = giveMachine(w, a, "cruiser");
-  assert.equal(g.x(ship.at), 20);
+  assert.equal(g.x(ship.at), 20, "the jetty on the sea wins over the one on the lake");
   assert.equal(orderUnit(w, ship.id, g.idx(100, 12)), null, "and it can sail out to sea");
+  addBuilding(w, { type: "naval_dock", owner: a, anchor: g.idx(18, 16), state: "active" });
+  assert.equal(g.y(giveMachine(w, a, "cruiser").at) >= 15, true, "a dock that builds it wins over a jetty on the same sea");
 });

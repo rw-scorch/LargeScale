@@ -354,7 +354,7 @@ function playerOrders() {
         const x = w.grid.x(u.at) + rng.int(-300, 300), y = w.grid.y(u.at) + rng.int(-150, 150);
         if (!w.grid.inside(x, y) || isLand(terrain[w.grid.idx(x, y)])) continue;
         const m0 = performance.now(), err = orderUnit(w, u.id, w.grid.idx(x, y));
-        sails.push({ ms: performance.now() - m0, ok: !err, err, type: u.type });
+        sails.push({ ms: performance.now() - m0, ok: !err, err, type: u.type, id: u.id });
         break;
       }
     }
@@ -512,7 +512,7 @@ const report = {
   planner: planSetup && { ...planSetup, piecesLeft: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.pieces.length, 0), 0), done: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.done, 0), 0) + planDone, dropped: planDropped },
   trade: seaSetup && { ...seaSetup, shipsAtSea: [...w.units.list.values()].filter(u => u.trade && !u.wreck).length, goldEarned: Math.round(players.reduce((t, id) => t + (w.nations.get(id).tradeGold ?? 0), 0)) },
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
-  machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +sails.reduce((m, s) => Math.max(m, s.ms), 0).toFixed(1), sailErrors: sails.reduce((o, s) => { if (s.err) o[`${s.type}: ${s.err}`] = (o[`${s.type}: ${s.err}`] ?? 0) + 1; return o; }, {}) },
+  machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, shipsOrdered: new Set(sails.map(s => s.id)).size, shipsNeverOk: (ok => new Set(sails.filter(s => !ok.has(s.id)).map(s => s.id)).size)(new Set(sails.filter(s => s.ok).map(s => s.id))), sailWorstMs: +sails.reduce((m, s) => Math.max(m, s.ms), 0).toFixed(1), sailErrors: sails.reduce((o, s) => { if (s.err) o[`${s.type}: ${s.err}`] = (o[`${s.type}: ${s.err}`] ?? 0) + 1; return o; }, {}) },
   ownedPlots: owned,
   ownerRuns: countRuns(w.owner),
   borderPlots,
