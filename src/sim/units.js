@@ -158,16 +158,23 @@ export function embark(world, stackId, shipId) {
   const s = world.stacks.get(stackId), u = world.units.list.get(shipId);
   if (!s || !u || u.wreck) return "missing";
   const def = UNIT_TYPES[u.type];
-  if (!def.capacity || def.domain === "air") return "not a transport";
+  if (!def.capacity) return "not a transport";
+  if (def.domain === "air" && u.air && !u.air.landed) return "the plane is in the air";
   if (u.owner !== s.owner) return "not your ship";
   if (world.grid.cheb(s.pos, u.at) > 1) return "ship must be next to the troops";
   const room = def.capacity - (u.cargo?.troops ?? 0);
   if (room < 1) return "ship is full";
-  const load = Math.min(room, s.troops), share = load / s.troops;
+  const para = def.paraOnly ? (s.mix?.paratrooper ?? 0) : null;
+  if (para !== null && para < 1) return "only paratroopers board a transport plane";
+  const load = Math.min(room, para ?? s.troops), share = load / s.troops;
   const c = u.cargo ?? { troops: 0, owner: s.owner, mix: null, xp: 0 };
   c.xp = (c.xp * c.troops + (s.xp ?? 0) * load) / (c.troops + load);
   c.troops += load;
-  if (s.mix) {
+  if (para !== null) {
+    c.mix = { ...(c.mix ?? {}), paratrooper: (c.mix?.paratrooper ?? 0) + load };
+    s.mix.paratrooper -= load;
+    clean(s);
+  } else if (s.mix) {
     c.mix ??= {};
     for (const id in s.mix) {
       const k = s.mix[id] * share;
@@ -469,7 +476,7 @@ function boardShips(world) {
       continue;
     }
     if (s.path.length || s.route) continue;
-    const spot = UNIT_TYPES[u.type].domain === "land" ? u.at : shoreNear(world, u.at, s.pos);
+    const spot = UNIT_TYPES[u.type].domain !== "sea" ? u.at : shoreNear(world, u.at, s.pos);
     if (spot === null || !world.orderMove(s.id, spot, "move")) fail("no land route to the ship");
   }
 }

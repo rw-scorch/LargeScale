@@ -188,7 +188,7 @@ test("every building type says in a sentence or two what it does, the idle ones 
     assert.match(d.description, /^[A-Z].*\.$/, `${d.id} reads as a sentence`);
   }
   for (const d of defs.filter(d => d.retired)) assert.match(d.description, /^No longer built/, `${d.id} is retired and says so`);
-  const idle = defs.filter(d => !d.retired && !d.gathers && !d.producer && !d.housing && !d.jobs && !d.makes && !d.trains && !d.builds && !d.port && !d.fort && !d.effects && !d.research && !d.station && !d.power && !d.pole && !d.antiAir);
+  const idle = defs.filter(d => !d.retired && !d.gathers && !d.producer && !d.housing && !d.jobs && !d.makes && !d.trains && !d.builds && !d.port && !d.fort && !d.effects && !d.research && !d.station && !d.power && !d.pole && !d.antiAir && !d.sam && !d.airbase);
   assert.ok(idle.length > 0);
   for (const d of idle) assert.match(d.description, /no effect/, `${d.id} does nothing yet and says so`);
 });
