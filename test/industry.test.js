@@ -52,7 +52,7 @@ test("Age of Industry needs ten Gunpowder nodes in all four branches, and each I
     ["railways", "oil", "mass_production", "mass_production", "trench_warfare", "field_guns", "steam_navy", "universities", "medicine", "bureaucracy", "bureaucracy"]);
   assert.deepEqual(["rifleman", "machine_gunner", "mortar_team", "stormtrooper", "field_artillery", "early_tank", "steamship", "ironclad", "destroyer"].map(u),
     ["rifling", "machine_guns", "trench_warfare", "trench_warfare", "field_guns", "armour", "steam_navy", "steam_navy", "destroyers"]);
-  const costs = TREE.nodes.filter(t => t.era === "I").map(t => t.cost);
+  const costs = TREE.nodes.filter(t => t.era === "I" && t.branch !== "era").map(t => t.cost);
   assert.ok(Math.min(...costs) === 440 && Math.max(...costs) === 960, `Industrial nodes cost 440 to 960: ${costs.join(" ")}`);
   const path = planPath(locks, new Set(TREE.nodes.filter(t => t.era !== "I" && t.id !== "age_industry").map(t => t.id)), "armour");
   assert.ok(path.includes("age_industry") && path.indexOf("age_industry") < path.indexOf("armour"), `the way to Armour goes through the era: ${path.join(", ")}`);

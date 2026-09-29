@@ -485,17 +485,24 @@ export const ORDERS = {
       if (!isPlot(sim, m.to)) return fail("that plot is off the map");
       const e = orderUnit(sim, u.id, m.to);
       if (e) return fail(e);
-      Object.assign(u, { follow: null, land: null });
-      return { ok: true };
+      const carrying = def.domain === "land" && def.capacity && u.cargo?.troops > 0;
+      Object.assign(u, { follow: null, land: carrying ? m.to : null });
+      return carrying ? { ok: true, unloads: m.to } : { ok: true };
     }
     if (m.do === "land") {
-      if (def.domain !== "sea") return fail("only ships carry troops");
+      if (!def.capacity) return fail("only ships and carriers take troops");
       if (!u.cargo?.troops) return fail("nothing aboard");
       if (!isPlot(sim, m.at) || !isLand(sim.terrain[m.at])) return fail("land the troops on land");
       const o = sim.owner[m.at];
       if (o && o !== nation && !sim.passable(nation, o) && !sim.hostile(nation, o)) return fail(`you are at peace with ${sim.nations.get(o)?.name ?? "them"}`);
       if (sim.grid.cheb(u.at, m.at) <= 1) {
         Object.assign(u, { path: [], route: null, progress: 0, follow: null, land: m.at });
+        return { ok: true };
+      }
+      if (def.domain === "land") {
+        const e = orderUnit(sim, u.id, m.at);
+        if (e) return fail(e);
+        Object.assign(u, { follow: null, land: m.at });
         return { ok: true };
       }
       const spots = landingSpots(sim, m.at, u.at);
@@ -512,11 +519,11 @@ export const ORDERS = {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
     const u = ownMachine(sim, nation, m.ship), def = u && UNIT_TYPES[u.type];
-    if (!u || u.wreck || def.domain !== "sea" || !def.capacity) return fail("pick one of your ships");
+    if (!u || u.wreck || def.domain === "air" || !def.capacity) return fail("pick one of your ships or carriers");
     if (def.transport) return fail("a transport boat carries only the stack it was sent for");
-    if ((u.cargo?.troops ?? 0) >= def.capacity) return fail("that ship is full");
+    if ((u.cargo?.troops ?? 0) >= def.capacity) return fail(def.domain === "land" ? `that ${def.name} is full` : "that ship is full");
     if (sim.grid.cheb(s.pos, u.at) > 1) {
-      const spot = shoreNear(sim, u.at, s.pos);
+      const spot = def.domain === "land" ? u.at : shoreNear(sim, u.at, s.pos);
       if (spot === null) return fail("that ship is not next to any land");
       if (!sim.orderMove(s.id, spot, "move")) return fail("no land route to the ship");
     }

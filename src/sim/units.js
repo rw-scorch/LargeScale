@@ -158,7 +158,7 @@ export function embark(world, stackId, shipId) {
   const s = world.stacks.get(stackId), u = world.units.list.get(shipId);
   if (!s || !u || u.wreck) return "missing";
   const def = UNIT_TYPES[u.type];
-  if (def.domain !== "sea" || !def.capacity) return "not a transport";
+  if (!def.capacity || def.domain === "air") return "not a transport";
   if (u.owner !== s.owner) return "not your ship";
   if (world.grid.cheb(s.pos, u.at) > 1) return "ship must be next to the troops";
   const room = def.capacity - (u.cargo?.troops ?? 0);
@@ -190,7 +190,7 @@ export function disembark(world, shipId, target, ownsPort = false, penalty = nul
   const def = UNIT_TYPES[u.type], cargo = u.cargo, owner = cargo.owner, o = world.owner[target];
   const ours = o === owner || (o && world.passable(owner, o));
   if (!ours && o && !world.hostile(owner, o)) return { error: "you are not at war with them" };
-  const pen = ownsPort ? LANDING.portPenalty : penalty ?? (def.beach ? LANDING.beachPenalty : LANDING.penalty);
+  const pen = def.domain === "land" ? 0 : ownsPort ? LANDING.portPenalty : penalty ?? (def.beach ? LANDING.beachPenalty : LANDING.penalty);
   let troops = cargo.troops * (1 - pen);
   const mix = cargo.mix ? { ...cargo.mix } : null, scale = k => { if (mix) for (const id in mix) mix[id] *= k; };
   scale(1 - pen);
@@ -426,7 +426,7 @@ function landCargo(world) {
     if (!u.cargo) { world.afterLanding?.(u, null); continue; }
     const t = u.transport;
     if (g.cheb(u.at, at) > 1 && t) at = shoreNear(world, u.at, at) ?? at;
-    const r = g.cheb(u.at, at) > 1 ? { error: "the ship could not reach the coast there" } : disembark(world, u.id, at, ownsPort(world, u.cargo.owner, at), world.landingPenalty?.(u) ?? null);
+    const r = g.cheb(u.at, at) > 1 ? { error: UNIT_TYPES[u.type].domain === "land" ? "the carrier could not get there" : "the ship could not reach the coast there" } : disembark(world, u.id, at, ownsPort(world, u.cargo.owner, at), world.landingPenalty?.(u) ?? null);
     if (r.error && t && !t.returning && t.home !== undefined) {
       Object.assign(t, { returning: true, loss: 0 });
       if (orderUnit(world, u.id, t.homeSea)) { u.path = []; u.route = null; }
@@ -469,7 +469,7 @@ function boardShips(world) {
       continue;
     }
     if (s.path.length || s.route) continue;
-    const spot = shoreNear(world, u.at, s.pos);
+    const spot = UNIT_TYPES[u.type].domain === "land" ? u.at : shoreNear(world, u.at, s.pos);
     if (spot === null || !world.orderMove(s.id, spot, "move")) fail("no land route to the ship");
   }
 }
@@ -515,9 +515,14 @@ function captureLoose(world) {
         else if (world.hostile(s.owner, u.owner) && (!foe || s.troops > foe.troops)) foe = s;
       }
     if (friend || !foe) continue;
-    const from = u.owner;
-    Object.assign(u, { owner: foe.owner, path: [], route: null, progress: 0, follow: null });
-    world.emit("machine_captured", { machine: u.id, kind: u.type, nation: from, by: foe.owner, at: u.at });
+    if (u.cargo?.troops > 0 && !disembark(world, u.id, u.at).error) {
+      Object.assign(u, { path: [], route: null, progress: 0, land: null });
+      byPlot = null;
+      continue;
+    }
+    const from = u.owner, lost = u.cargo?.troops ?? 0;
+    Object.assign(u, { owner: foe.owner, path: [], route: null, progress: 0, follow: null, cargo: null, land: null });
+    world.emit("machine_captured", { machine: u.id, kind: u.type, nation: from, by: foe.owner, at: u.at, ...(lost ? { lost } : {}) });
   }
 }
 

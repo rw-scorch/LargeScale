@@ -205,3 +205,11 @@ test("the browser's copy of the world proposes exactly what the server's view do
   assert.ok(server.length >= 6, `a full plan: ${server.map(p => p.key).join(", ")}`);
   assert.deepEqual(shape(browser), shape(server));
 });
+
+test("a Modern nation's plan uses Modern buildings: open-pit mines and concrete towers", () => {
+  const { plan } = world({ era: "Mo", dep: [[30, 30, "iron"], [31, 31, "iron"]] });
+  const list = plan();
+  const mines = byKey(list, "mines:iron"), towers = byKey(list, "towers:");
+  assert.deepEqual([mines?.pieces.length, mines?.pieces[0].type], [1, "mine_openpit"], "one open-pit mine reaches both iron plots");
+  assert.equal(towers?.pieces[0].type, "tower_concrete");
+});
