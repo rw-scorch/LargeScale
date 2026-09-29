@@ -939,8 +939,9 @@ const medieval = await fix.evaluate(async () => {
   await g.conn.request({ t: "admin", op: "give", nation: me, what: "money", amount: 5000 });
   await g.conn.request({ t: "admin", op: "give", nation: me, what: "money", amount: 1000 });
   const cap = w.nations.get(me).capital, cx = cap % w.w, cy = (cap / w.w) | 0, placed = [];
-  for (let dy = -6; dy <= 6 && placed.length < 4; dy += 2) for (let dx = -6; dx <= 6 && placed.length < 4; dx += 2) {
+  for (let r = 2; r <= 12 && placed.length < 4; r++) for (let dy = -r; dy <= r && placed.length < 4; dy++) for (let dx = -r; dx <= r && placed.length < 4; dx++) {
     const i = (cy + dy) * w.w + cx + dx;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || cx + dx < 0 || cy + dy < 0 || placed.some(p => Math.abs((p % w.w) - (cx + dx)) + Math.abs(((p / w.w) | 0) - (cy + dy)) < 2)) continue;
     if (w.owner[i] !== me || w.placeError("watchtower_wood", i)) continue;
     if ((await g.conn.request({ t: "build", type: "watchtower_wood", at: i })).ok) placed.push(i);
   }
@@ -975,7 +976,7 @@ await fix.click("#upgrade-go");
 const summaryText = await fix.waitForSelector("#upgrade-summary:not([hidden])", { timeout: 5000 }).then(() => fix.textContent("#upgrade-summary"), () => "");
 const upgraded = await fix.waitForFunction(ps => ps.every(i => window.__ls.game.world.buildingAt(i)?.type === "tower_stone"), medieval, { timeout: 5000 }).then(() => true, () => false);
 check(towersUp && medieval.length === 4 && goText === "Upgrade 3" && /gold/.test(totalText) && /^Upgraded 3 for/.test(summaryText) && upgraded,
-  `Pick all shows a live total ("${totalText.trim()}"), and ${goText} upgrades them at once: "${summaryText}"`);
+  `Pick all shows a live total ("${totalText.trim()}"), and ${goText} upgrades them at once: "${summaryText}"${medieval.length === 4 ? "" : ` (only ${medieval.length} towers placed)`}`);
 await fix.screenshot({ path: `${OUT}/25-upgrade-done.png` });
 await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#upgrade-panel")), "Esc closes the upgrade menu");

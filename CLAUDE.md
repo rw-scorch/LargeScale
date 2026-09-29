@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (269)
+npm test                  # unit tests (277)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -365,6 +365,13 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
   - **`src/sim/air.js`.** `airbase` blocks give reach and rearming slots (`baseRules`, `A.queued`). Bombers drop in a line (`stick`). `hover` and `strike` make the attack helicopter. Transports take the `drop` mission (`unload`, `dropTroops` for piloting). SAM sites and trucks (`sam` blocks, `launchers`, `samView` in the purse as `sams`) fire `sam_fired` missiles and reload for gold. All air-defence hits on a plane in a tick combine through `combined` with `air.overlap`.
   - **Boarding.** `embark` takes a transport on the ground; `paraOnly` takes only paratroopers.
   - **Planner.** `planAirDefence` proposes SAM sites (`planner.sams`, `samNear`).
+- **Ryan's asks after PR 38 (29 September 2026, branch `m8-asks`, stacked on `m8-air`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Cheats** (`src/sim/cheats.js`, `installCheats`, installed last): `n.cheats` holds `gold`, `troops`, `build`, `research`. Admin ops `cheat` and `researchAll`; the purse carries `cheats`.
+  - **Helpers.** `meta` `powers` maps accounts to powers (`POWERS` in `src/admin.js`: world, speed, schedule, kick, give, cheats); `adminAllowed` checks every admin op. The `powers` op is for full admins; `hello.powers` and the `powers` message tell the client, and `game.can(power)` and `game.canAdmin` gate the panel.
+  - **Research.** `research.maxQueue` is 150, so a whole path from the first era fits.
+  - **Taps.** A press on a control sets `game.uiHold`; `updatePanels` waits (at most 600 ms) and the click clears it first.
+  - **Colours.** `public/js/ui/theme.js` (`THEMES`, `SECTIONS`, `applyTheme`), stored as `ls_theme`; Settings has Colours. Buttons and fields use `--btn`, `--field`, `--primary`, `--on-bg`.
+  - **Ranks.** `rankSlots` in `src/shared/soldiers.js` replaces the spiral: the leader in front, ranks of at most 12. The renderer keeps each drawn soldier's position (`troopPos`), moves it at its own pace, faces the company (`facing` angle), draws the fallen for 3 s, and puts the marker over the leader (`leaderAt`).
 
 Open items as of 29 September 2026, in order:
 
