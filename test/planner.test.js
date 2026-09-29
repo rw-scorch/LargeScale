@@ -12,7 +12,13 @@ import { installEffects } from "../src/sim/effects.js";
 import { installPower, powerTick } from "../src/sim/power.js";
 import { installPlanner, planView, planTick, PLAN_RULES } from "../src/sim/planner.js";
 import { proposePlan, piecePlots, rectPlots } from "../src/shared/planner.js";
-import { runOrder } from "../src/game.js";
+import { runOrder, purseOf } from "../src/game.js";
+import { ClientWorld } from "../src/shared/client.js";
+import { PROTOCOL } from "../src/shared/protocol.js";
+import { rowOf } from "../src/shared/buildings.js";
+import { powerView } from "../src/sim/power.js";
+import { planSummary } from "../src/sim/planner.js";
+import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "../src/shared/rng.js";
 import { TID } from "../src/shared/terrain.js";
 import rules from "../data/rules.json" with { type: "json" };
@@ -144,7 +150,7 @@ test("the queue runs zones at once, waits for gold in order, builds when it come
   planTick(w, 20);
   events.push(...w.events.splice(0));
   assert.equal(n.plan.length, 0, "everything is done");
-  assert.ok([...w.bld.list.values()].some(b => b.type === "mine_pit" && b.owner === a), "the mine is placed: " + JSON.stringify(events.filter(e => /plan/.test(e.type))) + JSON.stringify(n.plan));
+  assert.ok([...w.bld.list.values()].some(b => b.type === "mine_pit" && b.owner === a), "the mine is placed");
   assert.equal(events.filter(e => e.type === "plan_done").length, 2);
   const again = plan();
   const next = again.find(p => p.pieces.some(q => q.t === "build"));
@@ -171,4 +177,31 @@ test("plan orders are checked: pieces, the queue limit, cancelling and kept area
   assert.equal(runOrder(w, a, { t: "plan", op: "keep", rects: [[0, 0, 10, 10], [20, 20, 5, 5]] }).keep, 2);
   assert.deepEqual(n.keepClear, [[0, 0, 10, 10], [20, 20, 5, 5]]);
   assert.equal(runOrder(w, a, { t: "plan", op: "clear" }).queued, 0);
+});
+
+test("the browser's copy of the world proposes exactly what the server's view does", () => {
+  const dep = [[30, 30, "iron"], [36, 40, "gold"], [10, 40, "copper"]];
+  const { w, a, put } = world({ era: "I", dep });
+  put("bank", 30, 10);
+  put("coal_plant", 5, 50);
+  put("vehicle_factory", 14, 50);
+  powerTick(w, 5);
+  runOrder(w, a, { t: "plan", op: "keep", rects: [[0, 0, 12, 12]] });
+  const n = w.nations.get(a);
+  const c = new ClientWorld({
+    t: "hello", v: PROTOCOL, you: a, w: w.grid.w, h: w.grid.h, map: { kind: "test" }, hashes: {},
+    nations: [...w.nations.values()].map(o => ({ id: o.id, name: o.name, capital: o.capital, troops: o.troops, alive: o.alive, spawned: o.spawned, plots: 0 })),
+    defs: buildingData.buildings, tech: { eras: [], branches: [], nodes: [] }, roadRules: w.log.rules, powerRules: w.power.rules, depositIds: DEPOSIT_IDS,
+  });
+  c.terrain = w.terrain.slice();
+  c.owner.set(w.owner);
+  c.zone.set(w.bld.zone);
+  c.roads.set(w.log.road);
+  c.setDeposits(w.res.dep);
+  for (const b of w.bld.list.values()) c.setBuilding(rowOf(b, w.bld.table));
+  c.message({ t: "purse", ...purseOf(n, { power: powerView(w, n), plan: planSummary(n) }) });
+  const shape = list => list.map(p => [p.key, p.kind, p.price, JSON.stringify(p.pieces)]);
+  const server = proposePlan(planView(w, a), PLAN_RULES), browser = proposePlan(c.planView(), PLAN_RULES);
+  assert.ok(server.length >= 6, `a full plan: ${server.map(p => p.key).join(", ")}`);
+  assert.deepEqual(shape(browser), shape(server));
 });

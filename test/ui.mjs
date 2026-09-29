@@ -251,6 +251,25 @@ check(rubble, "Demolish turns it to rubble");
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${OUT}/2g-rubble-${MAP}.png` });
 await page.keyboard.press("Escape");
+{
+  await page.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 6));
+  await page.keyboard.press("o");
+  const panel = await page.waitForSelector("#planner-panel:not([hidden])", { timeout: 3000 }).then(() => true, () => false);
+  const items = await page.waitForFunction(() => document.querySelectorAll("#planner-list .plan-item").length || null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => 0);
+  const drawn = await page.evaluate(() => window.__ls.game.view.plan?.items?.filter(i => !i.queued).length ?? 0);
+  const summary = await page.textContent("#planner-summary").catch(() => "");
+  const lay = await overlaps(page);
+  await page.screenshot({ path: `${OUT}/2p-planner-${MAP}.png` });
+  check(panel && items > 0 && drawn === items && !lay.hit.length && !lay.off.length, `O opens the planner: ${items} projects, each drawn as outlines on the map ("${summary}", ${await page.evaluate(() => window.__ls.game.planMs)} ms)`);
+  const first = await page.evaluate(() => { const list = window.__ls.game.planner.proposals, p = list.find(p => p.key.startsWith("block:")) ?? list[0]; return p && { key: p.key, title: p.title }; });
+  if (first) await page.click(`#planner-list .plan-item[data-key="${first.key}"] .plan-build`);
+  const queuedUi = first && await page.waitForFunction(k => window.__ls.game.world.planQueue.some(q => q.key === k) || window.__ls.game.world.purse?.plan?.projects?.some(p => p[0] === k) ? true : null, first.key, { timeout: 5000 }).then(() => true, () => false);
+  const built = queuedUi && await page.waitForFunction(t => [...document.querySelectorAll("#feed-list .item")].some(e => e.textContent.includes(`Plan finished: ${t}`)), first.title, { timeout: 30000 }).then(() => true, () => false);
+  await page.screenshot({ path: `${OUT}/2q-planned-${MAP}.png` });
+  check(queuedUi && built, `Build queues "${first?.title}", and it is built with nothing else pressed; the feed says it is finished`);
+  await page.keyboard.press("o");
+  check(!(await page.isVisible("#planner-panel")) && !(await page.evaluate(() => window.__ls.game.view.plan)), "O again closes the planner and clears its outlines");
+}
 await page.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 6));
 
 const ringItems = p => p.waitForSelector("#ring:not([hidden]) .ring-item", { timeout: 2000 }).then(() => p.evaluate(() => [...document.querySelectorAll("#ring .ring-item")].map(b => b.dataset.ring)), () => []);

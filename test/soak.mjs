@@ -2,6 +2,7 @@ import { PROTOCOL } from "../src/shared/protocol.js";
 import { ClientWorld } from "../src/shared/client.js";
 import { isLand } from "../src/shared/terrain.js";
 import { soldierTypes } from "../src/shared/soldiers.js";
+import { proposePlan } from "../src/shared/planner.js";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const INVITE = process.env.INVITE ?? "test-invite";
@@ -80,6 +81,18 @@ async function airfield() {
   for (const at of mine(A).sort(() => rand() - 0.5).slice(0, 300)) if (!w.placeError("airfield", at)) { note("build airfield", await A.send({ t: "build", type: "airfield", at })); return; }
 }
 for (let k = 0; k < 40 && A.cw.lockOf("airfield"); k++) await sleep(100);
+
+async function planSome(p) {
+  const w = p.cw;
+  if (!w.purse || !w.terrain || !w.nations.get(w.you)?.alive) return;
+  const list = proposePlan(w.planView(), w.planRules ?? {});
+  stats.proposals = Math.max(stats.proposals, list.length);
+  const roll = rand();
+  if (list.length && roll < 0.7) { const q = pick(list); note("plan add", await p.send({ t: "plan", op: "add", project: { key: q.key, kind: q.kind, name: q.title, pieces: q.pieces } })); }
+  else if (roll < 0.8) { const at = near(w, w.nations.get(w.you).capital, 10); note("plan keep", await p.send({ t: "plan", op: "keep", rects: [[at % w.w, (at / w.w) | 0, 4, 4]] })); }
+  else if (roll < 0.9 && w.planQueue.length) note("plan cancel", await p.send({ t: "plan", op: "cancel", key: pick(w.planQueue).key }));
+  else note("plan keep", await p.send({ t: "plan", op: "keep", rects: [] }));
+}
 
 async function fly(p) {
   const w = p.cw, you = w.you, n = w.nations.get(you);
@@ -174,10 +187,13 @@ function inspect(p, label) {
     else if (u.air.x < 0 || u.air.y < 0 || u.air.x > w.w || u.air.y > w.h) problem(`${label}: plane ${u.id} is off the map at ${u.air.x}, ${u.air.y}`);
   }
   if (planes > 100) problem(`${label}: ${planes} planes, over 100`);
+  const pl = purse.plan;
+  if (pl && (pl.projects.length > 40 || pl.projects.reduce((s, r) => s + r[3], 0) > 400)) problem(`${label}: the plan queue holds ${pl.projects.length} projects`);
+  if (pl) stats.done = Math.max(stats.done, pl.projects.reduce((s, r) => s + r[4], 0));
   stats.planes = Math.max(stats.planes, planes);
   stats.soldiers = Math.max(stats.soldiers, f?.soldiers ?? 0);
 }
-const stats = { planes: 0, soldiers: 0 };
+const stats = { planes: 0, soldiers: 0, proposals: 0, done: 0 };
 
 const t0 = Date.now();
 let rounds = 0;
@@ -193,6 +209,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
   }
   await Promise.all([act(A), act(B)]);
   if (rand() < 0.4) await Promise.all([fly(A), fly(B)]);
+  if (rounds % 12 === 5) await Promise.all([planSome(A), planSome(B)]);
   if (rounds % 20 === 0) {
     inspect(A, "host");
     inspect(B, "friend");
@@ -205,7 +222,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
 const st = (await api(`/api/worlds/${wid}/status`, null, admin.token)).body;
 console.log(`\n${rounds} rounds, ${Math.round(st.time / 60)} game minutes, tick errors ${st.tickErrors ?? 0}${st.lastError ? `: ${st.lastError}` : ""}`);
 for (const [k, v] of [...tally].sort((a, b) => a[0].localeCompare(b[0]))) console.log(`${String(v).padStart(5)}  ${k}`);
-console.log(`\nmost planes held by the host: ${stats.planes}; most soldiers in the field: ${stats.soldiers}; air events seen by both: ${JSON.stringify(Object.fromEntries(seen))}`);
+console.log(`\nmost planes held by the host: ${stats.planes}; most soldiers in the field: ${stats.soldiers}; most projects proposed at once: ${stats.proposals}; air events seen by both: ${JSON.stringify(Object.fromEntries(seen))}`);
 console.log(problems.length ? `\n${problems.length} problems` : "\nno problems found");
 A.ws.close();
 B.ws.close();

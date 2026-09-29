@@ -18,6 +18,7 @@ import { hashBytes, hashRuns } from "../src/shared/codec.js";
 import { ClientWorld } from "../src/shared/client.js";
 import { planBatch } from "../src/shared/buildings.js";
 import { makeTestMap } from "../src/shared/testmap.js";
+import { proposePlan } from "../src/shared/planner.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
@@ -286,6 +287,20 @@ check(aSpawn >= 0, "player spawns on land");
     const huts = [...cw.buildings.values()].filter(b => b.owner === you && b.type === "hut_grass" && b.state === "active");
     return huts.length >= 2 && cw.purse?.town?.pop > 0 ? huts.length : 0;
   }, 25000);
+  {
+    view.pump();
+    const t0 = performance.now(), plan = proposePlan(cw.planView(), cw.planRules ?? {}), ms = performance.now() - t0;
+    const pick = plan.find(p => p.key.startsWith("block:")) ?? plan.find(p => p.price <= (cw.purse?.money ?? 0));
+    if (pick) A.ws.send(JSON.stringify({ t: "plan", op: "add", project: { key: pick.key, kind: pick.kind, name: pick.title, pieces: pick.pieces } }));
+    const queued = pick && await nextResult(A, "plan");
+    const inQueue = queued?.ok && await until(() => A.json.some(m => m.t === "plan" && m.queue?.some(q => q.key === pick.key)), 3000);
+    const finished = inQueue && await until(() => A.json.some(m => m.t === "events" && m.events.some(e => e.type === "plan_done" && e.name === pick.title)), 20000);
+    const zone = pick?.pieces.find(p => p.t === "zone");
+    const cleared = finished && await until(() => { view.pump(); return (cw.purse?.plan?.projects?.length ?? 1) === 0; }, 3000);
+    const painted = !zone || cw.zone[zone.y * M.w + zone.x] === ["none", "res", "com", "ind", "farm"].indexOf(zone.zone);
+    check(plan.length && finished && painted && cleared,
+      `the planner proposes ${plan.length} projects in ${ms.toFixed(0)} ms (${plan.map(p => p.key.split(":")[0]).join(", ")}); "${pick?.title}" (${pick?.price} gold) is queued, reaches the host's queue, and is built with nothing else pressed`);
+  }
   check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [gold ${cw.purse?.money}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}; the world clock moved ${((await api(`/api/worlds/${wid}/status`, null, ta)).body.time - townClock.world).toFixed(1)} s in ${Math.round((Date.now() - townClock.wall) / 1000)} s]`}`);
   view.pump();
   const zonedBefore = cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0);
