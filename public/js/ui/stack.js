@@ -6,6 +6,9 @@ import { MAX_WAYPOINTS } from "../shared/protocol.js";
 import { XP_NAMES } from "../shared/units.js";
 import { soldierCount, soldierTypes } from "../shared/soldiers.js";
 
+const low = n => (/^[A-Z]{2}/.test(n) ? n : n.toLowerCase());
+const boardable = (w, u, s) => u.owner === w.you && !!u.def.capacity && !u.def.transport && u.state !== "wreck" && (u.cargo ?? 0) < u.def.capacity && (u.def.domain !== "air" || !u.air || u.air.landed) && (!u.def.paraOnly || (s.mix?.paratrooper ?? 0) >= 1);
+
 const ORDER_TEXT = { hold: "holding", move: "moving", advance: "advancing" };
 
 export const keyTag = action => el("kbd", { class: "key", "data-action": action, text: keyOf(action) });
@@ -85,7 +88,7 @@ export function createStackPanel(root, game) {
       if (!s) return;
       cancel();
       const u = game.world.machines.get(ship);
-      return order({ t: "board", stack: s.id, ship }, () => game.toast(u?.def.domain === "land" ? `The stack marches to the ${u.def.name} and gets in.` : "The stack marches to the ship and boards it."));
+      return order({ t: "board", stack: s.id, ship }, () => game.toast(u?.def.domain === "sea" ? "The stack marches to the ship and boards it." : u?.def.paraOnly ? `The paratroopers march to the ${low(u.def.name)} and get in.` : `The stack marches to the ${low(u.def.name)} and gets in.`));
     },
     async moveNow(plot) {
       const s = mine();
@@ -193,7 +196,7 @@ export function createStackPanel(root, game) {
       if (!s) return [];
       const o = w.owner[plot], onLand = isLand(w.terrain[plot]), items = [];
       const ship = w.machines.get(game.view?.machineAt(sx, sy));
-      if (ship && ship.owner === w.you && ship.def.capacity && ship.def.domain !== "air" && !ship.def.transport && ship.state !== "wreck") items.push({ id: "board", label: ship.def.domain === "land" ? `Board the ${ship.def.name}` : "Board ship", note: `${fmt(ship.cargo)} of ${ship.def.capacity}`, icon: "ui_map_supply", run: () => act.boardNow(ship.id) });
+      if (ship && boardable(w, ship, s)) items.push({ id: "board", label: ship.def.domain === "sea" ? "Board ship" : `Board the ${low(ship.def.name)}`, note: `${fmt(ship.cargo)} of ${ship.def.capacity}`, icon: "ui_map_supply", run: () => act.boardNow(ship.id) });
       if (onLand) items.push({ id: "move", label: "Move here", icon: "cursor_move", run: () => act.moveNow(plot) });
       if (onLand && o && o !== w.you) items.push({ id: "attack", label: `Attack ${w.nations.get(o)?.name ?? "them"}`, icon: "dip_war", run: () => order({ t: "advance", stack: s.id, only: o }) });
       if (onLand && !o) items.push({ id: "take", label: "Take unclaimed", icon: "ui_flag", run: () => order({ t: "advance", stack: s.id, only: "free" }) });
@@ -205,7 +208,8 @@ export function createStackPanel(root, game) {
       if (!s) return cancel();
       if (mode === "board") {
         const u = w.machines.get(game.view?.machineAt(sx, sy));
-        if (!u || u.owner !== w.you || !u.def.capacity || u.def.domain === "air") return game.toast("Click one of your ships or carriers.");
+        if (!u || u.owner !== w.you || !u.def.capacity || u.def.transport) return game.toast("Click one of your ships or carriers.");
+        if (u.def.domain === "air" && u.air && !u.air.landed) return game.toast(`That ${low(u.def.name)} is in the air. Board it at its airfield.`);
         return act.boardNow(u.id);
       }
       if (mode === "nation") {

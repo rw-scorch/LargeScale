@@ -59,11 +59,12 @@ export function createPilotPanel(root, game, top = root) {
     update() {
       const p = game.piloting, w = game.world;
       if (!p || !w) return;
-      const u = p.kind === "m" ? w.machines.get(p.id) : null, what = u ? u.def.name.toLowerCase() : "company";
-      const turns = !!u && ["sea", "air"].includes(u.def.domain), bomber = !!u?.def.bomb;
-      bomb.hidden = !bomber;
+      const u = p.kind === "m" ? w.machines.get(p.id) : null, what = u ? (/^[A-Z]{2}/.test(u.def.name) ? u.def.name : u.def.name.toLowerCase()) : "company";
+      const turns = !!u && ["sea", "air"].includes(u.def.domain), lift = !!u && u.def.domain === "air" && !!u.def.capacity, bomber = !!u?.def.bomb || lift;
+      bomb.hidden = !bomber || (lift && !u.cargo);
+      bomb.textContent = lift ? "Drop" : "Bomb";
       text.replaceChildren(`Piloting your ${what}: `,
-        el("span", { class: "fine-only", text: `${turns ? "W and S speed up and slow down, A and D turn" : "WASD or the arrows move it"}; the mouse aims and a held click fires${bomber ? "; B drops the bombs" : ""}. Esc lets go.` }),
+        el("span", { class: "fine-only", text: `${turns ? "W and S speed up and slow down, A and D turn" : "WASD or the arrows move it"}; the mouse aims and a held click fires${lift ? "; B sets the troops aboard down below" : bomber ? "; B drops the bombs" : ""}. Esc lets go.` }),
         el("span", { class: "coarse-only", text: turns ? "the stick's up and down speed up and slow down, left and right turn. Drag from Fire to aim, or tap it to fire at the nearest enemy ahead." : "the stick moves it. Drag from Fire to aim, or tap it to fire at the nearest enemy ahead." }));
     },
   };

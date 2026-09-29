@@ -7,7 +7,7 @@ export const PLAN_KINDS = ["towns", "economy", "civic", "defence"];
 export const PLAN_DEFAULTS = {
   every: 1, perTick: 6, maxPieces: 400, maxProjectPieces: 60, maxProjects: 40, keepMax: 32, keepSide: 128,
   block: 7, search: 30, freeRes: 6, freeCom: 4, freeInd: 4, indFrom: 6, towns: 6, townCell: 12,
-  farms: 12, farmRing: [3, 16], perDeposit: 12, towers: 8, airNear: 20, powerNear: 40, civicEach: 2, scale: 1, tradeMin: 12,
+  farms: 12, farmRing: [3, 16], perDeposit: 12, towers: 8, airNear: 20, powerNear: 40, civicEach: 2, scale: 1, tradeMin: 12, sams: 3, samNear: 5,
 };
 
 const EFFECT_WORDS = { income: "income", research: "research", pop_growth: "town growth", troop_cap: "troop limit", defence: "defence" };
@@ -492,6 +492,30 @@ function planDefence(ctx) {
   }
 }
 
+function planAirDefence(ctx, towns) {
+  const { v, R, L, w } = ctx, def = v.defs.sam_site;
+  if (!def?.sam || v.lockOf(def.id) || eraIdx(def.era) > eraIdx(v.me.era ?? "T")) return;
+  const reach = def.sam.radius * (R.scale ?? 1), centre = (b, d = b.def) => [(b.anchor % w) + d.fp[0] / 2, ((b.anchor / w) | 0) + d.fp[1] / 2];
+  const cover = ctx.mineBuildings.filter(b => b.def.sam).map(b => [...centre(b), b.def.sam.radius * (R.scale ?? 1)]);
+  const covered = i => cover.some(([x, y, r]) => Math.hypot(x - (i % w) - 0.5, y - ((i / w) | 0) - 0.5) <= r - 1);
+  const targets = [...towns.slice(0, 2).map(t => ({ at: t.centre, name: t.name })), ...ctx.mineBuildings.filter(b => b.def.airbase && b.state === "active").map(b => ({ at: b.anchor, name: `your ${lower(b.def.name)}` }))];
+  const pieces = [], draw = [], names = [];
+  for (const t of targets) {
+    if (pieces.length >= R.sams) break;
+    if (covered(t.at)) continue;
+    const spot = ctx.findSpot(def, t.at, 1, L(R.samNear));
+    if (!spot) continue;
+    ctx.take(spot.plots);
+    pieces.push({ t: "build", type: def.id, at: spot.anchor });
+    draw.push({ t: "build", type: def.id, plots: spot.plots });
+    names.push(t.name);
+    cover.push([...centre({ anchor: spot.anchor }, def), reach]);
+  }
+  if (!pieces.length) return;
+  const named = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+  ctx.add({ key: "sams", kind: "defence", title: `${plural(pieces.length, "SAM site")} over ${named}`, reason: `Enemy planes within ${reach} plots of a SAM site are shot at. Each holds ${def.sam.missiles} missiles and reloads them for ${def.sam.reloadCost} gold each.`, price: pieces.length * (def.cost?.money ?? 0), pieces, draw, at: pieces[0].at });
+}
+
 export function proposePlan(v, rules = {}) {
   if (v.me?.capital == null || v.owner[v.me.capital] !== v.me.id) return [];
   const ctx = context(v, rules), towns = townsOf(ctx);
@@ -504,5 +528,6 @@ export function proposePlan(v, rules = {}) {
   planCivic(ctx, towns);
   planUpgrades(ctx);
   planDefence(ctx);
+  planAirDefence(ctx, towns);
   return ctx.projects.slice(0, ctx.R.maxProjects);
 }
