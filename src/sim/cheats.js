@@ -2,6 +2,7 @@ import rules from "../../data/rules.json" with { type: "json" };
 import { complete, knownOf } from "./research.js";
 import { researchError } from "../shared/research.js";
 import { finishBuilding } from "./construction.js";
+import { finishWarheads } from "./nukes.js";
 
 export const CHEATS = ["gold", "troops", "build", "research"];
 export const CHEAT_RULES = { gold: 1e9, troops: 100000, ...rules.admin.cheats };
@@ -61,6 +62,7 @@ function cheatNation(world, n) {
       if (b?.state === "construction" && !b.civilian) finishBuilding(world, b);
     }
     for (const q of world.machines?.queues.values() ?? []) if (q.owner === n.id && q.paid) q.progress = 1;
+    if (world.nukes) finishWarheads(world, n);
   }
   if (on.has("research") && world.research && n.research?.queue.length) {
     for (const id of [...n.research.queue]) if (!researchError(world.research.tree, world.research.locks, knownOf(n), n.era, id)) complete(world, n, id);

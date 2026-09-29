@@ -150,7 +150,7 @@ export function orderPlane(world, u, kind, at) {
   return { ok: true, rearming: A.landed && A.rearm > 0 ? Math.ceil(A.rearm) : 0 };
 }
 
-function down(world, u, why) {
+export function down(world, u, why) {
   const lost = Math.round(u.cargo?.troops ?? 0);
   world.emit("plane_down", { machine: u.id, nation: u.owner, kind: u.type, at: u.at, by: u.hitBy ?? null, why, ...(lost ? { lost } : {}) });
   wreck(world, u);
@@ -336,6 +336,8 @@ function hitFrom(hits, e, owner, amount) {
   if (!h) hits.set(e, (h = []));
   h.push([amount, owner]);
 }
+
+export function refreshSites(world) { sites(world); }
 
 function sites(world) {
   const T = world.air;
