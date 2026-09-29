@@ -1,25 +1,91 @@
-export const TOURISM = {
-  park: { value: 0.2 }, plaza: { value: 0.2 }, campground: { value: 0.4, season: { summer: 1.6, winter: 0.2 } },
-  museum: { value: 1.5 }, zoo: { value: 2 }, theme_park: { value: 6, season: { summer: 1.4, winter: 0.5 } },
-  golf_course: { value: 2, season: { winter: 0.4 } }, marina: { value: 2.5, season: { summer: 1.5, winter: 0.3 } },
-  arena: { value: 3 }, stadium: { value: 6 }, casino: { value: 4 }, luxury_hotel: { value: 3 },
-  beach_resort: { value: 5, season: { summer: 1.6, spring: 1.0, autumn: 0.8, winter: 0.3 } },
-  ski_resort: { value: 5, season: { winter: 1.8, spring: 0.6, autumn: 0.5, summer: 0.2 } },
-  wonder_pyramid: { value: 8, wonder: true }, wonder_colossus: { value: 9, wonder: true }, wonder_clocktower: { value: 10, wonder: true },
-  wonder_grand_tower: { value: 11, wonder: true }, wonder_orbital_elevator: { value: 14, wonder: true },
-};
+import rules from "../../data/rules.json" with { type: "json" };
+import { BUILDINGS, removeBuilding } from "./buildings.js";
+import { tourismIncome as income, TOURISM_RULES as BASE } from "../shared/tourism.js";
 
-export function tourismIncome(types, season, { airport = false, port = false, rail = false } = {}) {
-  let sum = 0, wonders = 0;
-  const kinds = new Set();
-  for (const t of types) {
-    const d = TOURISM[t];
-    if (!d) continue;
-    kinds.add(t);
-    if (d.wonder) wonders++;
-    sum += d.value * (d.season?.[season] ?? 1);
+export const TOURISM_RULES = { every: 5, ...BASE, ...rules.tourism };
+export const TOURISM = Object.fromEntries(Object.values(BUILDINGS.table).filter(d => d.tourism).map(d => [d.id, { ...d.tourism, ...(d.wonder ? { wonder: true } : {}) }]));
+
+export function tourismIncome(types, season, { airport = false, port = false, rail = false } = {}, r = TOURISM_RULES) {
+  const items = types.filter(t => TOURISM[t]).map(t => ({ type: t, value: TOURISM[t].value, mult: TOURISM[t].season?.[season] ?? 1, wonder: !!TOURISM[t].wonder }));
+  return income(items, { airport, port, rail }, r).perSecond;
+}
+
+export function installTourism(world, { rules: r = TOURISM_RULES } = {}) {
+  if (world.tourism) return world.tourism;
+  const T = world.tourism = { rules: r, clock: 0, known: new Set(), sites: new Set(), last: new Map() };
+  for (const b of world.bld.list.values()) if (world.bld.table[b.type]?.wonder && b.state !== "construction" && b.state !== "rubble") T.known.add(b.id);
+  const tick = (w, dt) => tourismTick(w, dt, false);
+  tick.whole = (w, dt) => tourismTick(w, dt, true);
+  world.hooks.postTick.push(tick);
+  return T;
+}
+
+export function tourismOf(world, n) {
+  const bld = world.bld, items = [], links = { airport: false, port: false, rail: false }, seasons = new Map();
+  for (const id of bld.mine.get(n.id) ?? []) {
+    const b = bld.list.get(id), d = bld.table[b.type];
+    if (b.state !== "active") continue;
+    if (d.airport) links.airport = true;
+    if (d.port) links.port = true;
+    if (d.station) links.rail = true;
+    if (!d.tourism) continue;
+    const season = d.tourism.season ? world.res?.seasonOf(b.anchor) ?? "summer" : null, mult = season ? d.tourism.season[season] ?? 1 : 1;
+    items.push({ type: b.type, value: d.tourism.value, mult, wonder: !!d.wonder });
+    if (season) seasons.set(`${b.type}:${season}`, [b.type, season, mult]);
   }
-  const variety = Math.sqrt(Math.max(1, kinds.size)) / Math.sqrt(Math.max(1, types.length || 1)) * 0.5 + 0.5;
-  const reach = 1 + (airport ? 0.25 : 0) + (port ? 0.1 : 0) + (rail ? 0.1 : 0);
-  return sum * (1 + 0.1 * wonders) * reach * variety;
+  return { ...income(items, links, world.tourism?.rules ?? TOURISM_RULES), links, seasons: [...seasons.values()] };
+}
+
+function race(world, type, list, T) {
+  const winner = list.find(b => T.known.has(b.id)) ?? list.find(b => b.state !== "construction");
+  if (!winner) return;
+  if (!T.known.has(winner.id)) {
+    T.known.add(winner.id);
+    world.emit("wonder_built", { nation: winner.owner, building: winner.id, kind: type, at: winner.anchor });
+  }
+  for (const b of list) {
+    if (b === winner) continue;
+    const n = world.nations.get(b.owner), cost = world.bld.table[type].cost?.money ?? 0;
+    if (n) n.money = (n.money ?? 0) + cost;
+    T.sites.delete(b.id);
+    removeBuilding(world, b.id);
+    world.emit("wonder_lost", { nation: b.owner, by: winner.owner, kind: type, refund: cost, at: b.anchor });
+  }
+}
+
+export function wonderRace(world, full = true) {
+  const T = world.tourism, bld = world.bld, byType = new Map();
+  const ids = full ? bld.list.keys() : T.sites;
+  if (full) T.sites.clear();
+  for (const id of ids) {
+    const b = bld.list.get(id), d = b && bld.table[b.type];
+    if (!d?.wonder || b.state === "rubble") { T.sites.delete(id); continue; }
+    if (full) T.sites.add(id);
+    (byType.get(b.type) ?? byType.set(b.type, []).get(b.type)).push(b);
+  }
+  for (const [type, list] of byType) race(world, type, list, T);
+  for (const id of T.known) if (!bld.list.has(id) || bld.list.get(id).state === "rubble") T.known.delete(id);
+}
+
+function tourismTick(world, dt, whole) {
+  const T = world.tourism;
+  T.clock += dt;
+  if (T.sites.size && !whole) wonderRace(world, false);
+  if (!whole && T.clock < T.rules.every) return;
+  const span = T.clock;
+  T.clock = 0;
+  wonderRace(world, true);
+  for (const n of world.nations.values()) {
+    if (!n.alive || !n.human) continue;
+    const v = tourismOf(world, n);
+    T.last.set(n.id, v);
+    if (v.perSecond > 0 && n.money !== undefined) n.money += v.perSecond * (n.outputMult ?? 1) * span;
+  }
+}
+
+export function tourismView(world, n) {
+  const v = n && world.tourism?.last.get(n.id);
+  if (!v || !v.sites) return null;
+  const r2 = x => Math.round(x * 100) / 100;
+  return { perSecond: r2(v.perSecond * (n.outputMult ?? 1)), base: r2(v.base), sites: v.sites, kinds: v.kinds, wonders: v.wonders, variety: r2(v.variety), reach: r2(v.reach), links: v.links, seasons: v.seasons };
 }

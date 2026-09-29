@@ -63,7 +63,33 @@ export function placeError(v, nation, def, anchor, self = 0) {
     if (plots.some(i => v.owner[i] !== nid)) return "not your land";
     if (def.producer?.kind !== "deposit" && plots.some(i => !TERRAIN[v.terrain[i]].build)) return "the ground is too rough to build on";
   }
+  if (def.near && !nearTerrain(v, plots, def.near)) return `must be within ${def.near.within} plots of hills or mountains`;
+  if (def.wonder) {
+    const why = wonderErrorOf(v.buildingList?.() ?? v.buildings ?? [], def.id, nid, v.nameOf);
+    if (why) return why;
+  }
   return def.producer ? producerError(v, def.producer, plots) : null;
+}
+
+export function nearTerrain(v, plots, near) {
+  const names = new Set(near.terrain), r = near.within;
+  for (const i of plots) {
+    const x = i % v.w, y = (i / v.w) | 0;
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (xx >= 0 && yy >= 0 && xx < v.w && yy < v.h && names.has(TERRAIN[v.terrain[yy * v.w + xx]]?.name)) return true;
+    }
+  }
+  return false;
+}
+
+export function wonderErrorOf(list, type, nid, nameOf = () => "another nation") {
+  for (const b of list) {
+    if (b.type !== type || b.state === "rubble") continue;
+    if (b.state !== "construction") return b.owner === nid ? "you already have this wonder" : `it already stands in ${nameOf(b.owner)}'s land: there is one per world`;
+    if (b.owner === nid) return "you are already building it";
+  }
+  return null;
 }
 
 const GRAZING = new Set(["grassland", "plains", "meadow", "steppe", "savanna"]);

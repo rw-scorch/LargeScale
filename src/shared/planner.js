@@ -1,5 +1,5 @@
 import { TERRAIN } from "./terrain.js";
-import { footprintAt, placeError, areaAround, eraIdx } from "./buildings.js";
+import { footprintAt, placeError, areaAround, eraIdx, wonderErrorOf } from "./buildings.js";
 import { roadRoute, roadPrice, roadLine, ROAD_TYPES } from "./roads.js";
 import { polePlan } from "./power.js";
 
@@ -7,7 +7,7 @@ export const PLAN_KINDS = ["towns", "economy", "civic", "defence"];
 export const PLAN_DEFAULTS = {
   every: 1, perTick: 6, maxPieces: 400, maxProjectPieces: 60, maxProjects: 40, keepMax: 32, keepSide: 128,
   block: 7, search: 30, freeRes: 6, freeCom: 4, freeInd: 4, indFrom: 6, towns: 6, townCell: 12,
-  farms: 12, farmRing: [3, 16], perDeposit: 12, towers: 8, airNear: 20, powerNear: 40, civicEach: 2, scale: 1, tradeMin: 12, sams: 3, samNear: 5, abms: 2, abmNear: 6,
+  farms: 12, farmRing: [3, 16], perDeposit: 12, towers: 8, airNear: 20, powerNear: 40, civicEach: 2, scale: 1, tradeMin: 12, sams: 3, samNear: 5, abms: 2, abmNear: 6, tourism: 2, tourismNear: 10,
 };
 
 const EFFECT_WORDS = { income: "income", research: "research", pop_growth: "town growth", troop_cap: "troop limit", defence: "defence" };
@@ -538,6 +538,33 @@ function planMissileDefence(ctx, towns) {
   ctx.add({ key: "abms", kind: "defence", title: `${plural(pieces.length, "ABM silo")} over ${named}`, reason: `A nuclear warhead falling within ${reach} plots of an ABM silo has a ${Math.round(def.abm.chance * 100)}% chance of being shot down. Each holds ${def.abm.interceptors} interceptors and makes more for ${def.abm.reloadCost} gold each.`, price: pieces.length * (def.cost?.money ?? 0), pieces, draw, at: pieces[0].at });
 }
 
+function planTourism(ctx, towns) {
+  const { v, R, L } = ctx;
+  if (!towns.length) return;
+  const have = new Set(ctx.mineBuildings.filter(b => b.def.tourism).map(b => b.type));
+  const open = d => d.tourism && !d.retired && !have.has(d.id) && !v.lockOf(d.id) && eraIdx(d.era) <= eraIdx(v.me.era ?? "T");
+  const byValue = (a, b) => b.tourism.value - a.tourism.value;
+  let added = 0;
+  for (const def of Object.values(v.defs).filter(d => open(d) && !d.wonder).sort(byValue)) {
+    if (added >= R.tourism) break;
+    for (const t of towns) {
+      const spot = ctx.findSpot(def, t.centre, 2, L(R.tourismNear));
+      if (!spot) continue;
+      ctx.take(spot.plots);
+      ctx.add({ key: `tourism:${def.id}`, kind: "civic", title: `A ${lower(def.name)} near ${t.name}`, reason: `Visitors pay ${def.tourism.value} gold a second${def.tourism.season ? ", more or less with the season" : ""}. A kind you do not have yet also raises what the others earn.`, price: def.cost?.money ?? 0, pieces: [{ t: "build", type: def.id, at: spot.anchor }], draw: [{ t: "build", type: def.id, plots: spot.plots }], at: spot.anchor });
+      added++;
+      break;
+    }
+  }
+  for (const def of Object.values(v.defs).filter(d => open(d) && d.wonder && !wonderErrorOf(v.buildings ?? [], d.id, v.me.id)).sort(byValue)) {
+    const spot = ctx.findSpot(def, towns[0].centre, 3, L(R.tourismNear));
+    if (!spot) continue;
+    ctx.take(spot.plots);
+    ctx.add({ key: `wonder:${def.id}`, kind: "civic", title: `The ${lower(def.name)}, a wonder`, reason: `One per world, owned by whoever finishes it first; a rival's site is cleared and refunded. ${def.tourism.value} gold a second from visitors, 10% more for all your tourism, and ${Math.round(def.time / 60)} minutes to build.`, price: def.cost?.money ?? 0, pieces: [{ t: "build", type: def.id, at: spot.anchor }], draw: [{ t: "build", type: def.id, plots: spot.plots }], at: spot.anchor });
+    break;
+  }
+}
+
 export function proposePlan(v, rules = {}) {
   if (v.me?.capital == null || v.owner[v.me.capital] !== v.me.id) return [];
   const ctx = context(v, rules), towns = townsOf(ctx);
@@ -548,6 +575,7 @@ export function proposePlan(v, rules = {}) {
   planPorts(ctx);
   planRail(ctx, towns);
   planCivic(ctx, towns);
+  planTourism(ctx, towns);
   planUpgrades(ctx);
   planDefence(ctx);
   planAirDefence(ctx, towns);

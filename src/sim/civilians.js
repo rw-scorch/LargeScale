@@ -10,6 +10,7 @@ export const CIVIL = Object.fromEntries(Object.entries(BUILDINGS.table).filter((
 export const ZONE_NAMES = Object.keys(ZONES);
 
 export const CIV_RULES = rules.civilians;
+export const DOWNTOWN = rules.downtown;
 export const POLICY = rules.policy;
 
 const eraIdx = e => ERA_ORDER.indexOf(e);
@@ -108,6 +109,42 @@ export function startBuilding(world, nid, anchor, type) {
   return b;
 }
 
+export function roadSides(world, plots) {
+  const g = world.grid, road = world.log?.road;
+  if (!road) return 0;
+  const xs = plots.map(i => g.x(i)), ys = plots.map(i => g.y(i));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const at = (x, y) => g.inside(x, y) && road[g.idx(x, y)] > 0;
+  let sides = 0;
+  for (const [ax, ay, bx, by] of [[x0, y0 - 1, x1, y0 - 1], [x0, y1 + 1, x1, y1 + 1], [x0 - 1, y0, x0 - 1, y1], [x1 + 1, y0, x1 + 1, y1]]) {
+    let hit = false;
+    for (let y = ay; y <= by && !hit; y++) for (let x = ax; x <= bx && !hit; x++) hit = at(x, y);
+    if (hit) sides++;
+  }
+  return sides;
+}
+
+export function busyShops(world, b, radius) {
+  const g = world.grid, bld = world.bld, seen = new Set([b.id]), cx = g.x(b.anchor), cy = g.y(b.anchor);
+  let n = 0;
+  for (let y = cy - radius; y <= cy + radius; y++) for (let x = cx - radius; x <= cx + radius; x++) {
+    if (!g.inside(x, y)) continue;
+    const id = bld.at.get(g.idx(x, y));
+    if (id === undefined || seen.has(id)) continue;
+    seen.add(id);
+    const o = bld.list.get(id);
+    if (o.owner === b.owner && o.civilian && o.state === "active" && bld.table[o.type].zone === "com") n++;
+  }
+  return n;
+}
+
+export function downtownError(world, b, plots, r = world.civ?.downtown ?? DOWNTOWN) {
+  if (roadSides(world, plots) < r.roadSides) return `needs roads on ${r.roadSides} sides`;
+  const shops = busyShops(world, b, r.radius);
+  if (shops < r.shops) return `needs ${r.shops} shops within ${r.radius} plots, has ${shops}`;
+  return null;
+}
+
 export function tryUpgrade(world, b, force = false) {
   const table = world.bld.table, r = world.civ?.rules ?? CIV_RULES, def = table[b.type], n = world.nations.get(b.owner);
   if (!def.next || b.state !== "active") return false;
@@ -115,6 +152,7 @@ export function tryUpgrade(world, b, force = false) {
   if (eraIdx(nd.era) > eraIdx(n.era) || world.unlocked?.(b.owner, def.next) === false) return false;
   const plots = footprint(world, b.anchor, nd.fp);
   if (!fits(world, b.owner, plots, nd.zone, b.id)) return false;
+  if (nd.downtown && downtownError(world, b, plots)) return false;
   if (!force) {
     const needs = n.stats.needs ?? 0, occ = def.housing ? b.residents / def.housing : 1;
     if (needs < r.upgradeNeeds || occ < r.upgradeOccupancy * needs) return false;

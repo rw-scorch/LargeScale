@@ -42,6 +42,8 @@ import { runAdmin, parseSpeed, cleanName, ADMIN_RULES, adminAllowed, cleanPowers
 import { installCheats } from "./sim/cheats.js";
 import { installNavy } from "./sim/navy.js";
 import { installNukes, nukeView, flightsOf, NUKE_RULES } from "./sim/nukes.js";
+import { installTourism, tourismView, TOURISM_RULES } from "./sim/tourism.js";
+import { installCbd } from "./sim/cbd.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
 const SAVE_VERSION = 4;
@@ -185,6 +187,8 @@ export class World extends DurableObject {
     installAir(this.sim);
     installNavy(this.sim);
     installNukes(this.sim, { speed: info.rules?.buildSpeed ?? 1, rng: makeRng((info.seed ?? 1) + 13) }).on = info.nukes !== false;
+    installTourism(this.sim);
+    installCbd(this.sim, { scale: info.map.scale ?? 1 });
     const trimmed = trimField(this.sim);
     if (trimmed.size) this.fieldTrimmed = Object.fromEntries(trimmed);
     if (this.upgradedFrom && this.upgradedFrom < 4) this.goldLoaded = convertToGold(this.sim);
@@ -424,6 +428,7 @@ export class World extends DurableObject {
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, soldierRules: this.sim.soldiers?.rules ?? null, pilotRules: this.sim.pilot?.rules ?? null, pilots: this.sim.pilot ? pilotRows(this.sim) : [], time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen, powers: account.admin ? POWERS : this.powersOf(account.id),
+      tourismRules: TOURISM_RULES, cbdRules: { ...this.sim.cbd.rules, scale: this.sim.cbd.scale },
       nukes: flightsOf(this.sim), nukeRules: { warheads: NUKE_RULES.warheads, samChance: NUKE_RULES.samChance, overlap: NUKE_RULES.overlap, outerLoss: NUKE_RULES.outerLoss, scale: this.info.map.scale ?? 1 },
       plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
     }));
@@ -584,7 +589,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n), sams: n ? samView(this.sim, n.id) : null, cheats: n?.cheats ?? null, nukes: n ? nukeView(this.sim, n.id) : null });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n), sams: n ? samView(this.sim, n.id) : null, cheats: n?.cheats ?? null, nukes: n ? nukeView(this.sim, n.id) : null, tourism: tourismView(this.sim, n) });
   }
 
   sendState() {
