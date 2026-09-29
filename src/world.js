@@ -20,7 +20,7 @@ import { installConstruction } from "./sim/construction.js";
 import { installEconomy, convertToGold } from "./sim/economy.js";
 import { installSoldiers, trimField, fieldOf } from "./sim/soldiers.js";
 import { installPilot, pilotStep, pilotRows, takeShots, steer, pilotOf, release as releasePilot } from "./sim/pilot.js";
-import { installAir } from "./sim/air.js";
+import { installAir, samView } from "./sim/air.js";
 import { installCivilians, takeZoneNews } from "./sim/civilians.js";
 import { installRoads, restoreRoads, takeRoadNews } from "./sim/logistics.js";
 import { installBoats } from "./sim/boats.js";
@@ -577,7 +577,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n) });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n), sams: n ? samView(this.sim, n.id) : null });
   }
 
   sendState() {

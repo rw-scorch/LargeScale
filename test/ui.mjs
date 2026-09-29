@@ -1963,6 +1963,61 @@ check(railRow && !railRow.disabled && /Railway12 gold a plot/.test(railRow.text)
     `a stack right-clicks the APC and gets in ("${boardItem}", ${aboard} aboard${m.stack === null ? `; the stack was not formed: ${m.why}` : ""}); the APC's card has Unload, its ring offers ${ringLabels.join(", ")}, and Move here sets all ${Math.round(setDown ?? 0)} down where it stops`);
   await gp.keyboard.press("Escape");
 }
+{
+  const c = await gp.evaluate(async () => {
+    const g = window.__ls.game, w = g.world, wait = async (f, ms = 5000) => { const end = Date.now() + ms; let v; while (!(v = f()) && Date.now() < end) await new Promise(r => setTimeout(r, 100)); return v; };
+    for (const id of ["helicopters", "jet_engines", "guided_missiles"]) await g.conn.request({ t: "research", id, mode: "queue" });
+    await g.conn.request({ t: "admin", op: "finish", nation: w.you });
+    await wait(() => !w.lockOf("air_base") && !w.lockOf("sam_site") && !w.lockOf("transport_heli", "units"));
+    const lift = await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit: "transport_heli", amount: 1 });
+    const strike = await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit: "attack_heli", amount: 1 });
+    const id = lift.machines?.[0], hid = strike.machines?.[0];
+    await wait(() => w.machines.get(id)?.air && w.machines.get(hid)?.air);
+    const at = w.machines.get(id)?.at, st = await g.conn.request({ t: "stack", share: 0.05, at });
+    await wait(() => st.ok && w.stacks.has(st.stack), 3000);
+    const cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+    const spot = (type, r0, r1) => { for (let r = r0; r <= r1; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; const i = (cy + dy) * w.w + cx + dx; if (cx + dx > 1 && cy + dy > 1 && !w.placeError(type, i)) return i; } return null; };
+    const samAt = spot("sam_site", 3, 14), sam = samAt !== null ? await g.conn.request({ t: "build", type: "sam_site", at: samAt }) : { error: "no room" };
+    const baseAt = spot("air_base", 4, 24), base = baseAt !== null ? await g.conn.request({ t: "build", type: "air_base", at: baseAt }) : { error: "no room" };
+    return { id, hid, at, stack: st.stack ?? null, why: st.error ?? null, troops: Math.round(w.stacks.get(st.stack)?.troops ?? 0), sam: sam.building ?? null, samWhy: sam.error ?? null, base: base.building ?? null, baseWhy: base.error ?? null };
+  });
+  await gp.evaluate(({ stack, at }) => { const g = window.__ls.game; g.selectMachine(null); g.select(stack); g.focus(at, 24); }, c);
+  await gp.waitForTimeout(400);
+  const heliScreen = await toScreen(gp, c.at);
+  await gp.mouse.click(heliScreen.x, heliScreen.y, { button: "right" });
+  const boardItem = await gp.waitForFunction(() => [...document.querySelectorAll("#ring .ring-item")].find(b => b.dataset.ring === "board")?.textContent ?? null, null, { timeout: 3000 }).then(h => h.jsonValue(), () => null);
+  if (boardItem) await gp.click("#ring .ring-item[data-ring=board]");
+  const aboard = await gp.waitForFunction(id => window.__ls.game.world.machines.get(id)?.cargo || null, c.id, { timeout: 10000 }).then(h => h.jsonValue(), () => 0);
+  await gp.evaluate(({ id, at }) => { const g = window.__ls.game; g.select(null); g.selectMachine(id); g.focus(at, 20); }, c);
+  const dropButton = await gp.waitForSelector("#plane-drop:not([disabled])", { timeout: 3000 }).then(h => h.textContent(), () => null);
+  if (dropButton) await gp.click("#plane-drop");
+  const dest = await gp.evaluate(at => { const w = window.__ls.game.world; for (let r = 8; r < 14; r++) for (const d of [r, -r, r * w.w, -r * w.w]) if (w.owner[at + d] === w.you) return at + d; return null; }, c.at);
+  const destAt = await toScreen(gp, dest);
+  await gp.mouse.click(destAt.x, destAt.y);
+  await gp.waitForTimeout(1500);
+  await gp.screenshot({ path: `${OUT}/74-heli.png` });
+  const setDown = await gp.waitForFunction(t => [...window.__ls.game.world.stacks.values()].find(s => s.owner === window.__ls.game.world.you && s.pos === t)?.troops ?? null, dest, { timeout: 30000 }).then(h => h.jsonValue(), () => null);
+  const feedSays = await gp.evaluate(() => document.querySelector("#feed")?.textContent.includes("The transport helicopter set") ?? false);
+  check(boardItem?.startsWith("Board the transport helicopter") && aboard > 0 && dropButton === "Land troops" && Math.abs((setDown ?? 0) - aboard) < 1 && feedSays,
+    `after Helicopters a company right-clicks a transport helicopter and gets in ("${boardItem}", ${aboard} aboard); Land troops and a click fly it there and set ${Math.round(setDown ?? 0)} down, and the feed says so${c.stack === null ? `; no company: ${c.why}` : ""}`);
+  await gp.evaluate(hid => { const g = window.__ls.game; g.selectMachine(hid); }, c.hid);
+  const strikeButton = await gp.waitForSelector("#plane-patrol", { timeout: 3000 }).then(h => h.textContent(), () => null);
+  check(strikeButton === "Strike", `an attack helicopter's card offers ${strikeButton} instead of Patrol`);
+  await gp.evaluate(() => window.__ls.game.selectMachine(null));
+  const samUp = c.sam && await gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active" || null, c.sam, { timeout: 20000 }).then(() => true, () => false);
+  if (samUp) await gp.evaluate(id => { const g = window.__ls.game; g.selectBuilding(id); g.focus(g.world.buildings.get(id).anchor + 1 + g.world.w, 10); }, c.sam);
+  const samText = samUp ? await gp.waitForFunction(() => { const t = document.querySelector("#building-work")?.textContent ?? ""; return /of 4 missiles/.test(t) ? t : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null) : null;
+  await gp.waitForTimeout(400);
+  await gp.screenshot({ path: `${OUT}/75-sam.png` });
+  check(samUp && /^4 of 4 missiles/.test(samText ?? ""), `after Guided missiles a SAM site's card reads "${samText ?? c.samWhy}", with its 8-plot reach drawn`);
+  await gp.evaluate(() => window.__ls.game.selectBuilding(null));
+  const baseUp = c.base && await gp.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active" || null, c.base, { timeout: 30000 }).then(() => true, () => false);
+  if (baseUp) await gp.evaluate(id => { const g = window.__ls.game; g.focus(g.world.buildings.get(id).anchor + 2 + g.world.w, 40); }, c.base);
+  await gp.waitForTimeout(600);
+  await gp.screenshot({ path: `${OUT}/76-airbase.png` });
+  const parts = baseUp ? await gp.evaluate(id => window.__ls.game.world.buildings.get(id)?.def.parts?.length ?? 0, c.base) : 0;
+  check(baseUp && parts === 7, `after Jet engines an air base stands, drawn from its terminal, hangar and runway (${parts} parts)${c.baseWhy ? `: ${c.baseWhy}` : ""}`);
+}
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await login(ip, "rw_scorch", "correct horse");
 await ip.goto(`${BASE}/#w=${indId}`);

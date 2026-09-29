@@ -8,6 +8,20 @@ const refundOf = (cost, share) => Object.fromEntries(Object.entries(cost).map(([
 
 const list = parts => parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
 
+function airText(w, b) {
+  const d = b.def, out = [];
+  if (d.sam && b.state === "active") {
+    const sam = w.samOf(0, b.id);
+    if (sam) out.push(`${sam.missiles} of ${sam.max} missiles${sam.reloadIn ? `, the next ready in ${sam.reloadIn} s` : ""}${sam.missiles < sam.max && (w.purse?.money ?? 0) < d.sam.reloadCost ? ": reloading needs gold" : ""}.`);
+  }
+  if (d.airbase && b.state === "active") {
+    const mine = w.myMachines().filter(u => u.air?.landed && Math.hypot(u.air.x - ((b.anchor % w.w) + d.fp[0] / 2), u.air.y - (Math.floor(b.anchor / w.w) + d.fp[1] / 2)) < 0.6);
+    const waiting = mine.filter(u => u.air.queued).length;
+    out.push(`${mine.length ? `${mine.length} ${mine.length === 1 ? "plane" : "planes"} here` : "No planes here"}${waiting ? `, ${waiting} waiting to rearm` : ""}.`);
+  }
+  return out.join(" ");
+}
+
 function workText(w, def, town) {
   const out = [], g = w.goldRules;
   if (def.gathers && g) out.push(`Earns ${Object.entries(def.gathers).reduce((s, [k, v]) => s + v * (g.worth[k] ?? 1) * g.yield, 0).toFixed(2)} gold a second, no workers needed.`);
@@ -107,7 +121,7 @@ export function createBuildingPanel(root, game) {
       desc.textContent = b.def.description ?? "";
       desc.hidden = !desc.textContent;
       info.textContent = ` ${yours ? "yours" : owner}, ${b.state === "construction" ? `being built, ${Math.floor(b.progress * 100)}%` : b.state === "rubble" ? "rubble, clears soon" : b.state}`;
-      work.textContent = yours ? [workText(w, b.def, w.purse?.town), b.state === "active" ? tradeText(w, b) : "", powerText(w, b)].filter(Boolean).join(" ") : "";
+      work.textContent = yours ? [workText(w, b.def, w.purse?.town), b.state === "active" ? tradeText(w, b) : "", airText(w, b), powerText(w, b)].filter(Boolean).join(" ") : "";
       work.hidden = !work.textContent;
       const builds = yours && b.state === "active" && !w.frozen ? (b.def.builds ?? []).map(t => w.unitTypes.table[t]).filter(Boolean) : [];
       const q = w.purse?.machines?.queues?.[b.id];

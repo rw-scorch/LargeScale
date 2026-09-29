@@ -213,3 +213,17 @@ test("a Modern nation's plan uses Modern buildings: open-pit mines and concrete 
   assert.deepEqual([mines?.pieces.length, mines?.pieces[0].type], [1, "mine_openpit"], "one open-pit mine reaches both iron plots");
   assert.equal(towers?.pieces[0].type, "tower_concrete");
 });
+
+test("a Modern plan puts SAM sites over the capital and airfields that no SAM covers yet", () => {
+  const { w, g, a, put, plan } = world({ era: "Mo" });
+  put("airfield", 32, 44);
+  const sams = byKey(plan(), "sams");
+  assert.deepEqual(sams?.pieces.map(p => p.type), ["sam_site", "sam_site"]);
+  assert.equal(sams.title, "2 SAM sites over the capital and your airfield");
+  assert.match(sams.reason, /^Enemy planes within 8 plots of a SAM site are shot at/);
+  for (const p of sams.pieces) assert.equal(canPlace(w, a, p.type, p.at), null, `a SAM site at ${g.x(p.at)}, ${g.y(p.at)} is placeable`);
+  assert.ok(g.cheb(sams.pieces[0].at, g.idx(19, 19)) <= 5 && g.cheb(sams.pieces[1].at, g.idx(32, 44)) <= 5, "each sits beside what it covers");
+  put("sam_site", g.x(sams.pieces[0].at), g.y(sams.pieces[0].at));
+  assert.equal(byKey(plan(), "sams")?.title, "1 SAM site over your airfield", "a covered capital needs no more");
+  assert.equal(byKey(world({ era: "I" }).plan(), "sams"), undefined, "not before the Modern Age");
+});

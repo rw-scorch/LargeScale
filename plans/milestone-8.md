@@ -340,3 +340,45 @@ This part builds on the kit's `tourism.js`.
       - The APC card has Unload, and its ring offers land, move, stop, pilot and info. Move here sets all 300 down where it stops.
       - The first two runs failed on the test itself: the company had not been formed yet, and the check compared the troops aboard with the whole company instead of the 300 the APC holds.
       - The screenshot showed "Your apc" and "The ship is full". Names starting with two capitals now keep them, and boarding and getting out name the APC.
+- **Part C, air power and air defence (29 September 2026, branch `m8-air`, stacked on `m8-army`).** Built as planned, with these specifics:
+  - **Research.** Five military Modern nodes:
+    - Jet engines (1,300): the jet fighter and the air base.
+    - Strategic bombing (1,400, after Jet engines): the strategic bomber.
+    - Helicopters (1,200): attack and transport helicopters.
+    - Airborne forces (1,000): paratroopers and the transport plane.
+    - Guided missiles (1,200): the SAM site and the SAM truck.
+  - **Planes** (units 42 to 46, built at the airfield or air base, all counting toward the 100):
+
+    | Plane | Health | Speed | Reach | Fuel | Gold | Job |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | Jet fighter | 90 | 5 | 90 | 80 s | 4,200 | shoots planes within 3 plots |
+    | Strategic bomber | 160 | 3 | 140 | 150 s | 6,400 | 3 bombs in a line |
+    | Attack helicopter | 110 | 1.6 | 30 | 110 s | 3,800 | hovers, shoots companies and vehicles |
+    | Transport helicopter | 90 | 1.8 | 40 | 90 s | 2,600 | lifts 200 troops |
+    | Transport plane | 120 | 2.6 | 110 | 130 s | 3,400 | drops 500 paratroopers |
+
+  - **The air base** (building 69) is the airfield's upgrade: 5 by 3 plots, drawn from the terminal, hangar and runway art (`parts` in `data/buildings.json`). Its planes reach 1.5 times as far. It rearms 12 planes at once, the airfield 4 (`airbase.slots`); the rest wait their turn, and their rows and cards say so.
+  - **The strategic bomber** drops its three bombs 1.5 plots apart along its heading, reported as one `bombed` event with `bombs`.
+  - **The attack helicopter** hovers on its spot and hits the nearest enemy company (4 troops a second) or vehicle (6 health a second) within 2 plots (`strike`). It never shoots at planes; fighters, flak and SAMs shoot at it. Its attack of 14 is used only when piloted.
+  - **Troops by air.**
+    - A company boards a transport that is on the ground, as it boards a ship: Board in its ring, or the `board` order. The transport plane takes only the company's paratroopers.
+    - The `air` order's `drop` flies there and sets them down: the helicopter without loss, the plane losing 5% in the jump. On enemy land they pay the plot's capture cost, as a boat landing does.
+    - A transport shot down loses the troops aboard (`plane_down` carries `lost`). One on the ground at an airfield that is lost sets its troops down first.
+    - Piloting a transport, B or the Drop button sets the troops down below.
+  - **Paratroopers** (unit 41, barracks): attack 9, defence 7, capture 1.8, 22 gold.
+  - **SAM sites and trucks.**
+    - The SAM site (building 70) is the flak tower's upgrade, 2 by 2, drawn as the heavy SAM battery and as its empty launcher when it has no missiles. It fires at the nearest enemy plane within 8 plots: 4 missiles of 45 damage, one every 2 s, and one missile back every 15 s for 60 gold.
+    - The SAM truck (unit 47, vehicle factory) carries 2 missiles with a 6-plot reach and follows a company like any land machine.
+    - Each missile is a `sam_fired` event, drawn as a missile with a trail. Catch-up reloads as many as the gold pays for.
+  - **Overlapping air defence.** Every hit from flak, airfield guns and SAMs on one plane in a tick is sorted, largest first, and each counts half as much as the one before (`air.overlap`, `combined` in `src/sim/air.js`). Two SAM sites on one jet do 45 and 22.5. Fighters' guns are not part of this.
+  - **The planner** proposes SAM sites over the capital, the biggest town and airfields that no SAM site covers yet: at most 3 (`planner.sams`), within 5 plots (`samNear`). The civic buildings it proposes first fill the land within 3 plots of the capital.
+  - **Client.**
+    - Machine cards: Strike for the attack helicopter, Land troops or Drop paratroopers for transports, bombs and missiles aboard, and a place in the rearming queue.
+    - Building cards: a SAM site's missiles; the planes at an airfield and how many wait to rearm.
+    - The map: turning rotors, tracers from attack helicopters, SAM missiles, parachutes, a strategic bomber's line of blasts, and the reach ring of a selected SAM site or truck.
+  - **Evidence:**
+    - `npm test`: 269 of 269, with 8 air power tests in `test/airpower.test.js` and a planner test for SAM sites. The reference tests: 95 of 95.
+    - `npm run bench` on mains power, with a Modern air force: each of the 8 players has 100 planes (jet fighters, strategic bombers, attack helicopters and early bombers), 4 SAM sites and 4 SAM trucks.
+      - The air module's own tick: 1.05 ms at the median, 14.5 ms at worst, 3.3 s over 2,400 ticks. 1,655 missions were flown, 763 bomb runs, 19 SAM missiles fired and 4 planes shot down.
+      - The whole tick: 19.2 ms at the median, 103.6 ms at worst, so the bench still fails its 50 ms budget. The worst tick is path extension (60 ms for 12 paths), as before this part; the bench now takes `--modern` and `--sams`.
+    - Smoke, `npm run ui` and the soak have Part C checks written (a helicopter lift and a SAM site in the smoke; boarding, Land troops, Strike, the SAM card and the air base drawing in the UI test; transports, drops, SAM sites and trucks in the soak). They have not been run: they need the dev server.

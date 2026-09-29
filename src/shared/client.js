@@ -14,13 +14,13 @@ const stackFromRow = ([id, owner, pos, troops, order, mix, xp], units) => ({ id,
 
 const MACHINE_STATES = ["idle", "moving", "wreck"];
 
-const MISSIONS = [null, "patrol", "bomb", "return"];
+const MISSIONS = [null, "patrol", "bomb", "return", "drop"];
 
 const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air], units) => {
   const def = units.byNum[num];
   if (!def) return null;
   const u = { id, owner, type: def.id, def, at, hp, state: MACHINE_STATES[state] ?? "idle", cargo, follow: follow || null, face: face ?? 1 };
-  if (air) u.air = { x: air[0] / 10, y: air[1] / 10, heading: air[2] / 100, landed: !!air[3], bombs: air[4], fuel: air[5], mission: MISSIONS[air[6]] ?? null, rearm: air[7] ?? 0 };
+  if (air) u.air = { x: air[0] / 10, y: air[1] / 10, heading: air[2] / 100, landed: !!air[3], bombs: air[4], fuel: air[5], mission: MISSIONS[air[6]] ?? null, rearm: air[7] ?? 0, queued: !!air[8], target: air.length > 10 ? [air[9] / 10, air[10] / 10] : null };
   return u;
 };
 
@@ -118,6 +118,11 @@ export class ClientWorld {
   }
 
   myMachines() { return [...this.machines.values()].filter(u => u.owner === this.you); }
+
+  samOf(kind, id) {
+    const r = this.purse?.sams?.find(r => r[0] === kind && r[1] === id);
+    return r ? { missiles: r[2], max: r[3], reloadIn: r[4] } : null;
+  }
 
   setConvoy([id, owner, pos, kind, amount, era, dest, ship = 0, train = 0]) {
     const old = this.convoys.get(id), moved = old && old.pos !== pos && !!old.ship === !!ship;
@@ -337,7 +342,9 @@ export class ClientWorld {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
         if (e.type === "capital_moved" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.to;
         if (e.type === "deposit_depleted") this.depleted.add(e.at);
-        if (e.type === "bombed") this.effects.push({ kind: "bomb", plot: e.at, at: Date.now() });
+        if (e.type === "bombed") this.effects.push({ kind: "bomb", plot: e.at, at: Date.now(), bombs: e.bombs ?? 1, heading: this.machines.get(e.machine)?.air?.heading ?? 0 });
+        if (e.type === "sam_fired" && e.from && e.to) this.effects.push({ kind: "sam", from: e.from, to: e.to, at: Date.now() });
+        if (e.type === "landed" && this.machines.get(e.machine)?.def.domain === "air") this.effects.push({ kind: this.machines.get(e.machine).def.paraOnly ? "chute" : "heli", plot: e.at, at: Date.now(), n: Math.max(1, Math.min(6, Math.round(e.troops / 30))) });
         if (e.type === "era_up" && this.nations.has(e.nation)) {
           const n = this.nations.get(e.nation);
           n.era = e.era;

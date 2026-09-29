@@ -135,9 +135,22 @@ export class MapRenderer {
 
   spriteFor(b) {
     const a = this.atlas, d = b.def;
-    if (d?.sprite) return b.state === "active" ? d.seasonSprites?.[this.season] ?? d.sprite : a.has(`${b.type}_${b.state}`) ? `${b.type}_${b.state}` : d.seasonSprites?.winter ?? d.sprite;
+    if (d?.sprite) {
+      if (b.state === "active") return d.sam && b.owner === this.state.you && this.state.samOf?.(0, b.id)?.missiles === 0 && a.has(`${d.sprite}_empty`) ? `${d.sprite}_empty` : d.seasonSprites?.[this.season] ?? d.sprite;
+      return a.has(`${d.sprite}_${b.state}`) ? `${d.sprite}_${b.state}` : a.has(`${b.type}_${b.state}`) ? `${b.type}_${b.state}` : d.seasonSprites?.winter ?? d.sprite;
+    }
     if (b.state && b.state !== "active" && a.has(`${b.type}_${b.state}`)) return `${b.type}_${b.state}`;
     return this.frameFor(b.type);
+  }
+
+  drawParts(b, ax, ay, px, colour) {
+    const a = this.atlas;
+    for (const p of b.def.parts) {
+      const id = b.state === "active" ? p.sprite : a.has(`${p.sprite}_${b.state}`) ? `${p.sprite}_${b.state}` : null;
+      if (!id) continue;
+      const [sx, sy] = this.plotToScreen(ax + p.at[0], ay + p.at[1]);
+      a.draw(this.ctx, id, sx, sy - this.riseOf(id, p.fp) * px, px, colour);
+    }
   }
 
   riseOf(id, fp) {
@@ -468,7 +481,7 @@ export class MapRenderer {
   drawFortRing() {
     const s = this.state, b = this.selectedBuilding !== null ? s.buildings.get(this.selectedBuilding) : null;
     const def = this.ghost?.def?.fort ? this.ghost.def : b?.def?.fort && b.state === "active" ? b.def : null;
-    if (!def) return;
+    if (!def) return this.drawSamRing(b);
     const at = this.ghost?.def?.fort ? this.ghost.anchor : b.anchor, R = this.ratio ?? 1, ctx = this.ctx;
     const [x, y] = this.plotToScreen((at % s.w) + def.fp[0] / 2, Math.floor(at / s.w) + def.fp[1] / 2);
     const r = def.fort.radius * this.cam.scale;
@@ -483,6 +496,26 @@ export class MapRenderer {
     ctx.stroke();
     ctx.restore();
     this.label(`defends at ${def.fort.defence} times`, x, y + r + 4 * R, 12 * R, "#e8c84a");
+  }
+
+  drawSamRing(b) {
+    const s = this.state, m = this.selectedMachine != null ? s.machines?.get(this.selectedMachine) : null;
+    const ghost = this.ghost?.def?.sam ? this.ghost : null, sam = ghost?.def.sam ?? (b?.state === "active" ? b.def?.sam : null) ?? (m?.state !== "wreck" ? m?.def.sam : null);
+    if (!sam) return;
+    const R = this.ratio ?? 1, ctx = this.ctx, fp = ghost?.def.fp ?? b?.def.fp;
+    const [x, y] = ghost || (b && b.def?.sam) ? this.plotToScreen(((ghost?.anchor ?? b.anchor) % s.w) + fp[0] / 2, Math.floor((ghost?.anchor ?? b.anchor) / s.w) + fp[1] / 2) : this.plotToScreen(...this.machinePoint(m));
+    const r = sam.radius * (s.map?.scale ?? 1) * this.cam.scale;
+    ctx.save();
+    ctx.strokeStyle = "rgba(120,200,255,.85)";
+    ctx.fillStyle = "rgba(120,200,255,.08)";
+    ctx.lineWidth = 2 * R;
+    ctx.setLineDash([6 * R, 5 * R]);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    this.label(`missiles reach ${sam.radius * (s.map?.scale ?? 1)} plots`, x, y + r + 4 * R, 12 * R, "#9fd4ff");
   }
 
   drawGuide() {
@@ -510,11 +543,48 @@ export class MapRenderer {
     const now = Date.now(), R = this.ratio ?? 1, s = this.state;
     for (let k = list.length - 1; k >= 0; k--) if (now - list[k].at > 4000) list.splice(k, 1);
     for (const fx of list) {
+      const age = now - fx.at;
       if (fx.kind === "bomb") {
-        const age = now - fx.at;
         if (age > 1200) continue;
-        const frame = `flak_burst_${Math.min(2, Math.floor(age / 400))}`, size = Math.max(40 * R, this.cam.scale * 3.2), [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5, ((fx.plot / s.w) | 0) + 0.5);
-        this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, size / 16);
+        const n = fx.bombs ?? 1, gap = 1.5 * (s.map?.scale ?? 1), frame = `flak_burst_${Math.min(2, Math.floor(age / 400))}`, size = Math.max(40 * R, this.cam.scale * 3.2);
+        for (let k = 0; k < n; k++) {
+          const off = (k - (n - 1) / 2) * gap, [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5 + Math.cos(fx.heading ?? 0) * off, ((fx.plot / s.w) | 0) + 0.5 + Math.sin(fx.heading ?? 0) * off);
+          this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, size / 16);
+        }
+        continue;
+      }
+      if (fx.kind === "sam") {
+        if (age > 900) continue;
+        const t = Math.min(1, age / 600), x = fx.from[0] + (fx.to[0] - fx.from[0]) * t, y = fx.from[1] + (fx.to[1] - fx.from[1]) * t, [sx, sy] = this.plotToScreen(x, y);
+        const k = Math.max(R, this.cam.scale / 16), ctx = this.ctx;
+        if (t < 1) {
+          const [fx0, fy0] = this.plotToScreen(fx.from[0] + (fx.to[0] - fx.from[0]) * Math.max(0, t - 0.3), fx.from[1] + (fx.to[1] - fx.from[1]) * Math.max(0, t - 0.3));
+          ctx.save();
+          ctx.strokeStyle = "rgba(235,235,235,.7)";
+          ctx.lineWidth = 2.5 * R;
+          ctx.beginPath();
+          ctx.moveTo(fx0, fy0);
+          ctx.lineTo(sx, sy);
+          ctx.stroke();
+          ctx.translate(sx, sy);
+          ctx.rotate(Math.atan2(fx.to[1] - fx.from[1], fx.to[0] - fx.from[0]));
+          this.atlas.draw(ctx, "proj_sam_missile", -8 * k, -8 * k, k);
+          ctx.restore();
+        } else {
+          const size = Math.max(28 * R, this.cam.scale * 2);
+          this.atlas.draw(this.ctx, `flak_burst_${Math.min(2, Math.floor((age - 600) / 100))}`, sx - size / 2, sy - size / 2, size / 16);
+        }
+        continue;
+      }
+      if (fx.kind === "chute" || fx.kind === "heli") {
+        if (fx.kind === "heli" || age > 3000) continue;
+        const k = Math.max(R, this.cam.scale / 16), fall = 1 - age / 3000;
+        this.ctx.globalAlpha = Math.min(1, fall * 3);
+        for (let j = 0; j < fx.n; j++) {
+          const [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5 + Math.sin(j * 2.4) * 0.8, ((fx.plot / s.w) | 0) + 0.5 + Math.cos(j * 1.7) * 0.5 - fall * 2.5);
+          this.atlas.draw(this.ctx, "parachute", sx - 8 * k, sy - 8 * k + Math.sin(now / 300 + j) * 2 * R, k);
+        }
+        this.ctx.globalAlpha = 1;
         continue;
       }
       if (fx.kind !== "era_up") continue;
@@ -748,9 +818,10 @@ export class MapRenderer {
       if (ax + b.fp[0] < r.x0 || ax > r.x1 || ay > r.y1 || ay + b.fp[1] < r.y0) continue;
       items.push({ key: ay + b.fp[1], x: ax, draw: () => {
         const [sx, sy] = this.plotToScreen(ax, ay);
-        const id = this.spriteFor(b), dry = this.dryDeposit(b);
+        const id = this.spriteFor(b), dry = this.dryDeposit(b), colour = s.nations.get(b.owner)?.colour;
         if (dry) ctx.globalAlpha = 0.55;
-        a.draw(ctx, id, sx, sy - this.riseOf(id, b.fp) * px, px, s.nations.get(b.owner)?.colour);
+        if (b.def?.parts) this.drawParts(b, ax, ay, px, colour);
+        else a.draw(ctx, id, sx, sy - this.riseOf(id, b.fp) * px, px, colour);
         ctx.globalAlpha = 1;
         if (dry) for (const i of b.plots) { const [dx, dy] = this.plotToScreen(i % s.w, (i / s.w) | 0); a.draw(ctx, `deposit_${dry}_depleted`, dx, dy, px); }
         if (b.state === "construction") this.progressBar(sx, sy + (this.ratio ?? 1), b.fp[0] * this.cam.scale, b.progress);
@@ -867,7 +938,25 @@ export class MapRenderer {
     ctx.rotate(p[2]);
     if (!landed && this.atlas.has(shadow)) { ctx.globalAlpha = 0.35; this.atlas.draw(ctx, shadow, (-sp.w * kk) / 2 + lift * 0.4, (-sp.h * kk) / 2 + lift, kk); ctx.globalAlpha = 1; }
     this.atlas.draw(ctx, this.machineSprite(u), (-sp.w * kk) / 2, (-sp.h * kk) / 2, kk, s.nations.get(u.owner)?.colour);
+    const rotor = `${this.machineSprite(u)}_rotor${1 + (Math.floor(Date.now() / 70) % 2)}`;
+    if (u.state !== "wreck" && this.atlas.has(rotor)) this.atlas.draw(ctx, rotor, (-sp.w * kk) / 2, (-sp.h * kk) / 2, kk);
     ctx.restore();
+    const t = u.air?.target;
+    if (t && !landed && Math.floor(Date.now() / 120) % 3) {
+      const [tx, ty] = this.plotToScreen(t[0] + Math.sin(Date.now() / 90) * 0.25, t[1] + Math.cos(Date.now() / 110) * 0.25);
+      ctx.save();
+      ctx.strokeStyle = "#ffe27a";
+      ctx.lineWidth = 1.6 * R;
+      ctx.beginPath();
+      ctx.moveTo(sx + off, sy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,200,90,.85)";
+      ctx.beginPath();
+      ctx.arc(tx, ty, 3.5 * R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   drawFlak() {

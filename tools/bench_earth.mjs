@@ -54,6 +54,8 @@ const { values: a } = parseArgs({ options: {
   ports: { type: "string", default: "4" },
   companies: { type: "string", default: "100" },
   planes: { type: "string", default: "100" },
+  modern: { type: "string", default: "1" },
+  sams: { type: "string", default: "4" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -147,7 +149,23 @@ installRoads(w, { scale, rules: allRules.roads });
 installBoats(w, { scale });
 const soldiers = Number(a.companies) > 0 ? installSoldiers(w) : null;
 const air = Number(a.planes) > 0 ? installAir(w) : null;
-const airSetup = { fields: 0, planes: 0 };
+const airTime = { ms: [], worst: 0 };
+if (air) {
+  const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k];
+  const timed = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; airTime.ms.push(ms); airTime.worst = Math.max(airTime.worst, ms); };
+  timed.whole = hook.whole;
+  w.hooks.postTick[k] = timed;
+}
+const airSetup = { fields: 0, planes: 0, sams: 0, trucks: 0 };
+const planeKinds = Number(a.modern) ? ["jet_fighter", "strategic_bomber", "attack_heli", "jet_fighter", "early_bomber"] : ["biplane", "early_bomber"];
+const nearFree = (id, cx, cy, type, from = 3) => {
+  for (let r = from; r < 40; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !w.grid.inside(cx + dx, cy + dy)) continue;
+    const at = w.grid.idx(cx + dx, cy + dy), plots = footprint(w, at, bld.table[type].fp);
+    if (plots && !plots.some(p => w.owner[p] !== id || bld.at.has(p) || !isLand(terrain[p]))) return { at, plots };
+  }
+  return null;
+};
 if (air) for (const id of players) {
   const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
   let field = null;
@@ -159,7 +177,12 @@ if (air) for (const id of players) {
   }
   if (!field) continue;
   airSetup.fields++;
-  for (let k = 0; k < Number(a.planes); k++) { const u = spawnUnit(w, id, k % 2 ? "early_bomber" : "biplane", field.anchor); if (u) { planeOf(w, u); airSetup.planes++; } }
+  for (let k = 0; k < Number(a.planes); k++) { const u = spawnUnit(w, id, planeKinds[k % planeKinds.length], field.anchor); if (u) { planeOf(w, u); airSetup.planes++; } }
+  if (Number(a.modern)) for (let k = 0; k < Number(a.sams); k++) {
+    const spot = nearFree(id, cx + (k % 2 ? 12 : -12), cy + (k < 2 ? 8 : -8), "sam_site", 0);
+    if (spot) { addBuilding(w, { type: "sam_site", owner: id, anchor: spot.at, plots: spot.plots, state: "active", progress: 1 }); airSetup.sams++; }
+    if (giveMachine(w, id, "sam_truck")) airSetup.trucks++;
+  }
 }
 const airOrders = { issued: 0, ok: 0 };
 let fieldPeak = { soldiers: 0, companies: 0 };
@@ -360,7 +383,7 @@ for (const [name, key] of [["seek", "seek"], ["extendPath", "extend"]]) {
 }
 const feed = new StateFeed(0.01, 5);
 feed.delta(w);
-let maxEvents = 0, maxDiffBytes = 0, blocked = 0, airBombs = 0, airDowns = 0;
+let maxEvents = 0, maxDiffBytes = 0, blocked = 0, airBombs = 0, airDowns = 0, samShots = 0;
 for (let i = 0; i < Number(a.ticks); i++) {
   if (i % 800 === 400) queuePlans();
   if (i % 20 === 0) {
@@ -382,7 +405,7 @@ for (let i = 0; i < Number(a.ticks); i++) {
     const d = feed.delta(w);
     stateSizes.push(d ? Buffer.byteLength(JSON.stringify({ v: 2, t: "state", time: Math.floor(w.time), ...d })) : 0);
   }
-  for (const e of w.events) { if (e.type === "bombed") airBombs++; if (e.type === "plane_down") airDowns++; if (e.type === "plan_done") planDone += e.done; if (e.type === "plan_dropped") planDropped++; }
+  for (const e of w.events) { if (e.type === "bombed") airBombs++; if (e.type === "plane_down") airDowns++; if (e.type === "sam_fired") samShots++; if (e.type === "plan_done") planDone += e.done; if (e.type === "plan_dropped") planDropped++; }
   const shown = publicEvents(w, w.events);
   eventSizes.push(shown.length ? Buffer.byteLength(JSON.stringify({ v: 2, t: "events", events: shown })) : 0);
   maxEvents = Math.max(maxEvents, w.events.length);
@@ -466,7 +489,7 @@ const report = {
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
   worstTickParts: worstParts,
   pathTotals: { seekMs: Math.round(total.seek), seeks: total.seeks, extendMs: Math.round(total.extend), extends: total.extends, perExtendMs: +(total.extend / Math.max(1, total.extends)).toFixed(2) },
-  air: air && { ...airSetup, orders: airOrders, flyingNow: [...w.units.list.values()].filter(u => u.air && !u.air.landed).length, planesNow: [...w.units.list.values()].filter(u => u.air).length, bombRuns: airBombs, shotDown: airDowns },
+  air: air && { ...airSetup, orders: airOrders, flyingNow: [...w.units.list.values()].filter(u => u.air && !u.air.landed).length, planesNow: [...w.units.list.values()].filter(u => u.air).length, bombRuns: airBombs, shotDown: airDowns, samShots, tickMs: airTime.ms.length ? { p50: +[...airTime.ms].sort((x, y) => x - y)[airTime.ms.length >> 1].toFixed(2), worst: +airTime.worst.toFixed(1), total: Math.round(airTime.ms.reduce((x, y) => x + y, 0)) } : null },
   soldiers: soldiers && { perPlayerPeak: fieldPeak, cap: soldiers.rules.fieldCap, stacksNow: w.stacks.size, playerStacksNow: [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human).length, battlesNow: [...w.stacks.values()].filter(s => s.engaged).length },
   rail: { plots: railPlots, stations, trainsNow: trade.trains.size, railSearch: (() => { const list = [...bld.list.values()].filter(b => b.type === "station_large"), t0 = performance.now(); trade.paths.clear(); let found = 0; for (const b of list) for (const c of list) if (b !== c && b.owner === c.owner && railPath(w, b.owner, b, c)) found++; return { pairs: found, ms: +(performance.now() - t0).toFixed(1) }; })() },
   power: power && (() => {

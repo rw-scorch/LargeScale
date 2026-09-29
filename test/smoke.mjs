@@ -933,6 +933,33 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   check(modern && aboard > 0 && drive?.unloads === dest && landed && Math.abs(landed.troops - aboard) < 1 && ashore,
     `after Mechanised warfare an APC takes ${aboard} troops aboard, drives ${Math.round(Math.hypot((dest % ih.w) - (apcAt % ih.w), Math.floor(dest / ih.w) - Math.floor(apcAt / ih.w)))} plots and sets ${Math.round(landed?.troops ?? 0)} down where it stops`);
 }
+{
+  await ask({ t: "research", id: "helicopters", mode: "queue" });
+  await ask({ t: "research", id: "guided_missiles", mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  await until(() => !IM.pump().world.lockOf("sam_site") && !IM.world.lockOf("transport_heli", "units") ? true : null, 5000);
+  const gift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "transport_heli", amount: 1 });
+  const heliId = gift?.machines?.[0];
+  const heli = await until(() => IM.pump().world.machines.get(heliId)?.air ? IM.world.machines.get(heliId) : null, 5000);
+  const cw = IM.world, heliAt = heli?.at;
+  const st = heliAt !== undefined ? await ask({ t: "stack", share: 0.1, at: heliAt }) : null;
+  const boarded = st?.ok ? await ask({ t: "board", stack: st.stack, ship: heliId }) : null;
+  const aboard = boarded?.ok && await until(() => IM.pump().world.machines.get(heliId)?.cargo > 0 ? IM.world.machines.get(heliId).cargo : null, 15000);
+  let dest = null;
+  for (let r = 12; r <= 24 && dest === null; r++) for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) {
+    const x = (heliAt % ih.w) + dx, y = Math.floor(heliAt / ih.w) + dy, i = y * ih.w + x;
+    if (dest === null && x >= 0 && y >= 0 && x < ih.w && y < ih.h && (cw.owner[i] === ih.you || !cw.owner[i]) && isLand(cw.terrain[i])) dest = i;
+  }
+  const flight = aboard && dest !== null ? await ask({ t: "air", plane: heliId, do: "drop", at: dest }) : null;
+  const landed = flight?.ok && await until(() => IN.json.filter(m => m.t === "events").flatMap(m => m.events).find(e => e.type === "landed" && e.machine === heliId), 40000);
+  const ashore = landed && await until(() => [...IM.pump().world.stacks.values()].find(s => s.owner === ih.you && s.pos === dest), 3000);
+  check(aboard > 0 && aboard <= 200 && flight?.ok && landed && ashore,
+    `after Helicopters a transport helicopter lifts ${aboard} troops from its airfield, flies ${Math.round(Math.hypot((dest % ih.w) - (heliAt % ih.w), Math.floor(dest / ih.w) - Math.floor(heliAt / ih.w)))} plots and sets ${Math.round(landed?.troops ?? 0)} down${flight?.ok ? "" : ` (${flight?.error ?? boarded?.error ?? st?.error})`}`);
+  const samId = await buildAt("sam_site", spotFor("sam_site", inCap, 2, 12));
+  const samUp = await until(() => IM.pump().world.buildings.get(samId)?.state === "active", 20000);
+  const loaded = samUp && await until(() => IM.pump().world.samOf(0, samId), 5000);
+  check(samUp && loaded?.missiles === 4 && loaded.max === 4, `after Guided missiles a SAM site stands with ${loaded?.missiles} of ${loaded?.max} missiles`);
+}
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);

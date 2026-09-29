@@ -27,7 +27,7 @@ async function join(world, token) {
     const m = JSON.parse(e.data);
     if (m.t === "hello") { p.cw = new ClientWorld(m); p.hello = m; return; }
     if (m.t === "result" && p.waits.has(m.of)) { const q = p.waits.get(m.of); p.waits.delete(m.of); q(m); }
-    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
+    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
     p.cw?.message(m);
   };
   ws.onclose = e => { p.closed = e.code; };
@@ -73,12 +73,17 @@ await A.send({ t: "admin", op: "speed", factor: 8 });
 const mine = p => { const w = p.cw, out = []; for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === w.you) out.push(i); return out; };
 const near = (w, from, r) => { const x = from % w.w, y = (from / w.w) | 0; return Math.max(0, Math.min(w.h - 1, y + Math.floor(rand() * (2 * r + 1)) - r)) * w.w + Math.max(0, Math.min(w.w - 1, x + Math.floor(rand() * (2 * r + 1)) - r)); };
 
-note("research", await A.send({ t: "research", id: "flight", mode: "queue" }));
+for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: A.cw.you }));
 async function airfield() {
   const w = A.cw;
   if ([...w.buildings.values()].some(b => b.owner === w.you && b.type === "airfield")) return;
   for (const at of mine(A).sort(() => rand() - 0.5).slice(0, 300)) if (!w.placeError("airfield", at)) { note("build airfield", await A.send({ t: "build", type: "airfield", at })); return; }
+}
+async function samSite() {
+  const w = A.cw;
+  if ([...w.buildings.values()].filter(b => b.owner === w.you && b.type === "sam_site").length >= 3 || w.lockOf("sam_site")) return;
+  for (const at of mine(A).sort(() => rand() - 0.5).slice(0, 300)) if (!w.placeError("sam_site", at)) { note("build sam_site", await A.send({ t: "build", type: "sam_site", at })); return; }
 }
 for (let k = 0; k < 40 && A.cw.lockOf("airfield"); k++) await sleep(100);
 
@@ -116,6 +121,11 @@ async function fly(p) {
     m = { t: "detach", picks: [{ stack: s.id, take: { [id]: 1 + Math.floor(rand() * count) } }] };
   } else if (roll < 0.55 && (stacks.length || planes.length)) {
     m = planes.length && (rand() < 0.4 || !stacks.length) ? { t: "pilot", op: "take", machine: pick(planes).id } : { t: "pilot", op: "take", stack: pick(stacks).id };
+  } else if (roll < 0.7 && stacks.length && planes.some(u => u.def.capacity && u.air?.landed && !u.cargo)) {
+    const u = pick(planes.filter(u => u.def.capacity && u.air?.landed && !u.cargo));
+    m = { t: "board", stack: pick(stacks).id, ship: u.id };
+  } else if (roll < 0.8 && planes.some(u => u.def.capacity && u.cargo)) {
+    m = { t: "air", do: "drop", plane: pick(planes.filter(u => u.def.capacity && u.cargo)).id, at: near(w, cap, 20) };
   } else if (planes.length) {
     const what = pick(["patrol", "bomb", "bomb", "return"]);
     m = { t: "air", do: what, planes: planes.filter(() => rand() < 0.5).map(u => u.id).concat(pick(planes).id), ...(what === "return" ? {} : { at: near(w, cap, 18) }) };
@@ -205,7 +215,9 @@ while (Date.now() - t0 < SECONDS * 1000) {
       note("admin give", await A.send({ t: "admin", op: "give", nation: nid, what: "money", amount: 3000 }));
     }
     await airfield();
-    note("admin give plane", await A.send({ t: "admin", op: "give", nation: A.cw.you, what: "machine", unit: pick(["biplane", "early_bomber"]), amount: 2 }));
+    await samSite();
+    note("admin give plane", await A.send({ t: "admin", op: "give", nation: A.cw.you, what: "machine", unit: pick(["biplane", "early_bomber", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane"]), amount: 2 }));
+    if (rounds % 75 === 1) note("admin give sam truck", await A.send({ t: "admin", op: "give", nation: B.cw.you, what: "machine", unit: "sam_truck", amount: 1 }));
   }
   await Promise.all([act(A), act(B)]);
   if (rand() < 0.4) await Promise.all([fly(A), fly(B)]);

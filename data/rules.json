@@ -11,7 +11,7 @@
   "overtime": { "every": 120, "perTick": 4000 },
   "soldiers": { "troopsEach": 10, "fieldCap": 1000, "maxCompanies": 100, "spacing": 0.34, "drawZoom": 14, "drawArea": 900 },
   "pilot": { "every": 50, "sendEvery": 100, "idle": 30, "range": 2, "reload": 1.2, "bonus": 1.5, "aimRadius": 1.2, "followEvery": 1, "turnRate": 2.5, "inputsPerSecond": 30 },
-  "air": { "rearm": 20, "reserve": 1.25, "orbit": 2, "detect": 6, "cell": 8, "dogfight": 4, "bomb": { "defenceCut": 0.5, "cutSeconds": 90, "repairSeconds": 120 } },
+  "air": { "rearm": 20, "reserve": 1.25, "orbit": 2, "detect": 6, "cell": 8, "dogfight": 4, "overlap": 0.5, "stickGap": 1.5, "base": { "reach": 1, "slots": 4 }, "bomb": { "defenceCut": 0.5, "cutSeconds": 90, "repairSeconds": 120 } },
   "guard": { "every": 2, "ratio": 1.5, "reach": 6, "keepHome": 0.25, "lead": 4, "retarget": 3, "cell": 16 },
   "policy": { "taxSteps": [0, 0.5, 1, 1.5, 2], "taxNames": ["None", "Low", "Normal", "High", "Very high"], "taxUnrest": 0.3, "taxGrowth": 0.5, "conscriptMin": 0.1, "conscriptMax": 0.6, "conscriptStep": 0.05, "conscriptWorkLoss": 1 },
   "buildings": { "capturedResidentsKept": 1 },
@@ -28,7 +28,7 @@
   "world": { "botsPerMillionLand": 200, "maxBots": 400, "minMapSide": 64, "maxTestSide": 2000, "maxPlots": 5184000, "baseWidth": 3600, "messagesPerSecond": 20, "messageBurst": 40, "botTroopShare": 0.01, "botStateEvery": 5 },
   "troops": { "xpLevels": [0, 0.3, 1, 3], "xpBonus": [0, 0.1, 0.2, 0.35], "trainEvery": 5, "keepMax": 1000000 },
   "machines": { "wreckSeconds": 300, "queueMax": 10, "hpPerLoss": 1, "supportScale": 1, "portRadius": 2, "followEvery": 1, "limits": { "land": 100, "sea": 100, "air": 100 } },
-  "planner": { "every": 1, "perTick": 6, "maxPieces": 400, "maxProjectPieces": 60, "maxProjects": 40, "keepMax": 32, "keepSide": 128, "block": 7, "search": 30, "freeRes": 6, "freeCom": 4, "freeInd": 4, "indFrom": 6, "towns": 6, "townCell": 12, "farms": 12, "farmRing": [3, 16], "perDeposit": 12, "towers": 8, "airNear": 20, "powerNear": 40, "civicEach": 2 },
+  "planner": { "every": 1, "perTick": 6, "maxPieces": 400, "maxProjectPieces": 60, "maxProjects": 40, "keepMax": 32, "keepSide": 128, "block": 7, "search": 30, "freeRes": 6, "freeCom": 4, "freeInd": 4, "indFrom": 6, "towns": 6, "townCell": 12, "farms": 12, "farmRing": [3, 16], "perDeposit": 12, "towers": 8, "airNear": 20, "powerNear": 40, "civicEach": 2, "sams": 3, "samNear": 5 },
   "admin": { "maxGive": 1000000, "maxSpeed": 8, "logShown": 30, "nameLength": 40 },
   "detail": {
     "fineDir": "map/fine",

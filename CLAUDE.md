@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (260)
+npm test                  # unit tests (269)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -360,10 +360,15 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
   - **APCs.** The ships' boarding code now covers land machines with a `capacity`: `embark`, `disembark` with no loss, the `board` order, `land`, and a `machine` move that sets the troops down where it stops (`unloads`).
   - **Capture.** A carrier with troops aboard is not captured. When an enemy stack comes beside it, the troops get out (`captureLoose` in `src/sim/units.js`).
   - **Client.** The machine card has Unload for carriers, and a stack's ring has Board the APC.
+- **Part C, air power and air defence (29 September 2026, PR 38, base `m8-army`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Content.** Jet engines, Strategic bombing, Helicopters, Airborne forces and Guided missiles. Paratroopers (unit 41); jet fighter, strategic bomber, attack and transport helicopters, transport plane (42 to 46); SAM truck (47); the air base (building 69, the airfield's upgrade, drawn from `parts`) and the SAM site (70, the flak tower's upgrade).
+  - **`src/sim/air.js`.** `airbase` blocks give reach and rearming slots (`baseRules`, `A.queued`). Bombers drop in a line (`stick`). `hover` and `strike` make the attack helicopter. Transports take the `drop` mission (`unload`, `dropTroops` for piloting). SAM sites and trucks (`sam` blocks, `launchers`, `samView` in the purse as `sams`) fire `sam_fired` missiles and reload for gold. All air-defence hits on a plane in a tick combine through `combined` with `air.overlap`.
+  - **Boarding.** `embark` takes a transport on the ground; `paraOnly` takes only paratroopers.
+  - **Planner.** `planAirDefence` proposes SAM sites (`planner.sams`, `samNear`).
 
 Open items as of 29 September 2026, in order:
 
-1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`. PR 35 brings `m6-industry` into `main`. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C), PR 33 (`m7-pilot`, Part D) and PR 34 (`m7-air`, Part E) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PR 36 (`m8-modern`, the planner, base `m7-air`) and PR 37 (`m8-army`, the Modern army, base `m8-modern`) wait for Ryan; Part C, air power and SAMs, is next.
+1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`. PR 35 brings `m6-industry` into `main`. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C), PR 33 (`m7-pilot`, Part D) and PR 34 (`m7-air`, Part E) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PR 36 (`m8-modern`, the planner, base `m7-air`) PR 37 (`m8-army`, the Modern army, base `m8-modern`) and PR 38 (`m8-air`, air power and SAMs, base `m8-army`) wait for Ryan. Part C's smoke, UI and soak checks wait for a dev server run. Part D, the Modern navy, is next.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.

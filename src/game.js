@@ -11,7 +11,7 @@ import { coarseRoute } from "./shared/pathfind.js";
 import { trainRow, tradePerSecond } from "./sim/trade.js";
 import { fieldError, companyError, detachSoldiers } from "./sim/soldiers.js";
 import { takeControl, release, pilotOf } from "./sim/pilot.js";
-import { orderPlane, planeRow } from "./sim/air.js";
+import { orderPlane, planeRow, planeOf } from "./sim/air.js";
 import { planOrder } from "./sim/planner.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
@@ -344,7 +344,7 @@ export const ORDERS = {
   air(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
     if (!sim.air) return fail("planes are not flying in this world");
-    if (!["patrol", "bomb", "return"].includes(m.do)) return fail("the order is patrol, bomb or return");
+    if (!["patrol", "bomb", "drop", "return"].includes(m.do)) return fail("the order is patrol, bomb, drop or return");
     if (m.do !== "return" && !isPlot(sim, m.at)) return fail("that spot is off the map");
     const ids = Array.isArray(m.planes) ? m.planes.slice(0, MAX_GROUP) : [m.plane];
     let done = 0, error = null, rearming = 0;
@@ -466,7 +466,7 @@ export const ORDERS = {
     const u = ownMachine(sim, nation, m.machine);
     if (!u) return fail("not your machine");
     if (u.wreck) return fail("that machine is a wreck");
-    if (UNITS.table[u.type]?.domain === "air") return fail("planes take patrol, bomb and return orders");
+    if (UNITS.table[u.type]?.domain === "air") return fail("planes take patrol, bomb, drop and return orders");
     const def = UNIT_TYPES[u.type];
     if (def.transport) return fail("transport boats sail on their own and land where they were sent");
     if (def.freight) return fail("trade ships sail on their own between ports");
@@ -519,11 +519,16 @@ export const ORDERS = {
     const s = ownStack(sim, nation, m.stack);
     if (!s) return fail("not your stack");
     const u = ownMachine(sim, nation, m.ship), def = u && UNIT_TYPES[u.type];
-    if (!u || u.wreck || def.domain === "air" || !def.capacity) return fail("pick one of your ships or carriers");
+    if (!u || u.wreck || !def.capacity) return fail("pick one of your ships or carriers");
     if (def.transport) return fail("a transport boat carries only the stack it was sent for");
-    if ((u.cargo?.troops ?? 0) >= def.capacity) return fail(def.domain === "land" ? `that ${def.name} is full` : "that ship is full");
+    if ((u.cargo?.troops ?? 0) >= def.capacity) return fail(def.domain === "sea" ? "that ship is full" : `that ${lowName(def.name)} is full`);
+    if (def.domain === "air") {
+      if (!sim.air) return fail("planes are not flying in this world");
+      if (!planeOf(sim, u).landed) return fail(`that ${lowName(def.name)} is in the air: board it at its airfield`);
+      if (def.paraOnly && !(s.mix?.paratrooper >= 1)) return fail("only paratroopers board a transport plane");
+    }
     if (sim.grid.cheb(s.pos, u.at) > 1) {
-      const spot = def.domain === "land" ? u.at : shoreNear(sim, u.at, s.pos);
+      const spot = def.domain !== "sea" ? u.at : shoreNear(sim, u.at, s.pos);
       if (spot === null) return fail("that ship is not next to any land");
       if (!sim.orderMove(s.id, spot, "move")) return fail("no land route to the ship");
     }
@@ -730,6 +735,8 @@ export function purseOf(n, extra = {}) {
 
 const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink"]);
 const QUIET = new Set(["civ_build", "civ_upgrade"]);
+
+const lowName = name => (/^[A-Z]{2}/.test(name) ? name : name.toLowerCase());
 
 export function publicEvents(sim, events) {
   const human = id => id !== undefined && sim.nations.get(id)?.human;

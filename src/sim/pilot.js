@@ -2,7 +2,7 @@ import rules from "../../data/rules.json" with { type: "json" };
 import { isLand } from "../shared/terrain.js";
 import { UNIT_TYPES, unitCost, wreck } from "./units.js";
 import { stackPower, COMBAT } from "./combat.js";
-import { drop } from "./air.js";
+import { drop, dropTroops } from "./air.js";
 
 export const PILOT_RULES = { every: 50, sendEvery: 100, idle: 30, range: 2, reload: 1.2, bonus: 1.5, aimRadius: 1.2, followEvery: 1, turnRate: 2.5, inputsPerSecond: 30, ...rules.pilot };
 
@@ -197,7 +197,7 @@ export function pilotStep(world, dt) {
       if (P.kind === "m" && def?.bomb && world.air) {
         const hit = drop(world, u, P.x, P.y);
         if (hit) world.pilot.shots.push({ from: [P.x, P.y], to: [P.x, P.y], by: P.owner, kind: "shell", hit: hit.troops });
-      }
+      } else if (P.kind === "m" && def?.capacity && def.domain === "air" && world.air) dropTroops(world, u, P.x, P.y);
     }
     P.followClock += dt;
     if (P.followers.length && P.followClock >= r.followEvery) { P.followClock = 0; follow(world, P); }
