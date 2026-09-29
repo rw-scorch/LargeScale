@@ -287,20 +287,6 @@ check(aSpawn >= 0, "player spawns on land");
     const huts = [...cw.buildings.values()].filter(b => b.owner === you && b.type === "hut_grass" && b.state === "active");
     return huts.length >= 2 && cw.purse?.town?.pop > 0 ? huts.length : 0;
   }, 25000);
-  {
-    view.pump();
-    const t0 = performance.now(), plan = proposePlan(cw.planView(), cw.planRules ?? {}), ms = performance.now() - t0;
-    const pick = plan.find(p => p.key.startsWith("block:")) ?? plan.find(p => p.price <= (cw.purse?.money ?? 0));
-    if (pick) A.ws.send(JSON.stringify({ t: "plan", op: "add", project: { key: pick.key, kind: pick.kind, name: pick.title, pieces: pick.pieces } }));
-    const queued = pick && await nextResult(A, "plan");
-    const inQueue = queued?.ok && await until(() => A.json.some(m => m.t === "plan" && m.queue?.some(q => q.key === pick.key)), 3000);
-    const finished = inQueue && await until(() => A.json.some(m => m.t === "events" && m.events.some(e => e.type === "plan_done" && e.name === pick.title)), 20000);
-    const zone = pick?.pieces.find(p => p.t === "zone");
-    const cleared = finished && await until(() => { view.pump(); return (cw.purse?.plan?.projects?.length ?? 1) === 0; }, 3000);
-    const painted = !zone || cw.zone[zone.y * M.w + zone.x] === ["none", "res", "com", "ind", "farm"].indexOf(zone.zone);
-    check(plan.length && finished && painted && cleared,
-      `the planner proposes ${plan.length} projects in ${ms.toFixed(0)} ms (${plan.map(p => p.key.split(":")[0]).join(", ")}); "${pick?.title}" (${pick?.price} gold) is queued, reaches the host's queue, and is built with nothing else pressed`);
-  }
   check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [gold ${cw.purse?.money}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}; the world clock moved ${((await api(`/api/worlds/${wid}/status`, null, ta)).body.time - townClock.world).toFixed(1)} s in ${Math.round((Date.now() - townClock.wall) / 1000)} s]`}`);
   view.pump();
   const zonedBefore = cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0);
@@ -391,6 +377,23 @@ const sought = await until(() => {
   return o?.only === 0 && o.to !== null ? `the purse shows it heading for plot ${o.to}` : s && s.pos !== formed ? `it walked from plot ${formed} to ${s.pos}` : null;
 }, 30000);
 check(sought, `with the unclaimed land around it taken, the stack goes looking for more: ${sought ?? "it never left"}`);
+{
+  const cw = view.world, cx = aSpawn % M.w, cy = Math.floor(aSpawn / M.w);
+  A.ws.send(JSON.stringify({ t: "zone", zone: "none", x: cx - 4, y: cy - 4, w: 9, h: 5 }));
+  await nextResult(A, "zone");
+  await until(() => { view.pump(); return false; }, 800);
+  const t0 = performance.now(), plan = proposePlan(cw.planView(), cw.planRules ?? {}), ms = performance.now() - t0;
+  const pick = plan.find(p => p.key.startsWith("block:")) ?? plan.find(p => p.price <= (cw.purse?.money ?? 0));
+  if (pick) A.ws.send(JSON.stringify({ t: "plan", op: "add", project: { key: pick.key, kind: pick.kind, name: pick.title, pieces: pick.pieces } }));
+  const queued = pick && await nextResult(A, "plan");
+  const inQueue = queued?.ok && await until(() => A.json.some(m => m.t === "plan" && m.queue?.some(q => q.key === pick.key)), 3000);
+  const finished = inQueue && await until(() => A.json.some(m => m.t === "events" && m.events.some(e => e.type === "plan_done" && e.name === pick.title)), 20000);
+  const zone = pick?.pieces.find(p => p.t === "zone");
+  const cleared = finished && await until(() => { view.pump(); return (cw.purse?.plan?.projects?.length ?? 1) === 0; }, 3000);
+  const painted = !zone || cw.zone[zone.y * M.w + zone.x] === ["none", "res", "com", "ind", "farm"].indexOf(zone.zone);
+  check(plan.length && finished && painted && cleared,
+    `the planner proposes ${plan.length} projects in ${ms.toFixed(0)} ms (${plan.map(p => p.key.split(":")[0]).join(", ")}); "${pick?.title}" (${pick?.price} gold) is queued, reaches the host's queue, and is built with nothing else pressed`);
+}
 A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
 const st2 = await nextResult(A, "stack");
 const from = (await until(() => view.pump().stacks.get(st2?.stack)))?.pos;
@@ -429,7 +432,7 @@ for (const i of land.filter((_, k) => k % 211 === 0)) {
 check(moved, `a stack takes a move order at least ${far} plots away (reply seen within ${moved?.ms} ms; the test polls every 50 ms)`);
 const heading = await until(() => view.pump().world.purse?.orders?.find(o => o.id === st2.stack && o.to === moved?.to), 5000);
 const leaked = B.json.some(m => m.t === "purse" && (m.orders ?? []).some(o => o.id === st2.stack));
-check(heading && !leaked, `the host's purse says where the moving stack is heading (plot ${heading?.to}); the friend's does not`);
+check(heading && !leaked, `the host's purse says where the moving stack is heading (plot ${heading?.to}); the friend's does not${heading ? "" : ` [stack ${JSON.stringify(view.stacks.get(st2.stack) ?? null)}, orders ${JSON.stringify(view.world.purse?.orders)}, its events ${JSON.stringify(A.json.filter(m => m.t === "events").flatMap(m => m.events).filter(e => e.stack === st2.stack || e.into === st2.stack).slice(-6))}]`}`);
 const snap = (x0, y0, r) => {
   for (let d = 0; d < 80 * K; d++) for (let dy = -d; dy <= d; dy++) for (let dx = -d; dx <= d; dx++) {
     const x = x0 + dx, y = y0 + dy;

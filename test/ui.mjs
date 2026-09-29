@@ -263,7 +263,7 @@ await page.keyboard.press("Escape");
   check(panel && items > 0 && drawn === items && !lay.hit.length && !lay.off.length, `O opens the planner: ${items} projects, each drawn as outlines on the map ("${summary}", ${await page.evaluate(() => window.__ls.game.planMs)} ms)`);
   const first = await page.evaluate(() => { const list = window.__ls.game.planner.proposals, p = list.find(p => p.key.startsWith("block:")) ?? list[0]; return p && { key: p.key, title: p.title }; });
   if (first) await page.click(`#planner-list .plan-item[data-key="${first.key}"] .plan-build`);
-  const queuedUi = first && await page.waitForFunction(k => window.__ls.game.world.planQueue.some(q => q.key === k) || window.__ls.game.world.purse?.plan?.projects?.some(p => p[0] === k) ? true : null, first.key, { timeout: 5000 }).then(() => true, () => false);
+  const queuedUi = first && await page.waitForFunction(p => { const w = window.__ls.game.world; return w.planQueue.some(q => q.key === p.key) || w.purse?.plan?.projects?.some(r => r[0] === p.key) || w.events.some(e => e.type === "plan_done" && e.name === p.title) ? true : null; }, first, { timeout: 5000 }).then(() => true, () => false);
   const built = queuedUi && await page.waitForFunction(t => [...document.querySelectorAll("#feed-list .item")].some(e => e.textContent.includes(`Plan finished: ${t}`)), first.title, { timeout: 30000 }).then(() => true, () => false);
   await page.screenshot({ path: `${OUT}/2q-planned-${MAP}.png` });
   check(queuedUi && built, `Build queues "${first?.title}", and it is built with nothing else pressed; the feed says it is finished`);
@@ -1673,11 +1673,11 @@ const overseas = await gp.evaluate(async () => {
   return best;
 });
 const boatToast = await gp.waitForFunction(() => /by boat/.test(document.querySelector("#toasts")?.textContent ?? "") ? document.querySelector("#toasts").textContent : null, null, { timeout: 5000 }).then(h => h.jsonValue(), async () => `none: target ${overseas}, toasts "${await gp.textContent("#toasts")}"`);
-const boatAt = await gp.waitForFunction(() => [...window.__ls.game.world.machines.values()].find(u => u.type === "transport_boat")?.at ?? null, null, { timeout: 20000 }).then(h => h.jsonValue(), () => null);
+const boatAt = await gp.waitForFunction(() => { const w = window.__ls.game.world; return [...w.machines.values()].find(u => u.type === "transport_boat")?.at ?? w.events.find(e => e.type === "boat_launched" && e.nation === w.you)?.at ?? null; }, null, { timeout: 20000 }).then(h => h.jsonValue(), () => null);
 if (boatAt !== null) { await gp.evaluate(at => window.__ls.game.focus(at, 20), boatAt); await gp.waitForTimeout(250); await gp.screenshot({ path: `${OUT}/49-boat.png` }); }
 const landedLine = await gp.waitForFunction(() => { const t = document.querySelector("#feed-list")?.textContent ?? ""; return /troops landed/.test(t) ? t.match(/\d+ troops landed[^.]*\.[^.]*\./)?.[0] ?? "landed" : null; }, null, { timeout: 40000 }).then(h => h.jsonValue(), () => "");
 const boatGone = await gp.waitForFunction(() => ![...window.__ls.game.world.machines.values()].some(u => u.type === "transport_boat"), null, { timeout: 5000 }).then(() => true, () => false);
-const heldThere = await gp.evaluate(t => window.__ls.game.world.owner[t] === window.__ls.game.world.you, overseas);
+const heldThere = await gp.waitForFunction(t => window.__ls.game.world.owner[t] === window.__ls.game.world.you, overseas, { timeout: 15000 }).then(() => true, () => false);
 check(/by boat to take unclaimed land, losing about \d+% as they land/.test(boatToast) && boatAt !== null && /troops landed/.test(landedLine) && boatGone && heldThere,
   `Attack on land across water sends a free boat from the start ("${boatToast}"); it lands ("${landedLine}"), takes the land and the boat is gone`);
 const moveBoat = await gp.evaluate(async t => {
