@@ -279,5 +279,20 @@ This part builds on the kit's `tourism.js`.
       - The bench cannot give a pass or fail today: the laptop is on battery (39%, Balanced plan), and the same code swings several times between runs.
         - The previous commit, without the planner, measured a p99 of 52.5 ms, where it measured 30.1 ms this morning.
         - Two runs of this branch, back to back: with the planner off, worst 273 ms (p99 159); with it on, worst 63 ms (p99 51). The median was 12 ms in both.
-      - It is rerun on mains power before this part is called done.
+      - **Rerun on mains power** (afternoon of 29 September), full Earth bench, back to back:
+
+        | Planner | Median tick | p99 | Worst | Path extends |
+        | --- | --- | --- | --- | --- |
+        | On (35 projects, 195 pieces queued) | 19.9 ms | 76.1 ms | 107 ms | 11,970 at 5.1 ms each |
+        | Off | 18.1 ms | 74.9 ms | 97 ms | 11,655 at 4.7 ms each |
+
+        The planner adds about 2 ms at the median. Both runs are over the 50 ms budget, but so is the same simulation without the planner: it measured 41 ms at worst this morning, so the machine is running about 2.5 times slower now. The bench needs a rerun with the laptop cool and in its best performance mode.
+  - **Dev server run (29 September 2026).** Ryan said go ahead.
+    - `npm run smoke` on the test map: 114 of 114. The planner proposed 3 projects in 25 to 35 ms, and the housing block it queued was built with nothing else pressed.
+    - `npm run soak`, 180 s: 1,248 rounds, 0 tick errors, no problems. There were 150 plan additions and 58 kept areas, with up to 15 projects proposed at once.
+    - `npm run ui`: 170 of 171.
+      - O opens the planner, and Build builds a project with nothing else pressed.
+      - The layout checks pass at 1280 by 720 and on a phone held sideways, after two changes: Deposits moved to the corner icons, and the zoom buttons are hidden on touch screens, where pinching zooms.
+      - The one failure was the test, not the game. At speed 4 the free boat crosses a 7-plot strait before the browser sees it on the map. The check now also accepts the `boat_launched` event.
+    - A first smoke run failed three stack checks once: the second stack was gone after a long move. The next run passed them, and the check now prints the stack and its events if it happens again.
     - Smoke, `npm run ui` and the soak have planner checks written, but they have not been run: the dev server stays off until Ryan asks for it.

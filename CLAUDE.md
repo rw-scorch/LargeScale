@@ -348,7 +348,7 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
 - Troops go by air in transport helicopters and as paratroopers.
 - Submarines dive by water depth and cannot be hit in deep ocean, but rise to fire.
 
-- **Part A, the planner (29 September 2026, PR 36, base `m7-air`).** Details and evidence are in `plans/milestone-8.md`. Smoke, `npm run ui` and soak checks are written but wait for a dev server run, and the bench waits for a run on mains power.
+- **Part A, the planner (29 September 2026, PR 36, base `m7-air`).** Details and evidence are in `plans/milestone-8.md`. Smoke 114 of 114, soak clean, and `npm run ui` 170 of 171, with the one failure a test race that is now fixed. On the bench the planner adds about 2 ms at the median, but the machine ran 2.5 times slower that afternoon, so the 50 ms budget needs a rerun.
   - `src/shared/planner.js` (`proposePlan`, `piecePlots`) proposes projects from a view of the world: `ClientWorld.planView()` in the browser, and `planView` in `src/sim/planner.js` on the server.
   - `src/sim/planner.js` (`installPlanner`, rank 5) keeps each nation's queue (`n.plan`) and kept-clear areas (`n.keepClear`), and runs the `plan` order (`add`, `cancel`, `clear`, `keep`). Rules are in `rules.json` `planner`.
   - The purse carries `plan` (`planSummary`). The queue goes as a `plan` message when it changes, and in `hello` with `planRules`.
