@@ -62,9 +62,11 @@ test("a bomber flies to its target, bombs it, and comes home to rearm; the damag
   const bomber = spawnUnit(w, a, "early_bomber", g.idx(21, 21));
   const foe = w.createStack(b, g.idx(70, 20), 500);
   const shop = addBuilding(w, { type: "bunker", owner: b, anchor: g.idx(71, 21), state: "active" });
-  const far = order(a, { t: "air", plane: bomber.id, do: "bomb", at: g.idx(130, 20) });
-  assert.equal(far.ok, false);
-  assert.match(far.error, /^out of range: 109 plots from its airfield, at most 70$/);
+  const fighter = spawnUnit(w, a, "biplane", g.idx(21, 21));
+  assert.match(order(a, { t: "air", plane: fighter.id, do: "patrol", at: g.idx(130, 20) }).error, /^out of range: 109 plots from its airfield, at most 50$/, "fighters keep a short reach");
+  assert.ok(["early_bomber", "strategic_bomber"].every(id => UNIT_TYPES[id].radius >= Math.hypot(3600, 1440)), "a bomber reaches any spot on the Earth map from any airfield");
+  assert.ok(["early_bomber", "strategic_bomber"].every(id => UNIT_TYPES[id].endurance * UNIT_TYPES[id].speed >= 3 * 3600), "and has fuel to cross it three times");
+  assert.equal(order(a, { t: "air", plane: bomber.id, do: "bomb", at: g.idx(130, 20) }).ok, true, "the far side of this map is in reach");
   assert.equal(order(a, { t: "air", plane: bomber.id, do: "patrol", at: g.idx(70, 20) }).error, "bombers do not patrol: send fighters");
   const raw = w.captureCost(g.idx(70, 21), a);
   assert.equal(order(a, { t: "air", plane: bomber.id, do: "bomb", at: g.idx(70, 20) }).ok, true);
@@ -153,4 +155,34 @@ test("planes are limited to 100, catch-up lands them, a piloted bomber drops its
   const u = c.machines.get(bomber.id);
   assert.equal(u.air.bombs, 0);
   assert.ok(Math.abs(u.air.x - w.pilot.list.get(`m:${bomber.id}`).x) < 0.2);
+});
+
+test("a bomber crosses a map as wide as the Earth, bombs the far end and comes home with fuel to spare", () => {
+  const W = 3600, H = 12, terrain = new Uint8Array(W * H).fill(TID.grassland);
+  const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2 });
+  installCombat(w);
+  installTroops(w);
+  installBuildings(w);
+  installMachines(w);
+  installAir(w);
+  const g = w.grid, a = w.addNation({ name: "A" }), b = w.addNation({ name: "B" });
+  w.spawn(a, 10, 6);
+  w.spawn(b, 3590, 6);
+  for (let y = 0; y < H; y++) for (let x = 0; x < 30; x++) w.claim(g.idx(x, y), a);
+  Object.assign(w.nations.get(a), { money: 1e6, era: "I" });
+  addBuilding(w, { type: "airfield", owner: a, anchor: g.idx(4, 4), state: "active" });
+  const foe = w.createStack(b, g.idx(3590, 6), 400);
+  for (const id of ["early_bomber", "strategic_bomber"]) {
+    const u = spawnUnit(w, a, id, g.idx(5, 5));
+    w.tick(1);
+    const r = runOrder(w, a, { t: "air", plane: u.id, do: "bomb", at: g.idx(3590, 6) });
+    assert.equal(r.ok, true, `${id}: 3,585 plots away is in reach (${r.error})`);
+    let lowest = Infinity, t = 0;
+    w.events.length = 0;
+    for (; t < 20000 && !(planeOf(w, u).landed && planeOf(w, u).bombs === 0 && w.events.some(e => e.type === "bombed")); t += 5) { w.tick(5); if (!planeOf(w, u).landed) lowest = Math.min(lowest, planeOf(w, u).fuel); }
+    assert.ok(w.units.list.has(u.id) && !w.events.some(e => e.type === "plane_down"), `${id} came back`);
+    assert.ok(w.events.some(e => e.type === "bombed" && e.at === g.idx(3590, 6)), `${id} bombed the far end`);
+    assert.ok(lowest > UNIT_TYPES[id].endurance / 3, `${id} landed with over a third of its fuel left: ${Math.round(lowest)} of ${UNIT_TYPES[id].endurance} s, after ${t} s`);
+  }
+  assert.ok(foe.troops < 400, "the company at the far end took the bombs");
 });
