@@ -295,4 +295,48 @@ This part builds on the kit's `tourism.js`.
       - The layout checks pass at 1280 by 720 and on a phone held sideways, after two changes: Deposits moved to the corner icons, and the zoom buttons are hidden on touch screens, where pinching zooms.
       - The one failure was the test, not the game. At speed 4 the free boat crosses a 7-plot strait before the browser sees it on the map. The check now also accepts the `boat_launched` event.
     - A first smoke run failed three stack checks once: the second stack was gone after a long move. The next run passed them, and the check now prints the stack and its events if it happens again.
-    - Smoke, `npm run ui` and the soak have planner checks written, but they have not been run: the dev server stays off until Ryan asks for it.
+- **Part B, the Modern Age and its army (29 September 2026, branch `m8-army`, stacked on `m8-modern`).** Built as planned, with these specifics:
+  - **Research.**
+    - The Modern Age (`age_modern`) sits in the Industrial column and costs 3,600 points. It comes after Railways, Armour, Flight and Universities, and needs 12 Industrial nodes across the 4 branches.
+    - Twelve Modern nodes cost 800 to 1,400 points:
+      - **military:** Modern infantry; Special operations; Anti-tank weapons (+5% defence); Mechanised warfare; Rocketry; Reinforced concrete (the concrete tower);
+      - **economy:** Open-pit mining; Modern oil (pumpjack and offshore rig); Natural gas; Automation (the modern factory, +5% income);
+      - **civic:** High-rise living (apartment blocks); Consumer society (cafes).
+    - Every Modern building already in the registry is now behind one of them. Homes and shops upgrade to them only once they are known.
+  - **Soldiers** (units 35 to 37, trained at the barracks line):
+
+    | Type | Attack | Defence | Speed | Capture | Gold |
+    | --- | --- | --- | --- | --- | --- |
+    | Soldiers | 8 | 7 | 1.2 | 1.6 | 14 |
+    | Special forces | 11 | 6 | 1.4 | 2.2 | 24 |
+    | Anti-tank teams | 7 | 11 | 1 | 1.2 | 16 |
+
+    Stormtroopers are 6 and 3.
+  - **Machines** (units 38 to 40, built at the vehicle factory, all counting toward the 100):
+    - main battle tank: 320 health, attack 64, defence 44, speed 1.8, 3,400 gold;
+    - APC: carries up to 300 troops, 1,600 gold;
+    - rocket artillery: cuts capture cost to 1/4.5 within 6 plots, 2,600 gold.
+  - **APCs** use the ships' boarding code, widened to land machines with a `capacity`.
+    - A company boards with `board`, or Board the APC in its ring, and walks onto the APC's plot.
+    - A `machine` move with troops aboard sets them down where it stops, and the reply carries `unloads`. `land`, which is Unload on the card and Unload here in the ring, sets them down on a chosen plot.
+    - There is no loss, and a hostile plot costs its capture cost.
+    - Troops aboard count toward the 1,000 soldiers.
+    - **Added:** a carrier with troops aboard is not captured. When an enemy stack comes beside it, the troops get out and fight. Before, a capture would have handed the enemy an APC with your troops still inside; now a capture empties it.
+  - **The planner** places Modern buildings once they are known, and centres mines on their deposit. Before, a 3 by 3 open-pit mine only just reached its deposit and missed the one beside it.
+  - **Evidence:**
+    - `npm test`: 260 of 260, with six Modern tests:
+      - the era and its unlocks;
+      - soldiers and training;
+      - the vehicle factory;
+      - an APC's trip;
+      - unloading on enemy land, and troops getting out;
+      - rocket artillery's range.
+    - It also has a planner test for Modern buildings.
+    - `npm run smoke`: 115 of 115. After Mechanised warfare an APC took 300 troops aboard, drove 8 plots and set all 300 down where it stopped.
+      - Two older checks depend on where the host lands, which changes with how far the bot has spread by then. One run in five had no free strip for the road check and a friend too far off to beat in 90 s.
+      - The road check now searches a wider area, and the elimination check prints why if it fails.
+    - `npm run ui`: 173 of 173 on the test map.
+      - A company right-clicks the APC and gets in: 300 aboard.
+      - The APC card has Unload, and its ring offers land, move, stop, pilot and info. Move here sets all 300 down where it stops.
+      - The first two runs failed on the test itself: the company had not been formed yet, and the check compared the troops aboard with the whole company instead of the 300 the APC holds.
+      - The screenshot showed "Your apc" and "The ship is full". Names starting with two capitals now keep them, and boarding and getting out name the APC.

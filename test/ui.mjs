@@ -1932,8 +1932,11 @@ check(railRow && !railRow.disabled && /Railway12 gold a plot/.test(railRow.text)
     const gift = await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit: "apc", amount: 1 });
     const id = gift.machines?.[0], seen = Date.now() + 4000;
     while (id && !w.machines.has(id) && Date.now() < seen) await new Promise(r => setTimeout(r, 100));
+    await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "troops", amount: 2000 });
     const at = w.machines.get(id)?.at, st = await g.conn.request({ t: "stack", share: 0.1, at });
-    return { era: w.purse?.era, id, at, stack: st.stack ?? null, troops: st.ok ? Math.round(w.stacks.get(st.stack)?.troops ?? 0) : 0 };
+    const shown = Date.now() + 3000;
+    while (st.ok && !w.stacks.has(st.stack) && Date.now() < shown) await new Promise(r => setTimeout(r, 100));
+    return { era: w.purse?.era, id, at, stack: st.stack ?? null, why: st.error ?? null, troops: st.ok ? Math.round(w.stacks.get(st.stack)?.troops ?? 0) : 0 };
   });
   await gp.keyboard.press("k");
   const modernArmy = await gp.waitForFunction(() => { const t = document.querySelector("#army-list")?.textContent ?? ""; return ["Soldiers", "Special forces", "Anti-tank teams"].every(n => t.includes(n)) ? true : null; }, null, { timeout: 5000 }).then(() => true, () => false);
@@ -1954,9 +1957,10 @@ check(railRow && !railRow.disabled && /Railway12 gold a plot/.test(railRow.text)
   const ringLabels = await ringItems(gp);
   await gp.click("#ring .ring-item[data-ring=move]").catch(() => {});
   const setDown = await gp.waitForFunction(t => [...window.__ls.game.world.stacks.values()].find(s => s.owner === window.__ls.game.world.you && s.pos === t)?.troops ?? null, dest, { timeout: 20000 }).then(h => h.jsonValue(), () => null);
+  await gp.waitForTimeout(400);
   await gp.screenshot({ path: `${OUT}/73-apc.png` });
-  check(boardItem && aboard >= m.troops - 1 && unloadButton && ringLabels.includes("land") && Math.abs((setDown ?? 0) - aboard) < 1,
-    `a stack right-clicks the APC and gets in ("${boardItem}", ${aboard} aboard); the APC's card has Unload, its ring offers ${ringLabels.join(", ")}, and Move here sets all ${Math.round(setDown ?? 0)} down where it stops`);
+  check(boardItem && aboard >= Math.min(m.troops, 300) - 1 && unloadButton && ringLabels.includes("land") && Math.abs((setDown ?? 0) - aboard) < 1,
+    `a stack right-clicks the APC and gets in ("${boardItem}", ${aboard} aboard${m.stack === null ? `; the stack was not formed: ${m.why}` : ""}); the APC's card has Unload, its ring offers ${ringLabels.join(", ")}, and Move here sets all ${Math.round(setDown ?? 0)} down where it stops`);
   await gp.keyboard.press("Escape");
 }
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });

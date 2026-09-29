@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (253)
+npm test                  # unit tests (260)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -353,6 +353,13 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
   - `src/sim/planner.js` (`installPlanner`, rank 5) keeps each nation's queue (`n.plan`) and kept-clear areas (`n.keepClear`), and runs the `plan` order (`add`, `cancel`, `clear`, `keep`). Rules are in `rules.json` `planner`.
   - The purse carries `plan` (`planSummary`). The queue goes as a `plan` message when it changes, and in `hello` with `planRules`.
   - The Planner card is `public/js/ui/planner.js` (O, and Plan in the action bar). The renderer draws `view.plan` (`drawPlan`). Keep land clear is the zone drag in the `keep` mode.
+  - Deposits moved from the action bar to the corner icons. The zoom buttons are hidden on touch screens (`pointer:coarse`), so the bar and the corner fit on a phone.
+- **Part B, the Modern Age and its army (29 September 2026, branch `m8-army`, stacked on `m8-modern`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Research.** `age_modern` (in the Industrial column) and twelve Modern nodes. Every Modern building is behind one.
+  - **Units.** Soldiers, special forces and anti-tank teams (units 35 to 37, barracks). Main battle tank, APC and rocket artillery (38 to 40, vehicle factory).
+  - **APCs.** The ships' boarding code now covers land machines with a `capacity`: `embark`, `disembark` with no loss, the `board` order, `land`, and a `machine` move that sets the troops down where it stops (`unloads`).
+  - **Capture.** A carrier with troops aboard is not captured. When an enemy stack comes beside it, the troops get out (`captureLoose` in `src/sim/units.js`).
+  - **Client.** The machine card has Unload for carriers, and a stack's ring has Board the APC.
 
 Open items as of 29 September 2026, in order:
 
