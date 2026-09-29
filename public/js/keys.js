@@ -13,6 +13,7 @@ export const ACTIONS = {
   deposits: { key: "r", label: "Show deposits on the map" },
   research: { key: "u", label: "Research: the upgrade tree" },
   upgrade: { key: "y", label: "Upgrade buildings in bulk" },
+  plan: { key: "o", label: "Planner: projects proposed for your nation, built when you approve them" },
   army: { key: "k", label: "Army: train soldiers and see your reserve" },
   armies: { key: "v", label: "Armies: a swipe picks your soldiers one by one" },
   pilot: { key: "p", label: "Pilot the selected company or machine: WASD to move, the mouse to aim" },

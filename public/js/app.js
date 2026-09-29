@@ -28,6 +28,7 @@ import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
 import { createLogisticsPanel } from "./ui/logistics.js";
+import { createPlannerPanel } from "./ui/planner.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createRing, ownerItems } from "./ui/ring.js";
 import { createAttacks } from "./ui/attacks.js";
@@ -97,6 +98,7 @@ class Game {
     this.buildMenu = createBuildMenu(side, this);
     this.buildingPanel = createBuildingPanel(side, this);
     this.town = createTownPanel(side, this);
+    this.planner = createPlannerPanel(side, this);
     this.research = createResearchPanel(overlay, this);
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
@@ -294,6 +296,8 @@ class Game {
       const what = e.only === 0 ? "unclaimed land" : e.only ? `${name(e.only)}'s land` : "land to take";
       say(`done${e.stack}`, e.sought ? `A stack stopped: it found no ${what} it can reach by land${e.only !== null ? " without going through another nation's land" : ""}.` : "A stack stopped advancing: nothing left to take within its reach.", 5000, "warn", stackAt(e.stack));
     }
+    if (e.type === "plan_done" && e.nation === you) say(`pd${e.name}${e.done}`, `Plan finished: ${e.name}${e.dropped ? `, with ${e.dropped} ${e.dropped === 1 ? "piece" : "pieces"} dropped` : ""}.`, 0, "built");
+    if (e.type === "plan_dropped" && e.nation === you) say(`pdrop${e.name}`, `Part of "${e.name}" was dropped: ${e.why}.`, 20000, "warn");
     if (e.type === "overtime_shrink") say("shrink", `Overtime: every nation's border shrank, ${fmt(e.plots)} plots in all.`, 0, "danger", null);
     if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0, "danger", e.to);
     if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0, "built", w.buildings.get(e.building)?.anchor ?? null);
@@ -406,6 +410,7 @@ class Game {
     if (action === "upgrade") return this.toggleUpgrade();
     if (action === "army") return this.toggleArmy();
     if (action === "logistics") return this.toggleLogistics();
+    if (action === "plan") return this.togglePlanner();
     if (action === "deposits") return this.toggleDeposits();
     if (action === "armies") return this.toggleArmies();
     if (action === "pilot") return this.pilotSelected();
@@ -433,6 +438,7 @@ class Game {
       else if (this.army.open) this.toggleArmy(false);
       else if (this.logistics.open) this.toggleLogistics(false);
       else if (this.research.open) this.toggleResearch(false);
+      else if (this.planner.open) this.togglePlanner(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
       else if (this.soldiersPanel.choosing) { this.soldiersPanel.cancel(); }
@@ -448,6 +454,7 @@ class Game {
 
   toggleBuildMenu(on = !this.buildMenu.open) {
     if (on && this.town.open) this.town.show(false);
+    if (on && this.planner.open) this.togglePlanner(false);
     const me = this.world?.nations.get(this.world.you);
     this.buildMenu.show(on && !!me?.spawned && me.alive && !this.world.frozen);
     if (!this.buildMenu.open) this.stopBuild();
@@ -500,6 +507,30 @@ class Game {
     this.updatePanels();
   }
 
+  togglePlanner(on = !this.planner.open) {
+    if (on && this.buildMenu.open) this.toggleBuildMenu(false);
+    if (on && this.town.open) this.town.show(false);
+    const me = this.world?.nations.get(this.world.you);
+    this.planner.show(on && !!this.world?.purse && !!me?.spawned && me.alive && !this.world.frozen);
+    if (!this.planner.open && this.zoning === "keep") this.stopBuild();
+    this.updatePanels();
+  }
+
+  toggleKeepClear() {
+    if (this.zoning === "keep") return this.stopBuild();
+    this.startZone("keep");
+    this.toast("Drag over land the planner should leave alone.");
+  }
+
+  async keepClear(r) {
+    const w = this.world, R = w.planRules ?? {}, side = R.keepSide ?? 128, rects = [...(w.purse?.plan?.keep ?? [])];
+    for (let y = r.y; y < r.y + r.h; y += side) for (let x = r.x; x < r.x + r.w; x += side) rects.push([x, y, Math.min(side, r.x + r.w - x), Math.min(side, r.y + r.h - y)]);
+    const res = await this.conn.request({ t: "plan", op: "keep", rects });
+    if (!res.ok) return this.toast(res.error ?? "could not keep that clear");
+    this.toast(`The planner leaves ${r.w} by ${r.h} plots alone.`);
+    this.planner.replan(true);
+  }
+
   toggleDeposits() {
     if (!this.view) return;
     this.view.showDeposits = !this.view.showDeposits;
@@ -509,6 +540,7 @@ class Game {
 
   toggleTown(on = !this.town.open) {
     if (on && this.buildMenu.open) this.toggleBuildMenu(false);
+    if (on && this.planner.open) this.togglePlanner(false);
     this.town.show(on && !!this.world?.purse);
     this.updatePanels();
   }
@@ -531,13 +563,14 @@ class Game {
   dragZone(a, b) {
     if (!this.view || !this.zoning) return;
     const r = this.zoneRectOf(a, b);
-    this.view.zoneRect = { ...r, code: ["none", "res", "com", "ind", "farm"].indexOf(this.zoning) };
+    this.view.zoneRect = { ...r, code: ["none", "res", "com", "ind", "farm"].indexOf(this.zoning), keep: this.zoning === "keep" };
   }
 
   async paintZone(a, b) {
     if (!this.view || !this.zoning) return;
     const r = this.zoneRectOf(a, b), zone = this.zoning;
     this.view.zoneRect = null;
+    if (zone === "keep") return this.keepClear(r);
     let painted = 0;
     for (let y = r.y; y < r.y + r.h; y += MAX_ZONE_SIDE) for (let x = r.x; x < r.x + r.w; x += MAX_ZONE_SIDE) {
       const res = await this.conn.request({ t: "zone", zone, x, y, w: Math.min(MAX_ZONE_SIDE, r.x + r.w - x), h: Math.min(MAX_ZONE_SIDE, r.y + r.h - y) });
@@ -1253,7 +1286,7 @@ class Game {
       for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
       if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
     }
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

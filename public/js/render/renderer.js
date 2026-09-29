@@ -21,6 +21,7 @@ const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
 const ZONE_SPRITE = [null, "ov_zone_residential", "ov_zone_commercial", "ov_zone_industrial", "ov_zone_farmland"];
 const DEPOSIT_COLOUR = { stone: "#b8b0a0", clay: "#c07850", iron: "#a05a4a", copper: "#d08a40", tin: "#c8c8d0", coal: "#303030", gold: "#f0c840", silver: "#e0e0f0", gems: "#c060e0", oil: "#101010", gas: "#80c0c0", uranium: "#80f060", bauxite: "#d06040", lithium: "#f0f0f0", sulfur: "#f0f040", salt: "#ffffff", fish: "#50a0f0" };
 export const ZONE_COLOUR = [null, "rgba(111,207,122,.35)", "rgba(90,160,230,.35)", "rgba(232,200,74,.35)", "rgba(190,150,90,.35)"];
+const ZONE_RGB = { res: "111,207,122", com: "90,160,230", ind: "232,200,74", farm: "190,150,90" };
 const maskName = m => DIRS.filter(([b]) => m & b).map(d => d[1]).join("") || "dot";
 const ICON_FOR = { resources: "mapicon_industry", farming: "mapicon_agriculture", housing: "mapicon_housing", res: "mapicon_housing", commercial: "mapicon_commercial", com: "mapicon_commercial", industry: "mapicon_industry", ind: "mapicon_industry", infrastructure: "mapicon_industry", agriculture: "mapicon_agriculture", farm: "mapicon_agriculture", energy: "mapicon_energy", civic: "mapicon_civic", transport: "mapicon_transport", tourism: "mapicon_tourism", military: "mapicon_military" };
 
@@ -419,6 +420,7 @@ export class MapRenderer {
     else this.drawDots();
     if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
+    this.drawPlan();
     this.drawZoneRect();
     this.drawPowerCover();
     this.drawRoadPlan();
@@ -553,12 +555,44 @@ export class MapRenderer {
     }
   }
 
+  drawPlan() {
+    const p = this.plan;
+    if (!p) return;
+    const s = this.state, ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height, v = this.visibleRange(1), line = 1 / c.scale;
+    const seen = i => { const x = i % s.w, y = (i / s.w) | 0; return x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1; };
+    ctx.save();
+    ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
+    ctx.fillStyle = "rgba(150,150,170,.3)";
+    ctx.strokeStyle = "rgba(200,200,220,.8)";
+    ctx.lineWidth = 2 * line;
+    for (const [x, y, w, h] of p.keep ?? []) { ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h); }
+    for (const item of p.items) {
+      const hot = item.key === p.hover, a = item.queued ? 0.5 : hot ? 0.75 : 0.4;
+      for (const d of item.draw) {
+        if (!d.plots.some(seen)) continue;
+        if (d.t === "zone") { ctx.fillStyle = `rgba(${ZONE_RGB[d.zone] ?? "255,255,255"},${a})`; for (const i of d.plots) ctx.fillRect(i % s.w, (i / s.w) | 0, 1, 1); continue; }
+        if (d.t === "road") { ctx.fillStyle = `rgba(226,195,138,${a + 0.2})`; for (const i of d.plots) ctx.fillRect((i % s.w) + 0.2, ((i / s.w) | 0) + 0.2, 0.6, 0.6); continue; }
+        if (d.t === "pole") { ctx.fillStyle = `rgba(40,40,40,${a + 0.3})`; for (const i of d.plots) ctx.fillRect((i % s.w) + 0.35, ((i / s.w) | 0) + 0.35, 0.3, 0.3); continue; }
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const i of d.plots) { const x = i % s.w, y = (i / s.w) | 0; x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+        ctx.fillStyle = item.queued ? `rgba(120,170,240,${a * 0.6})` : `rgba(255,255,255,${a * 0.5})`;
+        ctx.fillRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        ctx.setLineDash(item.queued ? [4 * line, 3 * line] : []);
+        ctx.strokeStyle = d.t === "upgrade" ? "#e8c84a" : item.queued ? "#78aaf0" : hot ? "#ffffff" : "rgba(255,255,255,.85)";
+        ctx.lineWidth = (hot ? 3 : 2) * line;
+        ctx.strokeRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        ctx.setLineDash([]);
+      }
+    }
+    ctx.restore();
+  }
+
   drawZoneRect() {
     const q = this.zoneRect;
     if (!q) return;
     const ctx = this.ctx, k = this.ratio ?? 1, sc = this.cam.scale;
     const [sx, sy] = this.plotToScreen(q.x, q.y);
-    ctx.fillStyle = q.code ? ZONE_COLOUR[q.code] : "rgba(224,106,90,.3)";
+    ctx.fillStyle = q.keep ? "rgba(150,150,170,.4)" : q.code ? ZONE_COLOUR[q.code] : "rgba(224,106,90,.3)";
     ctx.fillRect(sx, sy, q.w * sc, q.h * sc);
     ctx.save();
     ctx.setLineDash([6 * k, 4 * k]);
