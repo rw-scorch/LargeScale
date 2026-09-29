@@ -1,6 +1,5 @@
 import rules from "../../data/rules.json" with { type: "json" };
 import { gridsOf, POWER_DEFAULTS } from "../shared/power.js";
-import { homeOf, takeNear, askFor, setShort } from "./stores.js";
 
 export const POWER_RULES = { ...POWER_DEFAULTS, ...rules.power };
 
@@ -16,14 +15,6 @@ export function installPower(world, { scale = 1, rules: r = POWER_RULES } = {}) 
   tick.rank = -2;
   world.hooks.postTick.push(tick);
   return p;
-}
-
-const coalAt = (world, n, b) => (world.stores && n.human ? homeOf(world, b)?.goods.coal ?? 0 : n.stock?.coal ?? 0);
-
-function burn(world, n, b, v) {
-  if (!(v > 0)) return;
-  if (world.stores && n.human) takeNear(world, b, "coal", v);
-  else n.stock.coal = Math.max(0, (n.stock.coal ?? 0) - v);
 }
 
 export function powerTick(world, dt) {
@@ -45,15 +36,12 @@ export function powerTick(world, dt) {
       const plants = g.nodes.filter(v => v.make > 0), need = g.users.reduce((s, u) => s + u.uses, 0);
       let make = 0;
       for (const v of plants) {
-        const d = bld.table[v.b.type], home = world.stores && n.human ? homeOf(world, v.b) : null;
-        if (home) askFor(world, home, "coal", d.power.burn * r.stock);
-        v.fuel = coalAt(world, n, v.b) > 1e-6;
-        if (world.stores && n.human) setShort(world, v.b, home ? (v.fuel ? [] : ["coal"]) : null);
+        v.fuel = (n.money ?? 0) > 0;
         if (v.fuel) make += v.make;
       }
       const share = need ? Math.min(1, make / need) : 0, load = make ? Math.min(1, need / make) : 0;
       for (const v of plants) {
-        if (v.fuel) burn(world, n, v.b, bld.table[v.b.type].power.burn * dt * load);
+        if (v.fuel) n.money = Math.max(0, n.money - bld.table[v.b.type].power.upkeep * dt * load);
         view.plants[v.id] = [v.fuel ? 1 : 0, Math.round(load * 100)];
       }
       for (const u of g.users) u.b.power = r.offGrid + (1 - r.offGrid) * share;

@@ -4,17 +4,27 @@ import { areaAround } from "../shared/buildings.js";
 import { People } from "./people.js";
 import { placeLabels } from "./labels.js";
 import { roadSprite } from "../shared/roads.js";
+import { soldierCount, soldierTypes, typeOfSlot, rankSlots } from "../shared/soldiers.js";
 
 export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
-const WAGON = { T: "hand_cart", M: "horse_wagon", G: "supply_wagon", I: "supply_truck", Mo: "supply_truck", F: "supply_truck" };
 const FORMATION = [[0, 0], [-0.32, 0.12], [0.32, 0.12], [-0.18, -0.2], [0.18, -0.2]];
+const RANKS = new Map();
+const ranksOf = (n, spacing) => {
+  const key = `${n}:${spacing}`;
+  let list = RANKS.get(key);
+  if (!list) { if (RANKS.size > 400) RANKS.clear(); RANKS.set(key, (list = rankSlots(n, spacing))); }
+  return list;
+};
+const noise = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
+const dirOf = a => { const c = Math.cos(a), s = Math.sin(a); return Math.abs(c) >= Math.abs(s) ? (c > 0 ? "e" : "w") : s > 0 ? "s" : "n"; };
 const ROAD_COLOUR = [null, "#e2c38a", "#d9d4c8", "#b8b8b8", "#f0f0f0", "#8a6a4a"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
 const ZONE_SPRITE = [null, "ov_zone_residential", "ov_zone_commercial", "ov_zone_industrial", "ov_zone_farmland"];
 const DEPOSIT_COLOUR = { stone: "#b8b0a0", clay: "#c07850", iron: "#a05a4a", copper: "#d08a40", tin: "#c8c8d0", coal: "#303030", gold: "#f0c840", silver: "#e0e0f0", gems: "#c060e0", oil: "#101010", gas: "#80c0c0", uranium: "#80f060", bauxite: "#d06040", lithium: "#f0f0f0", sulfur: "#f0f040", salt: "#ffffff", fish: "#50a0f0" };
 export const ZONE_COLOUR = [null, "rgba(111,207,122,.35)", "rgba(90,160,230,.35)", "rgba(232,200,74,.35)", "rgba(190,150,90,.35)"];
+const ZONE_RGB = { res: "111,207,122", com: "90,160,230", ind: "232,200,74", farm: "190,150,90" };
 const maskName = m => DIRS.filter(([b]) => m & b).map(d => d[1]).join("") || "dot";
 const ICON_FOR = { resources: "mapicon_industry", farming: "mapicon_agriculture", housing: "mapicon_housing", res: "mapicon_housing", commercial: "mapicon_commercial", com: "mapicon_commercial", industry: "mapicon_industry", ind: "mapicon_industry", infrastructure: "mapicon_industry", agriculture: "mapicon_agriculture", farm: "mapicon_agriculture", energy: "mapicon_energy", civic: "mapicon_civic", transport: "mapicon_transport", tourism: "mapicon_tourism", military: "mapicon_military" };
 
@@ -128,9 +138,22 @@ export class MapRenderer {
 
   spriteFor(b) {
     const a = this.atlas, d = b.def;
-    if (d?.sprite) return b.state === "active" ? d.seasonSprites?.[this.season] ?? d.sprite : a.has(`${b.type}_${b.state}`) ? `${b.type}_${b.state}` : d.seasonSprites?.winter ?? d.sprite;
+    if (d?.sprite) {
+      if (b.state === "active") return d.sam && b.owner === this.state.you && this.state.samOf?.(0, b.id)?.missiles === 0 && a.has(`${d.sprite}_empty`) ? `${d.sprite}_empty` : d.seasonSprites?.[this.season] ?? d.sprite;
+      return a.has(`${d.sprite}_${b.state}`) ? `${d.sprite}_${b.state}` : a.has(`${b.type}_${b.state}`) ? `${b.type}_${b.state}` : d.seasonSprites?.winter ?? d.sprite;
+    }
     if (b.state && b.state !== "active" && a.has(`${b.type}_${b.state}`)) return `${b.type}_${b.state}`;
     return this.frameFor(b.type);
+  }
+
+  drawParts(b, ax, ay, px, colour) {
+    const a = this.atlas;
+    for (const p of b.def.parts) {
+      const id = b.state === "active" ? p.sprite : a.has(`${p.sprite}_${b.state}`) ? `${p.sprite}_${b.state}` : null;
+      if (!id) continue;
+      const [sx, sy] = this.plotToScreen(ax + p.at[0], ay + p.at[1]);
+      a.draw(this.ctx, id, sx, sy - this.riseOf(id, p.fp) * px, px, colour);
+    }
   }
 
   riseOf(id, fp) {
@@ -288,8 +311,9 @@ export class MapRenderer {
     const s = this.state, out = [], showBots = this.cam.scale >= ZOOM.icons * (this.ratio ?? 1);
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
-      const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) ? "selected" : st.order === "hold" ? "idle" : "moving";
-      out.push({ id: st.id, owner: st.owner, x: (st.pos % s.w) + 0.5, y: ((st.pos / s.w) | 0) + 0.5, troops: st.troops, era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0, wagon: st.kind === "supply", supplies: st.supplies ?? 0, starving: !!this.starving?.has(st.id) });
+      const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) || this.picked?.get(st.id)?.size ? "selected" : st.order === "hold" ? "idle" : "moving";
+      const [x, y] = this.leaderAt?.get(st.id) ?? this.stackPoint(st);
+      out.push({ id: st.id, owner: st.owner, x, y, troops: st.troops, soldiers: this.soldiersIn(st), era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
     }
     return out;
   }
@@ -340,19 +364,6 @@ export class MapRenderer {
     for (const [mark, colour] of [[1, "rgba(255,236,120,.42)"], [2, "rgba(200,200,200,.38)"]]) {
       ctx.fillStyle = colour;
       for (let y = Math.max(0, v.y0); y <= Math.min(s.h - 1, v.y1); y++) for (let x = Math.max(0, v.x0); x <= Math.min(s.w - 1, v.x1); x++) if (cover[y * s.w + x] === mark) ctx.fillRect(x, y, 1, 1);
-    }
-    ctx.restore();
-  }
-
-  drawSupplyReach() {
-    const reach = this.supplyReach, s = this.state, ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height, v = this.visibleRange(1);
-    if (!reach?.size) return;
-    ctx.save();
-    ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
-    ctx.fillStyle = "rgba(111,207,122,.2)";
-    for (const i of reach.keys()) {
-      const x = i % s.w, y = (i / s.w) | 0;
-      if (x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1) ctx.fillRect(x, y, 1, 1);
     }
     ctx.restore();
   }
@@ -425,12 +436,14 @@ export class MapRenderer {
     else this.drawDots();
     if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
+    this.drawPlan();
     this.drawZoneRect();
     this.drawPowerCover();
-    this.drawSupplyReach();
     this.drawRoadPlan();
     this.drawGhost();
     this.drawEffects();
+    this.drawFlak();
+    this.drawShots();
     this.drawRoute();
     this.drawSwipe();
     this.drawFortRing();
@@ -471,7 +484,7 @@ export class MapRenderer {
   drawFortRing() {
     const s = this.state, b = this.selectedBuilding !== null ? s.buildings.get(this.selectedBuilding) : null;
     const def = this.ghost?.def?.fort ? this.ghost.def : b?.def?.fort && b.state === "active" ? b.def : null;
-    if (!def) return;
+    if (!def) return this.drawSamRing(b);
     const at = this.ghost?.def?.fort ? this.ghost.anchor : b.anchor, R = this.ratio ?? 1, ctx = this.ctx;
     const [x, y] = this.plotToScreen((at % s.w) + def.fp[0] / 2, Math.floor(at / s.w) + def.fp[1] / 2);
     const r = def.fort.radius * this.cam.scale;
@@ -486,6 +499,26 @@ export class MapRenderer {
     ctx.stroke();
     ctx.restore();
     this.label(`defends at ${def.fort.defence} times`, x, y + r + 4 * R, 12 * R, "#e8c84a");
+  }
+
+  drawSamRing(b) {
+    const s = this.state, m = this.selectedMachine != null ? s.machines?.get(this.selectedMachine) : null;
+    const ghost = this.ghost?.def?.sam ? this.ghost : null, sam = ghost?.def.sam ?? (b?.state === "active" ? b.def?.sam : null) ?? (m?.state !== "wreck" ? m?.def.sam : null);
+    if (!sam) return;
+    const R = this.ratio ?? 1, ctx = this.ctx, fp = ghost?.def.fp ?? b?.def.fp;
+    const [x, y] = ghost || (b && b.def?.sam) ? this.plotToScreen(((ghost?.anchor ?? b.anchor) % s.w) + fp[0] / 2, Math.floor((ghost?.anchor ?? b.anchor) / s.w) + fp[1] / 2) : this.plotToScreen(...this.machinePoint(m));
+    const r = sam.radius * (s.map?.scale ?? 1) * this.cam.scale;
+    ctx.save();
+    ctx.strokeStyle = "rgba(120,200,255,.85)";
+    ctx.fillStyle = "rgba(120,200,255,.08)";
+    ctx.lineWidth = 2 * R;
+    ctx.setLineDash([6 * R, 5 * R]);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    this.label(`missiles reach ${sam.radius * (s.map?.scale ?? 1)} plots`, x, y + r + 4 * R, 12 * R, "#9fd4ff");
   }
 
   drawGuide() {
@@ -513,6 +546,50 @@ export class MapRenderer {
     const now = Date.now(), R = this.ratio ?? 1, s = this.state;
     for (let k = list.length - 1; k >= 0; k--) if (now - list[k].at > 4000) list.splice(k, 1);
     for (const fx of list) {
+      const age = now - fx.at;
+      if (fx.kind === "bomb") {
+        if (age > 1200) continue;
+        const n = fx.bombs ?? 1, gap = 1.5 * (s.map?.scale ?? 1), frame = `flak_burst_${Math.min(2, Math.floor(age / 400))}`, size = Math.max(40 * R, this.cam.scale * 3.2);
+        for (let k = 0; k < n; k++) {
+          const off = (k - (n - 1) / 2) * gap, [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5 + Math.cos(fx.heading ?? 0) * off, ((fx.plot / s.w) | 0) + 0.5 + Math.sin(fx.heading ?? 0) * off);
+          this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, size / 16);
+        }
+        continue;
+      }
+      if (fx.kind === "sam") {
+        if (age > 900) continue;
+        const t = Math.min(1, age / 600), x = fx.from[0] + (fx.to[0] - fx.from[0]) * t, y = fx.from[1] + (fx.to[1] - fx.from[1]) * t, [sx, sy] = this.plotToScreen(x, y);
+        const k = Math.max(R, this.cam.scale / 16), ctx = this.ctx;
+        if (t < 1) {
+          const [fx0, fy0] = this.plotToScreen(fx.from[0] + (fx.to[0] - fx.from[0]) * Math.max(0, t - 0.3), fx.from[1] + (fx.to[1] - fx.from[1]) * Math.max(0, t - 0.3));
+          ctx.save();
+          ctx.strokeStyle = "rgba(235,235,235,.7)";
+          ctx.lineWidth = 2.5 * R;
+          ctx.beginPath();
+          ctx.moveTo(fx0, fy0);
+          ctx.lineTo(sx, sy);
+          ctx.stroke();
+          ctx.translate(sx, sy);
+          ctx.rotate(Math.atan2(fx.to[1] - fx.from[1], fx.to[0] - fx.from[0]));
+          this.atlas.draw(ctx, "proj_sam_missile", -8 * k, -8 * k, k);
+          ctx.restore();
+        } else {
+          const size = Math.max(28 * R, this.cam.scale * 2);
+          this.atlas.draw(this.ctx, `flak_burst_${Math.min(2, Math.floor((age - 600) / 100))}`, sx - size / 2, sy - size / 2, size / 16);
+        }
+        continue;
+      }
+      if (fx.kind === "chute" || fx.kind === "heli") {
+        if (fx.kind === "heli" || age > 3000) continue;
+        const k = Math.max(R, this.cam.scale / 16), fall = 1 - age / 3000;
+        this.ctx.globalAlpha = Math.min(1, fall * 3);
+        for (let j = 0; j < fx.n; j++) {
+          const [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5 + Math.sin(j * 2.4) * 0.8, ((fx.plot / s.w) | 0) + 0.5 + Math.cos(j * 1.7) * 0.5 - fall * 2.5);
+          this.atlas.draw(this.ctx, "parachute", sx - 8 * k, sy - 8 * k + Math.sin(now / 300 + j) * 2 * R, k);
+        }
+        this.ctx.globalAlpha = 1;
+        continue;
+      }
       if (fx.kind !== "era_up") continue;
       const frame = `era_up_${Math.floor((now - fx.at) / 180) % 3}`;
       const size = Math.max(48 * R, this.cam.scale * 3), k = size / 32;
@@ -551,12 +628,44 @@ export class MapRenderer {
     }
   }
 
+  drawPlan() {
+    const p = this.plan;
+    if (!p) return;
+    const s = this.state, ctx = this.ctx, c = this.cam, W = this.canvas.width, H = this.canvas.height, v = this.visibleRange(1), line = 1 / c.scale;
+    const seen = i => { const x = i % s.w, y = (i / s.w) | 0; return x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1; };
+    ctx.save();
+    ctx.setTransform(c.scale, 0, 0, c.scale, W / 2 - c.x * c.scale, H / 2 - c.y * c.scale);
+    ctx.fillStyle = "rgba(150,150,170,.3)";
+    ctx.strokeStyle = "rgba(200,200,220,.8)";
+    ctx.lineWidth = 2 * line;
+    for (const [x, y, w, h] of p.keep ?? []) { ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h); }
+    for (const item of p.items) {
+      const hot = item.key === p.hover, a = item.queued ? 0.5 : hot ? 0.75 : 0.4;
+      for (const d of item.draw) {
+        if (!d.plots.some(seen)) continue;
+        if (d.t === "zone") { ctx.fillStyle = `rgba(${ZONE_RGB[d.zone] ?? "255,255,255"},${a})`; for (const i of d.plots) ctx.fillRect(i % s.w, (i / s.w) | 0, 1, 1); continue; }
+        if (d.t === "road") { ctx.fillStyle = `rgba(226,195,138,${a + 0.2})`; for (const i of d.plots) ctx.fillRect((i % s.w) + 0.2, ((i / s.w) | 0) + 0.2, 0.6, 0.6); continue; }
+        if (d.t === "pole") { ctx.fillStyle = `rgba(40,40,40,${a + 0.3})`; for (const i of d.plots) ctx.fillRect((i % s.w) + 0.35, ((i / s.w) | 0) + 0.35, 0.3, 0.3); continue; }
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const i of d.plots) { const x = i % s.w, y = (i / s.w) | 0; x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+        ctx.fillStyle = item.queued ? `rgba(120,170,240,${a * 0.6})` : `rgba(255,255,255,${a * 0.5})`;
+        ctx.fillRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        ctx.setLineDash(item.queued ? [4 * line, 3 * line] : []);
+        ctx.strokeStyle = d.t === "upgrade" ? "#e8c84a" : item.queued ? "#78aaf0" : hot ? "#ffffff" : "rgba(255,255,255,.85)";
+        ctx.lineWidth = (hot ? 3 : 2) * line;
+        ctx.strokeRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        ctx.setLineDash([]);
+      }
+    }
+    ctx.restore();
+  }
+
   drawZoneRect() {
     const q = this.zoneRect;
     if (!q) return;
     const ctx = this.ctx, k = this.ratio ?? 1, sc = this.cam.scale;
     const [sx, sy] = this.plotToScreen(q.x, q.y);
-    ctx.fillStyle = q.code ? ZONE_COLOUR[q.code] : "rgba(224,106,90,.3)";
+    ctx.fillStyle = q.keep ? "rgba(150,150,170,.4)" : q.code ? ZONE_COLOUR[q.code] : "rgba(224,106,90,.3)";
     ctx.fillRect(sx, sy, q.w * sc, q.h * sc);
     ctx.save();
     ctx.setLineDash([6 * k, 4 * k]);
@@ -610,6 +719,32 @@ export class MapRenderer {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  drawShots() {
+    const s = this.state, now = Date.now(), ctx = this.ctx, R = this.ratio ?? 1;
+    if (!s.shots?.length) return;
+    ctx.save();
+    ctx.lineCap = "round";
+    for (const sh of s.shots) {
+      const age = (now - sh.at) / 1000;
+      if (age > 0.35) continue;
+      const [ax, ay] = this.plotToScreen(sh.x0, sh.y0), [bx, by] = this.plotToScreen(sh.x1, sh.y1), fade = 1 - age / 0.35;
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = sh.shell ? "#ff9a3c" : "#ffe27a";
+      ctx.lineWidth = (sh.shell ? 3 : 1.6) * R;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      if (sh.hit) {
+        ctx.fillStyle = sh.shell ? "rgba(255,120,40,.8)" : "rgba(255,230,140,.8)";
+        ctx.beginPath();
+        ctx.arc(bx, by, (sh.shell ? 7 : 4) * R * (1.4 - fade * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   drawSwipe() {
@@ -686,9 +821,10 @@ export class MapRenderer {
       if (ax + b.fp[0] < r.x0 || ax > r.x1 || ay > r.y1 || ay + b.fp[1] < r.y0) continue;
       items.push({ key: ay + b.fp[1], x: ax, draw: () => {
         const [sx, sy] = this.plotToScreen(ax, ay);
-        const id = this.spriteFor(b), dry = this.dryDeposit(b);
+        const id = this.spriteFor(b), dry = this.dryDeposit(b), colour = s.nations.get(b.owner)?.colour;
         if (dry) ctx.globalAlpha = 0.55;
-        a.draw(ctx, id, sx, sy - this.riseOf(id, b.fp) * px, px, s.nations.get(b.owner)?.colour);
+        if (b.def?.parts) this.drawParts(b, ax, ay, px, colour);
+        else a.draw(ctx, id, sx, sy - this.riseOf(id, b.fp) * px, px, colour);
         ctx.globalAlpha = 1;
         if (dry) for (const i of b.plots) { const [dx, dy] = this.plotToScreen(i % s.w, (i / s.w) | 0); a.draw(ctx, `deposit_${dry}_depleted`, dx, dy, px); }
         if (b.state === "construction") this.progressBar(sx, sy + (this.ratio ?? 1), b.fp[0] * this.cam.scale, b.progress);
@@ -697,13 +833,15 @@ export class MapRenderer {
     }
     for (const f of this.people.figures(r, this.time)) items.push({ key: f.y + 0.1, x: f.x, draw: () => this.drawPerson(f, px) });
     for (const f of this.soldiers(r)) items.push({ key: f.y + 0.05, x: f.x, draw: () => this.drawPerson(f, px) });
+    const now = performance.now();
+    for (const f of this.fallen ?? []) items.push({ key: f.y - 0.3, x: f.x, draw: () => { this.ctx.globalAlpha = Math.max(0, 1 - (now - f.at) / 3000); this.drawPerson({ ...f, size: 0.62 }, px); this.ctx.globalAlpha = 1; } });
     for (const f of this.convoyFigures(r)) items.push({ key: f.y + 0.05, x: f.x, draw: () => this.drawPerson(f, px) });
     const shown = [];
     for (const u of s.machines?.values() ?? []) {
       const x = u.at % s.w, y = (u.at / s.w) | 0;
       if (x < r.x0 - 2 || x > r.x1 + 2 || y < r.y0 - 2 || y > r.y1 + 2) continue;
       shown.push(u);
-      items.push({ key: y + 0.95, x, draw: () => this.drawMachine(u, px) });
+      items.push({ key: u.air ? 1e9 + y : y + 0.95, x, draw: () => this.drawMachine(u, px) });
     }
     for (const u of s.units) {
       if (u.x < r.x0 - 4 || u.x > r.x1 + 4 || u.y < r.y0 - 4 || u.y > r.y1 + 4) continue;
@@ -788,17 +926,71 @@ export class MapRenderer {
     return u.state === "wreck" && this.atlas.has(`${base}_wreck`) ? `${base}_wreck` : base;
   }
 
+  machinePoint(u) {
+    const s = this.state, p = s.pilotAt?.(`m:${u.id}`) ?? s.planeAt?.(u);
+    return p ? [p[0], p[1]] : [(u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5];
+  }
+
+  drawPlane(u, k) {
+    const s = this.state, sp = this.atlas.get(this.machineSprite(u)), p = s.pilotAt?.(`m:${u.id}`) ?? s.planeAt?.(u);
+    if (!sp || !p) return;
+    const [sx, sy] = this.plotToScreen(p[0], p[1]), R = this.ratio ?? 1, landed = u.air?.landed && !s.pilots?.has(`m:${u.id}`), size = landed ? 0.8 : 1.2;
+    if (sx < -80 || sy < -80 || sx > this.canvas.width + 80 || sy > this.canvas.height + 80) return;
+    const ctx = this.ctx, kk = Math.max(k, R) * size, lift = landed ? 0 : 10 * R;
+    const off = landed ? ((u.id % 5) - 2) * 6 * R : 0, shadow = `${this.machineSprite(u)}_shadow`;
+    ctx.save();
+    ctx.translate(sx + off, sy);
+    ctx.rotate(p[2]);
+    if (!landed && this.atlas.has(shadow)) { ctx.globalAlpha = 0.35; this.atlas.draw(ctx, shadow, (-sp.w * kk) / 2 + lift * 0.4, (-sp.h * kk) / 2 + lift, kk); ctx.globalAlpha = 1; }
+    this.atlas.draw(ctx, this.machineSprite(u), (-sp.w * kk) / 2, (-sp.h * kk) / 2, kk, s.nations.get(u.owner)?.colour);
+    const rotor = `${this.machineSprite(u)}_rotor${1 + (Math.floor(Date.now() / 70) % 2)}`;
+    if (u.state !== "wreck" && this.atlas.has(rotor)) this.atlas.draw(ctx, rotor, (-sp.w * kk) / 2, (-sp.h * kk) / 2, kk);
+    ctx.restore();
+    const t = u.air?.target;
+    if (t && !landed && Math.floor(Date.now() / 120) % 3) {
+      const [tx, ty] = this.plotToScreen(t[0] + Math.sin(Date.now() / 90) * 0.25, t[1] + Math.cos(Date.now() / 110) * 0.25);
+      ctx.save();
+      ctx.strokeStyle = "#ffe27a";
+      ctx.lineWidth = 1.6 * R;
+      ctx.beginPath();
+      ctx.moveTo(sx + off, sy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,200,90,.85)";
+      ctx.beginPath();
+      ctx.arc(tx, ty, 3.5 * R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  drawFlak() {
+    const s = this.state, now = Date.now(), R = this.ratio ?? 1;
+    let sites = null;
+    for (const u of s.machines?.values() ?? []) {
+      if (!u.air || u.air.landed || u.state === "wreck") continue;
+      sites ??= [...s.buildings.values()].filter(b => b.def?.antiAir && b.state === "active");
+      const [x, y] = this.machinePoint(u);
+      if (!sites.some(b => b.owner !== u.owner && Math.hypot((b.anchor % s.w) + b.fp[0] / 2 - x, ((b.anchor / s.w) | 0) + b.fp[1] / 2 - y) <= b.def.antiAir.radius * (s.map?.scale ?? 1))) continue;
+      const beat = Math.floor(now / 150 + u.id), frame = `flak_burst_${beat % 3}`, size = Math.max(14 * R, this.cam.scale * 0.9);
+      const [sx, sy] = this.plotToScreen(x + Math.sin(beat * 1.7) * 0.7, y + Math.cos(beat * 2.3) * 0.7);
+      this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, size / 16);
+    }
+  }
+
   machineBox(u, k) {
     const s = this.state, sp = this.atlas.get(this.machineSprite(u));
     if (!sp) return null;
-    const [sx, sy] = this.plotToScreen((u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5);
+    const [sx, sy] = this.plotToScreen(...this.machinePoint(u));
     if (sx < -80 || sy < -80 || sx > this.canvas.width + 80 || sy > this.canvas.height + 80) return null;
     return { sx, sy, w: sp.w * k, h: sp.h * k };
   }
 
   drawMachine(u, k) {
+    if (u.air) return this.drawPlane(u, k);
     const m = this.machineBox(u, k);
-    if (m) this.atlas.draw(this.ctx, this.machineSprite(u), m.sx - m.w / 2, m.sy - m.h / 2, k, this.state.nations.get(u.owner)?.colour, u.face < 0);
+    const p = this.state.pilotAt?.(`m:${u.id}`), left = p ? Math.cos(p[2]) < 0 : u.face < 0;
+    if (m) this.atlas.draw(this.ctx, this.machineSprite(u), m.sx - m.w / 2, m.sy - m.h / 2, k, this.state.nations.get(u.owner)?.colour, left);
   }
 
   machineOverlay(u, k) {
@@ -829,7 +1021,7 @@ export class MapRenderer {
       const px = c.prev % s.w, py = (c.prev / s.w) | 0, qx = c.pos % s.w, qy = (c.pos / s.w) | 0;
       const x = px + (qx - px) * t, y = py + (qy - py) * t;
       if (r && (x < r.x0 - 2 || x > r.x1 + 2 || y < r.y0 - 2 || y > r.y1 + 2)) continue;
-      out.push({ x: x + 0.5, y: y + 0.8, sprite: c.train ? "loco_steam" : WAGON[c.era] ?? "hand_cart", flip: qx < px, owner: c.owner, size: 0.9, convoy: c });
+      out.push({ x: x + 0.5, y: y + 0.8, sprite: "loco_steam", flip: qx < px, owner: c.owner, size: 0.9, convoy: c });
     }
     return out;
   }
@@ -851,7 +1043,7 @@ export class MapRenderer {
     for (const u of s.machines?.values() ?? []) {
       const sp = this.atlas.get(this.machineSprite(u));
       if (!sp) continue;
-      const [mx, my] = this.plotToScreen((u.at % s.w) + 0.5, ((u.at / s.w) | 0) + 0.5);
+      const [mx, my] = this.plotToScreen(...this.machinePoint(u));
       if (Math.abs(sx - mx) > Math.max((sp.w * k) / 2, 8 * R) || Math.abs(sy - my) > Math.max((sp.h * k) / 2, 8 * R)) continue;
       const d = Math.hypot(sx - mx, sy - my);
       if (d < bd) { bd = d; best = u.id; }
@@ -863,6 +1055,16 @@ export class MapRenderer {
     const k = px * (f.size ?? 0.85), sp = this.atlas.get(f.sprite);
     if (!sp) return;
     const [sx, sy] = this.plotToScreen(f.x, f.y);
+    if (f.picked) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.strokeStyle = "rgba(232,200,74,.95)";
+      ctx.lineWidth = Math.max(1, (this.ratio ?? 1) * 1.5);
+      ctx.beginPath();
+      ctx.ellipse(sx, sy - k, Math.max(3, sp.w * k * 0.45), Math.max(1.5, sp.w * k * 0.2), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     this.atlas.draw(this.ctx, f.sprite, sx - (sp.w * k) / 2, sy - sp.h * k, k, this.state.nations.get(f.owner)?.colour, f.flip);
   }
 
@@ -871,9 +1073,8 @@ export class MapRenderer {
     const [sx, sy0] = this.plotToScreen(m.x, m.y);
     const size = Math.max(16 * (this.ratio ?? 1), 16 * px);
     const k = size / 16, sy = sy0 - this.markerLift(px);
-    a.draw(ctx, m.wagon ? `supply_${m.era}` : `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
-    this.label(m.wagon ? `${Math.round(m.supplies)} food` : String(Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
-    if (m.starving) a.draw(ctx, "alert_starving", sx + size / 4, sy - size / 2 - 4 * k, k * 0.8);
+    a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - size / 2, sy - size / 2, k, colour);
+    this.label(String(m.soldiers ?? Math.round(m.troops)), sx, sy + size / 2 + 2, Math.max(11, 6 * k));
     if (m.xp) this.rank(sx, sy - size / 2 - 2 * k, m.xp, Math.max(this.ratio ?? 1, k * 0.6));
   }
 
@@ -902,28 +1103,104 @@ export class MapRenderer {
     ctx.restore();
   }
 
+  stackPoint(st) {
+    const piloted = this.state.pilotAt?.(`s:${st.id}`);
+    if (piloted) return [piloted[0], piloted[1]];
+    const w = this.state.w, t = st.movedAt && st.prev != null ? Math.min(1, (Date.now() - st.movedAt) / 1000) : 1, a = st.prev ?? st.pos;
+    return [(a % w) + ((st.pos % w) - (a % w)) * t + 0.5, ((a / w) | 0) + (((st.pos / w) | 0) - ((a / w) | 0)) * t + 0.5];
+  }
+
+  soldiersIn(st) {
+    const rules = this.state.soldierRules;
+    return rules && !this.state.nations.get(st.owner)?.bot ? soldierCount(st.troops, rules.troopsEach) : null;
+  }
+
+  oneByOne() {
+    const rules = this.state.soldierRules;
+    return !!rules && this.cam.scale >= rules.drawZoom * (this.ratio ?? 1);
+  }
+
+  soldierSpots(st, share = 1, dt = 0) {
+    const s = this.state, rules = s.soldierRules, n = soldierCount(st.troops, rules.troopsEach), out = [];
+    if (!n) return out;
+    const [cx, cy] = this.stackPoint(st), m = Math.max(1, Math.min(n, Math.round(n * share)));
+    const face = this.facing.get(st.id), ang = face?.angle ?? Math.PI / 2, fight = !!face?.fighting;
+    const gap = rules.spacing * (fight ? 1.35 : 1), c = Math.cos(ang), sn = Math.sin(ang), list = ranksOf(m, gap);
+    const land = (x, y) => { const i = Math.floor(y) * s.w + Math.floor(x); return x >= 0 && y >= 0 && x < s.w && y < s.h && TERRAIN[s.terrain?.[i]]?.land; };
+    this.troopPos ??= new Map();
+    for (let k = 0; k < m; k++) {
+      const slot = m === n ? k : Math.floor((k * n) / m), [fw, side] = list[k], wob = fight && k ? Math.sin(this.time * 3 + slot * 1.7) * gap * 0.18 : 0;
+      let x = cx + c * (fw + wob * 0.5) - sn * (side + wob), y = cy + sn * (fw + wob * 0.5) + c * (side + wob);
+      if (!land(x, y)) { x = cx + (x - cx) * 0.4; y = cy + (y - cy) * 0.4; if (!land(x, y)) { x = cx + (x - cx) * 0.25; y = cy + (y - cy) * 0.25; } }
+      const key = `${st.id}:${slot}`;
+      let p = this.troopPos.get(key);
+      if (!p || Math.hypot(p.x - x, p.y - y) > 4) this.troopPos.set(key, (p = { x, y, t: this.time }));
+      else if (dt > 0) {
+        const d = Math.hypot(x - p.x, y - p.y), step = Math.min(d, (1.2 + 0.9 * noise(slot, st.id)) * dt);
+        if (d > 1e-3) { p.x += ((x - p.x) / d) * step; p.y += ((y - p.y) / d) * step; }
+        p.t = this.time;
+      }
+      out.push({ slot, x: p.x, y: p.y, leader: k === 0, moving: Math.hypot(x - p.x, y - p.y) > 0.04 });
+    }
+    return out;
+  }
+
   soldiers(r) {
     const s = this.state, types = s.unitTypes, out = [];
     if (!types) return out;
-    const near = [...s.stacks.values()].filter(st => { const x = st.pos % s.w, y = (st.pos / s.w) | 0; return x >= r.x0 - 2 && x <= r.x1 + 2 && y >= r.y0 - 2 && y <= r.y1 + 2; });
+    const near = [...s.stacks.values()].filter(st => { const x = st.pos % s.w, y = (st.pos / s.w) | 0; return x >= r.x0 - 8 && x <= r.x1 + 8 && y >= r.y0 - 8 && y <= r.y1 + 8; });
+    const one = this.oneByOne(), lines = new Set();
+    let total = 0;
+    for (const st of near) {
+      if (one && this.soldiersIn(st) !== null) { lines.add(st); total += this.soldiersIn(st); }
+    }
+    const R = this.ratio ?? 1, budget = Math.max(60, Math.floor((this.canvas.width * this.canvas.height) / (R * R) / (s.soldierRules?.drawArea ?? 900)));
+    const share = total > budget ? budget / total : 1, clock = performance.now(), dt = this.soldierClock ? Math.min(0.1, (clock - this.soldierClock) / 1000) : 0;
+    this.soldierClock = clock;
+    this.soldierShare = share;
+    this.leaderAt = new Map();
+    this.soldierCounts ??= new Map();
+    this.fallen = (this.fallen ?? []).filter(f => clock - f.at < 3000);
+    if (this.troopPos && clock > (this.purgeAt ?? 0)) {
+      this.purgeAt = clock + 5000;
+      for (const [k, p] of this.troopPos) if (this.time - p.t > 5) this.troopPos.delete(k);
+      for (const id of this.soldierCounts.keys()) if (!s.stacks.has(id)) this.soldierCounts.delete(id);
+    }
     for (const st of near) {
       const x = st.pos % s.w, y = (st.pos / s.w) | 0;
-      const seen = this.facing.get(st.id);
-      if (!seen) this.facing.set(st.id, { pos: st.pos, dir: "s" });
+      let seen = this.facing.get(st.id);
+      if (!seen) this.facing.set(st.id, (seen = { pos: st.pos, dir: "s", angle: Math.PI / 2 }));
       else if (seen.pos !== st.pos) {
-        const dx = x - (seen.pos % s.w), dy = y - ((seen.pos / s.w) | 0);
-        seen.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? "e" : "w") : dy > 0 ? "s" : "n";
+        seen.angle = Math.atan2(y - ((seen.pos / s.w) | 0), x - (seen.pos % s.w));
         seen.pos = st.pos;
       }
-      const dir = this.facing.get(st.id).dir;
-      if (st.kind === "supply") {
-        out.push({ x: x + 0.5, y: y + 0.75, sprite: WAGON[s.nations.get(st.owner)?.era ?? "T"] ?? "hand_cart", flip: dir === "w", owner: st.owner, stack: st.id, size: 1 });
-        continue;
-      }
+      const foe = near.find(o => o.owner !== st.owner && Math.max(Math.abs((o.pos % s.w) - x), Math.abs(((o.pos / s.w) | 0) - y)) <= 1);
+      seen.fighting = !!foe;
+      if (foe && foe.pos !== st.pos) seen.angle = Math.atan2(((foe.pos / s.w) | 0) - y, (foe.pos % s.w) - x);
+      const pl = s.pilots?.get(`s:${st.id}`), steering = !!pl && (pl.x !== pl.px || pl.y !== pl.py);
+      if (steering) seen.angle = pl.heading;
+      const dir = (seen.dir = dirOf(seen.angle));
       let main = "levy", most = st.troops - Object.values(st.mix ?? {}).reduce((a, b) => a + b, 0);
       for (const [id, n] of Object.entries(st.mix ?? {})) if (n > most) { most = n; main = id; }
       const base = types.table[main]?.sprite ?? "hunter";
-      const fighting = near.some(o => o.owner !== st.owner && Math.max(Math.abs((o.pos % s.w) - x), Math.abs(((o.pos / s.w) | 0) - y)) <= 1);
+      const fighting = !!foe;
+      if (lines.has(st)) {
+        const rules = s.soldierRules, kinds = soldierTypes(st.troops, st.mix, rules.troopsEach), walking = pl ? steering : st.order !== "hold" || (st.movedAt && Date.now() - st.movedAt < 1000);
+        const whole = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id), picked = this.picked?.get(st.id);
+        const count = soldierCount(st.troops, rules.troopsEach), before = this.soldierCounts.get(st.id) ?? count;
+        if (count < before && this.troopPos) for (let slot = count; slot < before && this.fallen.length < 200; slot++) {
+          const p = this.troopPos.get(`${st.id}:${slot}`);
+          if (p) this.fallen.push({ x: p.x, y: p.y + 0.2, sprite: `${base}_dead`, owner: st.owner, at: clock });
+        }
+        this.soldierCounts.set(st.id, count);
+        for (const p of this.soldierSpots(st, share, dt)) {
+          const kind = typeOfSlot(kinds, p.slot) ?? "levy", sprite = types.table[kind]?.sprite ?? "hunter", beat = Math.floor(this.time * 4 + p.slot * 0.37 + st.id) % 2;
+          const frame = fighting ? (beat ? "attack" : "idle") : walking || p.moving ? (beat ? "walk1" : "walk2") : "idle";
+          if (p.leader) this.leaderAt.set(st.id, [p.x, p.y]);
+          out.push({ x: p.x, y: p.y + 0.2, sprite: `${sprite}_${dir === "w" ? "e" : dir}_${frame}`, flip: dir === "w", owner: st.owner, stack: st.id, slot: p.slot, size: p.leader ? 0.74 : 0.62, picked: whole || !!picked?.has(p.slot) });
+        }
+        continue;
+      }
       const count = Math.max(1, Math.min(5, Math.floor(1 + Math.log2(Math.max(1, st.troops / 40)))));
       for (let k = 0; k < count; k++) {
         const [ox, oy] = FORMATION[k], beat = Math.floor(this.time * 4 + k + st.id) % 2;
@@ -965,7 +1242,7 @@ export class MapRenderer {
     for (const m of this.markers()) {
       const [sx, sy] = this.plotToScreen(m.x, m.y);
       a.draw(ctx, `army_${m.era}_${m.state ?? "idle"}`, sx - 8 * rk, sy - 8 * rk, rk, s.nations.get(m.owner)?.colour);
-      this.label(String(Math.round(m.troops)), sx, sy + 9 * rk, 11 * rk);
+      this.label(String(m.soldiers ?? Math.round(m.troops)), sx, sy + 9 * rk, 11 * rk);
     }
   }
 

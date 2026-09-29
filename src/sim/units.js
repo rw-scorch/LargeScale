@@ -4,7 +4,6 @@ import { TERRAIN, isLand } from "../shared/terrain.js";
 import { buildRegions, coarseRoute, planSegment } from "../shared/pathfind.js";
 import { ERA_NAMES, eraIdx } from "../shared/buildings.js";
 import { nationBuildings } from "./buildings.js";
-import { sync, poolOf } from "./stores.js";
 
 export const UNIT_TYPES = Object.fromEntries(unitData.units.filter(d => d.kind === "machine").map(d => [d.id, d]));
 
@@ -159,16 +158,23 @@ export function embark(world, stackId, shipId) {
   const s = world.stacks.get(stackId), u = world.units.list.get(shipId);
   if (!s || !u || u.wreck) return "missing";
   const def = UNIT_TYPES[u.type];
-  if (def.domain !== "sea" || !def.capacity) return "not a transport";
+  if (!def.capacity) return "not a transport";
+  if (def.domain === "air" && u.air && !u.air.landed) return "the plane is in the air";
   if (u.owner !== s.owner) return "not your ship";
   if (world.grid.cheb(s.pos, u.at) > 1) return "ship must be next to the troops";
   const room = def.capacity - (u.cargo?.troops ?? 0);
   if (room < 1) return "ship is full";
-  const load = Math.min(room, s.troops), share = load / s.troops;
+  const para = def.paraOnly ? (s.mix?.paratrooper ?? 0) : null;
+  if (para !== null && para < 1) return "only paratroopers board a transport plane";
+  const load = Math.min(room, para ?? s.troops), share = load / s.troops;
   const c = u.cargo ?? { troops: 0, owner: s.owner, mix: null, xp: 0 };
   c.xp = (c.xp * c.troops + (s.xp ?? 0) * load) / (c.troops + load);
   c.troops += load;
-  if (s.mix) {
+  if (para !== null) {
+    c.mix = { ...(c.mix ?? {}), paratrooper: (c.mix?.paratrooper ?? 0) + load };
+    s.mix.paratrooper -= load;
+    clean(s);
+  } else if (s.mix) {
     c.mix ??= {};
     for (const id in s.mix) {
       const k = s.mix[id] * share;
@@ -191,7 +197,7 @@ export function disembark(world, shipId, target, ownsPort = false, penalty = nul
   const def = UNIT_TYPES[u.type], cargo = u.cargo, owner = cargo.owner, o = world.owner[target];
   const ours = o === owner || (o && world.passable(owner, o));
   if (!ours && o && !world.hostile(owner, o)) return { error: "you are not at war with them" };
-  const pen = ownsPort ? LANDING.portPenalty : penalty ?? (def.beach ? LANDING.beachPenalty : LANDING.penalty);
+  const pen = def.domain === "land" ? 0 : ownsPort ? LANDING.portPenalty : penalty ?? (def.beach ? LANDING.beachPenalty : LANDING.penalty);
   let troops = cargo.troops * (1 - pen);
   const mix = cargo.mix ? { ...cargo.mix } : null, scale = k => { if (mix) for (const id in mix) mix[id] *= k; };
   scale(1 - pen);
@@ -427,7 +433,7 @@ function landCargo(world) {
     if (!u.cargo) { world.afterLanding?.(u, null); continue; }
     const t = u.transport;
     if (g.cheb(u.at, at) > 1 && t) at = shoreNear(world, u.at, at) ?? at;
-    const r = g.cheb(u.at, at) > 1 ? { error: "the ship could not reach the coast there" } : disembark(world, u.id, at, ownsPort(world, u.cargo.owner, at), world.landingPenalty?.(u) ?? null);
+    const r = g.cheb(u.at, at) > 1 ? { error: UNIT_TYPES[u.type].domain === "land" ? "the carrier could not get there" : "the ship could not reach the coast there" } : disembark(world, u.id, at, ownsPort(world, u.cargo.owner, at), world.landingPenalty?.(u) ?? null);
     if (r.error && t && !t.returning && t.home !== undefined) {
       Object.assign(t, { returning: true, loss: 0 });
       if (orderUnit(world, u.id, t.homeSea)) { u.path = []; u.route = null; }
@@ -470,14 +476,14 @@ function boardShips(world) {
       continue;
     }
     if (s.path.length || s.route) continue;
-    const spot = shoreNear(world, u.at, s.pos);
+    const spot = UNIT_TYPES[u.type].domain !== "sea" ? u.at : shoreNear(world, u.at, s.pos);
     if (spot === null || !world.orderMove(s.id, spot, "move")) fail("no land route to the ship");
   }
 }
 
 function shipBattles(world, dt) {
   const r = world.machines.rules, g = world.grid, ships = [];
-  for (const u of world.units.list.values()) if (!u.wreck && UNIT_TYPES[u.type]?.domain === "sea") ships.push(u);
+  for (const u of world.units.list.values()) if (!u.wreck && UNIT_TYPES[u.type]?.domain === "sea" && !UNIT_TYPES[u.type].freight) ships.push(u);
   if (ships.length < 2) return;
   const byPlot = new Map();
   for (const u of ships) byPlot.set(u.at, [...(byPlot.get(u.at) ?? []), u]);
@@ -516,9 +522,14 @@ function captureLoose(world) {
         else if (world.hostile(s.owner, u.owner) && (!foe || s.troops > foe.troops)) foe = s;
       }
     if (friend || !foe) continue;
-    const from = u.owner;
-    Object.assign(u, { owner: foe.owner, path: [], route: null, progress: 0, follow: null });
-    world.emit("machine_captured", { machine: u.id, kind: u.type, nation: from, by: foe.owner, at: u.at });
+    if (u.cargo?.troops > 0 && !disembark(world, u.id, u.at).error) {
+      Object.assign(u, { path: [], route: null, progress: 0, land: null });
+      byPlot = null;
+      continue;
+    }
+    const from = u.owner, lost = u.cargo?.troops ?? 0;
+    Object.assign(u, { owner: foe.owner, path: [], route: null, progress: 0, follow: null, cargo: null, land: null });
+    world.emit("machine_captured", { machine: u.id, kind: u.type, nation: from, by: foe.owner, at: u.at, ...(lost ? { lost } : {}) });
   }
 }
 
@@ -529,19 +540,48 @@ export function machineLock(world, nid, type) {
   return world.lockReason?.(nid, type, "units") ?? null;
 }
 
-const have = (n, res, pool) => (res === "money" ? n.money ?? 0 : pool ? pool.have(res) : n.stock?.[res] ?? 0);
+const have = (n, res) => (res === "money" ? n.money ?? 0 : n.stock?.[res] ?? 0);
 
-function shortOf(n, cost, pool = null) {
-  for (const [res, v] of Object.entries(cost)) if (have(n, res, pool) < v) return res === "money" ? "gold" : res;
+function shortOf(n, cost) {
+  for (const [res, v] of Object.entries(cost)) if (have(n, res) < v) return res === "money" ? "gold" : res;
   return null;
 }
 
-function pay(n, cost, k = 1, pool = null) {
+function pay(n, cost, k = 1) {
   for (const [res, v] of Object.entries(cost)) {
     if (res === "money") n.money += -v * k;
-    else if (pool) pool.take(res, v * k);
     else n.stock[res] = (n.stock[res] ?? 0) - v * k;
   }
+}
+
+const LIMIT_NAMES = { land: "tanks, guns and siege engines", sea: "warships", air: "planes" };
+
+export function limitClass(def) {
+  return def && !def.transport && !def.freight && LIMIT_NAMES[def.domain] ? def.domain : null;
+}
+
+export function fleetOf(world, nid) {
+  const out = { land: 0, sea: 0, air: 0 };
+  for (const u of world.units?.list.values() ?? []) {
+    if (u.owner !== nid || u.wreck) continue;
+    const c = limitClass(UNIT_TYPES[u.type]);
+    if (c) out[c]++;
+  }
+  return out;
+}
+
+function queuedOf(world, nid, cls) {
+  let n = 0;
+  for (const q of world.machines.queues.values()) if (q.owner === nid) for (const t of q.items) if (limitClass(UNIT_TYPES[t]) === cls) n++;
+  return n;
+}
+
+export function limitError(world, nid, def, adding = 1) {
+  const cls = limitClass(def), cap = world.machines?.rules.limits?.[cls];
+  if (!cls || !(cap >= 0)) return null;
+  const have = fleetOf(world, nid)[cls], queued = queuedOf(world, nid, cls);
+  if (have + queued + adding <= cap) return null;
+  return `at most ${cap} ${LIMIT_NAMES[cls]}: you have ${have}${queued ? ` and ${queued} queued` : ""}`;
 }
 
 export function queueMachines(world, nid, bid, type, count = 1) {
@@ -557,6 +597,8 @@ export function queueMachines(world, nid, bid, type, count = 1) {
   if (!Number.isInteger(count) || count < 1) return { error: "build at least one" };
   const q = M.queues.get(bid) ?? { owner: nid, items: [], progress: 0, paid: false, why: null };
   if (q.items.length + count > M.rules.queueMax) return { error: `at most ${M.rules.queueMax} in a queue` };
+  const limit = limitError(world, nid, UNIT_TYPES[type], count);
+  if (limit) return { error: limit };
   for (let k = 0; k < count; k++) q.items.push(type);
   M.queues.set(bid, q);
   return { queued: q.items.length };
@@ -601,14 +643,11 @@ export function produce(world, dt) {
     if (b.state !== "active") { q.why = "the building is being worked on"; continue; }
     const def = UNIT_TYPES[q.items[0]], n = world.nations.get(q.owner);
     if (!q.paid) {
-      const pool = world.stores && n?.human ? (sync(world, n), poolOf(world, n, [b])) : null;
-      const short = shortOf(n, def.cost, pool);
-      if (short) {
-        if (pool) for (const [res, v] of Object.entries(def.cost)) if (res !== "money" && pool.have(res) < v) pool.ask(res, v);
-        q.why = pool && short !== "gold" && !pool.stores.length ? "no store within reach" : `not enough ${short}${pool && short !== "gold" ? " in its store yet" : ""}`;
-        continue;
-      }
-      pay(n, def.cost, 1, pool);
+      const cls = limitClass(def), cap = M.rules.limits?.[cls];
+      if (cls && cap >= 0 && fleetOf(world, q.owner)[cls] >= cap) { q.why = `you have ${cap} ${LIMIT_NAMES[cls]}, the most allowed`; continue; }
+      const short = shortOf(n, def.cost);
+      if (short) { q.why = `not enough ${short}`; continue; }
+      pay(n, def.cost);
       q.paid = true;
       q.progress = 0;
     }
@@ -647,12 +686,19 @@ export function machineOrdersOf(world, nid) {
     orders.push({ id: u.id, to, land: u.land, follow: u.follow });
   }
   for (const [bid, q] of world.machines.queues) if (q.owner === nid) queues[bid] = { items: [...q.items], progress: Math.round(q.progress * 100) / 100, why: q.why };
-  return { orders, queues };
+  return { orders, queues, fleet: fleetOf(world, nid), limits: world.machines.rules.limits ?? null };
 }
 
 export function giveMachine(world, nid, type) {
   const def = UNIT_TYPES[type], n = world.nations.get(nid);
   if (!def || !n?.spawned || n.capital === undefined) return null;
+  if (def.domain === "air") {
+    for (const id of world.bld?.mine.get(nid) ?? []) {
+      const b = world.bld.list.get(id);
+      if (b?.state === "active" && world.bld.table[b.type]?.airbase && world.owner[b.anchor] === nid) return spawnUnit(world, nid, type, b.anchor);
+    }
+    return null;
+  }
   const g = world.grid, seen = new Set([n.capital]), todo = [n.capital];
   for (let k = 0; k < todo.length && k < 40000; k++) {
     const i = todo[k];

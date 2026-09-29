@@ -4,7 +4,7 @@ import { ERA_NAMES } from "../shared/buildings.js";
 import { eraProgress, planPath } from "../shared/research.js";
 
 const BRANCH_NAMES = { military: "Military", economy: "Economy", civic: "Civic", government: "Government" };
-const EFFECT_NAMES = { research: "research", troop_cap: "troop cap", wood_rate: "wood output", food_rate: "food output", pop_growth: "population growth", defence: "defence", income: "gold income" };
+const EFFECT_NAMES = { research: "research", troop_cap: "troop cap", food_rate: "farm earnings", pop_growth: "population growth", defence: "defence", income: "gold income" };
 const BADGE = { known: "researched", current: "in_progress", queued: "available", ready: "available", locked: "locked" };
 const COL = 184, NODE_W = 156, NODE_H = 50, ROW = 60, TOP = 34, PAD = 10, LANE_GAP = 14;
 const pretty = id => id.replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
@@ -192,13 +192,13 @@ export function createResearchPanel(root, game) {
       detail.replaceChildren(...[
         el("b", { text: `${node.name}: ${BRANCH_NAMES[node.branch] ?? "Era"}, ${ERA_NAMES[node.era]}, ${node.cost} points${L_side(node) ? ", a side upgrade" : ""}` }),
         node.requires.length ? el("p", { class: "muted", text: `Needs ${node.requires.map(q => `${w.locks.nodes.get(q)?.name ?? q}${known.has(q) ? " (done)" : ""}`).join(", ")}${node.need ? `, and ${node.need.nodes} ${ERA_NAMES[node.era]} upgrades across ${node.need.branches} branches` : ""}` }) : null,
-        ...unlockText(w, node).map(t => el("p", { text: t })),
-        st === "known" ? el("p", { class: "muted", text: "Already researched." }) : why ? el("p", { class: "why", id: "research-why", text: `Cannot start yet: ${why}. Queueing it adds what it needs first.` }) : null,
-        adds.length > 1 || (adds.length === 1 && adds[0] !== node.id) ? el("p", { class: "muted", id: "research-plan", text: `Adding it queues ${adds.length} new: ${adds.map(id => w.locks.nodes.get(id)?.name ?? id).join(", ")}${plan.length > adds.length ? `, after ${plan.length - adds.length} already queued` : ""}. All are outlined in the tree.` }) : null,
-        st === "known" ? null : el("div", { class: "row wrap" },
-          el("button", { id: "research-first", class: "primary", text: "Research next", onclick: () => order(node.id, "first") }),
-          el("button", { id: "research-queue-add", text: "Add to queue", onclick: () => order(node.id, "queue") }),
+        st === "known" ? el("p", { class: "muted", text: "Already researched." }) : el("div", { class: "row wrap" },
+          el("button", { id: "research-first", class: "primary", text: adds.length > 1 ? `Research next, with the ${adds.length - 1} it needs` : "Research next", onclick: () => order(node.id, "first") }),
+          el("button", { id: "research-queue-add", text: adds.length > 1 ? `Queue all ${adds.length}` : "Add to queue", onclick: () => order(node.id, "queue") }),
           r.queue.includes(node.id) ? el("button", { text: "Remove from queue", onclick: () => order(node.id, "remove") }) : null),
+        st !== "known" && why ? el("p", { class: "why", id: "research-why", text: `Not yet: ${why}. You can still queue it: the buttons add what it needs first, in order.` }) : null,
+        adds.length > 1 || (adds.length === 1 && adds[0] !== node.id) ? el("p", { class: "muted", id: "research-plan", text: `Queueing it adds ${adds.length}: ${adds.map(id => w.locks.nodes.get(id)?.name ?? id).join(", ")}${plan.length > adds.length ? `, after ${plan.length - adds.length} already queued` : ""}. All are outlined in the tree.` }) : null,
+        ...unlockText(w, node).map(t => el("p", { text: t })),
       ].filter(Boolean));
     },
   };

@@ -1,12 +1,13 @@
 import { ROAD_TYPES, roadRoute, roadPrice } from "../shared/roads.js";
 import { roadView, payAndLay } from "./logistics.js";
-import { sync } from "./stores.js";
+
+const hubOf = d => !!(d && !d.retired && (d.port || d.station || d.trains || d.gathers));
 
 function storeList(world, nid) {
   const out = [];
   for (const id of world.bld?.mine.get(nid) ?? []) {
     const b = world.bld.list.get(id);
-    if (b?.state === "active" && world.bld.table[b.type]?.store && world.owner[b.anchor] === nid) out.push(b);
+    if (b?.state === "active" && hubOf(world.bld.table[b.type]) && world.owner[b.anchor] === nid) out.push(b);
   }
   return out;
 }
@@ -21,7 +22,7 @@ export function connectPlan(world, nid, kind) {
   const log = world.log, rules = log?.rules, n = world.nations.get(nid), g = world.grid;
   if (!rules?.types[kind]) return { error: "pick dirt, cobble or rail" };
   const list = storeList(world, nid);
-  if (!list.length) return { error: "you have no stores to connect yet" };
+  if (!list.length) return { error: "you have no town hall, port, station or barracks to connect yet" };
   const view = roadView(world), road = log.road, level = ROAD_TYPES.indexOf(kind);
   const hub = list.reduce((best, b) => (n.capital != null && g.dist(b.anchor, n.capital) < g.dist(best.anchor, n.capital) ? b : best), list[0]);
   const open = i => world.owner[i] === nid && !view.blocked(i);
@@ -53,9 +54,8 @@ export function connectPlan(world, nid, kind) {
 }
 
 export function connectStores(world, nid, kind) {
-  const n = world.nations.get(nid), plan = connectPlan(world, nid, kind);
+  const plan = connectPlan(world, nid, kind);
   if (plan.error || !plan.plots.length) return plan;
-  if (world.stores) sync(world, n);
   const r = payAndLay(world, nid, plan, kind);
   return r.error ? { ...plan, error: r.error } : { ...plan, laid: r.laid };
 }

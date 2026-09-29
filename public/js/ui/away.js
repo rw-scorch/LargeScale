@@ -22,8 +22,7 @@ export function awayLines(w, s) {
   const counted = (map, nameOf) => Object.entries(map).map(([k, v]) => `${num(v)} ${nameOf(k)}${v === 1 ? "" : "s"}`).join(", ");
   const add = (ic, text, tone = "") => lines.push({ icon: ic, text, tone });
   if (s.eliminated) add("alert_attack", "Your nation was eliminated.", "bad");
-  const stock = Object.entries(s.stock ?? {}).filter(([, v]) => v).map(([k, v]) => `${cap(k)} ${signed(v)}`);
-  add("res_money", `Gold ${signed(s.gold)}${stock.length ? `. ${stock.join(", ")}` : ""}`, s.gold >= 0 ? "good" : "bad");
+  add("res_money", `Gold ${signed(s.gold)}`, s.gold >= 0 ? "good" : "bad");
   if (s.pop[0] || s.pop[1]) add("ui_score_pop", `People ${num(s.pop[0])} to ${num(s.pop[1])}`, s.pop[1] >= s.pop[0] ? "good" : "bad");
   if (s.town || s.upgraded) add("alert_built", `Your towns started ${plural(s.town, "building")}${s.upgraded ? ` and upgraded ${num(s.upgraded)}` : ""}`);
   if (Object.keys(s.built).length) add("alert_built", `Finished: ${counted(s.built, bName)}`);
@@ -69,7 +68,7 @@ export function createAwayPanel(root, game) {
         : "The world kept running while you were gone.";
       const lines = awayLines(w, s);
       list.replaceChildren(...lines.map(l => el("p", { class: `away-line ${l.tone}` }, icon(l.icon, 1), el("span", { text: l.text }))));
-      note.textContent = `While you are away your nation makes ${Math.round(s.share * 100)}% of its usual gold, goods and research${s.defence ? `, and your land defends at ${Math.round(s.defence * 100)}%` : ""}.`;
+      note.textContent = `While you are away your nation makes ${Math.round(s.share * 100)}% of its usual gold and research${s.defence ? `, and your land defends at ${Math.round(s.defence * 100)}%` : ""}.`;
       game.feed?.push({ key: "away", text: `Welcome back. ${lines.slice(0, 2).map(l => l.text).join(". ")}.`, tone: "good" });
       this.show(true);
     },

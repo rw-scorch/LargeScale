@@ -4,7 +4,6 @@ import { icon } from "./icons.js";
 import { nextLine, when } from "./worldinfo.js";
 import { costText } from "./build.js";
 import { ROAD_NAMES } from "../shared/roads.js";
-import { stuckCount } from "./logistics.js";
 
 const STATUS = { online: "Online", connecting: "Connecting", reconnecting: "Reconnecting", waiting: "Offline", replaced: "Opened elsewhere", outdated: "Needs reload", closed: "Closed", removed: "Removed", deleted: "Deleted" };
 const RES_ICON = { gold: "res_money", concrete: "res_stone" };
@@ -18,10 +17,10 @@ export function clockOf(world) {
   return `Day ${Math.floor(t / day) + 1}, ${String(hour).padStart(2, "0")}:00`;
 }
 
-function chip(key, value, change, hint) {
-  const r = rate(change);
-  return el("span", { class: "res", "data-res": key, title: `${hint ?? key}${r ? `, ${r.replace("/s", " a second")}` : ""}` },
-    icon(RES_ICON[key] ?? `res_${key}`, 1), el("b", { text: fmt(value) }), r ? el("small", { class: change < 0 ? "down" : "up", text: r }) : null);
+function chip(key, value, change, hint, endless = false) {
+  const r = endless ? "" : rate(change);
+  return el("span", { class: "res", "data-res": key, title: endless ? `${hint ?? key}: without limit (a cheat is on)` : `${hint ?? key}${r ? `, ${r.replace("/s", " a second")}` : ""}` },
+    icon(RES_ICON[key] ?? `res_${key}`, 1), el("b", { text: endless ? "∞" : fmt(value) }), r ? el("small", { class: change < 0 ? "down" : "up", text: r }) : null);
 }
 
 export function createHud(root, game) {
@@ -37,13 +36,14 @@ export function createHud(root, game) {
   const pill = el("header", { id: "status-pill", class: "pill" }, worldName, speed, clock, season, next, el("span", { class: "status" }, dot, status));
 
   const iconButton = (id, ic, hint, onclick, extra = {}) => el("button", { id, class: "icon-btn", title: hint, "aria-label": hint, onclick, ...extra }, typeof ic === "string" ? icon(ic, 1.5) : ic);
-  const admin = game.admin ? iconButton("open-admin", "ui_dev", "Admin panel (`)", () => game.toggleAdmin()) : null;
+  const admin = iconButton("open-admin", "ui_dev", "Admin panel (`)", () => game.toggleAdmin());
   const full = document.fullscreenEnabled ? iconButton("full-screen", el("i", { class: "fs-mark" }), "Full screen", () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {})) : null;
   const corner = el("nav", { id: "corner", class: "icons" },
     iconButton("go-home", "ui_flag", "Your capital (H)", () => game.home()),
     iconButton("go-map", "ui_map", "Whole map", () => game.fit()),
     iconButton("zoom-out", "ui_zoom_out", "Zoom out (-)", () => game.zoom(1 / 1.6)),
     iconButton("zoom-in", "ui_zoom_in", "Zoom in (+)", () => game.zoom(1.6)),
+    iconButton("show-deposits", "ui_map_resources", `Deposits on the map (${keyTag("deposits").textContent})`, () => game.toggleDeposits()),
     full,
     iconButton("open-info", "ui_info", "World info: schedule, how to win and settings (I)", () => game.toggleInfo()),
     iconButton("open-settings", "ui_settings", "Settings: keys and display", () => game.toggleSettings()),
@@ -78,17 +78,19 @@ export function createHud(root, game) {
   const research = action("open-research", "res_research", "Research", "research", () => game.toggleResearch());
   const upgrade = action("open-upgrade", "upg_upgrade", "Upgrade", "upgrade", () => game.toggleUpgrade());
   const army = action("open-army", "ui_army", "Army", "army", () => game.toggleArmy());
-  const logistics = action("open-logistics", "ui_map_supply", "Logistics", "logistics", () => game.toggleLogistics());
-  const deposits = action("show-deposits", "ui_map_resources", "Deposits", "deposits", () => game.toggleDeposits());
-  const bar = el("nav", { id: "action-bar", class: "panel" }, build, town, research, upgrade, army, logistics, deposits);
+  const logistics = action("open-logistics", "res_trade", "Trade", "logistics", () => game.toggleLogistics());
+  const plan = action("open-planner", "tool_grid", "Plan", "plan", () => game.togglePlanner());
+  const armies = action("pick-armies", "cursor_select", "Armies", "armies", () => game.toggleArmies());
+  const bar = el("nav", { id: "action-bar", class: "panel" }, armies, build, plan, town, research, upgrade, army, logistics);
 
+  const armiesHint = el("div", { id: "armies-hint", class: "banner", hidden: true }, "Armies: ", el("span", { class: "fine-only", text: "drag across your soldiers to pick them, or Shift and drag a box. Click one to add it, and click a picked one for all of its kind on screen. Right-drag or the arrow keys move the map. " }), el("span", { class: "coarse-only", text: "swipe across your soldiers to pick them. Tap one to add it, and tap a picked one for all of its kind on screen. Two fingers move the map. " }), "Esc or Armies again stops.");
   const placeHint = el("div", { id: "place-hint", class: "banner", hidden: true }, "Click your own land to place the stack. ", el("span", { class: "fine-only", text: "Or point and press F. " }), "Esc cancels.");
   const buildText = el("span", { id: "build-text" });
   const paint = el("button", { id: "paint-toggle", class: "chip", title: "Paint: drag to place one on every free spot you pass", onclick: () => game.setPref("paint", !game.prefs.paint) });
   const buildHint = el("div", { id: "build-hint", class: "banner", hidden: true }, buildText, paint);
   const both = (mouse, touch) => [el("span", { class: "fine-only", text: mouse }), el("span", { class: "coarse-only", text: touch })];
   let hintKey = "";
-  cols.top.append(pill, placeHint, buildHint);
+  cols.top.append(pill, placeHint, buildHint, armiesHint);
   root.append(cols.left, cols.side, cols.top, corner, bar);
 
   const readShare = () => Number(share.value) / 100;
@@ -105,7 +107,8 @@ export function createHud(root, game) {
       const p = w?.purse;
       season.hidden = !p?.season;
       season.textContent = p?.season ? title(p.season) : "";
-      admin?.classList.toggle("on", !!game.adminPanel?.open);
+      admin.classList.toggle("on", !!game.adminPanel?.open);
+      admin.hidden = !game.canAdmin;
       corner.querySelector("#open-info").classList.toggle("on", !!game.worldInfo?.open);
       const nl = w?.ready ? nextLine(w, w.serverNow()) : null;
       next.hidden = !nl;
@@ -121,12 +124,12 @@ export function createHud(root, game) {
       swatch.style.background = n?.colour ?? "transparent";
       mine.textContent = n?.name ?? "";
       plots.textContent = n?.spawned ? `${fmt(n.plots)} plots` : n ? "not placed yet" : "";
-      troops.textContent = n?.spawned ? (v ? `${fmt(n.troops)} / ${fmt(v.cap)}` : fmt(n.troops)) : "-";
+      const endless = new Set(p?.cheats ?? []);
+      troops.textContent = n?.spawned ? (endless.has("troops") ? "∞" : v ? `${fmt(n.troops)} / ${fmt(v.cap)}` : fmt(n.troops)) : "-";
       troopRate.textContent = v ? (v.grow ? rate(v.grow) : "full") : "";
       fill.style.width = v?.cap ? `${Math.min(100, (n.troops / v.cap) * 100)}%` : "0";
-      const stock = p ? Object.entries(p.stock).filter(([k, x]) => x > 0 || k === "food" || k === "wood") : [];
-      const list = p ? [["gold", p.money, v?.income ?? 0], ...(p.town ? [["population", p.town.pop, 0, "people"]] : []), ...stock.map(([k, x]) => [k, x, (p.making?.[k] ?? 0) - (k === "food" ? p.town?.foodUse ?? 0 : 0)])] : [];
-      const sig = list.map(([k, x, r]) => `${k}${fmt(x)}${rate(r)}`).join();
+      const list = p ? [["gold", p.money, v?.income ?? 0, "gold", endless.has("gold")], ...(p.town ? [["population", p.town.pop, 0, "people"]] : [])] : [];
+      const sig = list.map(([k, x, r, , e]) => `${k}${e ? "inf" : fmt(x)}${rate(r)}`).join();
       if (purse.dataset.sig !== sig) { purse.dataset.sig = sig; purse.replaceChildren(...list.map(a => chip(...a))); }
       shareLabel.textContent = `${share.value}%${n?.spawned ? ` (${fmt(n.troops * readShare())})` : ""}`;
       form.disabled = !n?.spawned || !n.alive || w.frozen;
@@ -148,12 +151,20 @@ export function createHud(root, game) {
       upgrade.classList.toggle("on", !!game.upgrade?.open);
       army.disabled = !p?.army || !n?.spawned;
       army.classList.toggle("on", !!game.army?.open);
-      const stuck = w ? stuckCount(w) : 0;
-      logistics.disabled = !p?.logistics || !n?.spawned;
+      logistics.disabled = !p?.trade || !n?.spawned;
       logistics.classList.toggle("on", !!game.logistics?.open);
-      logistics.querySelector(".alert").hidden = !stuck;
-      logistics.title = stuck ? `Logistics: ${stuck} ${stuck === 1 ? "thing is" : "things are"} stuck (${keyTag("logistics").textContent})` : `Logistics (${keyTag("logistics").textContent})`;
-      deposits.classList.toggle("on", !!game.view?.showDeposits);
+      logistics.querySelector(".alert").hidden = true;
+      logistics.title = p?.trade ? `Trade: ${fmt(p.trade.perMinute)} gold a minute (${keyTag("logistics").textContent})` : `Trade (${keyTag("logistics").textContent})`;
+      corner.querySelector("#show-deposits").classList.toggle("on", !!game.view?.showDeposits);
+      plan.disabled = form.disabled || !p;
+      plan.classList.toggle("on", !!game.planner?.open);
+      const pq = p?.plan?.projects ?? [];
+      plan.querySelector(".prog").hidden = !pq.length;
+      if (pq.length) { const left = pq.reduce((s, r) => s + r[3], 0), done = pq.reduce((s, r) => s + r[4], 0); plan.querySelector(".prog").style.width = `${Math.floor((done / Math.max(1, left + done)) * 100)}%`; }
+      plan.title = pq.length ? `Plan: ${pq.length} queued, ${p.plan.why ?? "building"} (${keyTag("plan").textContent})` : `Plan: projects for your nation (${keyTag("plan").textContent})`;
+      armies.disabled = !n?.spawned || !n.alive || !!w?.frozen;
+      armies.classList.toggle("on", !!game.armies);
+      armiesHint.hidden = !game.armies;
 
       placeHint.hidden = !game.placing;
       const def = game.building && w?.defs.table[game.building];
@@ -178,7 +189,7 @@ export function createHud(root, game) {
           : route === "from" ? ["Road from the marked point: ", ...both("move to see the way it takes, and click where it ends. ", "tap where it ends. ")]
           : [`Laying ${ROAD_NAMES[game.roading].toLowerCase()}: `, ...both("click where it starts and where it ends, and it finds its own way round buildings; or drag to draw it. ", "tap where it starts and where it ends, and it finds its own way; or drag to draw it. "), `${rr?.types[game.roading] ? `${price(rr.types[game.roading])}, ${rr.bridge} times over rivers, ${rr.rough} times on mountains. ` : ""}`];
         buildText.replaceChildren(...(mode === "road" ? roadText.concat(roadCost ? [el("b", { id: "road-cost", text: `${roadCost} ` })] : [], route === "pinned" && !game.roadPreview?.error && game.roadPreview?.plots?.length ? [lay, " "] : [], route === "from" || route === "pinned" ? both("Esc starts again.", "") : both("Right-click or Esc stops.", "Two fingers move the map."))
-          : mode === "zone" ? [`${game.zoning === "none" ? "Erasing zones" : "Zoning"}: drag over your land. `, ...both("Right-click or Esc stops.", "Two fingers move the map.")]
+          : mode === "zone" ? [game.zoning === "keep" ? "Keeping land clear of the planner: drag over it. " : `${game.zoning === "none" ? "Erasing zones" : "Zoning"}: drag over your land. `, ...both("Right-click or Esc stops.", "Two fingers move the map.")]
           : mode === "paint" ? [`Painting ${def.name}: drag across your land to put one on every free spot. `, ...both("Right-drag or the arrow keys move the map; Esc stops.", "Two fingers move the map.")]
           : mode === "click" ? [`Placing ${def.name}. `, ...both("Click to build. Right-click or Esc stops.", "Tap twice to build.")]
           : mode === "pinned" ? [`Placing ${def.name}: press Build here to confirm, or pick another spot. `, ...both("Enter confirms, Esc cancels.", "")]

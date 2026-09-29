@@ -1,6 +1,8 @@
 import { PROTOCOL } from "../src/shared/protocol.js";
 import { ClientWorld } from "../src/shared/client.js";
 import { isLand } from "../src/shared/terrain.js";
+import { soldierTypes } from "../src/shared/soldiers.js";
+import { proposePlan } from "../src/shared/planner.js";
 
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const INVITE = process.env.INVITE ?? "test-invite";
@@ -25,6 +27,7 @@ async function join(world, token) {
     const m = JSON.parse(e.data);
     if (m.t === "hello") { p.cw = new ClientWorld(m); p.hello = m; return; }
     if (m.t === "result" && p.waits.has(m.of)) { const q = p.waits.get(m.of); p.waits.delete(m.of); q(m); }
+    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
     p.cw?.message(m);
   };
   ws.onclose = e => { p.closed = e.code; };
@@ -40,7 +43,7 @@ async function join(world, token) {
   return p;
 }
 
-const tally = new Map();
+const tally = new Map(), seen = new Map();
 const note = (t, r) => {
   const k = r.ok ? `${t}: ok` : `${t}: ${r.error ?? "failed"}`;
   tally.set(k, (tally.get(k) ?? 0) + 1);
@@ -70,10 +73,73 @@ await A.send({ t: "admin", op: "speed", factor: 8 });
 const mine = p => { const w = p.cw, out = []; for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === w.you) out.push(i); return out; };
 const near = (w, from, r) => { const x = from % w.w, y = (from / w.w) | 0; return Math.max(0, Math.min(w.h - 1, y + Math.floor(rand() * (2 * r + 1)) - r)) * w.w + Math.max(0, Math.min(w.w - 1, x + Math.floor(rand() * (2 * r + 1)) - r)); };
 
+for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
+note("admin finish", await A.send({ t: "admin", op: "finish", nation: A.cw.you }));
+async function airfield() {
+  const w = A.cw;
+  if ([...w.buildings.values()].some(b => b.owner === w.you && b.type === "airfield")) return;
+  for (const at of mine(A).sort(() => rand() - 0.5).slice(0, 300)) if (!w.placeError("airfield", at)) { note("build airfield", await A.send({ t: "build", type: "airfield", at })); return; }
+}
+async function samSite() {
+  const w = A.cw;
+  if ([...w.buildings.values()].filter(b => b.owner === w.you && b.type === "sam_site").length >= 3 || w.lockOf("sam_site")) return;
+  for (const at of mine(A).sort(() => rand() - 0.5).slice(0, 300)) if (!w.placeError("sam_site", at)) { note("build sam_site", await A.send({ t: "build", type: "sam_site", at })); return; }
+}
+for (let k = 0; k < 40 && A.cw.lockOf("airfield"); k++) await sleep(100);
+
+async function planSome(p) {
+  const w = p.cw;
+  if (!w.purse || !w.terrain || !w.nations.get(w.you)?.alive) return;
+  const list = proposePlan(w.planView(), w.planRules ?? {});
+  stats.proposals = Math.max(stats.proposals, list.length);
+  const roll = rand();
+  if (list.length && roll < 0.7) { const q = pick(list); note("plan add", await p.send({ t: "plan", op: "add", project: { key: q.key, kind: q.kind, name: q.title, pieces: q.pieces } })); }
+  else if (roll < 0.8) { const at = near(w, w.nations.get(w.you).capital, 10); note("plan keep", await p.send({ t: "plan", op: "keep", rects: [[at % w.w, (at / w.w) | 0, 4, 4]] })); }
+  else if (roll < 0.9 && w.planQueue.length) note("plan cancel", await p.send({ t: "plan", op: "cancel", key: pick(w.planQueue).key }));
+  else note("plan keep", await p.send({ t: "plan", op: "keep", rects: [] }));
+}
+
+async function fly(p) {
+  const w = p.cw, you = w.you, n = w.nations.get(you);
+  if (!n?.alive) return;
+  const cap = n.capital, stacks = [...w.stacks.values()].filter(s => s.owner === you);
+  const planes = [...w.machines.values()].filter(u => u.owner === you && u.air);
+  const roll = rand();
+  let m;
+  if (p.piloting) {
+    if (roll < 0.15) { m = { t: "pilot", op: "release" }; p.piloting = false; }
+    else {
+      const aim = near(w, cap, 10);
+      p.ws.send(JSON.stringify({ t: "pilot", op: "input", move: [rand() * 2 - 1, rand() * 2 - 1], aim: [(aim % w.w) + 0.5, ((aim / w.w) | 0) + 0.5], fire: rand() < 0.3, bomb: rand() < 0.05 }));
+      note("pilot input", { ok: true });
+      return;
+    }
+  } else if (roll < 0.35 && stacks.length) {
+    const s = pick(stacks), kinds = soldierTypes(s.troops, s.mix, w.soldierRules?.troopsEach ?? 10);
+    if (!kinds.length) return;
+    const [id, count] = pick(kinds);
+    m = { t: "detach", picks: [{ stack: s.id, take: { [id]: 1 + Math.floor(rand() * count) } }] };
+  } else if (roll < 0.55 && (stacks.length || planes.length)) {
+    m = planes.length && (rand() < 0.4 || !stacks.length) ? { t: "pilot", op: "take", machine: pick(planes).id } : { t: "pilot", op: "take", stack: pick(stacks).id };
+  } else if (roll < 0.7 && stacks.length && planes.some(u => u.def.capacity && u.air?.landed && !u.cargo)) {
+    const u = pick(planes.filter(u => u.def.capacity && u.air?.landed && !u.cargo));
+    m = { t: "board", stack: pick(stacks).id, ship: u.id };
+  } else if (roll < 0.8 && planes.some(u => u.def.capacity && u.cargo)) {
+    m = { t: "air", do: "drop", plane: pick(planes.filter(u => u.def.capacity && u.cargo)).id, at: near(w, cap, 20) };
+  } else if (planes.length) {
+    const what = pick(["patrol", "bomb", "bomb", "return"]);
+    m = { t: "air", do: what, planes: planes.filter(() => rand() < 0.5).map(u => u.id).concat(pick(planes).id), ...(what === "return" ? {} : { at: near(w, cap, 18) }) };
+  }
+  if (!m) return;
+  const r = await p.send(m);
+  note(m.t === "pilot" ? `pilot ${m.op}` : m.t, r);
+  if (m.t === "pilot" && m.op === "take" && r.ok) p.piloting = true;
+}
+
 async function act(p) {
   const w = p.cw, you = w.you, n = w.nations.get(you), purse = w.purse;
   if (!n?.alive || !purse) return;
-  const land = mine(p), stacks = [...w.stacks.values()].filter(s => s.owner === you), troops = stacks.filter(s => s.kind !== "supply");
+  const land = mine(p), stacks = [...w.stacks.values()].filter(s => s.owner === you), troops = stacks;
   const cap = n.capital ?? land[0];
   const roll = rand();
   let m;
@@ -90,17 +156,14 @@ async function act(p) {
   else if (roll < 0.65 && troops.length) m = { t: "split", stack: pick(troops).id, share: 0.5 };
   else if (roll < 0.68 && troops.length > 1) m = { t: "merge", into: troops[0].id, stack: troops[1].id };
   else if (roll < 0.7 && stacks.length) m = { t: "disband", stack: pick(stacks).id };
-  else if (roll < 0.73) m = { t: "wagon", at: cap, food: 20 + Math.floor(rand() * 60) };
-  else if (roll < 0.75 && troops.length && stacks.some(s => s.kind === "supply")) m = { t: "follow", stack: stacks.find(s => s.kind === "supply").id, target: pick(troops).id };
+  else if (roll < 0.75 && troops.length) { const s = pick(troops), far = pick([...w.buildings.values()].filter(b => b.owner !== you && b.state === "active")); if (far) m = { t: "move", stack: s.id, to: far.anchor }; }
   else if (roll < 0.8) { const node = pick(w.locks?.nodes ? [...w.locks.nodes.keys()] : []); if (node) m = { t: "research", id: node, mode: "queue" }; }
   else if (roll < 0.83) m = { t: "army", keep: { [pick(["club_warrior", "spear_thrower", "horse_archer", "spearman", "archer"])]: Math.floor(rand() * 200) } };
   else if (roll < 0.86) {
     const shop = [...w.buildings.values()].find(b => b.owner === you && b.state === "active" && b.def.builds?.length);
     if (shop) m = { t: "produce", building: shop.id, type: pick(shop.def.builds) };
-  } else if (roll < 0.89) {
-    const st = purse.logistics?.stores.filter(s => s[0]) ?? [];
-    if (st.length) { const want = Math.floor(rand() * 60); m = { t: "store", building: pick(st)[0], kind: pick(["wood", "food", "stone"]), keep: want + Math.floor(rand() * 20), want }; }
-  } else if (roll < 0.92) {
+  } else if (roll < 0.89) m = { t: "connect", kind: "dirt", keep: rand() < 0.5 };
+  else if (roll < 0.92) {
     const b = [...w.buildings.values()].filter(b => b.owner === you && b.state === "active" && b.def.next);
     if (b.length) m = { t: "upgrade", ids: [pick(b).id] };
   } else if (roll < 0.94) m = { t: "policy", tax: Math.floor(rand() * 5), conscription: 0.1 + Math.round(rand() * 10) * 0.05 };
@@ -118,15 +181,29 @@ function inspect(p, label) {
   if (!purse) return;
   const bad = (v, where) => { if (typeof v === "number" && !Number.isFinite(v)) problem(`${label}: ${where} is ${v}`); };
   bad(purse.money, "money");
-  for (const [k, v] of Object.entries(purse.stock ?? {})) { bad(v, `stock ${k}`); if (v < -1) problem(`${label}: stock ${k} is ${v}`); }
-  const lg = purse.logistics;
-  if (lg) {
-    const tot = {};
-    for (const s of lg.stores) for (const [k, v] of Object.entries(s[1])) { tot[k] = (tot[k] ?? 0) + v; if (v < -0.01) problem(`${label}: store ${s[0]} holds ${v} ${k}`); }
-    for (const k of new Set([...Object.keys(tot), ...Object.keys(purse.stock ?? {})])) if (Math.abs((tot[k] ?? 0) - (purse.stock[k] ?? 0)) > 2) problem(`${label}: stores hold ${(tot[k] ?? 0).toFixed(1)} ${k} but the stock says ${purse.stock[k]}`);
-  }
+  if (purse.money < 0) problem(`${label}: gold is ${purse.money}`);
+  if (purse.stock !== undefined) problem(`${label}: the purse still carries goods`);
+  const t = purse.trade;
+  if (t) for (const k of ["ports", "stations", "ships", "trains", "perMinute", "total"]) { bad(t[k], `trade ${k}`); if (t[k] < 0) problem(`${label}: trade ${k} is ${t[k]}`); }
   for (const s of w.stacks.values()) if (!Number.isFinite(s.troops) || s.troops < 0) problem(`${label}: stack ${s.id} has ${s.troops} troops`);
+  const f = purse.field;
+  if (f && f.soldiers > f.cap) problem(`${label}: ${f.soldiers} soldiers in the field, over ${f.cap}`);
+  if (f && f.companies > f.maxCompanies) problem(`${label}: ${f.companies} companies, over ${f.maxCompanies}`);
+  let planes = 0;
+  for (const u of w.machines.values()) {
+    if (!u.air) continue;
+    if (u.owner === w.you) planes++;
+    if (![u.air.x, u.air.y, u.air.fuel].every(Number.isFinite)) problem(`${label}: plane ${u.id} has ${JSON.stringify(u.air)}`);
+    else if (u.air.x < 0 || u.air.y < 0 || u.air.x > w.w || u.air.y > w.h) problem(`${label}: plane ${u.id} is off the map at ${u.air.x}, ${u.air.y}`);
+  }
+  if (planes > 100) problem(`${label}: ${planes} planes, over 100`);
+  const pl = purse.plan;
+  if (pl && (pl.projects.length > 40 || pl.projects.reduce((s, r) => s + r[3], 0) > 400)) problem(`${label}: the plan queue holds ${pl.projects.length} projects`);
+  if (pl) stats.done = Math.max(stats.done, pl.projects.reduce((s, r) => s + r[4], 0));
+  stats.planes = Math.max(stats.planes, planes);
+  stats.soldiers = Math.max(stats.soldiers, f?.soldiers ?? 0);
 }
+const stats = { planes: 0, soldiers: 0, proposals: 0, done: 0 };
 
 const t0 = Date.now();
 let rounds = 0;
@@ -135,10 +212,16 @@ while (Date.now() - t0 < SECONDS * 1000) {
   if (rounds % 25 === 1) {
     for (const p of [A, B]) {
       const nid = p.cw.you;
-      for (const [what, amount] of [["money", 3000], ["wood", 300], ["stone", 200], ["food", 300], ["iron", 100]]) note("admin give", await A.send({ t: "admin", op: "give", nation: nid, what, amount }));
+      note("admin give", await A.send({ t: "admin", op: "give", nation: nid, what: "money", amount: 3000 }));
     }
+    await airfield();
+    await samSite();
+    note("admin give plane", await A.send({ t: "admin", op: "give", nation: A.cw.you, what: "machine", unit: pick(["biplane", "early_bomber", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane"]), amount: 2 }));
+    if (rounds % 75 === 1) note("admin give sam truck", await A.send({ t: "admin", op: "give", nation: B.cw.you, what: "machine", unit: "sam_truck", amount: 1 }));
   }
   await Promise.all([act(A), act(B)]);
+  if (rand() < 0.4) await Promise.all([fly(A), fly(B)]);
+  if (rounds % 12 === 5) await Promise.all([planSome(A), planSome(B)]);
   if (rounds % 20 === 0) {
     inspect(A, "host");
     inspect(B, "friend");
@@ -151,6 +234,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
 const st = (await api(`/api/worlds/${wid}/status`, null, admin.token)).body;
 console.log(`\n${rounds} rounds, ${Math.round(st.time / 60)} game minutes, tick errors ${st.tickErrors ?? 0}${st.lastError ? `: ${st.lastError}` : ""}`);
 for (const [k, v] of [...tally].sort((a, b) => a[0].localeCompare(b[0]))) console.log(`${String(v).padStart(5)}  ${k}`);
+console.log(`\nmost planes held by the host: ${stats.planes}; most soldiers in the field: ${stats.soldiers}; most projects proposed at once: ${stats.proposals}; air events seen by both: ${JSON.stringify(Object.fromEntries(seen))}`);
 console.log(problems.length ? `\n${problems.length} problems` : "\nno problems found");
 A.ws.close();
 B.ws.close();

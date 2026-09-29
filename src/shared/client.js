@@ -6,16 +6,22 @@ import { emptyDeposits, decodeDeposits, cropDeposits, depositIndex } from "./dep
 import { lockMap, lockReason, researchError } from "./research.js";
 import { ERA_ORDER } from "./buildings.js";
 import { unitTable, mixFromRow, mixParts, powerOf } from "./units.js";
+import { piecePlots } from "./planner.js";
 
 const LEVY_ONLY = [{ id: "levy", num: 1, name: "Levies", kind: "troop", era: "T", attack: 1, defence: 1, speed: 1, capture: 1 }];
 
-const stackFromRow = ([id, owner, pos, troops, order, mix, xp, kind, supplies], units) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold", mix: mixFromRow(units, mix), xp: xp ?? 0, kind: kind === 1 ? "supply" : null, supplies: supplies ?? 0 });
+const stackFromRow = ([id, owner, pos, troops, order, mix, xp], units) => ({ id, owner, pos, troops, order: ORDER_CODES[order] ?? "hold", mix: mixFromRow(units, mix), xp: xp ?? 0 });
 
 const MACHINE_STATES = ["idle", "moving", "wreck"];
 
-const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face], units) => {
+const MISSIONS = [null, "patrol", "bomb", "return", "drop"];
+
+const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air], units) => {
   const def = units.byNum[num];
-  return def ? { id, owner, type: def.id, def, at, hp, state: MACHINE_STATES[state] ?? "idle", cargo, follow: follow || null, face: face ?? 1 } : null;
+  if (!def) return null;
+  const u = { id, owner, type: def.id, def, at, hp, state: MACHINE_STATES[state] ?? "idle", cargo, follow: follow || null, face: face ?? 1 };
+  if (air) u.air = { x: air[0] / 10, y: air[1] / 10, heading: air[2] / 100, landed: !!air[3], bombs: air[4], fuel: air[5], mission: MISSIONS[air[6]] ?? null, rearm: air[7] ?? 0, queued: !!air[8], target: air.length > 10 ? [air[9] / 10, air[10] / 10] : null };
+  return u;
 };
 
 export class ClientWorld {
@@ -46,6 +52,14 @@ export class ClientWorld {
     this.roads = new Uint8Array(this.w * this.h);
     this.roadRules = hello.roadRules ?? null;
     this.powerRules = hello.powerRules ?? null;
+    this.goldRules = hello.goldRules ?? null;
+    this.soldierRules = hello.soldierRules ?? null;
+    this.pilotRules = hello.pilotRules ?? null;
+    this.planRules = hello.planRules ?? null;
+    this.planQueue = hello.plan ?? [];
+    this.pilots = new Map();
+    this.shots = [];
+    this.setPilots(hello.pilots ?? [], []);
     this.terrain = null;
     this.parts = new PartCollector();
     this.queue = [];
@@ -59,6 +73,7 @@ export class ClientWorld {
     this.buildingsReady = !hello.frames?.buildings;
     this.early = new Set();
     this.purse = hello.purse ?? null;
+    this.powers = hello.powers ?? [];
     this.consRules = { demolishRefund: 0.5, refundOnCancel: 0.5, instantPremium: 1.5, moneyForMissing: 4, ...hello.consRules };
     this.disbandLoss = hello.disbandLoss ?? 0.25;
     this.seasonRules = { dayLengthMinutes: 60, daysPerSeason: 6, ...hello.seasonRules };
@@ -91,20 +106,48 @@ export class ClientWorld {
   mixOf(s) { return mixParts(this.unitTypes, s.troops, s.mix); }
 
   setMachine(r) {
-    const u = machineFromRow(r, this.unitTypes);
+    const u = machineFromRow(r, this.unitTypes), old = u && this.machines.get(u.id);
+    if (u?.air) { u.air.px = old?.air ? old.air.x : u.air.x; u.air.py = old?.air ? old.air.y : u.air.y; u.air.at = Date.now(); }
     if (u) this.machines.set(u.id, u);
   }
 
+  planeAt(u) {
+    const A = u.air;
+    if (!A) return null;
+    const t = Math.min(1, (Date.now() - A.at) / 1000);
+    return [A.px + (A.x - A.px) * t, A.py + (A.y - A.py) * t, A.heading];
+  }
+
   myMachines() { return [...this.machines.values()].filter(u => u.owner === this.you); }
+
+  samOf(kind, id) {
+    const r = this.purse?.sams?.find(r => r[0] === kind && r[1] === id);
+    return r ? { missiles: r[2], max: r[3], reloadIn: r[4] } : null;
+  }
 
   setConvoy([id, owner, pos, kind, amount, era, dest, ship = 0, train = 0]) {
     const old = this.convoys.get(id), moved = old && old.pos !== pos && !!old.ship === !!ship;
     this.convoys.set(id, { id, owner, pos, kind, amount, era, dest, ship: ship || null, train: !!train, prev: moved ? old.pos : old && !!old.ship !== !!ship ? pos : old?.prev ?? pos, movedAt: moved ? Date.now() : old?.movedAt ?? 0 });
   }
 
-  cargoOf(shipId) {
-    for (const c of this.convoys.values()) if (c.ship === shipId) return c;
-    return null;
+
+  setPilots(rows, shots) {
+    const now = Date.now(), seen = new Set();
+    for (const [kind, id, owner, x, y, heading] of rows) {
+      const key = `${kind ? "m" : "s"}:${id}`, old = this.pilots.get(key);
+      seen.add(key);
+      this.pilots.set(key, { key, kind: kind ? "m" : "s", id, owner, x, y, heading, px: old ? old.x : x, py: old ? old.y : y, at: now });
+    }
+    for (const key of [...this.pilots.keys()]) if (!seen.has(key)) this.pilots.delete(key);
+    for (const [x0, y0, x1, y1, shell, by, hit] of shots ?? []) this.shots.push({ x0, y0, x1, y1, shell: !!shell, by, hit, at: now });
+    if (this.shots.length) this.shots = this.shots.filter(s => now - s.at < 1000);
+  }
+
+  pilotAt(key) {
+    const p = this.pilots.get(key);
+    if (!p) return null;
+    const t = Math.min(1, (Date.now() - p.at) / (this.pilotRules?.sendEvery ?? 100));
+    return [p.px + (p.x - p.px) * t, p.py + (p.y - p.py) * t, p.heading];
   }
 
   powerOf(s, holding = false) { return powerOf(this.unitTypes, s.troops, s.mix, holding ? "defence" : "attack", this.troopRules.xpBonus[s.xp] ?? 0); }
@@ -181,13 +224,28 @@ export class ClientWorld {
     const def = this.defs.table[type], me = this.nations.get(this.you);
     if (!def || !me) return "unknown building";
     const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id), road: this.roads };
-    const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} };
+    const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0 };
     return placeError(view, nation, def, anchor) ?? costError(def, nation);
+  }
+
+  planView(extra = {}) {
+    const p = this.purse, me = this.nations.get(this.you);
+    const occupant = i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; };
+    const view = {
+      w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, zone: this.zone, road: this.roads, occupant, blocked: i => !!occupant(i),
+      deposit: i => this.depositAt(i), depositPlots: this.deposits.plots, depositName: k => this.depositNames[this.depositIds.indexOf(k)] ?? k,
+      lockOf: (id, kind) => this.lockOf(id, kind), buildings: [...this.buildings.values()], defs: this.defs.table,
+      me: { id: this.you, era: p?.era ?? "T", money: p?.money ?? 0, capital: me?.capital ?? null }, town: p?.town ?? {},
+      nations: [...this.nations.values()], power: p?.power ?? null, roadRules: this.roadRules, powerRules: this.powerRules,
+      worth: this.goldRules?.worth, keep: p?.plan?.keep ?? [], premium: this.consRules.instantPremium, reserved: [],
+    };
+    for (const q of this.planQueue) for (const piece of q.pieces) if (piece.t === "build" || piece.t === "zone") view.reserved.push(...piecePlots(view, piece));
+    return Object.assign(view, extra);
   }
 
   costError(type) {
     const def = this.defs.table[type];
-    return def ? costError(def, { money: this.purse?.money ?? 0, stock: this.purse?.stock ?? {} }) : "unknown building";
+    return def ? costError(def, { money: this.purse?.money ?? 0 }) : "unknown building";
   }
 
   takeChanged() { return this.changed.splice(0); }
@@ -256,7 +314,12 @@ export class ClientWorld {
         if (!this.nations.has(id)) this.nations.set(id, { id, name: `Nation ${id}`, colour: "#8a8a8a" });
         Object.assign(this.nations.get(id), { plots, troops, alive: !!alive, spawned: !!spawned, era: ERA_ORDER[era] ?? "T" });
       }
-      for (const r of m.s) this.stacks.set(r[0], stackFromRow(r, this.unitTypes));
+      for (const r of m.s) {
+        const old = this.stacks.get(r[0]), s = stackFromRow(r, this.unitTypes);
+        if (old && old.pos !== s.pos) { s.prev = old.pos; s.movedAt = Date.now(); }
+        else if (old) { s.prev = old.prev; s.movedAt = old.movedAt; }
+        this.stacks.set(r[0], s);
+      }
       for (const id of m.gone) this.stacks.delete(id);
       for (const r of m.m ?? []) this.setMachine(r);
       for (const id of m.mg ?? []) this.machines.delete(id);
@@ -265,19 +328,25 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, stock: m.stock, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, supply: m.supply ?? null, logistics: m.logistics ?? null, power: m.power ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null, sams: m.sams ?? null, cheats: m.cheats ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
+    if (m.t === "plan") this.planQueue = m.queue ?? [];
+    if (m.t === "pilots") this.setPilots(m.p ?? [], m.shots ?? []);
     if (m.t === "schedule") { this.schedule = m.schedule ?? {}; if (m.info) this.info = m.info; }
     if (m.t === "phase") this.lastPhase = m;
     if (m.t === "joined") {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));
     }
+    if (m.t === "powers") this.powers = m.powers ?? [];
     if (m.t === "events") {
       for (const e of m.events) {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
         if (e.type === "capital_moved" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.to;
         if (e.type === "deposit_depleted") this.depleted.add(e.at);
+        if (e.type === "bombed") this.effects.push({ kind: "bomb", plot: e.at, at: Date.now(), bombs: e.bombs ?? 1, heading: this.machines.get(e.machine)?.air?.heading ?? 0 });
+        if (e.type === "sam_fired" && e.from && e.to) this.effects.push({ kind: "sam", from: e.from, to: e.to, at: Date.now() });
+        if (e.type === "landed" && this.machines.get(e.machine)?.def.domain === "air") this.effects.push({ kind: this.machines.get(e.machine).def.paraOnly ? "chute" : "heli", plot: e.at, at: Date.now(), n: Math.max(1, Math.min(6, Math.round(e.troops / 30))) });
         if (e.type === "era_up" && this.nations.has(e.nation)) {
           const n = this.nations.get(e.nation);
           n.era = e.era;

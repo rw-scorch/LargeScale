@@ -55,14 +55,14 @@ export function createWorldInfo(root, game) {
     note.textContent = "Saved. Everyone in the world sees the new times.";
     dirty = false;
   };
-  const editor = game.admin ? el("section", { id: "sched-editor" },
+  const editor = el("section", { id: "sched-editor", hidden: true },
     el("b", { text: "Change the schedule" }),
     el("span", { class: "muted", text: "Times are in your own time zone. Leave a time empty to skip that event." }),
     ...EVENTS.map(k => el("label", { class: "sched-row" }, el("span", { text: EVENT_NAMES[k] }), inputs[k],
       el("button", { class: "ghost", type: "button", "data-clear": k, text: "Clear", onclick: () => { inputs[k].value = ""; dirty = true; } }))),
     el("label", { class: "sched-row" }, el("span", { text: "Overtime shrinks every" }), el("span", { class: "row" }, every, el("span", { class: "muted", text: "minutes" }))),
     el("div", { class: "row" }, el("button", { id: "sched-save", class: "primary", text: "Save schedule", onclick: save }), el("button", { class: "ghost", text: "Undo changes", onclick: () => { fill(); note.textContent = ""; } })),
-    note) : null;
+    note);
 
   const box = el("section", { id: "info-panel", class: "panel center", hidden: true },
     el("div", { class: "row spread" }, title, el("button", { class: "ghost", text: "Close", onclick: () => game.toggleInfo(false) })),
@@ -109,6 +109,7 @@ export function createWorldInfo(root, game) {
       const now = w.serverNow();
       remind(w, now);
       if (box.hidden) return;
+      editor.hidden = !game.can("schedule");
       const s = w.schedule ?? {}, i = w.info ?? {}, speed = w.speed || 1;
       title.textContent = `World info: ${game.name}`;
       const sig = JSON.stringify([s, Math.floor(now / 1000), w.shrinkIn, speed, w.victory, w.ended, w.nations.size]);

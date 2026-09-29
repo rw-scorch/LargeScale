@@ -75,12 +75,11 @@ test("player and civilian buildings share one registry and block each other", ()
   installCivilians(wo, rng);
   const n = wo.nations.get(a);
   n.money = 10000;
-  n.stock.wood = 1000;
   const hall = place(wo, a, "chieftain_hut", wo.grid.idx(20, 20));
   assert.ok(hall.id, hall.error);
   assert.equal(hall.civilian, false);
   zonePlots(wo, a, disc(wo.grid, 20, 20, 4), "res");
-  for (let k = 0; k < 40; k++) { n.stock.food = 500; econTick(wo, 5, rng); }
+  for (let k = 0; k < 40; k++) econTick(wo, 5, rng);
   const civ = [...wo.bld.list.values()].filter(x => x.civilian);
   assert.ok(civ.length >= 3, `civilian buildings ${civ.length}`);
   for (const x of civ) for (const i of x.plots) assert.ok(!hall.plots.includes(i), "a hut was built on the hall");
@@ -181,14 +180,15 @@ test("bulk upgrade moves the plot index to the new footprint", () => {
   for (const i of hut.plots) assert.equal(buildingAt(wo, i), hut);
 });
 
-test("every building type says in a sentence or two what it does, and the idle ones say so", () => {
+test("every building type says in a sentence or two what it does, the idle ones say so, and retired ones say they are no longer built", () => {
   const defs = Object.values(BUILDINGS.table);
   for (const d of defs) {
     assert.equal(typeof d.description, "string", `${d.id} has a description`);
     assert.ok(d.description.length >= 20 && d.description.length <= 160, `${d.id}: ${d.description.length} characters`);
     assert.match(d.description, /^[A-Z].*\.$/, `${d.id} reads as a sentence`);
   }
-  const idle = defs.filter(d => !d.gathers && !d.producer && !d.housing && !d.jobs && !d.makes && !d.trains && !d.builds && !d.port && !d.fort && !d.effects && !d.research && !d.store && !d.power && !d.pole);
+  for (const d of defs.filter(d => d.retired)) assert.match(d.description, /^No longer built/, `${d.id} is retired and says so`);
+  const idle = defs.filter(d => !d.retired && !d.gathers && !d.producer && !d.housing && !d.jobs && !d.makes && !d.trains && !d.builds && !d.port && !d.fort && !d.effects && !d.research && !d.station && !d.power && !d.pole && !d.antiAir && !d.sam && !d.airbase);
   assert.ok(idle.length > 0);
   for (const d of idle) assert.match(d.description, /no effect/, `${d.id} does nothing yet and says so`);
 });

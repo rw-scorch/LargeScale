@@ -23,6 +23,8 @@ export const RULES = {
   legAhead: 2,
   pathMaxNodes: 60000,
   seekMaxNodes: 60000,
+  seeksPerTick: 8,
+  extendsPerTick: 24,
   disbandLoss: 0.25,
 };
 
@@ -36,6 +38,8 @@ export class World {
     this.rules = { ...RULES, ...rules };
     this.nextNation = 1;
     this.nextStack = 1;
+    this.seeksLeft = this.rules.seeksPerTick;
+    this.extendsLeft = this.rules.extendsPerTick;
     this.time = 0;
     this.events = [];
     this.dirty = new Set();
@@ -352,7 +356,7 @@ export class World {
   stepStack(s, dt) {
     if (s.engaged) return;
     if (!s.route && s.via?.length && s.path.length < this.rules.legAhead) this.nextLeg(s);
-    if (s.route && s.path.length < this.rules.pathLookahead && !this.extendPath(s)) {
+    if (s.route && s.path.length < this.rules.pathLookahead && (!s.path.length || this.extendsLeft-- > 0) && !this.extendPath(s)) {
       s.route = null;
       s.via = null;
       this.emit("path_blocked", { stack: s.id, at: s.pos });
@@ -411,6 +415,7 @@ export class World {
     if (!budget) return;
     const f = this.frontier(s, budget);
     if (!f.length) {
+      if (s.seek && !(this.seeksLeft-- > 0)) { s.carry += budget; return; }
       if (s.seek && this.seek(s)) return;
       s.order = "hold";
       this.emit("advance_done", s.seek ? { stack: s.id, only: s.only ?? null, sought: true } : { stack: s.id });
@@ -478,6 +483,8 @@ export class World {
   tick(dt) {
     this.time += dt;
     this.lost.clear();
+    this.seeksLeft = this.rules.seeksPerTick;
+    this.extendsLeft = this.rules.extendsPerTick;
     for (const f of this.hooks.preTick) f(this, dt);
     this.growTroops(dt);
     for (const s of this.stacks.values()) this.stepStack(s, dt);

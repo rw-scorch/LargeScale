@@ -4,7 +4,6 @@ import { depositIndex, emptyDeposits } from "../shared/deposits.js";
 import { areaAround } from "../shared/buildings.js";
 import { installBuildings, addBuilding, footprint, WOOD_FULL } from "./buildings.js";
 import { canPlace } from "./construction.js";
-import { roomFor, deliver, homeOf, takeNear, askFor, setShort } from "./stores.js";
 import rules from "../../data/rules.json" with { type: "json" };
 import depositData from "../../data/deposits.json" with { type: "json" };
 import { makeRng } from "../shared/rng.js";
@@ -14,7 +13,9 @@ export const DEPOSIT_IDS = DEPOSIT_TABLE.map(d => d.id);
 export const DEPOSITS = Object.fromEntries(DEPOSIT_TABLE.map(d => [d.id, d]));
 export const RES_RULES = rules.resources;
 export const SEASON_YIELD = RES_RULES.seasonYield;
-export const FOREST_WOOD = RES_RULES.forestWood;
+export const WORTH = rules.economy.worth;
+export const YIELD = rules.economy.yield;
+export const goldOf = (kind, v) => v * (WORTH[kind] ?? 1) * YIELD;
 const LAND_FORMAT = 1;
 
 export function generateDeposits(map, rng, table = DEPOSIT_TABLE) {
@@ -119,50 +120,22 @@ function nearestFirst(world, b, radius) {
 function gather(world, b, rates, k, out) {
   if (world.owner[b.anchor] !== b.owner) return;
   const n = world.nations.get(b.owner);
-  if (!out.has(b.owner)) out.set(b.owner, {});
-  const o = out.get(b.owner);
   let got = 0;
-  for (const [kind, rate] of Object.entries(rates)) {
-    const v = Math.min(rate * k * (1 + effectOf(world, n, `${kind}_rate`)) * (n?.outputMult ?? 1), roomFor(world, b, kind));
-    if (!(v > 0)) continue;
-    o[kind] = (o[kind] ?? 0) + v;
-    out.drops.push([b, kind, v]);
-    got += v;
-  }
+  for (const [kind, rate] of Object.entries(rates)) got += goldOf(kind, rate * k * (1 + effectOf(world, n, `${kind}_rate`)) * (n?.outputMult ?? 1));
+  if (!(got > 0)) return;
+  out.set(b.owner, (out.get(b.owner) ?? 0) + got);
   b.made = (b.made ?? 0) + got;
-}
-
-function convert(world, b, n, p, want, r) {
-  const stored = !!world.stores && !!n?.human, home = stored ? homeOf(world, b) : null;
-  const have = g => (stored ? home?.goods[g] ?? 0 : n?.stock?.[g] ?? 0);
-  let k = want;
-  const short = [];
-  for (const [g, per] of Object.entries(p.in)) {
-    const can = have(g) / per;
-    if (can < want - 1e-9) short.push(g);
-    k = Math.min(k, can);
-  }
-  if (home) for (const [g, per] of Object.entries(p.in)) askFor(world, home, g, per * p.rate * (r.speed ?? 1) * r.convertStock);
-  if (stored) setShort(world, b, home ? (k > 1e-9 ? [] : short) : null);
-  if (!(k > 1e-9)) return 0;
-  for (const [g, per] of Object.entries(p.in)) {
-    if (stored) takeNear(world, b, g, per * k);
-    else n.stock[g] = Math.max(0, (n.stock[g] ?? 0) - per * k);
-  }
-  return k;
 }
 
 export function produce(world, dt) {
   const res = world.res, bld = world.bld, dep = res.dep, r = res.rules, out = new Map();
-  out.drops = [];
   for (const b of bld.list.values()) {
     const def = bld.table[b.type], p = def.producer;
     if (def.gathers && b.state === "active") gather(world, b, def.gathers, dt * (r.speed ?? 1), out);
-    if (!p || b.state !== "active" || world.owner[b.anchor] !== b.owner) continue;
+    if (!p || def.retired || b.state !== "active" || world.owner[b.anchor] !== b.owner) continue;
     const n = world.nations.get(b.owner);
     const staffed = Math.max(r.minWorkforce, n?.stats?.worked ?? 1);
-    let want = p.rate * dt * staffed * (r.speed ?? 1) * (n?.outputMult ?? 1) * (b.power ?? 1), got = 0, kind = p.out, capped = !!p.out;
-    if (p.out) want = Math.min(want, roomFor(world, b, p.out));
+    let want = p.rate * dt * staffed * (r.speed ?? 1) * (n?.outputMult ?? 1) * (b.power ?? 1), got = 0, kind = p.out;
     if (p.kind === "deposit") {
       for (const i of nearestFirst(world, b, p.radius ?? 0)) {
         if (want <= 0) break;
@@ -172,7 +145,6 @@ export function produce(world, dt) {
         if (!p.deposits.includes(id)) continue;
         kind ??= id;
         if ((p.out ?? id) !== kind) continue;
-        if (!capped) { capped = true; want = Math.min(want, roomFor(world, b, kind)); if (want <= 0) break; }
         const take = Math.min(want, dep.amount[k]);
         if (dep.amount[k] !== Infinity) {
           dep.amount[k] -= take;
@@ -183,39 +155,18 @@ export function produce(world, dt) {
         want -= take;
         got += take;
       }
-    } else if (p.kind === "forest") {
-      const unit = FOREST_WOOD / WOOD_FULL;
-      b.cut ??= 0;
-      for (const i of nearestFirst(world, b, p.radius)) {
-        if (b.cut >= want) break;
-        if (!res.wood[i]) continue;
-        const steps = Math.min(res.wood[i], Math.ceil((want - b.cut) / unit));
-        res.wood[i] -= steps;
-        b.cut += steps * unit;
-        bld.changed.add("wood");
-        res.growing.delete(i);
-        if (!res.wood[i] && TERRAIN[world.terrain[i]].forest) { setTerrain(world, i, TID.cleared); world.emit("forest_cleared", { nation: b.owner, at: i }); }
-      }
-      got = Math.min(want, b.cut);
-      b.cut -= got;
     } else if (p.kind === "farm") {
       const fert = b.plots.reduce((s, i) => s + TERRAIN[world.terrain[i]].fertility, 0) / b.plots.length;
       got = want * fert * (SEASON_YIELD[res.seasonOf(b.anchor)] ?? 1) * (b.weatherMult ?? 1);
     } else if (p.kind === "pasture") {
       got = want * (res.seasonOf(b.anchor) === "winter" ? r.winterPasture : 1);
-    } else if (p.kind === "convert") {
-      got = convert(world, b, n, p, want, r);
     }
     got *= 1 + effectOf(world, n, `${kind}_rate`);
-    if (kind) got = Math.min(got, roomFor(world, b, kind));
     b.idle = got <= 1e-9;
-    b.made = (b.made ?? 0) + got;
-    if (got > 0 && kind) {
-      if (!out.has(b.owner)) out.set(b.owner, {});
-      const o = out.get(b.owner);
-      o[kind] = (o[kind] ?? 0) + got;
-      out.drops.push([b, kind, got]);
-    }
+    if (!kind || b.idle) continue;
+    const g = goldOf(kind, got);
+    b.made = (b.made ?? 0) + g;
+    out.set(b.owner, (out.get(b.owner) ?? 0) + g);
   }
   return out;
 }
@@ -223,14 +174,11 @@ export function produce(world, dt) {
 export function productionTick(world, dt) {
   const all = produce(world, dt);
   for (const n of world.nations.values()) {
-    const made = all.get(n.id);
-    if (!made) { if (n.made) n.made = {}; continue; }
-    n.stock ??= {};
-    if (!world.stores || !n.human) for (const [k, v] of Object.entries(made)) n.stock[k] = (n.stock[k] ?? 0) + v;
-    n.made = made;
+    const g = all.get(n.id) ?? 0;
+    n.made = g;
     n.madeEvery = dt;
+    if (g > 0 && n.money !== undefined) n.money += g;
   }
-  if (world.stores) for (const [b, k, v] of all.drops) deliver(world, b, k, v);
   regrowForests(world, dt);
 }
 

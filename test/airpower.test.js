@@ -1,0 +1,236 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { World } from "../src/sim/territory.js";
+import { installCombat } from "../src/sim/combat.js";
+import { installTroops } from "../src/sim/troops.js";
+import { installBuildings, addBuilding } from "../src/sim/buildings.js";
+import { installMachines, spawnUnit, UNIT_TYPES, limitClass } from "../src/sim/units.js";
+import { installAir, planeOf, planeRow, combined, samView, AIR_RULES } from "../src/sim/air.js";
+import { installPilot, takeControl, steer, pilotStep } from "../src/sim/pilot.js";
+import { runOrder } from "../src/game.js";
+import { lockMap } from "../src/shared/research.js";
+import { TREE } from "../src/sim/research.js";
+import { BUILDINGS } from "../src/sim/buildings.js";
+import { TID } from "../src/shared/terrain.js";
+
+function world() {
+  const W = 140, H = 40, terrain = new Uint8Array(W * H).fill(TID.grassland);
+  const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2 });
+  installCombat(w);
+  installTroops(w);
+  installBuildings(w);
+  installMachines(w);
+  installPilot(w);
+  installAir(w);
+  const g = w.grid, a = w.addNation({ name: "A" }), b = w.addNation({ name: "B" });
+  w.spawn(a, 10, 20);
+  w.spawn(b, 120, 20);
+  for (let y = 0; y < H; y++) for (let x = 0; x < 40; x++) w.claim(g.idx(x, y), a);
+  for (let y = 0; y < H; y++) for (let x = 60; x < W; x++) w.claim(g.idx(x, y), b);
+  for (const id of [a, b]) Object.assign(w.nations.get(id), { troops: 20000, money: 1e6, era: "Mo" });
+  const field = addBuilding(w, { type: "airfield", owner: a, anchor: g.idx(20, 20), state: "active" });
+  const until = (done, most = 4000) => { for (let k = 0; k < most; k++) { if (done()) return k; w.tick(0.25); } return -1; };
+  return { w, g, a, b, field, until, order: (nid, m) => runOrder(w, nid, m) };
+}
+
+const fly = (w, u, x, y, kind = "patrol", to = [x, y]) => {
+  const A = planeOf(w, u);
+  Object.assign(A, { x, y, landed: false, rearm: 0, fuel: 999, mission: { kind, x: to[0], y: to[1], at: w.grid.idx(Math.floor(to[0]), Math.floor(to[1])) } });
+  u.at = w.grid.idx(Math.floor(x), Math.floor(y));
+  return A;
+};
+
+test("Modern research unlocks the air base, jets, heavy bombers, helicopters, paratroopers and SAMs; the new planes count toward the 100", () => {
+  const locks = lockMap(TREE), u = id => locks.units.get(id), b = id => locks.buildings.get(id);
+  assert.deepEqual(["jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "paratrooper", "transport_plane", "sam_truck"].map(u), ["jet_engines", "strategic_bombing", "helicopters", "helicopters", "airborne_forces", "airborne_forces", "guided_missiles"]);
+  assert.deepEqual(["air_base", "sam_site"].map(b), ["jet_engines", "guided_missiles"]);
+  assert.equal(BUILDINGS.table.airfield.next, "air_base", "the airfield upgrades to the air base");
+  assert.equal(BUILDINGS.table.flak_tower.next, "sam_site", "and the flak tower to the SAM site");
+  assert.deepEqual(["jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane", "sam_truck"].map(id => limitClass(UNIT_TYPES[id])), ["air", "air", "air", "air", "air", "land"]);
+  assert.ok(BUILDINGS.table.air_base.builds.includes("strategic_bomber") && BUILDINGS.table.airfield.builds.includes("jet_fighter"));
+  assert.equal(AIR_RULES.overlap, 0.5);
+});
+
+test("an air base reaches half as far again as an airfield, and rearms 12 planes at once to the airfield's 4", () => {
+  const { w, g, a, field, order } = world();
+  const base = addBuilding(w, { type: "air_base", owner: a, anchor: g.idx(10, 30), state: "active" });
+  const far = spawnUnit(w, a, "jet_fighter", g.idx(12, 31)), near = spawnUnit(w, a, "jet_fighter", g.idx(21, 21));
+  w.tick(0.25);
+  assert.equal(planeOf(w, far).base, base.id);
+  assert.equal(planeOf(w, near).base, field.id);
+  assert.equal(order(a, { t: "air", plane: far.id, do: "patrol", at: g.idx(128, 31) }).ok, true, "116 plots from the air base, within 90 x 1.5");
+  assert.equal(order(a, { t: "air", plane: near.id, do: "patrol", at: g.idx(128, 31) }).error, "out of range: 108 plots from its airfield, at most 90");
+  const planes = Array.from({ length: 6 }, () => spawnUnit(w, a, "biplane", g.idx(21, 21)));
+  w.tick(0.25);
+  for (const u of planes) Object.assign(planeOf(w, u), { rearm: 20, landed: true });
+  w.tick(1);
+  const busy = planes.filter(u => planeOf(w, u).rearm < 20), queued = planes.filter(u => planeRow(u)[8] === 1);
+  assert.equal(busy.length, 4, "the airfield rearms four at a time");
+  assert.equal(queued.length, 2, "the rest wait, and their rows say so");
+  const big = Array.from({ length: 14 }, () => spawnUnit(w, a, "biplane", g.idx(12, 31)));
+  w.tick(0.25);
+  for (const u of big) Object.assign(planeOf(w, u), { rearm: 20, landed: true });
+  w.tick(1);
+  assert.equal(big.filter(u => planeOf(w, u).rearm < 20).length, 12, "the air base rearms twelve");
+});
+
+test("a strategic bomber drops three bombs in a line across its target, in one report", () => {
+  const { w, g, a, b, until, order } = world();
+  const bomber = spawnUnit(w, a, "strategic_bomber", g.idx(21, 21));
+  const foe = w.createStack(b, g.idx(70, 21), 1000);
+  w.tick(0.25);
+  assert.equal(order(a, { t: "air", plane: bomber.id, do: "bomb", at: g.idx(70, 21) }).ok, true);
+  assert.ok(until(() => w.events.some(e => e.type === "bombed")) > 0);
+  const e = w.events.filter(e => e.type === "bombed");
+  assert.equal(e.length, 1, "one event for the whole run");
+  assert.equal(e[0].bombs, 3);
+  assert.equal(foe.troops, 1000 - 3 * UNIT_TYPES.strategic_bomber.bomb.troops, "the stack under the middle is inside all three blasts");
+  assert.ok(e[0].plots >= 30, `a long strip of land is hit: ${e[0].plots} plots`);
+  assert.equal(planeOf(w, bomber).bombs, 0);
+});
+
+test("an attack helicopter hovers over its spot and shoots enemy companies and vehicles, but not planes", () => {
+  const { w, g, a, b, until, order } = world();
+  const heli = spawnUnit(w, a, "attack_heli", g.idx(21, 21));
+  w.claim(g.idx(46, 20), b);
+  const foe = w.createStack(b, g.idx(46, 20), 500);
+  w.tick(0.25);
+  assert.equal(order(a, { t: "air", plane: heli.id, do: "patrol", at: g.idx(45, 20) }).ok, true);
+  assert.ok(until(() => foe.troops < 500) > 0, "it reaches the front and opens fire");
+  const A = planeOf(w, heli), start = foe.troops;
+  for (let k = 0; k < 40; k++) w.tick(0.25);
+  assert.deepEqual([A.x, A.y], [45.5, 20.5], "it hovers in place instead of circling");
+  assert.ok(Math.abs(start - foe.troops - 40) < 1, `4 troops a second: ${(start - foe.troops).toFixed(1)} in 10 s`);
+  const row = planeRow(heli);
+  assert.deepEqual(row.slice(9), [465, 205], "its row says where it is firing");
+  w.stacks.delete(foe.id);
+  const tank = spawnUnit(w, b, "main_battle_tank", g.idx(44, 21));
+  const hp = tank.hp;
+  for (let k = 0; k < 20; k++) w.tick(0.25);
+  assert.ok(Math.abs(hp - tank.hp - 30) < 1, `and 6 health a second off a vehicle: ${hp - tank.hp}`);
+  const enemy = spawnUnit(w, b, "early_bomber", g.idx(45, 22));
+  fly(w, enemy, 45.5, 21.5);
+  for (let k = 0; k < 20; k++) w.tick(0.25);
+  assert.equal(enemy.hp, UNIT_TYPES.early_bomber.hp, "a helicopter does not shoot at planes");
+});
+
+test("a transport helicopter lifts one company of 200 and sets it down within its reach, fighting on enemy land", () => {
+  const { w, g, a, b, until, order } = world();
+  const heli = spawnUnit(w, a, "transport_heli", g.idx(21, 21));
+  const s = w.createStack(a, g.idx(17, 21), 300);
+  w.tick(0.25);
+  assert.equal(order(a, { t: "board", stack: s.id, ship: heli.id }).ok, true);
+  assert.ok(until(() => w.events.some(e => e.type === "embarked")) > 0);
+  const em = w.events.find(e => e.type === "embarked");
+  assert.deepEqual([heli.cargo.troops, Math.round(em.left)], [200, 100], "it holds 200, the rest stay behind");
+  assert.equal(order(a, { t: "air", plane: heli.id, do: "drop", at: g.idx(64, 20) }).error, "out of range: 43 plots from its airfield, at most 40");
+  assert.equal(order(a, { t: "air", plane: heli.id, do: "drop", at: g.idx(50, 20) }).ok, true);
+  w.events.length = 0;
+  assert.ok(until(() => w.events.some(e => e.type === "landed")) > 0);
+  const e = w.events.find(e => e.type === "landed"), landed = w.stacks.get(e.stack);
+  assert.equal(w.owner[g.idx(50, 20)], a, "the unclaimed plot is taken");
+  assert.ok(landed.troops > 190 && landed.troops < 200, `${landed.troops.toFixed(1)} troops, less only the cost of the plot`);
+  assert.equal(heli.cargo, null);
+  assert.equal(planeOf(w, heli).mission.kind, "return", "it flies home");
+  const raid = spawnUnit(w, a, "transport_heli", g.idx(21, 21));
+  raid.cargo = { troops: 200, owner: a, mix: null, xp: 0 };
+  w.nations.get(b).troops = 200;
+  fly(w, raid, 58.5, 20.5, "drop", [60.5, 20.5]);
+  w.events.length = 0;
+  assert.ok(until(() => w.events.some(e => e.type === "landed" && e.machine === raid.id)) >= 0);
+  const hit = w.events.find(e => e.type === "landed" && e.machine === raid.id);
+  assert.equal(w.owner[g.idx(60, 20)], a, "on enemy land it lands fighting and takes the plot");
+  assert.ok(hit.lost > 0.5, `paying the plot's capture cost: ${hit.lost.toFixed(1)}`);
+});
+
+test("a transport plane takes only paratroopers and drops them far away, losing 1 in 20; a plane shot down loses its troops", () => {
+  const { w, g, a, until, order } = world();
+  const plane = spawnUnit(w, a, "transport_plane", g.idx(21, 21));
+  const levy = w.createStack(a, g.idx(17, 22), 200);
+  w.tick(0.25);
+  assert.equal(order(a, { t: "board", stack: levy.id, ship: plane.id }).error, "only paratroopers board a transport plane");
+  const s = w.createStack(a, g.idx(17, 21), 250);
+  s.mix = { paratrooper: 150 };
+  assert.equal(order(a, { t: "board", stack: s.id, ship: plane.id }).ok, true);
+  assert.ok(until(() => plane.cargo?.troops > 0) > 0);
+  assert.deepEqual([plane.cargo.troops, plane.cargo.mix, s.troops, s.mix], [150, { paratrooper: 150 }, 100, null], "the paratroopers board and the levies stay");
+  assert.equal(order(a, { t: "air", plane: plane.id, do: "drop", at: g.idx(50, 20) }).ok, true);
+  w.events.length = 0;
+  assert.ok(until(() => w.events.some(e => e.type === "landed")) > 0);
+  const e = w.events.find(e => e.type === "landed"), para = w.stacks.get(e.stack);
+  assert.ok(e.lost > 150 * 0.05 && e.lost < 150 * 0.05 + 5, `5% in the jump plus the plot: ${e.lost.toFixed(1)}`);
+  assert.ok(para.mix.paratrooper > 130, "they land as paratroopers");
+  const heli = spawnUnit(w, a, "transport_heli", g.idx(21, 21));
+  heli.cargo = { troops: 120, owner: a, mix: null, xp: 0 };
+  fly(w, heli, 30.5, 20.5, "drop", [50.5, 20.5]);
+  heli.hp = -1;
+  w.tick(0.25);
+  const down = w.events.find(e => e.type === "plane_down" && e.machine === heli.id);
+  assert.equal(down.lost, 120, "the troops aboard go down with it");
+});
+
+test("a SAM site fires missiles at planes within 8 plots, reloads for gold, and a second site adds half as much", () => {
+  const { w, g, a, b } = world();
+  assert.equal(combined([[45, a], [45, a], [45, a]], 0.5), 45 + 22.5 + 11.25);
+  const site = addBuilding(w, { type: "sam_site", owner: a, anchor: g.idx(30, 20), state: "active" });
+  const bomber = spawnUnit(w, b, "strategic_bomber", g.idx(36, 21));
+  fly(w, bomber, 36.5, 21.5);
+  w.tick(0.25);
+  assert.equal(bomber.hp, 160 - 45, "one missile hits");
+  assert.equal(site.missiles, 3);
+  const shot = w.events.find(e => e.type === "sam_fired");
+  assert.deepEqual([shot.by, shot.machine, shot.left, shot.site], [a, bomber.id, 3, site.id]);
+  w.tick(0.25);
+  assert.equal(bomber.hp, 160 - 45, "it waits 2 s between missiles");
+  for (let k = 0; k < 8; k++) w.tick(0.25);
+  assert.equal(bomber.hp, 160 - 90);
+  w.units.list.delete(bomber.id);
+  const money = w.nations.get(a).money;
+  const t = w.time;
+  for (let k = 0; k < 80 && site.missiles < 3; k++) w.tick(0.25);
+  assert.equal(site.missiles, 3);
+  assert.ok(Math.abs(w.time - t - 13) < 0.6, `a missile comes back 15 s after the first went: ${(w.time - t).toFixed(2)} s later`);
+  assert.equal(w.nations.get(a).money, money - 60, "for 60 gold");
+  assert.deepEqual(samView(w, a)[0].slice(0, 4), [0, site.id, site.missiles, 4]);
+  const two = addBuilding(w, { type: "sam_site", owner: a, anchor: g.idx(34, 24), state: "active" });
+  const jet = spawnUnit(w, b, "jet_fighter", g.idx(33, 22));
+  w.air.flakAt = -Infinity;
+  site.fireAt = two.fireAt = 0;
+  site.missiles = two.missiles = 4;
+  fly(w, jet, 33.5, 22.5);
+  w.tick(0.25);
+  assert.equal(jet.hp, 90 - 45 - 22.5, "two sites over the same jet: 45 and half of 45");
+  w.nations.get(a).money = 0;
+  const left = site.missiles;
+  for (let k = 0; k < 100; k++) w.tick(0.25);
+  assert.ok(site.missiles <= left, "no gold, no reloads");
+});
+
+test("a SAM truck follows a company and covers it; catch-up reloads SAMs for gold; a piloted transport drops its troops", () => {
+  const { w, g, a, b, until, order } = world();
+  const truck = spawnUnit(w, a, "sam_truck", g.idx(25, 25));
+  const s = w.createStack(a, g.idx(26, 25), 100);
+  assert.equal(order(a, { t: "machine", machine: truck.id, do: "follow", stack: s.id }).ok, true);
+  w.orderMove(s.id, g.idx(36, 25), "move");
+  assert.ok(until(() => g.cheb(truck.at, g.idx(36, 25)) <= 1, 400) > 0, "it keeps up with the company");
+  const plane = spawnUnit(w, b, "biplane", g.idx(38, 26));
+  fly(w, plane, 38.5, 26.5);
+  w.tick(0.25);
+  assert.ok(!w.units.list.has(plane.id) || plane.hp < 40, "it fires at the plane overhead");
+  assert.equal(truck.missiles, 1);
+  truck.missiles = 0;
+  truck.reloadAt = w.time + 100;
+  const money = w.nations.get(a).money;
+  w.catchUp(600);
+  assert.equal(truck.missiles, 2, "back to full after the world slept");
+  assert.equal(w.nations.get(a).money, money - 2 * 60);
+  const heli = spawnUnit(w, a, "transport_heli", g.idx(21, 21));
+  heli.cargo = { troops: 150, owner: a, mix: null, xp: 0 };
+  w.tick(0.25);
+  assert.equal(takeControl(w, a, "m", heli.id).ok, true);
+  for (let k = 0; k < 400 && Math.floor(w.pilot.list.get(`m:${heli.id}`).x) < 45; k++) { steer(w, a, { move: [1, 0] }); pilotStep(w, 0.05); w.tick(0.05); }
+  steer(w, a, { move: [0, 0], bomb: true });
+  pilotStep(w, 0.05);
+  const e = w.events.find(e => e.type === "landed" && e.machine === heli.id);
+  assert.ok(e && w.owner[e.at] === a && heli.cargo === null, "B sets the troops down below");
+});

@@ -18,6 +18,7 @@ import { hashBytes, hashRuns } from "../src/shared/codec.js";
 import { ClientWorld } from "../src/shared/client.js";
 import { planBatch } from "../src/shared/buildings.js";
 import { makeTestMap } from "../src/shared/testmap.js";
+import { proposePlan } from "../src/shared/planner.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let failures = 0;
@@ -108,9 +109,9 @@ if (process.env.RECHECK) {
   const lc = st.loadCheck;
   check(lc?.loaded.terrain === last.hashes.terrain && lc?.loaded.owner === last.hashes.owner, `after a restart the ${st.map?.kind} world loads terrain ${lc?.loaded.terrain} and owner ${lc?.loaded.owner}, the same as before (${last.hashes.terrain}, ${last.hashes.owner})`);
   check(lc?.saved?.owner === lc?.loaded.owner, `the owner hash stored with the save matches the decoded layer (load took ${st.loadMs} ms)`);
-  check(st.loaded && (st.loaded.upgradedFrom === null || st.loaded.upgradedFrom === 2), st.loaded?.upgradedFrom ? `a format ${st.loaded.upgradedFrom} save loaded as format 3, with ${st.loaded.buildings} buildings` : `the format 3 save loaded with ${st.loaded?.buildings} buildings`);
-  const layers = ["zone", "wood", "buildings", "land", "road", "stores"].filter(k => last.hashes[k]);
-  check(layers.every(k => lc?.loaded[k] === last.hashes[k]), layers.length ? `zone, wood, building, land, road and store layers load identically (${layers.map(k => `${k} ${lc?.loaded[k]}`).join(", ")})` : "the save had no zone, wood or building layers yet");
+  check(st.loaded && (st.loaded.upgradedFrom === null || [2, 3].includes(st.loaded.upgradedFrom)), st.loaded?.upgradedFrom ? `a format ${st.loaded.upgradedFrom} save loaded as format 4, with ${st.loaded.buildings} buildings${st.loaded.gold ? `; goods became ${st.loaded.gold.gold} gold` : ""}` : `the format 4 save loaded with ${st.loaded?.buildings} buildings`);
+  const layers = ["zone", "wood", "buildings", "land", "road"].filter(k => last.hashes[k]);
+  check(layers.every(k => lc?.loaded[k] === last.hashes[k]), layers.length ? `zone, wood, building, land and road layers load identically (${layers.map(k => `${k} ${lc?.loaded[k]}`).join(", ")})` : "the save had no zone, wood or building layers yet");
   const again = await connect(last.wid, last.token);
   const h = await waitFor(again, m => m.t === "hello");
   const n = h?.nations.find(x => x.id === last.you);
@@ -196,7 +197,7 @@ check(aSpawn >= 0, "player spawns on land");
 {
   const cw = view.world;
   const kit = await until(() => { view.pump(); return [...cw.buildings.values()].find(b => b.owner === you && b.type === "chieftain_hut"); });
-  check(kit && kit.state === "active" && cw.purse?.money >= 100 && cw.purse.stock.food >= 50 && cw.purse.stock.wood >= 40, `starting kit: a finished chieftain hut at the capital, ${cw.purse?.money} gold, ${cw.purse?.stock.food} food and ${cw.purse?.stock.wood} wood`);
+  check(kit && kit.state === "active" && cw.purse?.money >= 100 && cw.purse.stock === undefined, `starting kit: a finished chieftain hut at the capital and ${cw.purse?.money} gold, with no goods`);
   const near = [];
   for (let r = 1; r < 12 * K && near.length < 400; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
@@ -209,8 +210,8 @@ check(aSpawn >= 0, "player spawns on land");
   check(gated?.error === "needs Palisades research" && gated.error === cw.placeError("watchtower_wood", open), `before research the tower is refused: "${gated?.error}"`);
   const r0 = cw.purse?.research, starter = ["fire_keeping", "stone_tools", "foraging", "barter", "farming"];
   check(r0 && starter.every(id => r0.queue.includes(id) || r0.known.includes(id)), `a new nation starts with a research queue: ${[...(r0?.known ?? []).map(id => `${id} (done)`), ...(r0?.queue ?? [])].join(", ")}`);
-  const gathered = await until(() => { view.pump(); return cw.purse?.making?.food > 0 && cw.purse.making.wood > 0 ? cw.purse.making : null; }, 8000);
-  check(gathered, `the chieftain hut gathers from the start: ${JSON.stringify(gathered)} a second (this world runs production 200 times faster)`);
+  const gathered = await until(() => { view.pump(); return cw.purse?.making?.producers > 0 ? cw.purse.making : null; }, 8000);
+  check(gathered, `the chieftain hut earns gold from the start: ${gathered?.producers} gold a second (this world runs production 200 times faster)`);
   const wanted = ["palisades", "fire_keeping", "barter", "farming", "chieftains"];
   const replies = [];
   for (const id of wanted) { A.ws.send(JSON.stringify({ t: "research", id })); replies.push(await nextResult(A, "research")); }
@@ -242,8 +243,8 @@ check(aSpawn >= 0, "player spawns on land");
   const before = cw.purse.money;
   A.ws.send(JSON.stringify({ t: "demolish", building: bid }));
   const gone = await nextResult(A, "demolish");
-  check(gone?.ok && gone.refund?.money === 10 && gone.refund?.wood === 7, `demolish refunds half: ${JSON.stringify(gone?.refund)}`);
-  await until(() => { view.pump(); return cw.buildings.get(bid)?.state === "rubble" && cw.purse.money >= before + 10; }, 3000);
+  check(gone?.ok && gone.refund?.money === 25 && Object.keys(gone.refund).length === 1, `demolish refunds half, in gold: ${JSON.stringify(gone?.refund)}`);
+  await until(() => { view.pump(); return cw.buildings.get(bid)?.state === "rubble" && cw.purse.money >= before + 25; }, 3000);
   check(cw.buildings.get(bid)?.state === "rubble" && await until(() => seenByB(3), 3000), "the tower turns to rubble for both players");
   check(await until(() => B.json.some(m => m.t === "state" && m.bg?.includes(bid)), 20000), "the rubble clears on its own, and the friend's client drops it");
   const cx = aSpawn % M.w, cy = Math.floor(aSpawn / M.w);
@@ -255,9 +256,9 @@ check(aSpawn >= 0, "player spawns on land");
   check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
   const rr = async (kind, via) => { A.ws.send(JSON.stringify({ t: "road", kind, via })); return nextResult(A, "road"); };
   const runNear = () => {
-    for (let dy = -7; dy <= 7; dy++) {
+    for (let dy = -12; dy <= 12; dy++) {
       let run = [];
-      for (let dx = -9; dx <= 9; dx++) {
+      for (let dx = -14; dx <= 14; dx++) {
         const i = (cy + dy) * M.w + cx + dx;
         if (cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && !cw.zone[i]) { run.push(i); if (run.length >= 6) return run; } else run = [];
       }
@@ -274,37 +275,19 @@ check(aSpawn >= 0, "player spawns on land");
   const roadGone = removed?.ok && await until(() => { view.pump(); return run.every(i => !cw.roads[i]); }, 3000);
   if (run) await rr("dirt", [run[0], run[2]]);
   view.pump();
-  const food0 = cw.purse.stock.food;
   A.ws.send(JSON.stringify({ t: "wagon", at: aSpawn, food: 10 }));
-  const wag = await nextResult(A, "wagon");
-  const friendWagon = wag?.ok && await until(() => B.json.some(m => m.t === "state" && m.s?.some(r => r[0] === wag.stack && r[7] === 1 && r[8] === 10)), 3000);
-  A.ws.send(JSON.stringify({ t: "wagon", at: 0, food: 20 }));
-  const farWagon = await nextResult(A, "wagon");
-  A.ws.send(JSON.stringify({ t: "disband", stack: wag?.stack }));
-  A.ws.send(JSON.stringify({ t: "disband", stack: wag?.stack }));
-  const unload = await until(() => A.json.find(m => m.t === "result" && m.of === "disband" && m.food), 3000);
-  const foodBack = await until(() => { view.pump(); return cw.purse.stock.food >= food0 - 1 ? cw.purse.stock.food : null; }, 3000);
-  check(wag?.ok && wag.food === 10 && friendWagon && /loaded at your capital or a store/.test(farWagon?.error ?? "") && unload?.food === 10 && foodBack && cw.purse.supply?.carry === 600 && cw.purse.supply?.range === 18 * K,
-    `a supply wagon is loaded with 10 food at the capital, the friend sees it as a wagon, one away from a store is refused ("${farWagon?.error}"), and disbanding it gives the food back (${food0} to ${foodBack}); supply reach is ${cw.purse.supply?.range} plots`);
+  const noWagon = await until(() => A.json.find(m => m.t === "error" || (m.t === "result" && m.of === "wagon")), 3000);
+  check(noWagon?.error === "unknown order" && !cw.purse.supply && !cw.purse.logistics && cw.purse.trade?.ports === 0, `army supply and stores are gone: a wagon order gets "${noWagon?.error ?? noWagon?.message ?? noWagon?.t}", and the purse has a trade view instead (${JSON.stringify(cw.purse.trade)})`);
   check(laid?.ok && laid.laid === 6 && roadSeen && friendRoad && offLand?.error === "roads go on your own land" && /Paved roads/.test(lockedCobble?.error ?? "") && removed?.laid === 6 && roadGone,
     `a dirt road of ${laid?.laid} plots costs ${JSON.stringify(laid?.cost)} (gold ${gold0} before), reaches both clients, is refused off your land ("${offLand?.error}") and as cobble before research ("${lockedCobble?.error}"), and comes up again for free`);
   view.pump();
-  const lg = cw.purse.logistics, stock0 = { ...cw.purse.stock }, hutRow = lg?.stores?.find(s => cw.buildings.get(s[0])?.type === "chieftain_hut");
-  const sumOf = k => (lg?.stores ?? []).reduce((a, s) => a + (s[1][k] ?? 0), 0);
-  A.ws.send(JSON.stringify({ t: "store", building: hutRow?.[0], kind: "wood", keep: 5, want: 0 }));
-  const setKeep = await nextResult(A, "store");
-  A.ws.send(JSON.stringify({ t: "store", building: hutRow?.[0], kind: "wood", keep: 99999, want: 0 }));
-  const badKeep = await nextResult(A, "store");
-  const keepShown = setKeep?.ok && await until(() => { view.pump(); return cw.purse.logistics?.stores?.find(s => s[0] === hutRow?.[0])?.[3]?.wood === 5; }, 3000);
-  check(hutRow && hutRow[2] === 1000 && Math.abs(sumOf("food") - stock0.food) <= 1 && Math.abs(sumOf("wood") - stock0.wood) <= 1 && lg.reach === 12 * K && lg.capacity === 10 && keepShown && /from 0 to 1000/.test(badKeep?.error ?? ""),
-    `goods live in stores: the chieftain hut holds ${Math.floor(hutRow?.[1].food ?? 0)} food and ${Math.floor(hutRow?.[1].wood ?? 0)} wood of ${hutRow?.[2]} each, the same as the stock shown; buildings use a store within ${lg?.reach} plots, carts carry ${lg?.capacity}; Keep is set on the hut ("${badKeep?.error}" past its size)${keepShown ? "" : ` [set ${JSON.stringify(setKeep)}, row ${JSON.stringify(cw.purse.logistics?.stores)}]`}${Math.abs(sumOf("food") - stock0.food) <= 1 ? "" : ` [food ${sumOf("food")} vs ${stock0.food}]`}`);
   const townClock = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
   const town = await until(() => {
     view.pump();
     const huts = [...cw.buildings.values()].filter(b => b.owner === you && b.type === "hut_grass" && b.state === "active");
     return huts.length >= 2 && cw.purse?.town?.pop > 0 ? huts.length : 0;
   }, 25000);
-  check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [wood ${cw.purse?.stock?.wood}, food ${cw.purse?.stock?.food}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}; the world clock moved ${((await api(`/api/worlds/${wid}/status`, null, ta)).body.time - townClock.world).toFixed(1)} s in ${Math.round((Date.now() - townClock.wall) / 1000)} s]`}`);
+  check(town, `huts go up on their own and people move in: ${town} huts, ${cw.purse?.town?.pop} people, ${cw.purse?.town?.housing} homes${town ? "" : ` [gold ${cw.purse?.money}, demand ${JSON.stringify(cw.purse?.town?.demand)}, all huts ${[...cw.buildings.values()].filter(b => b.owner === you && b.def.civilian).map(b => b.type + ":" + b.state).join(" ")}; the world clock moved ${((await api(`/api/worlds/${wid}/status`, null, ta)).body.time - townClock.world).toFixed(1)} s in ${Math.round((Date.now() - townClock.wall) / 1000)} s]`}`);
   view.pump();
   const zonedBefore = cw.zone.reduce((n, z) => n + (z ? 1 : 0), 0);
   const erased = await zr("none", cx - 4, cy + 1, 9, 3);
@@ -312,20 +295,15 @@ check(aSpawn >= 0, "player spawns on land");
   const deps = cw.deposits.plots.length;
   check(MAP !== "test" || (deps > 0 && hello.frames.deposits === 1), `the world's deposits reach the client: ${deps} plots (${MAP === "test" ? "in the join" : "from the static file, not loaded by this test"})`);
   let prod = null;
-  for (const type of ["woodcutter_camp", "crop_wheat", "pasture_sheep"]) {
+  for (const type of ["crop_wheat", "pasture_sheep", "fishing_hut"]) {
     const at = near.find(i => cw.owner[i] === you && !cw.placeError(type, i));
     if (at !== undefined) { prod = { type, at }; break; }
   }
   A.ws.send(JSON.stringify({ t: "build", type: prod?.type, at: prod?.at }));
   const pb = await nextResult(A, "build");
-  const out = prod?.type === "woodcutter_camp" ? "wood" : "food";
-  const stockBefore = cw.purse.stock[out] ?? 0, makingBefore = cw.purse.making?.[out] ?? 0;
-  const making = await until(() => { view.pump(); return cw.purse?.making?.[out] > makingBefore + 0.05 ? cw.purse.making[out] : 0; }, 20000);
-  check(pb?.ok && making, `a ${prod?.type} on your land starts making ${out}: ${(making - makingBefore).toFixed(2)} a second on top of the chieftain hut's ${makingBefore} (stock ${stockBefore} before)`);
-  if (prod?.type === "woodcutter_camp") {
-    const edited = await until(() => B.binary.some(f => f[0] === MSG.TERRAIN_EDIT), 60000);
-    check(edited, "the woodcutter clears a forest plot, and the friend receives the terrain edit");
-  }
+  const makingBefore = cw.purse.making?.producers ?? 0;
+  const making = await until(() => { view.pump(); return cw.purse?.making?.producers > makingBefore + 0.05 ? cw.purse.making.producers : 0; }, 20000);
+  check(pb?.ok && making, `a ${prod?.type} on your land earns gold: ${(making - makingBefore).toFixed(2)} a second on top of the chieftain hut's ${makingBefore}`);
   const pursesBefore = A.json.filter(m => m.t === "purse").length;
   const clock0 = { world: (await api(`/api/worlds/${wid}/status`, null, ta)).body.time, wall: Date.now() };
   A.ws.send(JSON.stringify({ t: "research", id: "age_medieval", mode: "first" }));
@@ -350,7 +328,7 @@ check(aSpawn >= 0, "player spawns on land");
     if (r?.ok) towers.push(i);
   }
   const ready = await until(() => { view.pump(); return towers.every(i => cw.buildingAt(i)?.state === "active"); }, 10000);
-  const stoneTower = cw.defs.table.tower_stone, purse0 = { money: cw.purse.money, stone: cw.purse.stock.stone ?? 0 };
+  const stoneTower = cw.defs.table.tower_stone, purse0 = { money: cw.purse.money };
   const expected = planBatch(Array(towers.length).fill(stoneTower.cost), cw.purse, cw.consRules.instantPremium, cw.consRules.moneyForMissing);
   A.ws.send(JSON.stringify({ t: "upgrade", picks: [["watchtower_wood", 3]] }));
   const up = await nextResult(A, "upgrade");
@@ -399,9 +377,50 @@ const sought = await until(() => {
   return o?.only === 0 && o.to !== null ? `the purse shows it heading for plot ${o.to}` : s && s.pos !== formed ? `it walked from plot ${formed} to ${s.pos}` : null;
 }, 30000);
 check(sought, `with the unclaimed land around it taken, the stack goes looking for more: ${sought ?? "it never left"}`);
+{
+  const cw = view.world, cx = aSpawn % M.w, cy = Math.floor(aSpawn / M.w);
+  A.ws.send(JSON.stringify({ t: "zone", zone: "none", x: cx - 4, y: cy - 4, w: 9, h: 5 }));
+  await nextResult(A, "zone");
+  await until(() => { view.pump(); return false; }, 800);
+  const t0 = performance.now(), plan = proposePlan(cw.planView(), cw.planRules ?? {}), ms = performance.now() - t0;
+  const pick = plan.find(p => p.key.startsWith("block:")) ?? plan.find(p => p.price <= (cw.purse?.money ?? 0));
+  if (pick) A.ws.send(JSON.stringify({ t: "plan", op: "add", project: { key: pick.key, kind: pick.kind, name: pick.title, pieces: pick.pieces } }));
+  const queued = pick && await nextResult(A, "plan");
+  const inQueue = queued?.ok && await until(() => A.json.some(m => m.t === "plan" && m.queue?.some(q => q.key === pick.key)), 3000);
+  const finished = inQueue && await until(() => A.json.some(m => m.t === "events" && m.events.some(e => e.type === "plan_done" && e.name === pick.title)), 20000);
+  const zone = pick?.pieces.find(p => p.t === "zone");
+  const cleared = finished && await until(() => { view.pump(); return (cw.purse?.plan?.projects?.length ?? 1) === 0; }, 3000);
+  const painted = !zone || cw.zone[zone.y * M.w + zone.x] === ["none", "res", "com", "ind", "farm"].indexOf(zone.zone);
+  check(plan.length && finished && painted && cleared,
+    `the planner proposes ${plan.length} projects in ${ms.toFixed(0)} ms (${plan.map(p => p.key.split(":")[0]).join(", ")}); "${pick?.title}" (${pick?.price} gold) is queued, reaches the host's queue, and is built with nothing else pressed`);
+}
 A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
 const st2 = await nextResult(A, "stack");
 const from = (await until(() => view.pump().stacks.get(st2?.stack)))?.pos;
+{
+  const whole = view.stacks.get(st2.stack)?.troops ?? 0;
+  A.ws.send(JSON.stringify({ t: "detach", picks: [{ stack: st2.stack, take: { levy: 3 } }] }));
+  const d = await nextResult(A, "detach");
+  const part = d?.ok && (await until(() => view.pump().stacks.get(d.stacks[0])));
+  const field = view.world.purse?.field;
+  check(d?.ok && part && part.troops >= 30 && part.troops < 40 && Math.abs(view.stacks.get(st2.stack).troops + part.troops - whole) < 2 && hello.soldierRules?.troopsEach === 10,
+    `three picked soldiers leave their company of ${whole} as a company of ${part?.troops} troops, leaving ${view.stacks.get(st2.stack)?.troops}; the purse counts ${field?.soldiers} of ${field?.cap} soldiers in ${field?.companies} companies`);
+  A.ws.send(JSON.stringify({ t: "merge", into: st2.stack, stack: d?.stacks?.[0] }));
+  await nextResult(A, "merge");
+  A.ws.send(JSON.stringify({ t: "pilot", op: "take", stack: st2.stack }));
+  const pt = await nextResult(A, "pilot");
+  let far = 0;
+  for (const move of [[1, 0], [0, -1], [-1, 0], [0, 1]]) for (let k = 0; k < 8; k++) {
+    A.ws.send(JSON.stringify({ t: "pilot", op: "input", move, aim: null, fire: false }));
+    await sleep(100);
+    for (const m of A.json) if (m.t === "pilots") for (const r of m.p) if (r[1] === st2.stack && pt?.ok) far = Math.max(far, Math.hypot(r[3] - pt.x, r[4] - pt.y));
+  }
+  const friendSaw = B.json.some(m => m.t === "pilots" && m.p.some(r => r[1] === st2.stack));
+  A.ws.send(JSON.stringify({ t: "pilot", op: "release" }));
+  const rel = await nextResult(A, "pilot");
+  const cleared = await waitFor(A, m => m.t === "pilots" && !m.p.length, 3000);
+  check(pt?.ok && far > 1 && friendSaw && rel?.released && cleared, `piloting: the host steers the company ${far.toFixed(1)} plots from where it stood, the friend sees it move, and letting go clears it`);
+}
 let moved = null;
 const far = Math.min(250 * K, Math.floor(hello.w / 3));
 for (const i of land.filter((_, k) => k % 211 === 0)) {
@@ -413,7 +432,7 @@ for (const i of land.filter((_, k) => k % 211 === 0)) {
 check(moved, `a stack takes a move order at least ${far} plots away (reply seen within ${moved?.ms} ms; the test polls every 50 ms)`);
 const heading = await until(() => view.pump().world.purse?.orders?.find(o => o.id === st2.stack && o.to === moved?.to), 5000);
 const leaked = B.json.some(m => m.t === "purse" && (m.orders ?? []).some(o => o.id === st2.stack));
-check(heading && !leaked, `the host's purse says where the moving stack is heading (plot ${heading?.to}); the friend's does not`);
+check(heading && !leaked, `the host's purse says where the moving stack is heading (plot ${heading?.to}); the friend's does not${heading ? "" : ` [stack ${JSON.stringify(view.stacks.get(st2.stack) ?? null)}, orders ${JSON.stringify(view.world.purse?.orders)}, its events ${JSON.stringify(A.json.filter(m => m.t === "events").flatMap(m => m.events).filter(e => e.stack === st2.stack || e.into === st2.stack).slice(-6))}]`}`);
 const snap = (x0, y0, r) => {
   for (let d = 0; d < 80 * K; d++) for (let dy = -d; dy <= d; dy++) for (let dx = -d; dx <= d; dx++) {
     const x = x0 + dx, y = y0 + dy;
@@ -494,7 +513,7 @@ for (const end = Date.now() + 90000; !won && Date.now() < end; ) {
   won = await waitFor(A, m => m.t === "victory", 700);
 }
 const bSaw = await waitFor(B, m => m.t === "victory", 2000);
-check(won?.winner === you && bSaw, `the friend is eliminated and both players hear that ${won?.name} has won`);
+check(won?.winner === you && bSaw, `the friend is eliminated and both players hear that ${won?.name} has won${won ? "" : ` [friend plots ${view.nations.get(bNation)?.plots}, host stack ${JSON.stringify(view.stacks.get(as.stack) ?? null)}]`}`);
 A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
 check((await nextResult(A, "stack"))?.error === "the world has ended", "the world is frozen after the win: orders are refused");
 const frozen = (await api(`/api/worlds/${wid}/status`, null, ta)).body;
@@ -689,7 +708,7 @@ for (let y = 20; y < 75 && !zAt; y += 9) for (const x of [30, 50, 70]) {
 await until(() => Z.json.some(m => m.t === "purse"), 5000);
 Z.ws.send(JSON.stringify({ t: "zone", zone: "res", x: zAt.x - 7, y: zAt.y - 7, w: 14, h: 5 }));
 const zZone = await nextResult(Z, "zone");
-for (const [what, amount] of [["wood", 800], ["food", 400]]) await adminOp(Z, { op: "give", nation: zh.you, what, amount });
+await adminOp(Z, { op: "give", nation: zh.you, what: "money", amount: 2000 });
 const zBefore = Z.json.filter(m => m.t === "purse").at(-1);
 Z.ws.close();
 let asleep = false;
@@ -812,11 +831,11 @@ await adminOp(IN, { op: "speed", factor: 8 });
 await adminOp(IN, { op: "give", nation: ih.you, what: "troops", amount: 6000 });
 const inStack = await ask({ t: "stack", share: 0.9 });
 await ask({ t: "advance", stack: inStack?.stack, only: "free" });
-for (const id of ["railways", "steelmaking"]) await ask({ t: "research", id, mode: "queue" });
+for (const id of ["railways", "field_guns"]) await ask({ t: "research", id, mode: "queue" });
 const inFin = await adminOp(IN, { op: "finish", nation: ih.you });
-for (const [what, amount] of [["money", 100000], ["iron", 600], ["coal", 900], ["stone", 900], ["steel", 400]]) await adminOp(IN, { op: "give", nation: ih.you, what, amount });
+await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 100000 });
 const inPurse = () => IM.pump().world.purse;
-const industrial = await until(() => inPurse()?.era === "I" && (inPurse().stock.steel ?? 0) >= 400, 8000);
+const industrial = await until(() => inPurse()?.era === "I" && inPurse().money >= 50000, 8000);
 check(inSpawn && inFin?.ok && ["age_industry", "steelmaking", "steam_power", "railways"].every(id => inFin.done.includes(id)) && industrial,
   `a nation researches through Gunpowder into the Industrial era: ${inFin?.done?.length} nodes, ending ${inFin?.done?.slice(-4).join(", ")}`);
 await until(() => IM.pump().world.owner.reduce((t, o) => t + (o === ih.you), 0) >= 600, 30000);
@@ -837,14 +856,13 @@ const buildAt = async (type, at) => {
   if (r?.ok) await until(() => IM.pump().world.buildings.get(r.building), 5000);
   return r?.ok ? r.building : null;
 };
-const millId = await buildAt("steel_mill", spotFor("steel_mill", inCap, 3, 9));
+const millId = await buildAt("vehicle_factory", spotFor("vehicle_factory", inCap, 3, 9));
 const plantId = await buildAt("coal_plant", millId && spotFor("coal_plant", IM.world.buildings.get(millId).anchor, 3, 5));
 const bothUp = await until(() => [millId, plantId].every(id => IM.pump().world.buildings.get(id)?.state === "active"), 20000);
-const steel0 = inPurse()?.stock.steel ?? 0;
-const powered = await until(() => { const p = inPurse()?.power; return p?.grids?.[0]?.[2] === 100 && p.users?.[millId] >= 0 ? p.grids[0] : null; }, 15000);
-const madeSteel = await until(() => (inPurse()?.stock.steel ?? 0) > steel0 + 1, 20000);
-check(millId && plantId && bothUp && powered && madeSteel,
-  `a steel mill beside a coal plant makes steel on full power (grid ${JSON.stringify(powered)}: made, used, % met; steel ${Math.floor(steel0)} to ${Math.floor(inPurse()?.stock.steel ?? 0)})`);
+const gold0 = inPurse()?.money ?? 0;
+const powered = await until(() => { const p = inPurse()?.power; return p?.grids?.[0]?.[2] === 100 && p.users?.[millId] >= 0 && p.plants?.[plantId]?.[0] === 1 ? p.grids[0] : null; }, 15000);
+check(millId && plantId && bothUp && powered,
+  `a vehicle factory beside a coal plant runs on full power, the plant paid in gold (grid ${JSON.stringify(powered)}: made, used, % met; gold ${Math.floor(gold0)} then ${Math.floor(inPurse()?.money ?? 0)})`);
 const aId = await buildAt("station_large", spotFor("station_large", inCap, 4, 12));
 const aAt = aId ? IM.world.buildings.get(aId).anchor : null;
 const bId = await buildAt("station_large", aAt === null ? null : spotFor("station_large", aAt, 14, 24));
@@ -857,18 +875,92 @@ const beside = (id, toward) => {
 };
 const railFrom = aId && bId ? beside(aId, bAt) : null, railTo = aId && bId ? beside(bId, aAt) : null;
 const rail = railFrom !== null && railTo !== null ? await ask({ t: "road", kind: "rail", from: railFrom, to: railTo }) : null;
-const coalAt = id => inPurse()?.logistics?.stores.find(r => r[0] === id)?.[1].coal ?? 0;
-const hutId = inPurse()?.logistics?.stores.find(r => IM.world.buildings.get(r[0])?.type === "chieftain_hut")?.[0];
-await ask({ t: "store", building: aId, kind: "coal", keep: 400, want: 400 });
-const filled = await until(() => coalAt(aId) >= 300, 30000);
-await ask({ t: "store", building: hutId, kind: "coal", keep: 1000, want: 0 });
-await ask({ t: "store", building: aId, kind: "coal", keep: 0, want: 0 });
+const trade0 = inPurse()?.trade?.total ?? 0;
 await adminOp(IN, { op: "speed", factor: 1 });
-await ask({ t: "store", building: bId, kind: "coal", keep: 250, want: 250 });
-const train = await until(() => IN.json.filter(m => m.t === "state").flatMap(m => m.c ?? []).find(r => r[8] === 1 && r[6] === bAt), 20000);
-const delivered = await until(() => coalAt(bId) >= 200, 30000);
-check(stationsUp && rail?.ok && rail.laid > 8 && filled && train && delivered,
-  `rail between two railway stations (${rail?.laid} plots for ${JSON.stringify(rail?.cost)}) carries coal as a train of ${train?.[4]}, and the far station has ${Math.floor(coalAt(bId))}${rail?.ok ? "" : ` (${rail?.error})`}`);
+const train = await until(() => IN.json.filter(m => m.t === "state").flatMap(m => m.c ?? []).find(r => r[8] === 1 && (r[6] === bAt || r[6] === aAt)), 20000);
+const earned = await until(() => (inPurse()?.trade?.total ?? 0) > trade0 ? inPurse().trade : null, 30000);
+check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
+  `rail between two railway stations (${rail?.laid} plots for ${JSON.stringify(rail?.cost)}) runs trains worth ${train?.[4]} gold a trip, and trade has earned ${earned?.total} gold${rail?.ok ? "" : ` (${rail?.error})`}`);
+{
+  await ask({ t: "research", id: "flight", mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  await until(() => !IM.pump().world.lockOf("airfield"), 5000);
+  const fieldId = await buildAt("airfield", spotFor("airfield", inCap, 3, 14));
+  const fieldUp = await until(() => IM.pump().world.buildings.get(fieldId)?.state === "active", 20000);
+  const gift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "early_bomber", amount: 1 });
+  const bomberId = gift?.machines?.[0];
+  await api(`/api/worlds/${indWorld.body.id}/join`, {}, tb);
+  const FR = await connect(indWorld.body.id, tb);
+  const fh = await waitFor(FR, m => m.t === "hello");
+  const cx = inCap % ih.w, cy = Math.floor(inCap / ih.w);
+  let fSpawn = null;
+  for (let r = 30; r <= 60 && !fSpawn; r += 6) for (let k = 0; k < 16 && !fSpawn; k++) {
+    const x = Math.round(cx + Math.cos((k * Math.PI) / 8) * r), y = Math.round(cy + Math.sin((k * Math.PI) / 8) * r);
+    if (x < 3 || y < 3 || x >= ih.w - 3 || y >= ih.h - 3) continue;
+    FR.ws.send(JSON.stringify({ t: "spawn", x, y }));
+    if ((await nextResult(FR, "spawn"))?.ok) fSpawn = y * ih.w + x;
+  }
+  await adminOp(IN, { op: "give", nation: fh.you, what: "troops", amount: 3000 });
+  FR.ws.send(JSON.stringify({ t: "stack", share: 0.5, at: fSpawn }));
+  const fStack = await nextResult(FR, "stack");
+  await adminOp(IN, { op: "speed", factor: 4 });
+  const sent = bomberId ? await ask({ t: "air", plane: bomberId, do: "bomb", at: fSpawn }) : null;
+  const hitEvent = await until(() => IN.json.filter(m => m.t === "events").flatMap(m => m.events).find(e => e.type === "bombed" && e.by === ih.you), 40000);
+  const friendHeard = FR.json.some(m => m.t === "events" && m.events.some(e => e.type === "bombed" && e.nation === fh.you));
+  check(fieldUp && bomberId && fSpawn !== null && fStack?.ok && sent?.ok && hitEvent?.stacks >= 1 && hitEvent.troops > 0 && friendHeard,
+    `after Flight, an airfield's bomber flies ${Math.round(Math.hypot((fSpawn % ih.w) - cx, Math.floor(fSpawn / ih.w) - cy))} plots and bombs the friend's company: ${hitEvent?.troops} troops lost, ${hitEvent?.buildings} buildings damaged${sent?.ok ? "" : ` (${sent?.error ?? "no bomber"})`}`);
+  await adminOp(IN, { op: "speed", factor: 1 });
+  FR.ws.close();
+}
+{
+  await ask({ t: "research", id: "mechanised", mode: "queue" });
+  await ask({ t: "research", id: "modern_infantry", mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  const modern = await until(() => IM.pump().world.purse?.era === "Mo" && !IM.world.lockOf("apc", "units") ? true : null, 5000);
+  const gift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "apc", amount: 1 });
+  const apcId = gift?.machines?.[0], cw = IM.pump().world, apcAt = cw.machines.get(apcId)?.at;
+  const st = apcAt !== undefined ? await ask({ t: "stack", share: 0.1, at: apcAt }) : null;
+  const boarded = st?.ok && (await ask({ t: "board", stack: st.stack, ship: apcId }))?.ok;
+  const aboard = boarded && await until(() => IM.pump().world.machines.get(apcId)?.cargo > 0 ? IM.world.machines.get(apcId).cargo : null, 10000);
+  let dest = null;
+  for (let r = 8; r <= 14 && dest === null; r++) for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) {
+    const x = (apcAt % ih.w) + dx, y = Math.floor(apcAt / ih.w) + dy, i = y * ih.w + x;
+    if (dest === null && x >= 0 && y >= 0 && x < ih.w && y < ih.h && cw.owner[i] === ih.you && isLand(cw.terrain[i])) dest = i;
+  }
+  const drive = aboard && dest !== null ? await ask({ t: "machine", machine: apcId, do: "move", to: dest }) : null;
+  const landed = drive?.ok && await until(() => IN.json.filter(m => m.t === "events").flatMap(m => m.events).find(e => e.type === "landed" && e.machine === apcId), 30000);
+  const ashore = landed && await until(() => [...IM.pump().world.stacks.values()].find(s => s.owner === ih.you && s.pos === dest), 3000);
+  check(modern && aboard > 0 && drive?.unloads === dest && landed && Math.abs(landed.troops - aboard) < 1 && ashore,
+    `after Mechanised warfare an APC takes ${aboard} troops aboard, drives ${Math.round(Math.hypot((dest % ih.w) - (apcAt % ih.w), Math.floor(dest / ih.w) - Math.floor(apcAt / ih.w)))} plots and sets ${Math.round(landed?.troops ?? 0)} down where it stops`);
+}
+{
+  await ask({ t: "research", id: "helicopters", mode: "queue" });
+  await ask({ t: "research", id: "guided_missiles", mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  await until(() => !IM.pump().world.lockOf("sam_site") && !IM.world.lockOf("transport_heli", "units") ? true : null, 5000);
+  const gift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "transport_heli", amount: 1 });
+  const heliId = gift?.machines?.[0];
+  const heli = await until(() => IM.pump().world.machines.get(heliId)?.air ? IM.world.machines.get(heliId) : null, 5000);
+  const cw = IM.world, heliAt = heli?.at;
+  const st = heliAt !== undefined ? await ask({ t: "stack", share: 0.1, at: heliAt }) : null;
+  const boarded = st?.ok ? await ask({ t: "board", stack: st.stack, ship: heliId }) : null;
+  const aboard = boarded?.ok && await until(() => IM.pump().world.machines.get(heliId)?.cargo > 0 ? IM.world.machines.get(heliId).cargo : null, 15000);
+  let dest = null;
+  for (let r = 12; r <= 24 && dest === null; r++) for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) {
+    const x = (heliAt % ih.w) + dx, y = Math.floor(heliAt / ih.w) + dy, i = y * ih.w + x;
+    if (dest === null && x >= 0 && y >= 0 && x < ih.w && y < ih.h && (cw.owner[i] === ih.you || !cw.owner[i]) && isLand(cw.terrain[i])) dest = i;
+  }
+  const flight = aboard && dest !== null ? await ask({ t: "air", plane: heliId, do: "drop", at: dest }) : null;
+  const landed = flight?.ok && await until(() => IN.json.filter(m => m.t === "events").flatMap(m => m.events).find(e => e.type === "landed" && e.machine === heliId), 40000);
+  const ashore = landed && await until(() => [...IM.pump().world.stacks.values()].find(s => s.owner === ih.you && s.pos === dest), 3000);
+  check(aboard > 0 && aboard <= 200 && flight?.ok && landed && ashore,
+    `after Helicopters a transport helicopter lifts ${aboard} troops from its airfield, flies ${Math.round(Math.hypot((dest % ih.w) - (heliAt % ih.w), Math.floor(dest / ih.w) - Math.floor(heliAt / ih.w)))} plots and sets ${Math.round(landed?.troops ?? 0)} down${flight?.ok ? "" : ` (${flight?.error ?? boarded?.error ?? st?.error})`}`);
+  const samSpot = spotFor("sam_site", inCap, 2, 16), samTry = samSpot === null ? null : await ask({ t: "build", type: "sam_site", at: samSpot });
+  const samId = samTry?.ok ? samTry.building : null;
+  const samUp = samId !== null && await until(() => IM.pump().world.buildings.get(samId)?.state === "active", 20000);
+  const loaded = samUp && await until(() => IM.pump().world.samOf(0, samId), 5000);
+  check(samUp && loaded?.missiles === 4 && loaded.max === 4, `after Guided missiles a SAM site stands with ${loaded?.missiles} of ${loaded?.max} missiles${samUp ? "" : ` (spot ${samSpot}, ${samTry?.error ?? (samId === null ? "no spot" : IM.world.buildings.get(samId)?.state)}, locked: ${IM.world.lockOf("sam_site")})`}${samUp && !loaded ? ` (purse sams ${JSON.stringify(inPurse()?.sams)})` : ""}`);
+}
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);

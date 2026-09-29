@@ -8,6 +8,7 @@ import { api, session } from "./api.js";
 import { showLogin } from "./ui/login.js";
 import { showWorlds } from "./ui/worlds.js";
 import { createMenu } from "./ui/menu.js";
+import { applyTheme } from "./ui/theme.js";
 import { createHud } from "./ui/hud.js";
 import { createSpawnHint } from "./ui/spawn.js";
 import { createNations } from "./ui/nations.js";
@@ -17,9 +18,9 @@ import { createNotices } from "./ui/notice.js";
 import { createBuildMenu, costText } from "./ui/build.js";
 import { roadPlan, routePlan, roadLine, ROAD_NAMES } from "./shared/roads.js";
 import { simplifyPath } from "./shared/pathfind.js";
-import { reachMap } from "./shared/supply.js";
 import { polePlan, coverOf, gridsOf } from "./shared/power.js";
 import { Grid } from "./shared/grid.js";
+import { soldierTypes, typeOfSlot } from "./shared/soldiers.js";
 import { createBuildingPanel } from "./ui/building.js";
 import { createTownPanel, nodeFor } from "./ui/town.js";
 import { createResearchPanel } from "./ui/research.js";
@@ -28,6 +29,7 @@ import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
 import { createLogisticsPanel } from "./ui/logistics.js";
+import { createPlannerPanel } from "./ui/planner.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createRing, ownerItems } from "./ui/ring.js";
 import { createAttacks } from "./ui/attacks.js";
@@ -40,6 +42,8 @@ import { fmt } from "./ui/dom.js";
 import { createAwayPanel, span } from "./ui/away.js";
 import { createLayout } from "./ui/layout.js";
 import { createGroupPanel } from "./ui/group.js";
+import { createSoldiersPanel } from "./ui/soldiers.js";
+import { createPilotPanel } from "./ui/pilot.js";
 import { createWorldInfo, phaseText } from "./ui/worldinfo.js";
 import { MAX_ZONE_SIDE } from "./shared/protocol.js";
 import { gunzip } from "./shared/codec.js";
@@ -90,10 +94,12 @@ class Game {
     this.attacks = createAttacks(overlay, side, this);
     this.stack = createStackPanel(side, this);
     this.groupPanel = createGroupPanel(side, this);
+    this.soldiersPanel = createSoldiersPanel(side, this);
     this.notices = createNotices(overlay, this, top);
     this.buildMenu = createBuildMenu(side, this);
     this.buildingPanel = createBuildingPanel(side, this);
     this.town = createTownPanel(side, this);
+    this.planner = createPlannerPanel(side, this);
     this.research = createResearchPanel(overlay, this);
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
@@ -104,10 +110,19 @@ class Game {
     this.place = createPlaceConfirm(overlay, this);
     this.aim = createAim(overlay, this);
     this.ring = createRing(overlay, this);
-    this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
+    this.adminPanel = createAdminPanel(overlay, this);
     this.worldInfo = createWorldInfo(overlay, this);
     this.settings = createSettings(overlay, this);
     this.away = createAwayPanel(overlay, this);
+    this.pilotPanel = createPilotPanel(overlay, this, top);
+    this.piloting = null;
+    this.pilotKeys = new Set();
+    this.pilotSent = { json: "", at: 0 };
+    this.uiHold = 0;
+    document.addEventListener("pointerdown", e => { if (e.target.closest?.("button, input, select, label, summary, .ring-item, .chip, [data-tap]")) this.uiHold = performance.now(); }, true);
+    for (const t of ["click", "pointercancel"]) document.addEventListener(t, () => { this.uiHold = 0; }, true);
+    canvas.addEventListener("pointerdown", e => { this.lastPointer = e.pointerType; if (this.piloting && e.pointerType === "mouse" && e.button === 0) this.mouseFire = true; });
+    addEventListener("pointerup", e => { if (e.pointerType === "mouse") this.mouseFire = false; });
     this.layout = createLayout(overlay, this);
     const self = this;
     attachInput(canvas, {
@@ -124,7 +139,7 @@ class Game {
         if (this.roading && this.routeFrom !== null && this.routeTo === null && x !== null) { const p = this.plotAt(x, y); if (p !== this.routeHover) { this.routeHover = p; this.previewRoute(p); this.updatePanels(); } }
       },
       dragging: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting()),
-      rightPans: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting()),
+      rightPans: () => !this.prefs.crosshair && (!!this.zoning || !!this.roading || this.painting() || (this.armies && !this.picked)),
       swipeStart: (x, y, e) => this.swipeStart(x, y, e),
       onSwipe: (kind, line) => this.swiping(kind, line),
       onSwipeEnd: (kind, line) => this.swiped(kind, line),
@@ -140,6 +155,7 @@ class Game {
       const t = e.target;
       if (t.tagName === "SELECT" || t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && !["range", "checkbox", "radio"].includes(t.type))) return;
       if (t.tagName === "INPUT" && t.type === "range" && /^(Arrow|Home$|End$|Page)/.test(e.key)) return;
+      if (this.piloting && this.pilotKey(e, true)) { e.preventDefault(); return; }
       const action = actionFor(this.keys, e);
       if (!action || !this.world?.ready) return;
       e.preventDefault();
@@ -148,17 +164,19 @@ class Game {
     };
     addEventListener("keydown", this.onKey);
     this.onKeyUp = e => {
+      if (this.piloting && this.pilotKey(e, false)) return;
       const action = actionFor(this.keys, e);
       if (action?.startsWith("pan")) this.panKeys.delete(action);
       if (action === "select") this.aimUp();
     };
-    this.onBlur = () => { this.panKeys.clear(); this.aimUp(); };
+    this.onBlur = () => { this.panKeys.clear(); this.pilotKeys.clear(); this.mouseFire = this.keyFire = false; this.aimUp(); };
     addEventListener("keyup", this.onKeyUp);
     addEventListener("blur", this.onBlur);
     this.onWheel = e => { if (e.ctrlKey) e.preventDefault(); };
     this.onGesture = e => e.preventDefault();
     addEventListener("wheel", this.onWheel, { passive: false });
     addEventListener("gesturestart", this.onGesture);
+    applyTheme();
     this.ui = setInterval(() => this.updatePanels(), 250);
     let last = performance.now();
     const loop = now => {
@@ -173,6 +191,7 @@ class Game {
         if (this.prefs.crosshair) this.hover = this.centre();
         if (this.aimHeld) this.aimMove();
         this.updateGhost();
+        this.pilotFrame();
         const t = performance.now();
         this.view.render(dt / 1000);
         this.place.position();
@@ -243,6 +262,7 @@ class Game {
     if (m.t === "reopened") note(`${m.by} reopened this world.`);
     if (m.t === "speed") note(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
     if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
+    if (m.t === "powers") { note(m.powers.length ? `${m.by} made you a helper in this world. The admin panel, top right or the backquote key, has what you can use.` : `${m.by} took your helper powers in this world.`); if (!m.powers.length) this.toggleAdmin(false); }
     if (m.t === "catchup") this.feed.push({ key: "catchup", text: m.left ? `The world is catching up on ${span(m.of)} while nobody played: ${span(m.left)} to go.` : `The world caught up ${span(m.of)} in ${((m.ms ?? 0) / 1000).toFixed(1)} s.`, tone: "info" });
     if (m.t === "away") this.away.summary(m);
     if (m.t === "schedule") this.worldInfo.changed(m);
@@ -282,6 +302,8 @@ class Game {
       const what = e.only === 0 ? "unclaimed land" : e.only ? `${name(e.only)}'s land` : "land to take";
       say(`done${e.stack}`, e.sought ? `A stack stopped: it found no ${what} it can reach by land${e.only !== null ? " without going through another nation's land" : ""}.` : "A stack stopped advancing: nothing left to take within its reach.", 5000, "warn", stackAt(e.stack));
     }
+    if (e.type === "plan_done" && e.nation === you) say(`pd${e.name}${e.done}`, `Plan finished: ${e.name}${e.dropped ? `, with ${e.dropped} ${e.dropped === 1 ? "piece" : "pieces"} dropped` : ""}.`, 0, "built");
+    if (e.type === "plan_dropped" && e.nation === you) say(`pdrop${e.name}`, `Part of "${e.name}" was dropped: ${e.why}.`, 20000, "warn");
     if (e.type === "overtime_shrink") say("shrink", `Overtime: every nation's border shrank, ${fmt(e.plots)} plots in all.`, 0, "danger", null);
     if (e.type === "capital_moved" && e.nation === you) say("capital", "Your capital fell. It moved to the nearest land you still hold.", 0, "danger", e.to);
     if (e.type === "built" && e.nation === you) say(`built${e.building}`, `${w.defs.table[e.kind]?.name ?? "A building"} is finished.`, 0, "built", w.buildings.get(e.building)?.anchor ?? null);
@@ -291,27 +313,25 @@ class Game {
       const node = w.locks.nodes.get(e.node), builds = [...(node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name), ...(node?.unlocks?.units ?? []).map(u => w.unitTypes.table[u]?.name)].filter(Boolean);
       say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build or train: ${builds.join(", ")}.` : ""}`, 0, "research");
     }
-    const machine = e.kind && w.unitTypes.table[e.kind]?.name.toLowerCase();
+    const low = n => (/^[A-Z]{2}/.test(n) ? n : n.toLowerCase());
+    const machine = e.kind && low(w.unitTypes.table[e.kind]?.name ?? "machine");
+    const lifter = e.machine !== undefined ? w.machines.get(e.machine)?.def : null, carrier = lifter && lifter.domain !== "sea" ? low(lifter.name) : null;
     if (e.type === "machine_built" && e.nation === you) say(`mb${e.machine}`, `A ${machine} is ready.`, 0, "built", machineAt(e.machine));
-    if (e.type === "machine_destroyed" && e.nation === you) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
+    if (e.type === "machine_destroyed" && e.nation === you && !w.unitTypes.table[e.kind]?.domain?.startsWith("air")) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
+    if (e.type === "bombed" && e.nation === you) say(`bomb${e.at}`, `${name(e.by)} bombed your land: ${e.troops ? `${fmt(e.troops)} troops lost` : "no troops lost"}${e.buildings ? `, ${e.buildings} ${e.buildings === 1 ? "building" : "buildings"} damaged` : ""}. Flak, SAM sites and fighters on patrol stop bombers.`, 0, "danger", e.at);
+    if (e.type === "bombed" && e.by === you) say(`bomb${e.at}`, `Your bomber hit its target: ${fmt(e.troops)} troops lost there, ${e.buildings} ${e.buildings === 1 ? "building" : "buildings"} damaged.`, 0, "good", e.at);
+    if (e.type === "plane_down" && e.nation === you) say(`pd${e.machine}`, `Your ${machine} went down: ${e.why}.${e.lost ? ` The ${fmt(e.lost)} troops aboard were lost.` : ""}`, 0, "danger", e.at);
+    if (e.type === "plane_down" && e.by === you && e.nation !== you) say(`pd${e.machine}`, `You shot down a ${machine} of ${name(e.nation)}'s.`, 0, "good", e.at);
     if (e.type === "machine_captured" && e.nation === you) say(`mc${e.machine}`, `${name(e.by)} captured your ${machine}. Keep a stack beside your machines.`, 0, "danger");
     if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0, "good");
-    if (e.type === "out_of_supply" && e.nation === you) say(`oos${e.stack}`, "A stack is out of supply: it weakens and troops desert. Bring it back near a store, or send a supply wagon.", 0, "danger", stackAt(e.stack));
-    if (e.type === "supplies_low" && e.nation === you) say(`low${e.stack}`, `A stack beyond supply has about ${Math.max(1, Math.ceil(e.left / 60))} min of supplies left.`, 0, "warn", stackAt(e.stack));
-    if (e.type === "resupplied" && e.nation === you) say(`res${e.stack}`, "A stack is back in supply.", 0, "good", stackAt(e.stack));
-    if (e.type === "wagon_empty" && e.nation === you) say(`we${e.stack}`, "A supply wagon has run out of food.", 0, "warn", stackAt(e.stack));
-    if (e.type === "roads_connected" && e.nation === you) say(`rc${e.plots}${e.stores}`, `Roads laid by themselves: ${fmt(e.plots)} plots for ${costText(e.cost)}, linking ${e.stores} new ${e.stores === 1 ? "store" : "stores"} to your capital.`, 0, "built");
-    if (e.type === "roads_waiting" && e.nation === you) say("rwait", `New stores are waiting for roads: they need ${costText(e.cost)}.`, 60000, "warn");
-    if (e.type === "convoy_taken" && e.nation === you) say(`ct${e.convoy}`, `${name(e.by)} took a cart of yours with ${fmt(e.amount)} ${e.kind}. Keep enemy stacks away from your roads.`, 0, "danger");
-    if (e.type === "convoy_taken" && e.by === you) say(`ct${e.convoy}`, `You took a cart of ${name(e.nation)}'s with ${fmt(e.amount)} ${e.kind}.`, 0, "good");
-    if (e.type === "convoy_lost" && e.nation === you) say(`cl${e.convoy}`, e.why === "sunk" ? `${e.by ? `${name(e.by)} sank` : "A warship sank"} a merchant ship of yours with ${fmt(e.amount)} ${e.kind}. Keep warships near your sea routes.` : `A ${e.ship ? "merchant ship" : "cart"} with ${fmt(e.amount)} ${e.kind} was cut off and lost.`, 0, e.why === "sunk" ? "danger" : "warn", e.at);
-    if (e.type === "convoy_lost" && e.why === "sunk" && e.by === you) say(`cl${e.convoy}`, `You sank a merchant ship of ${name(e.nation)}'s with ${fmt(e.amount)} ${e.kind}.`, 0, "good", e.at);
-    if (e.type === "store_captured" && e.nation === you) say(`sc${e.building}`, `${name(e.by)} took your ${w.defs.table[e.kind]?.name.toLowerCase() ?? "store"} with ${fmt(e.goods)} goods in it.`, 0, "danger");
-    if (e.type === "store_captured" && e.by === you) say(`sc${e.building}`, `You took ${name(e.nation)}'s ${w.defs.table[e.kind]?.name.toLowerCase() ?? "store"} with ${fmt(e.goods)} goods in it.`, 0, "good");
+    if (e.type === "roads_connected" && e.nation === you) say(`rc${e.plots}${e.stores}`, `Roads laid by themselves: ${fmt(e.plots)} plots for ${costText(e.cost)}, linking ${e.stores} more ${e.stores === 1 ? "building" : "buildings"} to your capital.`, 0, "built");
+    if (e.type === "roads_waiting" && e.nation === you) say("rwait", `New buildings are waiting for roads: they need ${costText(e.cost)}.`, 60000, "warn");
+    if (e.type === "trade_captured" && e.nation === you) say(`tc${e.machine}`, `${name(e.by)} captured a trade ship of yours, worth ${fmt(e.pay)} gold. Warships near your sea lanes keep them safe.`, 0, "danger", e.at);
+    if (e.type === "trade_captured" && e.by === you) say(`tc${e.machine}`, `Your warship captured a trade ship of ${name(e.nation)}'s. It sails for your nearest port, worth ${fmt(e.pay)} gold.`, 0, "good", e.at);
     if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);
-    if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
+    if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, carrier ? (e.left ? `${Math.round(e.troops)} troops got into the ${carrier}. It is full, so ${Math.round(e.left)} stay behind.` : `${Math.round(e.troops)} troops got into the ${carrier}.`) : e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
     if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0, "warn", stackAt(e.stack));
-    if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0, "good");
+    if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, lifter?.paraOnly ? `${Math.round(e.troops)} paratroopers landed${e.lost > 0.5 ? `, ${Math.round(e.lost)} fewer than jumped` : ""}.` : lifter?.domain === "air" ? `The ${carrier} set ${Math.round(e.troops)} troops down${e.lost > 0.5 ? `, and ${Math.round(e.lost)} were lost taking the plot` : ""}.` : carrier ? (e.lost > 0.5 ? `${Math.round(e.troops)} troops got out of the ${carrier} and took the plot, losing ${Math.round(e.lost)}.` : `${Math.round(e.troops)} troops got out of the ${carrier}.`) : e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0, "good");
     if (e.type === "landing_failed" && e.nation === you) say(`lf${e.machine}`, e.why ? `The landing did not happen: ${e.why}.` : `The landing failed: all ${Math.round(e.lost)} troops were lost against the defenders.`, 0, "danger");
     if (e.type === "machine_blocked" && e.nation === you) say(`mbk${e.machine}`, "A machine's way is blocked. Give it a new order.", 5000, "warn", machineAt(e.machine));
     if (e.type === "kit" && e.nation === you) {
@@ -398,7 +418,11 @@ class Game {
     if (action === "upgrade") return this.toggleUpgrade();
     if (action === "army") return this.toggleArmy();
     if (action === "logistics") return this.toggleLogistics();
+    if (action === "plan") return this.togglePlanner();
     if (action === "deposits") return this.toggleDeposits();
+    if (action === "armies") return this.toggleArmies();
+    if (action === "pilot") return this.pilotSelected();
+    if (this.picked && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.soldiersPanel.act[action](); return this.updatePanels(); }
     if (this.group && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.groupPanel.act[action](); return this.updatePanels(); }
     if (["advance", "claim", "target", "move", "draw", "split", "merge", "disband"].includes(action)) act[action]();
     if (action === "next") this.nextStack();
@@ -422,8 +446,12 @@ class Game {
       else if (this.army.open) this.toggleArmy(false);
       else if (this.logistics.open) this.toggleLogistics(false);
       else if (this.research.open) this.toggleResearch(false);
+      else if (this.planner.open) this.togglePlanner(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
+      else if (this.soldiersPanel.choosing) { this.soldiersPanel.cancel(); }
+      else if (this.picked) this.pickSoldiers(null);
+      else if (this.armies) this.toggleArmies(false);
       else if (this.groupPanel.choosing) { this.groupPanel.cancel(); }
       else if (this.group) this.selectGroup(null);
       else if (this.stack.choosing) this.stack.cancel();
@@ -434,6 +462,7 @@ class Game {
 
   toggleBuildMenu(on = !this.buildMenu.open) {
     if (on && this.town.open) this.town.show(false);
+    if (on && this.planner.open) this.togglePlanner(false);
     const me = this.world?.nations.get(this.world.you);
     this.buildMenu.show(on && !!me?.spawned && me.alive && !this.world.frozen);
     if (!this.buildMenu.open) this.stopBuild();
@@ -458,8 +487,12 @@ class Game {
     this.updatePanels();
   }
 
+  can(power) { return this.admin || !!this.world?.powers?.includes(power); }
+
+  get canAdmin() { return this.admin || (this.world?.powers?.length ?? 0) > 0; }
+
   toggleAdmin(on = !this.adminPanel?.open) {
-    if (!this.adminPanel) return;
+    if (!this.adminPanel || (on && !this.canAdmin)) return;
     if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.settings.show(false); }
     this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
@@ -482,8 +515,32 @@ class Game {
   toggleLogistics(on = !this.logistics.open) {
     if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
     const me = this.world?.nations.get(this.world.you);
-    this.logistics.show(on && !!this.world?.purse?.logistics && !!me?.spawned);
+    this.logistics.show(on && !!this.world?.purse?.trade && !!me?.spawned);
     this.updatePanels();
+  }
+
+  togglePlanner(on = !this.planner.open) {
+    if (on && this.buildMenu.open) this.toggleBuildMenu(false);
+    if (on && this.town.open) this.town.show(false);
+    const me = this.world?.nations.get(this.world.you);
+    this.planner.show(on && !!this.world?.purse && !!me?.spawned && me.alive && !this.world.frozen);
+    if (!this.planner.open && this.zoning === "keep") this.stopBuild();
+    this.updatePanels();
+  }
+
+  toggleKeepClear() {
+    if (this.zoning === "keep") return this.stopBuild();
+    this.startZone("keep");
+    this.toast("Drag over land the planner should leave alone.");
+  }
+
+  async keepClear(r) {
+    const w = this.world, R = w.planRules ?? {}, side = R.keepSide ?? 128, rects = [...(w.purse?.plan?.keep ?? [])];
+    for (let y = r.y; y < r.y + r.h; y += side) for (let x = r.x; x < r.x + r.w; x += side) rects.push([x, y, Math.min(side, r.x + r.w - x), Math.min(side, r.y + r.h - y)]);
+    const res = await this.conn.request({ t: "plan", op: "keep", rects });
+    if (!res.ok) return this.toast(res.error ?? "could not keep that clear");
+    this.toast(`The planner leaves ${r.w} by ${r.h} plots alone.`);
+    this.planner.replan(true);
   }
 
   toggleDeposits() {
@@ -495,6 +552,7 @@ class Game {
 
   toggleTown(on = !this.town.open) {
     if (on && this.buildMenu.open) this.toggleBuildMenu(false);
+    if (on && this.planner.open) this.togglePlanner(false);
     this.town.show(on && !!this.world?.purse);
     this.updatePanels();
   }
@@ -517,13 +575,14 @@ class Game {
   dragZone(a, b) {
     if (!this.view || !this.zoning) return;
     const r = this.zoneRectOf(a, b);
-    this.view.zoneRect = { ...r, code: ["none", "res", "com", "ind", "farm"].indexOf(this.zoning) };
+    this.view.zoneRect = { ...r, code: ["none", "res", "com", "ind", "farm"].indexOf(this.zoning), keep: this.zoning === "keep" };
   }
 
   async paintZone(a, b) {
     if (!this.view || !this.zoning) return;
     const r = this.zoneRectOf(a, b), zone = this.zoning;
     this.view.zoneRect = null;
+    if (zone === "keep") return this.keepClear(r);
     let painted = 0;
     for (let y = r.y; y < r.y + r.h; y += MAX_ZONE_SIDE) for (let x = r.x; x < r.x + r.w; x += MAX_ZONE_SIDE) {
       const res = await this.conn.request({ t: "zone", zone, x, y, w: Math.min(MAX_ZONE_SIDE, r.x + r.w - x), h: Math.min(MAX_ZONE_SIDE, r.y + r.h - y) });
@@ -620,7 +679,7 @@ class Game {
   async connectStores(kind, dry, keep) {
     const r = await this.conn.request({ t: "connect", kind, dry, ...(keep !== undefined ? { keep } : {}) });
     if (!r.ok) { this.toast(r.error ? r.error[0].toUpperCase() + r.error.slice(1) + "." : "Could not plan the roads."); return r; }
-    if (!dry) this.toast(r.laid ? `Laid ${r.laid} plots of road for ${costText(r.cost)}, linking ${r.joined} ${r.joined === 1 ? "store" : "stores"} to your capital.` : "Every store you can reach is already on your roads.");
+    if (!dry) this.toast(r.laid ? `Laid ${r.laid} plots of road for ${costText(r.cost)}, linking ${r.joined} ${r.joined === 1 ? "building" : "buildings"} to your capital.` : "Your barracks, ports and stations are already on your roads.");
     return r;
   }
 
@@ -859,7 +918,7 @@ class Game {
     const w = this.world, me = w.nations.get(w.you);
     if (!me?.spawned || !me.alive || w.frozen) return this.tip.pin(sx, sy);
     const u = w.machines.get(this.selectedMachine), s = w.stacks.get(this.selected);
-    const items = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
+    const items = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.picked ? this.soldiersPanel.ringFor(plot) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
     if (!items.length) return this.tip.pin(sx, sy);
     this.ring.show(sx, sy, [...items, { id: "info", label: "Info", icon: "ui_info", run: () => this.tip.pin(sx, sy, 5000) }]);
   }
@@ -884,6 +943,10 @@ class Game {
   }
 
   tap(sx, sy) {
+    if (this.piloting) {
+      if (this.lastPointer !== "mouse") { const [px, py] = this.view.screenToPlot(sx, sy); this.tapAim = [px, py]; this.tapFireUntil = performance.now() + 200; }
+      return;
+    }
     if (this.prefs.crosshair && !this.aimTap) return;
     const w = this.world, v = this.view;
     const plot = this.plotAt(sx, sy);
@@ -897,6 +960,8 @@ class Game {
       if (w.owner[plot] !== w.you) return this.toast("Pick a plot of your own land.");
       return this.formAt(plot);
     }
+    if (this.soldiersPanel.choosing) return this.soldiersPanel.pick(plot);
+    if (this.armies) return this.armyTap(sx, sy);
     if (this.groupPanel.choosing) return this.groupPanel.pick(plot);
     if (this.stack.choosing) return this.stack.pickTarget(plot, sx, sy);
     if (this.machinePanel.choosing) return this.machinePanel.pick(plot, sx, sy);
@@ -943,7 +1008,8 @@ class Game {
   }
 
   swipeStart(sx, sy, e) {
-    if (this.prefs.crosshair || this.building || this.zoning || this.roading || this.placing || this.stack.choosing || this.machinePanel.choosing || this.groupPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
+    if (this.prefs.crosshair || this.building || this.zoning || this.roading || this.placing || this.stack.choosing || this.machinePanel.choosing || this.groupPanel.choosing || this.soldiersPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
+    if (this.armies && this.world.soldierRules) return e.shiftKey && e.pointerType === "mouse" ? "soldierBox" : "soldiers";
     if (e.shiftKey && e.pointerType === "mouse") return "box";
     const id = this.view.stackAt(sx, sy);
     return id !== null && this.world.stacks.get(id)?.owner === this.world.you ? "swipe" : null;
@@ -964,14 +1030,195 @@ class Game {
     }).map(s => s.id);
   }
 
+  soldierHit(sx, sy, test) {
+    const v = this.view, w = this.world, out = new Map();
+    for (const s of w.myStacks()) {
+      for (const p of v.soldierSpots(s)) {
+        const [px, py] = v.plotToScreen(p.x, p.y);
+        if (!test(px, py)) continue;
+        let set = out.get(s.id);
+        if (!set) out.set(s.id, (set = new Set()));
+        set.add(p.slot);
+      }
+    }
+    return out;
+  }
+
+  soldiersBy(kind, line) {
+    const v = this.view, R = Math.max(12 * (v.ratio ?? 1), v.cam.scale * 0.3), [a, b] = [line[0], line[line.length - 1]];
+    if (kind === "soldierBox") return this.soldierHit(0, 0, (px, py) => px >= Math.min(a[0], b[0]) && px <= Math.max(a[0], b[0]) && py >= Math.min(a[1], b[1]) && py <= Math.max(a[1], b[1]));
+    const seg = (px, py, p, q) => {
+      const dx = q[0] - p[0], dy = q[1] - p[1], len = dx * dx + dy * dy;
+      const t = len ? Math.max(0, Math.min(1, ((px - p[0]) * dx + (py - p[1]) * dy) / len)) : 0;
+      return Math.hypot(px - p[0] - t * dx, py - p[1] - t * dy);
+    };
+    return this.soldierHit(0, 0, (px, py) => line.some((p, n) => (n ? seg(px, py, line[n - 1], p) : Math.hypot(px - p[0], py - p[1])) <= R));
+  }
+
+  pilotKey(e, down) {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const dir = { w: "up", ArrowUp: "up", s: "down", ArrowDown: "down", a: "left", ArrowLeft: "left", d: "right", ArrowRight: "right" }[k];
+    if (dir) { if (down) this.pilotKeys.add(dir); else this.pilotKeys.delete(dir); return true; }
+    if (k === " ") { this.keyFire = down; return true; }
+    if (k === "b" && down) { this.pilotBomb = true; return true; }
+    if (k === "b") return true;
+    if (down && (k === "Escape" || actionFor(this.keys, e) === "pilot")) { this.stopPilot(); return true; }
+    return false;
+  }
+
+  reachOf(kind, id) {
+    const w = this.world, scale = w.map?.scale ?? 1;
+    if (kind === "s") return (w.pilotRules?.range ?? 2) * scale;
+    return Math.max(1, Math.round((w.machines.get(id)?.def.range ?? 1) * scale));
+  }
+
+  async startPilot(kind, id, follow = []) {
+    const r = await this.conn.request({ t: "pilot", op: "take", [kind === "s" ? "stack" : "machine"]: id, follow });
+    if (!r.ok) return this.toast(r.error ?? "could not take control");
+    const w = this.world;
+    this.piloting = { kind, id, key: `${kind}:${id}`, since: performance.now(), reach: this.reachOf(kind, id) };
+    if (this.armies) this.toggleArmies(false);
+    this.pilotKeys.clear();
+    this.pilotSent = { json: "", at: 0 };
+    this.pilotPanel.show(true);
+    const at = kind === "s" ? w.stacks.get(id)?.pos : w.machines.get(id)?.at;
+    if (at !== undefined) this.focus(at, Math.max(this.view.cam.scale / (this.view.ratio ?? 1), 24));
+    if (r.followers) this.toast(`${r.followers} more ${r.followers === 1 ? "company follows" : "companies follow"} it.`);
+    this.updatePanels();
+  }
+
+  async stopPilot(send = true) {
+    if (!this.piloting) return;
+    this.piloting = null;
+    this.pilotKeys.clear();
+    this.mouseFire = this.keyFire = false;
+    this.pilotPanel.show(false);
+    this.updatePanels();
+    if (send) await this.conn.request({ t: "pilot", op: "release" });
+  }
+
+  pilotSelected() {
+    const w = this.world;
+    if (this.piloting) return this.stopPilot();
+    if (this.picked) return this.soldiersPanel.act.pilot();
+    const u = w.machines.get(this.selectedMachine);
+    if (u && u.owner === w.you) return this.startPilot("m", u.id);
+    if (this.group) {
+      const list = [...this.group].map(id => w.stacks.get(id)).filter(s => s && s.owner === w.you);
+      if (list.length) { const big = list.reduce((a, b) => (b.troops > a.troops ? b : a)); return this.startPilot("s", big.id, list.filter(s => s !== big).map(s => s.id)); }
+    }
+    const s = w.stacks.get(this.selected);
+    if (s && s.owner === w.you) return this.startPilot("s", s.id);
+    this.toast("Select one of your companies or machines to pilot.");
+  }
+
+  nearestAhead(pos, p) {
+    const w = this.world, v = this.view, head = w.pilots.get(p.key)?.heading ?? 0, hx = Math.cos(head), hy = Math.sin(head);
+    let best = null, bd = Infinity;
+    const consider = (x, y) => {
+      const dx = x - pos[0], dy = y - pos[1], d = Math.hypot(dx, dy);
+      if (d > p.reach + 0.5) return;
+      const score = d - ((dx * hx + dy * hy) / (d || 1)) * 2;
+      if (score < bd) { bd = score; best = [x, y]; }
+    };
+    for (const s of w.stacks.values()) if (s.owner !== w.you) consider(...v.stackPoint(s));
+    for (const u of w.machines.values()) if (u.owner !== w.you && u.state !== "wreck") consider(...v.machinePoint(u));
+    return best ?? [pos[0] + hx * p.reach, pos[1] + hy * p.reach];
+  }
+
+  pilotFrame() {
+    const p = this.piloting, w = this.world, v = this.view;
+    if (!p || !w || !v) return;
+    const unit = p.kind === "s" ? w.stacks.get(p.id) : w.machines.get(p.id), now = performance.now();
+    if (!unit || unit.state === "wreck" || (!w.pilots.has(p.key) && now - p.since > 2500)) {
+      this.stopPilot(false);
+      return this.toast(unit && unit.state !== "wreck" ? "You let go: it holds where it stands." : "What you were piloting is gone.");
+    }
+    const pos = w.pilotAt(p.key) ?? (p.kind === "s" ? v.stackPoint(unit) : v.machinePoint(unit));
+    v.cam.x += (pos[0] - v.cam.x) * 0.15;
+    v.cam.y += (pos[1] - v.cam.y) * 0.15;
+    v.clampCamera();
+    const k = this.pilotKeys, st = this.pilotPanel.state;
+    let mx = (k.has("right") ? 1 : 0) - (k.has("left") ? 1 : 0), my = (k.has("down") ? 1 : 0) - (k.has("up") ? 1 : 0);
+    if (st.move[0] || st.move[1]) [mx, my] = st.move;
+    let aim = null, fire = false;
+    if (st.aim) { const len = Math.hypot(st.aim[0], st.aim[1]) || 1; aim = [pos[0] + (st.aim[0] / len) * p.reach, pos[1] + (st.aim[1] / len) * p.reach]; fire = st.firing; }
+    else if (this.pilotPanel.takeTap()) { this.tapAim = this.nearestAhead(pos, p); this.tapFireUntil = now + 200; }
+    if (!aim && this.tapFireUntil > now) { aim = this.tapAim; fire = true; }
+    if (!aim && this.hover && !this.prefs.crosshair) aim = v.screenToPlot(...this.hover);
+    if (this.mouseFire || this.keyFire) fire = true;
+    const r2 = x => Math.round(x * 100) / 100;
+    const msg = { move: [r2(mx), r2(my)], aim: aim ? [r2(aim[0]), r2(aim[1])] : null, fire };
+    const json = JSON.stringify(msg), since = now - this.pilotSent.at, bomb = this.pilotBomb || this.pilotPanel.takeBomb();
+    this.pilotBomb = false;
+    if (bomb || (json !== this.pilotSent.json && since >= 50) || ((mx || my || fire) && since >= 250) || since >= 5000) {
+      this.conn.send({ t: "pilot", op: "input", ...msg, ...(bomb ? { bomb: true } : {}) });
+      this.pilotSent = { json, at: now };
+    }
+  }
+
+  toggleArmies(on = !this.armies) {
+    const me = this.world?.nations.get(this.world.you);
+    this.armies = !!on && !!me?.spawned && me.alive && !this.world.frozen && !!this.world.soldierRules;
+    if (this.armies) { if (this.placing) this.togglePlacing(false); if (this.building || this.zoning || this.roading) this.stopBuild(); }
+    this.updatePanels();
+  }
+
+  pickSoldiers(map) {
+    this.picked = map && [...map.values()].some(s => s.size) ? map : null;
+    if (this.view) this.view.picked = this.picked;
+    this.soldiersPanel?.cancel();
+    if (this.picked) {
+      if (this.group) { this.group = null; if (this.view) this.view.group = null; }
+      if (this.selected !== null) { this.selected = null; if (this.view) this.view.selected = null; }
+      this.selectMachine(null);
+      this.selectBuilding(null);
+      this.nationCard?.show(null);
+    }
+    this.updatePanels();
+  }
+
+  armyTap(sx, sy) {
+    const v = this.view, w = this.world, R = Math.max(14 * (v.ratio ?? 1), v.cam.scale * 0.35);
+    let best = null, bd = R;
+    for (const s of w.myStacks()) for (const p of v.soldierSpots(s)) {
+      const [px, py] = v.plotToScreen(p.x, p.y), d = Math.hypot(px - sx, py - sy);
+      if (d < bd) { bd = d; best = { stack: s, slot: p.slot }; }
+    }
+    if (!best) return this.pickSoldiers(null);
+    const picked = new Map([...(this.picked ?? [])].map(([id, set]) => [id, new Set(set)]));
+    if (picked.get(best.stack.id)?.has(best.slot)) {
+      const kind = this.soldierKind(best.stack, best.slot), W = canvas.width, H = canvas.height;
+      const all = this.soldierHit(0, 0, (px, py) => px >= 0 && py >= 0 && px <= W && py <= H);
+      for (const [id, slots] of all) {
+        const s = w.stacks.get(id);
+        for (const k of slots) if (this.soldierKind(s, k) === kind) { if (!picked.has(id)) picked.set(id, new Set()); picked.get(id).add(k); }
+      }
+    } else {
+      if (!picked.has(best.stack.id)) picked.set(best.stack.id, new Set());
+      picked.get(best.stack.id).add(best.slot);
+    }
+    this.pickSoldiers(picked);
+  }
+
+  soldierKind(s, slot) {
+    return typeOfSlot(soldierTypes(s.troops, s.mix, this.world.soldierRules.troopsEach), slot);
+  }
+
   swiping(kind, line) {
     if (!this.view) return;
+    if (kind === "soldiers" || kind === "soldierBox") {
+      this.view.swipe = { kind: kind === "soldierBox" ? "box" : "swipe", line };
+      this.view.picked = this.soldiersBy(kind, line);
+      return;
+    }
     this.view.swipe = { kind, line };
     this.view.groupPreview = new Set(this.stacksBy(kind, line));
   }
 
   swiped(kind, line) {
     if (this.view) { this.view.swipe = null; this.view.groupPreview = null; }
+    if (kind === "soldiers" || kind === "soldierBox") return this.pickSoldiers(line && this.view ? this.soldiersBy(kind, line) : this.picked);
     if (!line || !this.view) return;
     const ids = this.stacksBy(kind, line);
     if (ids.length === 1) return this.select(ids[0]);
@@ -983,6 +1230,7 @@ class Game {
     if (this.view) this.view.group = this.group;
     this.groupPanel?.cancel();
     if (this.group) {
+      if (this.picked) { this.picked = null; if (this.view) this.view.picked = null; }
       this.select(null);
       this.selectMachine(null);
       this.selectBuilding(null);
@@ -993,6 +1241,7 @@ class Game {
 
   select(id) {
     if (id !== null && this.group) { this.group = null; if (this.view) this.view.group = null; }
+    if (id !== null && this.picked) { this.picked = null; if (this.view) this.view.picked = null; }
     if (id !== null) this.nationCard?.show(null);
     if (id !== null && this.selectedMachine !== null) { this.selectedMachine = null; if (this.view) this.view.selectedMachine = null; }
     if (id !== null && this.selectedBuilding !== null) { this.selectedBuilding = null; if (this.view) this.view.selectedBuilding = null; }
@@ -1025,20 +1274,6 @@ class Game {
 
   toast(text) { this.notices?.toast(text); }
 
-  supplyOverlay() {
-    const w = this.world, v = this.view, sup = w?.purse?.supply;
-    if (!v || !sup) return;
-    v.starving = new Set(sup.stacks.filter(r => r[1] <= 0).map(r => r[0]));
-    const s = w.stacks.get(this.selected), show = s && s.owner === w.you;
-    if (!show) { v.supplyReach = null; this.reachAt = 0; return; }
-    if (performance.now() - (this.reachAt ?? 0) < 2000) return;
-    this.reachAt = performance.now();
-    const cap = w.nations.get(w.you)?.capital;
-    const sources = (w.purse.stock?.food ?? 0) > 0 ? [...w.buildings.values()].filter(b => b.owner === w.you && b.state === "active" && b.def?.store && w.owner[b.anchor] === w.you).map(b => b.anchor).concat(cap != null && w.owner[cap] === w.you ? [cap] : []) : [];
-    this.grid ??= new Grid(w.w, w.h);
-    v.supplyReach = reachMap(this.grid, { terrain: w.terrain, owner: w.owner, road: w.roads }, w.you, sources, sup.range);
-  }
-
   powerOverlay() {
     const w = this.world, v = this.view;
     if (!v || !w?.powerRules) return;
@@ -1057,10 +1292,13 @@ class Game {
   }
 
   updatePanels() {
-    if (this.left) return;
-    this.supplyOverlay();
+    if (this.left || (this.uiHold && performance.now() - this.uiHold < 600)) return;
     this.powerOverlay();
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    if (this.picked && this.world) {
+      for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
+      if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
+    }
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {
@@ -1078,6 +1316,8 @@ class Game {
     this.onLeave();
   }
 }
+
+applyTheme();
 
 function showScreen(which) {
   screen.hidden = which !== "screen";

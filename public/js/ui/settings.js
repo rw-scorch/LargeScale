@@ -1,5 +1,6 @@
 import { el } from "./dom.js";
 import { ACTIONS, FIXED, keyOf, keyName, rebind, saveKeys, keyMap } from "../keys.js";
+import { THEMES, SECTIONS, PARTS, loadTheme, saveTheme, applyTheme, colourOf } from "./theme.js";
 
 const PREFS = "ls_prefs";
 const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta", "CapsLock", "Dead"]);
@@ -19,12 +20,14 @@ export function createSettings(root, game) {
   const building = el("div", { class: "settings-toggles" });
   const access = el("div", { class: "settings-toggles" });
   const keys = el("div", { class: "key-grid" });
+  const colours = el("div", { id: "theme-box", class: "theme-box" });
   const said = el("p", { id: "settings-note", class: "muted" });
   const panel = el("section", { id: "settings-panel", class: "panel center", hidden: true },
     el("div", { class: "row spread" }, el("b", { class: "title", text: "Settings" }), el("button", { class: "ghost", text: "Close", onclick: () => game.toggleSettings(false) })),
     el("h2", { text: "Display" }), boxes,
     el("h2", { text: "Building" }), building,
     el("h2", { text: "Accessibility" }), access,
+    el("h2", { text: "Colours" }), colours,
     el("h2", { text: "Layout" }),
     el("p", { class: "muted", text: "Move and resize the panels: the leaderboard, your nation, the action bar, events and chat, the cards, the status line, and the Research, Army and Upgrade panels. The layout is kept in this browser." }),
     el("div", { class: "row wrap" },
@@ -51,9 +54,27 @@ export function createSettings(root, game) {
     const cross = el("input", { type: "checkbox", id: "set-crosshair", checked: !!prefs.crosshair, onchange: () => game.setPref("crosshair", cross.checked) });
     access.replaceChildren(el("label", { class: "row" }, cross, "Crosshair: act at the middle of the screen and aim by moving the view. Select and Orders buttons appear; on a keyboard the arrow keys move, Space selects and E opens the orders."));
     said.textContent = note;
-    keys.replaceChildren(...Object.entries(ACTIONS).filter(([a]) => a !== "admin" || game.admin).map(([a, def]) => el("div", { class: "key-row" },
+    keys.replaceChildren(...Object.entries(ACTIONS).filter(([a]) => a !== "admin" || game.canAdmin).map(([a, def]) => el("div", { class: "key-row" },
       el("span", { text: def.label }),
       el("button", { class: `chip${waiting === a ? " on" : ""}`, "data-bind": a, disabled: FIXED.has(a), text: waiting === a ? "Press a key" : keyOf(a), onclick: () => { waiting = waiting === a ? null : a; note = ""; draw(); } }))));
+  };
+
+  const drawColours = () => {
+    const t = loadTheme();
+    const set = (fn, redraw = true) => { fn(t); saveTheme(t); applyTheme(t); if (redraw) drawColours(); };
+    colours.replaceChildren(
+      el("p", { class: "muted", text: "Pick a theme, then colour any part on its own. A part keeps its own colours when you change the theme; Reset gives it the theme's again. Kept in this browser." }),
+      el("div", { class: "row wrap" }, ...Object.entries(THEMES).map(([id, th]) => el("button", { class: `chip theme-chip${t.preset === id ? " on" : ""}`, "data-theme": id, onclick: () => set(x => { x.preset = id; }) },
+        el("i", { class: "swatch", style: `background:${th.panel};outline:2px solid ${th.accent}` }), th.name))),
+      el("label", { class: "row" }, "Panel opacity", el("input", { id: "theme-opacity", type: "range", min: 50, max: 100, value: Math.round(t.opacity * 100), oninput: e => set(x => { x.opacity = Number(e.target.value) / 100; }, false) })),
+      ...SECTIONS.map(sec => el("div", { class: "theme-row", "data-section": sec.id },
+        el("span", { class: "theme-name", text: sec.name }),
+        el("div", { class: "row" },
+          ...PARTS.map(([p, label]) => el("label", { class: "theme-pick", title: `${sec.name}: ${label.toLowerCase()}` },
+            el("input", { type: "color", value: colourOf(t, sec.id, p), "data-part": p, onchange: e => set(x => { (x.sections[sec.id] ??= {})[p] = e.target.value; }) }),
+            el("small", { text: label }))),
+          el("button", { class: "ghost chip", text: "Reset", disabled: !t.sections[sec.id], onclick: () => set(x => { delete x.sections[sec.id]; }) })))),
+      el("button", { id: "theme-reset", text: "Back to the usual colours", onclick: () => set(x => { x.preset = "harbour"; x.opacity = 0.86; x.sections = {}; }) }));
   };
 
   const onKey = e => {
@@ -76,7 +97,7 @@ export function createSettings(root, game) {
 
   return {
     get open() { return !panel.hidden; },
-    show(on) { panel.hidden = !on; waiting = null; note = ""; if (on) draw(); },
+    show(on) { panel.hidden = !on; waiting = null; note = ""; if (on) { draw(); drawColours(); } },
     destroy() { removeEventListener("keydown", onKey, true); },
     update() {},
   };

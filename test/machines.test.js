@@ -5,8 +5,9 @@ import { installCombat, resolveBattles, stackPower } from "../src/sim/combat.js"
 import { installTroops, UNITS } from "../src/sim/troops.js";
 import { installBuildings, addBuilding } from "../src/sim/buildings.js";
 import { installResearch, complete, TREE } from "../src/sim/research.js";
-import { installMachines, spawnUnit, saveMachines, UNIT_TYPES, MACHINE_RULES } from "../src/sim/units.js";
+import { installMachines, spawnUnit, saveMachines, fleetOf, machineOrdersOf, UNIT_TYPES, MACHINE_RULES } from "../src/sim/units.js";
 import { runOrder, StateFeed } from "../src/game.js";
+import { runAdmin } from "../src/admin.js";
 import { lockMap } from "../src/shared/research.js";
 import { TID } from "../src/shared/terrain.js";
 
@@ -48,11 +49,11 @@ function field() {
 const until = (w, done, most = 2000) => { for (let k = 0; k < most; k++) { if (done()) return k; w.tick(1); } return -1; };
 
 test("the Medieval and Gunpowder machines come from the unit registry, and research unlocks them", () => {
-  const all = ["catapult", "trebuchet", "galley", "cog", "cannon", "galleon", "frigate", "ship_of_the_line", "transport_boat", "merchant_ship", "field_artillery", "early_tank", "steamship", "ironclad", "destroyer"];
+  const all = ["catapult", "trebuchet", "galley", "cog", "cannon", "galleon", "frigate", "ship_of_the_line", "transport_boat", "merchant_ship", "field_artillery", "early_tank", "steamship", "ironclad", "destroyer", "biplane", "early_bomber", "main_battle_tank", "apc", "rocket_artillery", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane", "sam_truck"];
   assert.deepEqual(Object.keys(UNIT_TYPES), all);
-  assert.ok(UNITS.troops.every(d => d.kind === "troop") && UNITS.troops.length === 17, "the troop list leaves machines out");
+  assert.ok(UNITS.troops.every(d => d.kind === "troop") && UNITS.troops.length === 21, "the troop list leaves machines out");
   const locks = lockMap(TREE);
-  assert.deepEqual(all.map(id => locks.units.get(id)), ["siegecraft", "siegecraft", "harbours", "harbours", "artillery", "shipbuilding", "shipbuilding", "navigation", undefined, undefined, "field_guns", "armour", "steam_navy", "steam_navy", "destroyers"], "the free transport boat and merchant ship need no research");
+  assert.deepEqual(all.map(id => locks.units.get(id)), ["siegecraft", "siegecraft", "harbours", "harbours", "artillery", "shipbuilding", "shipbuilding", "navigation", undefined, undefined, "field_guns", "armour", "steam_navy", "steam_navy", "destroyers", "flight", "flight", "mechanised", "mechanised", "rocketry", "jet_engines", "strategic_bombing", "helicopters", "helicopters", "airborne_forces", "guided_missiles"], "the free transport boat and merchant ship need no research");
   assert.equal(locks.buildings.get("siege_workshop"), "siegecraft");
   assert.equal(locks.buildings.get("cannon_foundry"), "gunpowder");
   assert.equal(locks.buildings.get("shipyard"), "shipbuilding");
@@ -63,26 +64,58 @@ test("the Medieval and Gunpowder machines come from the unit registry, and resea
 test("a siege workshop builds catapults one after another, paying as each starts, and waits when gold runs short", () => {
   const { w, g, a, n, order } = field();
   const ws = addBuilding(w, { type: "siege_workshop", owner: a, anchor: g.idx(10, 10), state: "active" });
-  Object.assign(n, { money: 250 });
-  n.stock.wood = 500;
+  const price = UNIT_TYPES.catapult.cost.money;
+  assert.deepEqual(Object.keys(UNIT_TYPES.catapult.cost), ["money"]);
+  Object.assign(n, { money: 2 * price + 20 });
   assert.deepEqual(order(a, { t: "produce", building: ws.id, type: "catapult", count: 3 }), { t: "result", of: "produce", ok: true, queued: 3 });
   w.tick(1);
-  assert.equal(n.money, 130, "the first catapult is paid for as it starts");
+  assert.equal(n.money, price + 20, "the first catapult is paid for as it starts");
   const first = until(w, () => w.units.list.size === 1);
   assert.ok(first >= 58 && first <= 61, `it takes its 60 seconds: ${first + 1}`);
   const cat = [...w.units.list.values()][0];
   assert.equal(cat.type, "catapult");
   assert.ok(ws.plots.some(p => g.cheb(p, cat.at) === 1) && !ws.plots.includes(cat.at), "it appears next to the workshop");
   w.tick(1);
-  assert.equal(n.money, 10);
+  assert.equal(n.money, 20);
   until(w, () => w.units.list.size === 2);
   w.tick(1);
   assert.equal(w.machines.queues.get(ws.id).why, "not enough gold");
   n.money = 500;
   w.tick(1);
-  assert.equal(n.money, 380);
-  assert.deepEqual(order(a, { t: "produce", building: ws.id, clear: true }), { t: "result", of: "produce", ok: true, cleared: 1, refund: { money: 120, wood: 60 } });
+  assert.equal(n.money, 500 - price);
+  assert.deepEqual(order(a, { t: "produce", building: ws.id, clear: true }), { t: "result", of: "produce", ok: true, cleared: 1, refund: { money: price } });
   assert.equal(n.money, 500, "clearing the queue refunds the one being built");
+});
+
+test("warships and land machines are limited per nation, counting queues, but transports and trade ships are not", () => {
+  const { w, g, a, b, n, order } = coast();
+  assert.deepEqual(MACHINE_RULES.limits, { land: 100, sea: 100, air: 100 });
+  w.machines.rules = { ...w.machines.rules, limits: { land: 2, sea: 3, air: 1 } };
+  const hb = addBuilding(w, { type: "harbour", owner: a, anchor: g.idx(23, 10), state: "active" });
+  const ws = addBuilding(w, { type: "siege_workshop", owner: a, anchor: g.idx(10, 10), state: "active" });
+  n.money = 100000;
+  spawnUnit(w, a, "galley", g.idx(30, 5));
+  spawnUnit(w, a, "transport_boat", g.idx(31, 5));
+  spawnUnit(w, a, "merchant_ship", g.idx(32, 5));
+  spawnUnit(w, b, "cog", g.idx(40, 5));
+  assert.deepEqual(fleetOf(w, a), { land: 0, sea: 1, air: 0 }, "the boat and the trade ship do not count, nor B's cog");
+  assert.equal(order(a, { t: "produce", building: hb.id, type: "cog", count: 3 }).error, "at most 3 warships: you have 1");
+  assert.equal(order(a, { t: "produce", building: hb.id, type: "cog", count: 2 }).ok, true);
+  assert.equal(order(a, { t: "produce", building: hb.id, type: "galley" }).error, "at most 3 warships: you have 1 and 2 queued");
+  assert.equal(order(a, { t: "produce", building: ws.id, type: "catapult", count: 2 }).ok, true, "land machines have their own limit");
+  assert.equal(order(a, { t: "produce", building: ws.id, type: "catapult" }).error, "at most 2 tanks, guns and siege engines: you have 0 and 2 queued");
+  spawnUnit(w, a, "catapult", g.idx(5, 5));
+  spawnUnit(w, a, "catapult", g.idx(6, 5));
+  const money = n.money;
+  w.tick(1);
+  assert.equal(w.machines.queues.get(ws.id).why, "you have 2 tanks, guns and siege engines, the most allowed", "a machine captured or given past the limit holds the queue");
+  assert.equal(n.money, money - UNIT_TYPES.cog.cost.money, "only the cog was paid for");
+  const view = machineOrdersOf(w, a);
+  assert.deepEqual([view.fleet, view.limits], [{ land: 2, sea: 1, air: 0 }, { land: 2, sea: 3, air: 1 }]);
+  w.machines.rules.limits.sea = 5;
+  const gift = runAdmin(w, { op: "give", nation: a, what: "machine", unit: "cog", amount: 3 });
+  assert.deepEqual([gift.ok, gift.now, gift.limit], [true, 2, "at most 5 warships: you have 3 and 2 queued"], "an admin gift stops at the limit");
+  assert.deepEqual(runAdmin(w, { op: "give", nation: a, what: "machine", unit: "catapult", amount: 1 }), { ok: false, error: "at most 2 tanks, guns and siege engines: you have 2 and 2 queued" });
 });
 
 test("a harbour launches ships onto the water beside it, and orders are checked", () => {

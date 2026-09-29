@@ -70,15 +70,53 @@ test("a frame or message from another protocol version marks the client stale", 
   assert.equal(d.stale, true);
 });
 
-test("a convoy row at sea names its ship, and the ship's cargo can be found", () => {
+test("a train row carries its trip's gold and slides from plot to plot", () => {
   const c = new ClientWorld(hello());
-  c.setConvoy([4, 1, 50, "wood", 10, "T", 90]);
-  c.setConvoy([4, 1, 51, "wood", 10, "T", 90, 7]);
-  assert.equal(c.convoys.get(4).ship, 7);
-  assert.equal(c.cargoOf(7).amount, 10);
-  assert.equal(c.convoys.get(4).prev, 51, "boarding does not slide the cart out to sea");
-  c.setConvoy([4, 1, 60, "wood", 10, "T", 90, 0]);
-  assert.equal(c.convoys.get(4).ship, null);
-  assert.equal(c.convoys.get(4).prev, 60, "landing does not slide it back");
-  assert.equal(c.cargoOf(7), null);
+  c.setConvoy([4, 1, 50, "gold", 30, "I", 90, 0, 1]);
+  const t = c.convoys.get(4);
+  assert.deepEqual([t.train, t.kind, t.amount, t.ship, t.prev], [true, "gold", 30, null, 50]);
+  c.setConvoy([4, 1, 51, "gold", 30, "I", 90, 0, 1]);
+  assert.equal(c.convoys.get(4).prev, 50, "it slides from where it was");
+  c.message({ v: PROTOCOL, t: "state", time: 1, n: [], s: [], gone: [], cg: [4] });
+  assert.equal(c.convoys.has(4), false, "gone when it arrives");
+});
+
+test("a stack that moves keeps where it was, so the client can walk its soldiers between plots", () => {
+  const rules = { troopsEach: 10, fieldCap: 1000, maxCompanies: 100, spacing: 0.34, drawZoom: 14, drawArea: 900 };
+  const c = new ClientWorld(hello({ soldierRules: rules }));
+  assert.deepEqual(c.soldierRules, rules);
+  c.message({ v: PROTOCOL, t: "state", time: 1, n: [], s: [[7, 1, 45, 120, 2]], gone: [] });
+  const s = c.stacks.get(7);
+  assert.equal(s.prev, 44);
+  assert.ok(Date.now() - s.movedAt < 1000);
+  c.message({ v: PROTOCOL, t: "state", time: 2, n: [], s: [[7, 1, 45, 110, 2]], gone: [] });
+  assert.equal(c.stacks.get(7).prev, 44, "losing troops in place keeps the last move");
+  assert.equal(c.stacks.get(7).movedAt, s.movedAt);
+});
+
+test("pilot positions glide between samples, and shots are kept for a second", () => {
+  const c = new ClientWorld(hello({ pilotRules: { sendEvery: 100 }, pilots: [[0, 7, 1, 44.5, 1.5, 0]] }));
+  assert.deepEqual(c.pilotAt("s:7"), [44.5, 1.5, 0]);
+  c.message({ v: PROTOCOL, t: "pilots", p: [[0, 7, 1, 45.5, 1.5, 0], [1, 3, 2, 10.2, 5.7, 1.57]], shots: [[45.5, 1.5, 47.5, 1.5, 0, 1, 6.2]] });
+  const p = c.pilots.get("s:7");
+  assert.deepEqual([p.px, p.x], [44.5, 45.5], "it glides from the last sample");
+  assert.ok(c.pilotAt("m:3"));
+  assert.deepEqual(c.shots.map(s => [s.x1, s.shell, s.hit]), [[47.5, false, 6.2]]);
+  c.message({ v: PROTOCOL, t: "pilots", p: [], shots: [] });
+  assert.equal(c.pilots.size, 0, "let go: nothing piloted");
+  assert.equal(c.shots.length, 1, "the shot still shows for a moment");
+});
+
+test("the browser keeps every field of the purse the server sends", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/world.js", import.meta.url), "utf8");
+  const call = src.match(/return purseOf\(n, \{([^\n]*)\}\);/);
+  assert.ok(call, "the purse call is found");
+  const keys = [...call[1].matchAll(/(?:^|, )([a-zA-Z]+):/g)].map(m => m[1]);
+  assert.ok(keys.includes("sams") && keys.includes("cheats") && keys.length >= 10, keys.join(" "));
+  const c = new ClientWorld({ t: "hello", v: 5, you: 1, w: 4, h: 4, map: { kind: "test" }, hashes: {}, nations: [], stacks: [], units: [], chat: [] });
+  const msg = { t: "purse", money: 1, era: "T", town: {} };
+  for (const k of keys) msg[k] = { sent: k };
+  c.message(msg);
+  for (const k of keys) assert.deepEqual(c.purse[k], { sent: k }, `the purse keeps ${k}`);
 });

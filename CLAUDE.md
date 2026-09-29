@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-7.md`: fighting first (gold as the only currency, individual soldiers, piloting, planes and bombing, easier crossings by sea), agreed 28 September 2026 and built in five parts. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-8.md`: the planner and the Modern era, agreed 29 September 2026 in six parts (the planner first, then the Modern army, air power, navy, nukes, and tourism and downtowns). Milestone seven (`plans/milestone-7.md`: gold only, individual soldiers, piloting, planes, easier crossings) is built, passed its dev server run, and waits for Ryan's check. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (242)
+npm test                  # unit tests (278)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -102,7 +102,7 @@ Steps 1 to 5 are done (September 2026). Step 6, Ryan's own deploy and playtest, 
 - **Scale.** Border sets per nation, bots think in slices and fold idle stacks back in, long moves use a land-region graph. `npm run bench` passes at 200 and 400 bots with the worst tick near 20 to 26 ms.
 - **Game.** Combat and bots run in every world; bots spawn at creation. Orders live in `src/game.js` (plain JavaScript, unit tested): spawn, stack, move, advance, split, merge, disband, route. Rate limit 20 a second per account. Offline players defend at 0.95. State is sent as compact deltas (protocol 2), about 3.5 KB a second per player with 400 bots. A win freezes the world.
 - **Fine region maps.** Region maps (Europe, lat/long boxes) default to the fine map: Europe is 1400 by 760 plots, 500,828 land. The whole Earth stays at 0.1 degrees. `info.map` stores `dir` and `scale`; `scaledRules(scale)` in `src/worldconfig.js` doubles the length rules and quadruples the area rules listed in `data/rules.json` under `detail`. Bots follow land area; fine maps allow at most 100 (fine Europe worst tick: 11.5 ms at 25 bots, 27 ms at 100, 71 ms at 400). Old worlds without `dir` keep the normal map. The server reads `terrain.bin.gz` for both.
-- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, D draw a path (then drag), S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging; in its Roads tab a click starts a routed road and a second click ends it), T town panel, U research, Y upgrade menu, K army panel, L logistics panel, R deposits at mid zoom, I world info (schedule, how to win, settings), backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -, Enter confirms a placed building, the arrow keys move the view, and with the crosshair on Space selects and E opens the orders ring). Every key but Esc can be rebound in Settings (the gear, top right). Every control has a mouse and a touch form (Ryan, 26 September 2026). A right-click, or a finger held on the map, opens the ring menu (milestone three, C2); a right-drag with a stack selected still draws the way it goes. Stacks form on any owned plot. A drag that starts on one of your stacks sweeps up every stack it passes into a group, and Shift with a mouse drag draws a box; the group panel (`public/js/ui/group.js`) gives them one `group` order.
+- **Controls.** Keys live in `public/js/keys.js` (F form at pointer, A advance, C advance into unclaimed land only, N advance into one nation's land (click it next), M move, D draw a path (then drag), S split, G merge, X disband or demolish, B build menu (its Zones tab paints zones by dragging; in its Roads tab a click starts a routed road and a second click ends it), T town panel, U research, Y upgrade menu, O planner, K army panel, L logistics panel, R deposits at mid zoom, I world info (schedule, how to win, settings), backquote the admin panel (admins only), Tab next stack, H home, Esc cancel, + and -, Enter confirms a placed building, the arrow keys move the view, and with the crosshair on Space selects and E opens the orders ring). Every key but Esc can be rebound in Settings (the gear, top right). Every control has a mouse and a touch form (Ryan, 26 September 2026). A right-click, or a finger held on the map, opens the ring menu (milestone three, C2); a right-drag with a stack selected still draws the way it goes. Stacks form on any owned plot. A drag that starts on one of your stacks sweeps up every stack it passes into a group, and Shift with a mouse drag draws a box; the group panel (`public/js/ui/group.js`) gives them one `group` order.
 - **Capital.** A lost capital moves to the nearest plot the nation still owns, with a `capital_moved` event.
 - **Client.** `public/index.html` plus `public/js/`: login, world list (map choice, bot slider), spawn picker, stack panel with route preview, nation list, chat, connection status with reconnect, victory banner. The renderer is the kit's, adapted: territory in 256 by 256 chunk canvases. `src/shared/client.js` holds the client's copy of the world and is shared with the smoke test.
 
@@ -290,10 +290,93 @@ Ryan's asks of 28 September 2026: one currency, individual soldiers, piloting, p
   - A group crossing shares one key (`BOAT_GROUP`, a symbol clients cannot send), counted once against `boats.maxBoats`, and keeps its formation on the far side.
   - A drawn path may cross water once (`crossingOf` in `src/sim/boats.js`); `sendByBoat` takes `from`, `via` and `group`.
   - Selected stack, machine and group cards keep their room in the side column, and the folded feed stays inside its column on short screens.
+- **Part B, gold only (29 September 2026, branch `m7-gold`, stacked on `m7-boats`).** Milestone five's stores, carts, army supply and sea routes are gone (`src/sim/stores.js`, `sea.js` and `supply.js` are deleted), and so is the steel of milestone six.
+  - **Costs.** Every cost in `data/` is gold, converted once by `tools/gold_only.mjs` at the worths in `rules.json` `economy.worth`.
+  - **Retired buildings.** They carry `retired: true` and are refused by `placeError`: the woodcutter, quarry, clay pit, sawmill, steel mill and the three store buildings.
+  - **Income.**
+    - Producers earn `goldOf(kind, amount)` (`src/sim/resources.js`), reported as `n.made`.
+    - Towns grow on housing and jobs, and shops and works earn `stats.trade`.
+    - Power plants cost `power.upkeep` gold.
+  - **Trade (`src/sim/trade.js`, `installTrade`).**
+    - Ports send free trade ships (unit 23) to friendly ports in the same water, and both ends are paid on arrival.
+    - Hostile warships capture them.
+    - Stations send trains along rail-only paths, drawn from the convoy rows.
+    - The purse carries `trade` (`tradeView`), and `hello` carries `goldRules`.
+    - While away, trade is paid as an estimate, only for ports with a partner (`partnersOf`) and stations joined by rail to another.
+  - **Old worlds.** Save format 4. `convertToGold` in `src/sim/economy.js` turns stock, store goods, carts, wagons and retired buildings into gold on load.
+  - **Client.** The Logistics panel (L) is now the Trade panel. The HUD shows gold and people, and the build menu hides retired buildings.
+- **Machine limits and Part C, soldiers (29 September 2026, branch `m7-soldiers`, stacked on `m7-gold`).** Details and the reasons for the design are in `plans/milestone-7.md`.
+  - **Machine limits.** `rules.json` `machines.limits` caps land machines, warships and planes at 100 each (`limitError`, `fleetOf` in `src/sim/units.js`). Admin gifts stop at the limit too.
+  - **Companies.** A player's stack is a company, and every 10 troops (`soldiers.troopsEach`) is a soldier.
+    - `src/shared/soldiers.js` counts soldiers by type (`soldierTypes`) and gives the formation (`formationSlot`), the same on both ends.
+    - `src/sim/soldiers.js` (`installSoldiers`) keeps a player to 1,000 soldiers and 100 companies in the field, and trims old worlds on load.
+    - The `detach` order takes picked soldiers, by type, out of their companies.
+    - Bots are not limited.
+  - **Path budgets.** Advancing stacks look for the border at most `seeksPerTick` (8) a tick. Stacks extend paths at most `extendsPerTick` (12) a tick while they still have plots left to walk.
+  - **Client.**
+    - Above `soldiers.drawZoom`, companies are drawn soldier by soldier, on screen only, within a budget by screen size (`soldierSpots`, `soldiers` in the renderer). Stacks glide between plots (`prev`, `movedAt`).
+    - Armies (V, `toggleArmies`) turns a swipe or a Shift-drag box into picking soldiers (`app.picked`). The soldiers panel is `public/js/ui/soldiers.js`.
+- **Part D, piloting (29 September 2026, branch `m7-pilot`, stacked on `m7-soldiers`).**
+  - **Server.** `src/sim/pilot.js` (`installPilot`) keeps a position inside the plot for each piloted company or machine (`s.pilot`, `u.pilot`).
+    - The normal stack stepping skips piloted stacks.
+    - The `pilot` order takes (`op: "take"`, with `follow`) or releases control. Any other order on the unit releases it too.
+    - `op: "input"` messages (move, aim, fire) skip the order limiter and have their own (`pilot.inputsPerSecond`).
+    - `World.startPilots` runs a 50 ms loop only while something is piloted, and broadcasts `pilots` (rows and shots) every 100 ms.
+  - **Client.**
+    - `ClientWorld.pilots` and `pilotAt`; the renderer's `stackPoint` and `machinePoint` use them, and `drawShots` draws tracers.
+    - `app.pilotFrame` sends input and follows the unit with the camera.
+    - `public/js/ui/pilot.js` has the banner, and the stick and Fire button on phones.
+    - P pilots; WASD or the arrows move, the mouse aims, a held click or Space fires.
+- **Part E, planes and bombing (29 September 2026, branch `m7-air`, stacked on `m7-pilot`).**
+  - **Content.** Flight unlocks the airfield (`airbase`, `antiAir`), the biplane fighter and the bomber (`bomb` in `data/units.json`). Anti-aircraft guns unlock the flak tower (`antiAir`).
+  - **Simulation.** `src/sim/air.js` (`installAir`, a postTick hook with a whole-step version) keeps each plane's flight in `u.air`: base, position, heading, fuel, bombs, mission, landed and rearm.
+    - `orderPlane` checks the radius from the airfield; `drop` resolves a bombing.
+    - Fighters hunt and dogfight through buckets, and flak sites hit planes overhead.
+    - Bombed plots are cheaper to take through a `captureCost` wrapper, and damaged buildings repair themselves.
+    - Rules are in `rules.json` `air`.
+  - **Orders.** The `air` order: patrol, bomb or return. The admin's `give machine` places planes at an airfield.
+  - **Rows.** A plane's machine row carries a tenth field (`planeRow`), which the client reads into `u.air`. `planeAt` glides planes between samples.
+  - **Client.** `drawPlane` (rotated, with a shadow), `drawFlak`, and a bomb blast effect. The machine card has Patrol, Bomb and Fly home. B, or the Bomb button, drops bombs while piloting a bomber.
 
-Open items as of 28 September 2026, in order:
+## Milestone eight progress
 
-1. PRs 14 to 27 are merged (roads, army supply, free boats, stores and carts, road tools, the new menu, 28 September 2026). PR 28 (`m5-sea`, sea routes) and the milestone six PR (`m6-industry`, stacked on it) wait for Ryan. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`, and checks logistics and the Industrial era together.
+Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacked on `m7-air`. Ryan's decisions:
+
+- All of the Modern era is in: army, air power and SAMs, navy, nukes, and tourism and downtowns.
+- An automatic planner comes first. It proposes projects (towns, economy, civic and upgrades, defence) drawn as outlines with a price, and builds only what the player approves, from one queue.
+- Nukes cost gold only and are very expensive.
+- Troops go by air in transport helicopters and as paratroopers.
+- Submarines dive by water depth and cannot be hit in deep ocean, but rise to fire.
+
+- **Part A, the planner (29 September 2026, PR 36, base `m7-air`).** Details and evidence are in `plans/milestone-8.md`. Smoke 114 of 114, soak clean, and `npm run ui` 170 of 171, with the one failure a test race that is now fixed. On the bench the planner adds about 2 ms at the median, but the machine ran 2.5 times slower that afternoon, so the 50 ms budget needs a rerun.
+  - `src/shared/planner.js` (`proposePlan`, `piecePlots`) proposes projects from a view of the world: `ClientWorld.planView()` in the browser, and `planView` in `src/sim/planner.js` on the server.
+  - `src/sim/planner.js` (`installPlanner`, rank 5) keeps each nation's queue (`n.plan`) and kept-clear areas (`n.keepClear`), and runs the `plan` order (`add`, `cancel`, `clear`, `keep`). Rules are in `rules.json` `planner`.
+  - The purse carries `plan` (`planSummary`). The queue goes as a `plan` message when it changes, and in `hello` with `planRules`.
+  - The Planner card is `public/js/ui/planner.js` (O, and Plan in the action bar). The renderer draws `view.plan` (`drawPlan`). Keep land clear is the zone drag in the `keep` mode.
+  - Deposits moved from the action bar to the corner icons. The zoom buttons are hidden on touch screens (`pointer:coarse`), so the bar and the corner fit on a phone.
+- **Part B, the Modern Age and its army (29 September 2026, PR 37, base `m8-modern`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Research.** `age_modern` (in the Industrial column) and twelve Modern nodes. Every Modern building is behind one.
+  - **Units.** Soldiers, special forces and anti-tank teams (units 35 to 37, barracks). Main battle tank, APC and rocket artillery (38 to 40, vehicle factory).
+  - **APCs.** The ships' boarding code now covers land machines with a `capacity`: `embark`, `disembark` with no loss, the `board` order, `land`, and a `machine` move that sets the troops down where it stops (`unloads`).
+  - **Capture.** A carrier with troops aboard is not captured. When an enemy stack comes beside it, the troops get out (`captureLoose` in `src/sim/units.js`).
+  - **Client.** The machine card has Unload for carriers, and a stack's ring has Board the APC.
+- **Part C, air power and air defence (29 September 2026, PR 38, base `m8-army`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Content.** Jet engines, Strategic bombing, Helicopters, Airborne forces and Guided missiles. Paratroopers (unit 41); jet fighter, strategic bomber, attack and transport helicopters, transport plane (42 to 46); SAM truck (47); the air base (building 69, the airfield's upgrade, drawn from `parts`) and the SAM site (70, the flak tower's upgrade).
+  - **`src/sim/air.js`.** `airbase` blocks give reach and rearming slots (`baseRules`, `A.queued`). Bombers drop in a line (`stick`). `hover` and `strike` make the attack helicopter. Transports take the `drop` mission (`unload`, `dropTroops` for piloting). SAM sites and trucks (`sam` blocks, `launchers`, `samView` in the purse as `sams`) fire `sam_fired` missiles and reload for gold. All air-defence hits on a plane in a tick combine through `combined` with `air.overlap`.
+  - **Boarding.** `embark` takes a transport on the ground; `paraOnly` takes only paratroopers.
+  - **Planner.** `planAirDefence` proposes SAM sites (`planner.sams`, `samNear`).
+- **Ryan's asks after PR 38 (29 September 2026, PR 39, base `m8-air`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Cheats** (`src/sim/cheats.js`, `installCheats`, installed last): `n.cheats` holds `gold`, `troops`, `build`, `research`. Admin ops `cheat` and `researchAll`; the purse carries `cheats`.
+  - **Helpers.** `meta` `powers` maps accounts to powers (`POWERS` in `src/admin.js`: world, speed, schedule, kick, give, cheats); `adminAllowed` checks every admin op. The `powers` op is for full admins; `hello.powers` and the `powers` message tell the client, and `game.can(power)` and `game.canAdmin` gate the panel.
+  - **Research.** `research.maxQueue` is 150, so a whole path from the first era fits.
+  - **Taps.** A press on a control sets `game.uiHold`; `updatePanels` waits (at most 600 ms) and the click clears it first.
+  - **Colours.** `public/js/ui/theme.js` (`THEMES`, `SECTIONS`, `applyTheme`), stored as `ls_theme`; Settings has Colours. Buttons and fields use `--btn`, `--field`, `--primary`, `--on-bg`.
+  - **Bombers** (branch `m8-bombers`, stacked on `m8-asks`): both reach 4,000 plots with 6,000 and 8,000 s of fuel, so they bomb anywhere on the map.
+  - **Ranks.** `rankSlots` in `src/shared/soldiers.js` replaces the spiral: the leader in front, ranks of at most 12. The renderer keeps each drawn soldier's position (`troopPos`), moves it at its own pace, faces the company (`facing` angle), draws the fallen for 3 s, and puts the marker over the leader (`leaderAt`).
+
+Open items as of 29 September 2026, in order:
+
+1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`. PR 35 brings `m6-industry` into `main`. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C), PR 33 (`m7-pilot`, Part D) and PR 34 (`m7-air`, Part E) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PR 36 (`m8-modern`, the planner, base `m7-air`) PR 37 (`m8-army`, the Modern army, base `m8-modern`) PR 38 (`m8-air`, air power and SAMs, base `m8-army`) and PR 39 (`m8-asks`, his asks after PR 38, base `m8-air`) wait for Ryan. Smoke, UI and soak passed on `m8-asks` (117, 183, clean). Part D, the Modern navy, is next.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
