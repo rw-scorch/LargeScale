@@ -62,6 +62,19 @@
     {"id":"anti_aircraft","name":"Anti-aircraft guns","branch":"military","era":"I","cost":620,"requires":["flight"],"unlocks":{"buildings":["flak_tower"]}},
     {"id":"universities","name":"Universities","branch":"civic","era":"I","cost":520,"requires":["age_industry"],"unlocks":{"buildings":["university"],"effects":{"research":0.1}}},
     {"id":"medicine","name":"Medicine","branch":"civic","era":"I","cost":600,"requires":["universities"],"unlocks":{"buildings":["clinic"]}},
-    {"id":"bureaucracy","name":"Bureaucracy","branch":"government","era":"I","cost":500,"requires":["age_industry"],"unlocks":{"buildings":["tax_office","parliament"]}}
+    {"id":"bureaucracy","name":"Bureaucracy","branch":"government","era":"I","cost":500,"requires":["age_industry"],"unlocks":{"buildings":["tax_office","parliament"]}},
+    {"id":"age_modern","name":"Modern Age","branch":"era","era":"I","cost":3600,"requires":["railways","armour","flight","universities"],"advances":"Mo","need":{"nodes":12,"branches":4},"icon":"era_badge_Mo"},
+    {"id":"modern_infantry","name":"Modern infantry","branch":"military","era":"Mo","cost":800,"requires":["age_modern"],"unlocks":{"units":["soldier"]}},
+    {"id":"special_operations","name":"Special operations","branch":"military","era":"Mo","cost":1100,"requires":["modern_infantry"],"unlocks":{"units":["special_forces"]}},
+    {"id":"anti_tank","name":"Anti-tank weapons","branch":"military","era":"Mo","cost":950,"requires":["modern_infantry"],"unlocks":{"units":["at_team"],"effects":{"defence":0.05}}},
+    {"id":"mechanised","name":"Mechanised warfare","branch":"military","era":"Mo","cost":1400,"requires":["age_modern"],"unlocks":{"units":["main_battle_tank","apc"]}},
+    {"id":"rocketry","name":"Rocketry","branch":"military","era":"Mo","cost":1300,"requires":["mechanised"],"unlocks":{"units":["rocket_artillery"]}},
+    {"id":"reinforced_concrete","name":"Reinforced concrete","branch":"military","era":"Mo","cost":900,"requires":["age_modern"],"unlocks":{"buildings":["tower_concrete"]}},
+    {"id":"open_pit_mining","name":"Open-pit mining","branch":"economy","era":"Mo","cost":1000,"requires":["age_modern"],"unlocks":{"buildings":["mine_openpit"]}},
+    {"id":"modern_oil","name":"Modern oil","branch":"economy","era":"Mo","cost":1100,"requires":["age_modern"],"unlocks":{"buildings":["pumpjack","offshore_rig"]}},
+    {"id":"natural_gas","name":"Natural gas","branch":"economy","era":"Mo","cost":950,"requires":["modern_oil"],"unlocks":{"buildings":["gas_plant"]}},
+    {"id":"automation","name":"Automation","branch":"economy","era":"Mo","cost":1200,"requires":["age_modern"],"unlocks":{"buildings":["factory_modern"],"effects":{"income":0.05}}},
+    {"id":"high_rise","name":"High-rise living","branch":"civic","era":"Mo","cost":1000,"requires":["age_modern"],"unlocks":{"buildings":["apartment_block"]}},
+    {"id":"consumer_society","name":"Consumer society","branch":"civic","era":"Mo","cost":900,"requires":["high_rise"],"unlocks":{"buildings":["cafe"]}}
   ]
 }

@@ -49,11 +49,11 @@ function field() {
 const until = (w, done, most = 2000) => { for (let k = 0; k < most; k++) { if (done()) return k; w.tick(1); } return -1; };
 
 test("the Medieval and Gunpowder machines come from the unit registry, and research unlocks them", () => {
-  const all = ["catapult", "trebuchet", "galley", "cog", "cannon", "galleon", "frigate", "ship_of_the_line", "transport_boat", "merchant_ship", "field_artillery", "early_tank", "steamship", "ironclad", "destroyer", "biplane", "early_bomber"];
+  const all = ["catapult", "trebuchet", "galley", "cog", "cannon", "galleon", "frigate", "ship_of_the_line", "transport_boat", "merchant_ship", "field_artillery", "early_tank", "steamship", "ironclad", "destroyer", "biplane", "early_bomber", "main_battle_tank", "apc", "rocket_artillery"];
   assert.deepEqual(Object.keys(UNIT_TYPES), all);
-  assert.ok(UNITS.troops.every(d => d.kind === "troop") && UNITS.troops.length === 17, "the troop list leaves machines out");
+  assert.ok(UNITS.troops.every(d => d.kind === "troop") && UNITS.troops.length === 20, "the troop list leaves machines out");
   const locks = lockMap(TREE);
-  assert.deepEqual(all.map(id => locks.units.get(id)), ["siegecraft", "siegecraft", "harbours", "harbours", "artillery", "shipbuilding", "shipbuilding", "navigation", undefined, undefined, "field_guns", "armour", "steam_navy", "steam_navy", "destroyers", "flight", "flight"], "the free transport boat and merchant ship need no research");
+  assert.deepEqual(all.map(id => locks.units.get(id)), ["siegecraft", "siegecraft", "harbours", "harbours", "artillery", "shipbuilding", "shipbuilding", "navigation", undefined, undefined, "field_guns", "armour", "steam_navy", "steam_navy", "destroyers", "flight", "flight", "mechanised", "mechanised", "rocketry"], "the free transport boat and merchant ship need no research");
   assert.equal(locks.buildings.get("siege_workshop"), "siegecraft");
   assert.equal(locks.buildings.get("cannon_foundry"), "gunpowder");
   assert.equal(locks.buildings.get("shipyard"), "shipbuilding");
