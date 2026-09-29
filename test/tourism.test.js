@@ -123,8 +123,10 @@ test("in a busy downtown with roads on two sides, a cafe grows into an office bl
   assert.equal(tryUpgrade(w, cafe, true), true);
   assert.deepEqual([cafe.type, cafe.state], ["office_block", "construction"]);
   cafe.state = "active";
-  assert.equal(tryUpgrade(w, cafe, true), true, "the 2 by 2 skyscraper has room and roads on two sides");
-  assert.deepEqual([cafe.type, cafe.plots.length], ["skyscraper", 4]);
+  const neighbour = put("shop", 11, 11), outside = put("general_store", 12, 11);
+  assert.equal(tryUpgrade(w, cafe, true), true, "the 2 by 2 skyscraper has roads on two sides, and takes in the shop inside its footprint");
+  assert.deepEqual([cafe.type, cafe.plots.length, w.bld.list.has(neighbour.id), w.bld.list.has(outside.id)], ["skyscraper", 4, false, true]);
+  assert.equal(w.events.find(e => e.type === "civ_upgrade" && e.to === "skyscraper")?.absorbed, 1);
   const low = put("cafe", 3, 3);
   setRoad(w, g.idx(3, 2), 1);
   setRoad(w, g.idx(2, 3), 1);

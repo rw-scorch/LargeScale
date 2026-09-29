@@ -1,7 +1,7 @@
 import { effectOf } from "./effects.js";
 import { goldOf } from "./resources.js";
 import { TERRAIN } from "../shared/terrain.js";
-import { ERA_ORDER, ZONES, BUILDINGS, installBuildings, footprint, addBuilding, setPlots, nationBuildings, touched } from "./buildings.js";
+import { ERA_ORDER, ZONES, BUILDINGS, installBuildings, footprint, addBuilding, removeBuilding, setPlots, nationBuildings, touched } from "./buildings.js";
 import rules from "../../data/rules.json" with { type: "json" };
 
 export { ERA_ORDER, ZONES, footprint };
@@ -83,12 +83,24 @@ export function takeZoneNews(world) {
   return out;
 }
 
-function fits(world, nid, plots, zone, self = 0) {
+function fits(world, nid, plots, zone, self = 0, absorb = null) {
   const bld = world.bld;
   return plots && plots.every(i => {
     const id = bld.at.get(i);
-    return world.owner[i] === nid && bld.zone[i] === ZONES[zone] && TERRAIN[world.terrain[i]].build && (id === undefined || id === self) && !world.log?.road[i];
+    return world.owner[i] === nid && bld.zone[i] === ZONES[zone] && TERRAIN[world.terrain[i]].build && (id === undefined || id === self || !!absorb?.has(id)) && !world.log?.road[i];
   });
+}
+
+export function absorbable(world, b, plots) {
+  const bld = world.bld, inside = new Set(plots ?? []), out = new Map();
+  for (const i of inside) {
+    const id = bld.at.get(i);
+    if (id === undefined || id === b.id || out.has(id)) continue;
+    const o = bld.list.get(id), d = bld.table[o.type];
+    if (!o.civilian || o.owner !== b.owner || d.zone !== "com" || d.downtown || !o.plots.every(p => inside.has(p))) return null;
+    out.set(id, o);
+  }
+  return out;
 }
 
 export function bestTypeFor(zone, era, table = CIVIL, allowed = () => true) {
@@ -150,19 +162,20 @@ export function tryUpgrade(world, b, force = false) {
   if (!def.next || b.state !== "active") return false;
   const nd = table[def.next];
   if (eraIdx(nd.era) > eraIdx(n.era) || world.unlocked?.(b.owner, def.next) === false) return false;
-  const plots = footprint(world, b.anchor, nd.fp);
-  if (!fits(world, b.owner, plots, nd.zone, b.id)) return false;
+  const plots = footprint(world, b.anchor, nd.fp), absorb = nd.downtown ? absorbable(world, b, plots) : null;
+  if (!fits(world, b.owner, plots, nd.zone, b.id, absorb)) return false;
   if (nd.downtown && downtownError(world, b, plots)) return false;
   if (!force) {
     const needs = n.stats.needs ?? 0, occ = def.housing ? b.residents / def.housing : 1;
     if (needs < r.upgradeNeeds || occ < r.upgradeOccupancy * needs) return false;
   }
+  for (const id of absorb?.keys() ?? []) removeBuilding(world, id);
   b.type = def.next;
   setPlots(world, b, plots);
   b.state = "construction";
   b.progress = 0;
   b.upgrading = true;
-  world.emit("civ_upgrade", { nation: b.owner, building: b.id, to: b.type });
+  world.emit("civ_upgrade", { nation: b.owner, building: b.id, to: b.type, ...(absorb?.size ? { absorbed: absorb.size } : {}) });
   return true;
 }
 
