@@ -994,6 +994,7 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   let target = null;
   if (foe) for (let i = 0; i < w.owner.length && target === null; i++) if (w.owner[i] === foe.id && i !== foe.capital && Math.hypot((i % w.w) - (foe.capital % w.w), Math.floor(i / w.w) - Math.floor(foe.capital / w.w)) >= 2 && isLand(w.terrain[i])) target = i;
   const aimed = ready && target !== null ? await ask({ t: "nuke", op: "check", silo: siloId, at: target }) : null;
+  await adminOp(IN, { op: "speed", factor: 8 });
   const fired = aimed?.ok ? await ask({ t: "nuke", op: "launch", silo: siloId, at: target }) : null;
   const inEvents = () => IN.json.filter(m => m.t === "events").flatMap(m => m.events);
   const heard = fired?.ok && await until(() => inEvents().find(e => e.type === "nuke_launched" && e.id === fired.id), 5000);
@@ -1001,6 +1002,7 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   const boom = fired?.ok && await until(() => inEvents().find(e => (e.type === "nuke_detonated" || e.type === "nuke_intercepted") && e.id === fired.id), 40000);
   const scar = boom?.type === "nuke_detonated" && await until(() => IM.pump().world.owner[target] === 0 && TERRAIN[IM.world.terrain[target]]?.name === "crater" ? true : null, 5000);
   const capitalKept = IM.pump().world.owner[foe?.capital] === foe?.id;
+  await adminOp(IN, { op: "speed", factor: 1 });
   check(ready && fired?.ok && heard && seen && scar && capitalKept,
     `after Nuclear weapons a silo builds an atomic warhead, aimed at ${foe?.name ?? "nobody"}'s land (${Math.round((aimed?.chance ?? 0) * 100)}% to be shot down, ${aimed?.flight} s); everyone hears the launch, and the blast leaves a crater and clears the land but the capital (${boom?.type ?? "no impact"}, ${boom?.cleared ?? 0} plots cleared)${fired?.ok ? "" : ` (${fired?.error ?? aimed?.error ?? made?.error ?? (siloUp ? "not ready" : "no silo")})`}`);
 }
