@@ -487,3 +487,85 @@ This part builds on the kit's `tourism.js`.
       - smoke: a submarine reports its depth, and a jet bases on a carrier and lands on it;
       - UI: right-clicking the carrier with a jet selected, the carrier card's plane count, and the submarine card's depth text (screens `77-carrier` and `78-submarine`);
       - soak: ship gifts and base orders.
+- **Part E, nukes and missile defence (29 September 2026, branch `m8-nukes`, stacked on `m8-navy`).** Built as planned on the kit's `nukes.js`, with these specifics:
+  - **Research.** Three military Modern nodes:
+    - Nuclear weapons (1,800, after Rocketry and Guided missiles): the missile silo and the atomic warhead.
+    - Thermonuclear weapons (2,000, after Nuclear weapons): the hydrogen warhead.
+    - Missile defence (1,300, after Guided missiles): the ABM silo.
+
+    The two nuclear nodes cost more than any other Modern node (800 to 1,400).
+  - **The missile silo** (building 71, 1 plot, 8,000 gold). It holds one warhead, being built or ready; more warheads need more silos.
+
+    | Warhead | Gold | Build time | Flattened within | Hit within | Flight |
+    | --- | --- | --- | --- | --- | --- |
+    | Atomic | 40,000 | 15 min | 3 plots | 8 plots | 60 s plus a thirtieth of a second a plot |
+    | Hydrogen | 120,000 | 30 min | 5 plots | 14 plots | 75 s plus the same |
+
+    - The gold is paid when the build starts. Take apart refunds all of it (`nukes.cancelRefund`), built or not.
+    - A warhead is built only while its silo works, so a bombed silo pauses. A silo that is captured or destroyed loses its warhead (`warhead_lost`).
+    - Silos and warheads in flight are kept on the nation (`n.nuke`), so they are saved with it and need no new save format.
+  - **Launching** is the `nuke` order: `build`, `cancel`, `check` and `launch`.
+    - It is refused when the host has turned nukes off, during the peace, and at your own land, unclaimed land or a nation you are not at war with.
+    - `check` answers with the flight time, the chance of being shot down and the blast circles, without launching.
+    - `nuke_launched` goes to everyone, with who launched, whose land, the circles and the impact time. The target's owner also gets a push notification.
+  - **Interception** is rolled at impact (`defencesAt` and `resolve` in `src/sim/nukes.js`).
+    - Every ABM silo (60% within 20 plots), SAM site and SAM truck (15% within their own reach) that covers the target, has a missile left and belongs to a nation at war with the launcher.
+    - Strongest first, each counting half as much as the one before (`nukes.overlap`): one ABM silo is 60%, two are 72%, an ABM silo and a SAM site 63%.
+    - Each defence that rolls spends a missile, until one hits.
+    - ABM silos hold 2 interceptors and make one every 3 minutes for 1,500 gold.
+    - Like SAM missiles, interceptors are not saved: after a reload they are full.
+  - **The blast** (`detonate`), with lengths doubled on fine maps.
+    - **Inner ring.**
+      - The ground becomes crater within 1 plot of the centre and scorched ground around it. Rivers stay rivers.
+      - Forest and roads are gone.
+      - The land turns unclaimed, except any nation's capital plot.
+      - Buildings become rubble, which clears like demolished rubble.
+      - Companies are destroyed and machines wrecked.
+    - **Outer ring.**
+      - Buildings are damaged, lose 70% of their people, and repair themselves after 10 minutes.
+      - Companies lose 60% of their troops, and machines 60% of their health.
+    - Planes in the air or on the ground are hit the same way. A submarine deep in the ocean is spared.
+    - `nuke_detonated` reports the troops and people lost, and the buildings destroyed and damaged.
+  - **The host switch.**
+    - It is `info.nukes`, on by default.
+    - The admin op `nukes` (the World power) turns it on or off.
+    - World info shows it, with a button for anyone who has the World power.
+    - Off stops building and launching; warheads stay in their silos.
+  - **The build cheat** finishes warheads at once.
+  - **The planner** proposes ABM silos over the capital and the biggest town where no ABM silo covers them yet: at most 2 (`planner.abms`), within 6 plots (`abmNear`).
+  - **Client.**
+    - **The silo's card** (`public/js/ui/nukes.js`):
+      - build a warhead (locked until the research is known);
+      - time left, and Take apart;
+      - Aim and launch. A click on enemy land asks the server for the check and draws the circles. Launch, then "Sure? Launch now".
+    - **The alert** under the status pill has a row for every warhead in the air: who launched at whom, a countdown and Show. It pulses red when the warhead is aimed at you.
+    - **The map:**
+      - pulsing target circles;
+      - the missile flying an arc from its silo, with a trail and launch smoke;
+      - a flash and the `nuke_0` to `nuke_4` blast;
+      - a burst for an interception.
+
+      The crater and scorched ground arrive as ordinary terrain edits.
+    - **Also:**
+      - The ABM silo's card counts its interceptors, and an empty silo is drawn empty.
+      - The research panel lists warheads under "Silos build".
+      - The feed reports launches, interceptions, blasts, ready and lost warheads, and the host switch.
+  - **Evidence:**
+    - `npm test`: 295 of 295. `test/nukes.test.js` has 6 tests:
+      - the content;
+      - building, cancelling and losing a warhead;
+      - the launch rules and the public event;
+      - the blast;
+      - interception, and the reload;
+      - a save and a catch-up with a warhead in flight.
+
+      There is also a planner test for ABM silos and a browser test for warheads, blasts and the silo purse. The reference tests: 95 of 95.
+    - The drawing, run in Node against a recording canvas: the aim, flight and blast circles (6 arcs), the missile, the second blast frame and the interception burst.
+    - `npm run bench` on mains power, now launching 2 warheads per player at bots halfway through (`--nukes`):
+      - all 16 landed;
+      - the nuke module's tick: 0.01 ms at the median, 2.1 ms at worst, blasts included;
+      - the whole tick: 8.5 ms median, p99 30.2 ms, worst 42.6 ms. That passes the 50 ms budget.
+    - Smoke, `npm run ui` and the soak have Part E checks written but not run yet; they need the dev server:
+      - **smoke:** a silo builds an atomic warhead, launches at the friend's land, everyone hears it, and the blast leaves a crater and clears the land but the capital;
+      - **UI:** Aim and launch, the circles and chance, the second press, the alert and the blast (screens `79-nuke-aim` to `82-nuke-crater`);
+      - **soak:** silos, ABM silos, builds, checks, launches and cancels.
