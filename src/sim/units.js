@@ -717,6 +717,18 @@ export function giveMachine(world, nid, type) {
     }
     return null;
   }
+  if (def.domain === "sea") {
+    let port = null;
+    for (const id of world.bld?.mine.get(nid) ?? []) {
+      const b = world.bld.list.get(id), t = b && world.bld.table[b.type];
+      if (b?.state !== "active" || !(t?.port || def.builtAt.includes(b.type))) continue;
+      const at = spawnSpot(world, b, def);
+      if (at === null) continue;
+      if (def.builtAt.includes(b.type)) return spawnUnit(world, nid, type, at);
+      port ??= at;
+    }
+    if (port !== null) return spawnUnit(world, nid, type, port);
+  }
   const g = world.grid, seen = new Set([n.capital]), todo = [n.capital];
   for (let k = 0; k < todo.length && k < 40000; k++) {
     const i = todo[k];

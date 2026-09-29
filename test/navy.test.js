@@ -4,7 +4,7 @@ import { World } from "../src/sim/territory.js";
 import { installCombat } from "../src/sim/combat.js";
 import { installTroops } from "../src/sim/troops.js";
 import { installBuildings, addBuilding, BUILDINGS } from "../src/sim/buildings.js";
-import { installMachines, spawnUnit, UNIT_TYPES, limitClass, diveOf, canHit, orderUnit, wreck } from "../src/sim/units.js";
+import { installMachines, spawnUnit, giveMachine, UNIT_TYPES, limitClass, diveOf, canHit, orderUnit, wreck } from "../src/sim/units.js";
 import { installAir, planeOf, homeOf } from "../src/sim/air.js";
 import { installBoats, boatPlan, boatType } from "../src/sim/boats.js";
 import { installNavy } from "../src/sim/navy.js";
@@ -149,4 +149,16 @@ test("after Amphibious warfare the free boats are landing craft: faster, and los
   const launched = w.events.find(e => e.type === "boat_launched");
   assert.equal(w.units.list.get(launched.machine)?.type, "landing_craft");
   assert.equal(b > 0, true);
+});
+
+test("a warship given by the admin comes out beside a naval dock, not in a lake by the capital", () => {
+  const { w, g, a } = world();
+  w.terrain[g.idx(10, 12)] = TID.lake;
+  const lake = giveMachine(w, a, "cruiser");
+  assert.equal(lake.at, g.idx(10, 12), "with no dock or port it takes the nearest water");
+  w.units.list.delete(lake.id);
+  addBuilding(w, { type: "naval_dock", owner: a, anchor: g.idx(18, 3), state: "active" });
+  const ship = giveMachine(w, a, "cruiser");
+  assert.equal(g.x(ship.at), 20);
+  assert.equal(orderUnit(w, ship.id, g.idx(100, 12)), null, "and it can sail out to sea");
 });
