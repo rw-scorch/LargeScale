@@ -360,6 +360,11 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
   - **APCs.** The ships' boarding code now covers land machines with a `capacity`: `embark`, `disembark` with no loss, the `board` order, `land`, and a `machine` move that sets the troops down where it stops (`unloads`).
   - **Capture.** A carrier with troops aboard is not captured. When an enemy stack comes beside it, the troops get out (`captureLoose` in `src/sim/units.js`).
   - **Client.** The machine card has Unload for carriers, and a stack's ring has Board the APC.
+- **Part C, air power and air defence (29 September 2026, branch `m8-air`, stacked on `m8-army`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Content.** Jet engines, Strategic bombing, Helicopters, Airborne forces and Guided missiles. Paratroopers (unit 41); jet fighter, strategic bomber, attack and transport helicopters, transport plane (42 to 46); SAM truck (47); the air base (building 69, the airfield's upgrade, drawn from `parts`) and the SAM site (70, the flak tower's upgrade).
+  - **`src/sim/air.js`.** `airbase` blocks give reach and rearming slots (`baseRules`, `A.queued`). Bombers drop in a line (`stick`). `hover` and `strike` make the attack helicopter. Transports take the `drop` mission (`unload`, `dropTroops` for piloting). SAM sites and trucks (`sam` blocks, `launchers`, `samView` in the purse as `sams`) fire `sam_fired` missiles and reload for gold. All air-defence hits on a plane in a tick combine through `combined` with `air.overlap`.
+  - **Boarding.** `embark` takes a transport on the ground; `paraOnly` takes only paratroopers.
+  - **Planner.** `planAirDefence` proposes SAM sites (`planner.sams`, `samNear`).
 
 Open items as of 29 September 2026, in order:
 
