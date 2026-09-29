@@ -267,17 +267,19 @@ function planDeposits(ctx) {
   for (const [kind, list] of [...byKind].sort((a, b) => (worth[b[0]] ?? 1) - (worth[a[0]] ?? 1))) {
     const def = ctx.best(d => d.producer?.kind === "deposit" && d.producer.deposits.includes(kind) && !d.rule);
     if (!def) continue;
-    const r = def.producer.radius ?? 0, [fw, fh] = def.fp, pieces = [], draw = [];
+    const r = def.producer.radius ?? 0, [fw, fh] = def.fp, pieces = [], draw = [], offsets = [];
+    for (let dy = -r - fh + 1; dy <= r; dy++) for (let dx = -r - fw + 1; dx <= r; dx++) offsets.push([dx, dy, Math.hypot(dx + (fw - 1) / 2, dy + (fh - 1) / 2)]);
+    offsets.sort((p, q) => p[2] - q[2]);
     for (const i of list) {
       if (pieces.length >= R.perDeposit) break;
       if (covered.has(i)) continue;
       const x = i % ctx.w, y = (i / ctx.w) | 0;
       let spot = null;
-      for (let dy = -r - fh + 1; dy <= r && !spot; dy++) for (let dx = -r - fw + 1; dx <= r && !spot; dx++) {
+      for (const [dx, dy] of offsets) {
         const ax = x + dx, ay = y + dy;
-        if (ax < 0 || ay < 0) continue;
+        if (ax < 0 || ay < 0 || ax + fw > ctx.w) continue;
         const plots = ctx.placeOk(def, ay * ctx.w + ax);
-        if (plots) spot = { anchor: ay * ctx.w + ax, plots };
+        if (plots) { spot = { anchor: ay * ctx.w + ax, plots }; break; }
       }
       if (!spot) continue;
       ctx.take(spot.plots);

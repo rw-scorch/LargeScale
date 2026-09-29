@@ -1922,6 +1922,43 @@ check(railRow && !railRow.disabled && /Railway12 gold a plot/.test(railRow.text)
   check(planes.field && planes.id && /^Your biplane fighter/.test(card) && flying !== null, `after Flight, an airfield bases a fighter ("${card}"), and Patrol and a click send it up (${flying} s of fuel)`);
   await gp.keyboard.press("Escape");
 }
+{
+  const m = await gp.evaluate(async () => {
+    const g = window.__ls.game, w = g.world;
+    for (const id of ["rocketry", "special_operations", "anti_tank"]) await g.conn.request({ t: "research", id, mode: "queue" });
+    await g.conn.request({ t: "admin", op: "finish", nation: w.you });
+    const known = Date.now() + 5000;
+    while ((w.purse?.era !== "Mo" || w.lockOf("apc", "units")) && Date.now() < known) await new Promise(r => setTimeout(r, 100));
+    const gift = await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit: "apc", amount: 1 });
+    const id = gift.machines?.[0], seen = Date.now() + 4000;
+    while (id && !w.machines.has(id) && Date.now() < seen) await new Promise(r => setTimeout(r, 100));
+    const at = w.machines.get(id)?.at, st = await g.conn.request({ t: "stack", share: 0.1, at });
+    return { era: w.purse?.era, id, at, stack: st.stack ?? null, troops: st.ok ? Math.round(w.stacks.get(st.stack)?.troops ?? 0) : 0 };
+  });
+  await gp.keyboard.press("k");
+  const modernArmy = await gp.waitForFunction(() => { const t = document.querySelector("#army-list")?.textContent ?? ""; return ["Soldiers", "Special forces", "Anti-tank teams"].every(n => t.includes(n)) ? true : null; }, null, { timeout: 5000 }).then(() => true, () => false);
+  await gp.keyboard.press("Escape");
+  check(m.era === "Mo" && modernArmy, `in the Modern Age the Army panel offers soldiers, special forces and anti-tank teams (era ${m.era})`);
+  await gp.evaluate(({ stack, at }) => { const g = window.__ls.game; g.select(stack); g.focus(at, 24); }, m);
+  await gp.waitForTimeout(400);
+  const apcScreen = await toScreen(gp, m.at);
+  await gp.mouse.click(apcScreen.x, apcScreen.y, { button: "right" });
+  const boardItem = await gp.waitForFunction(() => [...document.querySelectorAll("#ring .ring-item")].find(b => b.dataset.ring === "board")?.textContent ?? null, null, { timeout: 3000 }).then(h => h.jsonValue(), () => null);
+  if (boardItem) await gp.click("#ring .ring-item[data-ring=board]");
+  const aboard = await gp.waitForFunction(id => window.__ls.game.world.machines.get(id)?.cargo || null, m.id, { timeout: 8000 }).then(h => h.jsonValue(), () => 0);
+  await gp.evaluate(({ id, at }) => { const g = window.__ls.game; g.select(null); g.selectMachine(id); g.focus(at, 24); }, m);
+  const unloadButton = await gp.waitForSelector("#machine-unload:not([disabled])", { timeout: 3000 }).then(() => true, () => false);
+  const dest = await gp.evaluate(at => { const w = window.__ls.game.world; for (let r = 5; r < 10; r++) for (const d of [r, -r, r * w.w, -r * w.w]) if (w.owner[at + d] === w.you) return at + d; return null; }, m.at);
+  const destAt = await toScreen(gp, dest);
+  await gp.mouse.click(destAt.x, destAt.y, { button: "right" });
+  const ringLabels = await ringItems(gp);
+  await gp.click("#ring .ring-item[data-ring=move]").catch(() => {});
+  const setDown = await gp.waitForFunction(t => [...window.__ls.game.world.stacks.values()].find(s => s.owner === window.__ls.game.world.you && s.pos === t)?.troops ?? null, dest, { timeout: 20000 }).then(h => h.jsonValue(), () => null);
+  await gp.screenshot({ path: `${OUT}/73-apc.png` });
+  check(boardItem && aboard >= m.troops - 1 && unloadButton && ringLabels.includes("land") && Math.abs((setDown ?? 0) - aboard) < 1,
+    `a stack right-clicks the APC and gets in ("${boardItem}", ${aboard} aboard); the APC's card has Unload, its ring offers ${ringLabels.join(", ")}, and Move here sets all ${Math.round(setDown ?? 0)} down where it stops`);
+  await gp.keyboard.press("Escape");
+}
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await login(ip, "rw_scorch", "correct horse");
 await ip.goto(`${BASE}/#w=${indId}`);

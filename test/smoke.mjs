@@ -256,9 +256,9 @@ check(aSpawn >= 0, "player spawns on land");
   check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
   const rr = async (kind, via) => { A.ws.send(JSON.stringify({ t: "road", kind, via })); return nextResult(A, "road"); };
   const runNear = () => {
-    for (let dy = -7; dy <= 7; dy++) {
+    for (let dy = -12; dy <= 12; dy++) {
       let run = [];
-      for (let dx = -9; dx <= 9; dx++) {
+      for (let dx = -14; dx <= 14; dx++) {
         const i = (cy + dy) * M.w + cx + dx;
         if (cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && !cw.zone[i]) { run.push(i); if (run.length >= 6) return run; } else run = [];
       }
@@ -513,7 +513,7 @@ for (const end = Date.now() + 90000; !won && Date.now() < end; ) {
   won = await waitFor(A, m => m.t === "victory", 700);
 }
 const bSaw = await waitFor(B, m => m.t === "victory", 2000);
-check(won?.winner === you && bSaw, `the friend is eliminated and both players hear that ${won?.name} has won`);
+check(won?.winner === you && bSaw, `the friend is eliminated and both players hear that ${won?.name} has won${won ? "" : ` [friend plots ${view.nations.get(bNation)?.plots}, host stack ${JSON.stringify(view.stacks.get(as.stack) ?? null)}]`}`);
 A.ws.send(JSON.stringify({ t: "stack", share: 0.5 }));
 check((await nextResult(A, "stack"))?.error === "the world has ended", "the world is frozen after the win: orders are refused");
 const frozen = (await api(`/api/worlds/${wid}/status`, null, ta)).body;
@@ -911,6 +911,27 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
     `after Flight, an airfield's bomber flies ${Math.round(Math.hypot((fSpawn % ih.w) - cx, Math.floor(fSpawn / ih.w) - cy))} plots and bombs the friend's company: ${hitEvent?.troops} troops lost, ${hitEvent?.buildings} buildings damaged${sent?.ok ? "" : ` (${sent?.error ?? "no bomber"})`}`);
   await adminOp(IN, { op: "speed", factor: 1 });
   FR.ws.close();
+}
+{
+  await ask({ t: "research", id: "mechanised", mode: "queue" });
+  await ask({ t: "research", id: "modern_infantry", mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  const modern = await until(() => IM.pump().world.purse?.era === "Mo" && !IM.world.lockOf("apc", "units") ? true : null, 5000);
+  const gift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "apc", amount: 1 });
+  const apcId = gift?.machines?.[0], cw = IM.pump().world, apcAt = cw.machines.get(apcId)?.at;
+  const st = apcAt !== undefined ? await ask({ t: "stack", share: 0.1, at: apcAt }) : null;
+  const boarded = st?.ok && (await ask({ t: "board", stack: st.stack, ship: apcId }))?.ok;
+  const aboard = boarded && await until(() => IM.pump().world.machines.get(apcId)?.cargo > 0 ? IM.world.machines.get(apcId).cargo : null, 10000);
+  let dest = null;
+  for (let r = 8; r <= 14 && dest === null; r++) for (const [dx, dy] of [[r, 0], [-r, 0], [0, r], [0, -r]]) {
+    const x = (apcAt % ih.w) + dx, y = Math.floor(apcAt / ih.w) + dy, i = y * ih.w + x;
+    if (dest === null && x >= 0 && y >= 0 && x < ih.w && y < ih.h && cw.owner[i] === ih.you && isLand(cw.terrain[i])) dest = i;
+  }
+  const drive = aboard && dest !== null ? await ask({ t: "machine", machine: apcId, do: "move", to: dest }) : null;
+  const landed = drive?.ok && await until(() => IN.json.filter(m => m.t === "events").flatMap(m => m.events).find(e => e.type === "landed" && e.machine === apcId), 30000);
+  const ashore = landed && await until(() => [...IM.pump().world.stacks.values()].find(s => s.owner === ih.you && s.pos === dest), 3000);
+  check(modern && aboard > 0 && drive?.unloads === dest && landed && Math.abs(landed.troops - aboard) < 1 && ashore,
+    `after Mechanised warfare an APC takes ${aboard} troops aboard, drives ${Math.round(Math.hypot((dest % ih.w) - (apcAt % ih.w), Math.floor(dest / ih.w) - Math.floor(apcAt / ih.w)))} plots and sets ${Math.round(landed?.troops ?? 0)} down where it stops`);
 }
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;
