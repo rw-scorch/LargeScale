@@ -143,3 +143,29 @@ test("catch-up starts a pending war on world time", () => {
   assert.ok(w.events.some(e => e.type === "war_started"));
   assert.equal(w.hostile(a, b), true);
 });
+
+test("the browser reads the same relations as the server", async () => {
+  const { ClientWorld } = await import("../src/shared/client.js");
+  const { PROTOCOL } = await import("../src/shared/protocol.js");
+  const buildingData = (await import("../data/buildings.json", { with: { type: "json" } })).default;
+  const { w, g, a, b, c } = world();
+  const hello = () => ({ t: "hello", v: PROTOCOL, you: a, w: g.w, h: g.h, map: { kind: "test" }, hashes: {}, time: w.time, nations: [...w.nations.values()].map(o => ({ id: o.id, name: o.name, bot: !!o.bot })), defs: buildingData.buildings, tech: { eras: [], branches: [], nodes: [] }, diplomacy: { ...w.dip.view(w.time), proposals: w.dip.proposalsOf(a) }, dipRules: { warNotice: DIPLO.warNotice } });
+  run(w, a, { t: "diplo", op: "war", to: b });
+  run(w, a, { t: "diplo", op: "embargo", to: b, on: true });
+  let cw = new ClientWorld(hello());
+  assert.equal(cw.relation(a, b).status, "war_pending");
+  assert.ok(Math.abs(cw.relation(a, b).startsIn - DIPLO.warNotice) < 3);
+  assert.deepEqual([cw.relation(a, b).embargoes, cw.relation(b, a).embargoed], [true, true]);
+  assert.equal(cw.relation(a, c).status, "open");
+  assert.equal(cw.canAttack(a, b), false);
+  assert.equal(cw.canAttack(a, c), true);
+  w.time += DIPLO.warNotice + 1;
+  w.tick(1);
+  cw = new ClientWorld(hello());
+  assert.equal(cw.relation(a, b).status, w.dip.status(a, b, w.time));
+  assert.equal(cw.canAttack(a, b), true);
+  w.time += DIPLO.peaceMinWar;
+  assert.equal(run(w, b, { t: "diplo", op: "propose", to: a, kind: "peace" }).ok, true);
+  cw.message({ v: PROTOCOL, t: "diplomacy", ...w.dip.view(w.time), proposals: w.dip.proposalsOf(a) });
+  assert.deepEqual(cw.dip.proposals.map(p => [p.from, p.kind]), [[b, "peace"]]);
+});

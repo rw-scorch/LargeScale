@@ -31,6 +31,8 @@ export function phaseText(m) {
   return ["The world has reached its end time.", "warn"];
 }
 
+const noticeText = s => (s >= 3600 ? `${s / 3600} h` : s >= 60 ? `${s / 60} min` : `${s} s`);
+
 export function createWorldInfo(root, game) {
   const title = el("b", { class: "title" });
   const events = el("div", { id: "info-schedule", class: "info-list" });
@@ -91,6 +93,12 @@ export function createWorldInfo(root, game) {
     }
   }
 
+  const noticeSelect = (now, choices) => {
+    const pick = el("select", { id: "info-war-notice", title: "how long a declared war waits before the first attack", onchange: async () => { const r = await game.conn.request({ t: "admin", op: "diplomacy", warNotice: Number(pick.value) }); if (!r.ok) game.toast(r.error ?? "that did not work"); } }, ...choices.map(c => el("option", { value: c, text: noticeText(c) })));
+    pick.value = String(now);
+    return pick;
+  };
+
   return {
     get open() { return !box.hidden; },
     show(on) {
@@ -112,7 +120,7 @@ export function createWorldInfo(root, game) {
       editor.hidden = !game.can("schedule");
       const s = w.schedule ?? {}, i = w.info ?? {}, speed = w.speed || 1;
       title.textContent = `World info: ${game.name}`;
-      const sig = JSON.stringify([s, Math.floor(now / 1000), w.shrinkIn, speed, w.victory, w.ended, w.nations.size, i.nukes, game.can("world")]);
+      const sig = JSON.stringify([s, Math.floor(now / 1000), w.shrinkIn, speed, w.victory, w.ended, w.nations.size, i.nukes, i.warNotice, game.can("world")]);
       if (sig === key) return;
       key = sig;
       const any = EVENTS.some(k => s[k] != null);
@@ -138,6 +146,7 @@ export function createWorldInfo(root, game) {
         line("Away", `Players who are away defend at ${Math.round((i.offline?.defence ?? 0.95) * 100)}% and produce ${Math.round((i.offline?.output ?? 0.9) * 100)}%`),
         line("Catch-up", `up to ${i.maxCatchupHours ?? 72} hours while nobody is on`),
         line("Nuclear weapons", i.nukes === false ? "off" : "allowed", game.can("world") ? el("button", { id: "info-nukes", class: "ghost", text: i.nukes === false ? "Allow" : "Turn off", onclick: async () => { const r = await game.conn.request({ t: "admin", op: "nukes", on: i.nukes === false }); if (!r.ok) game.toast(r.error ?? "that did not work"); } }) : null),
+        line("War notice", `${noticeText(i.warNotice ?? 300)} between a declaration and the first attack`, game.can("world") && w.dipRules?.noticeChoices ? noticeSelect(i.warNotice ?? 300, w.dipRules.noticeChoices) : null),
         tests.length ? line("Test speeds", tests.join(", ")) : null].filter(Boolean));
     },
   };

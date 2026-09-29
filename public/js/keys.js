@@ -18,6 +18,7 @@ export const ACTIONS = {
   armies: { key: "v", label: "Armies: a swipe picks your soldiers one by one" },
   pilot: { key: "p", label: "Pilot the selected company or machine: WASD to move, the mouse to aim" },
   logistics: { key: "l", label: "Trade: ports, stations, and what trade earns" },
+  diplomacy: { key: "j", label: "Diplomacy: war, peace, alliances, treaties and embargoes" },
   info: { key: "i", label: "World info: schedule, how to win and settings" },
   admin: { key: "`", label: "Admin panel (admins and helpers)" },
   next: { key: "Tab", label: "Select your next stack" },

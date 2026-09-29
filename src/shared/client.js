@@ -97,9 +97,45 @@ export class ClientWorld {
     this.nukeRules = hello.nukeRules ?? null;
     this.cbdRules = hello.cbdRules ?? null;
     this.tourismRules = hello.tourismRules ?? null;
+    this.dipRules = hello.dipRules ?? null;
+    this.setDiplomacy(hello.diplomacy ?? null);
     this.nukes = (hello.nukes ?? []).map(flightOf);
     this.blasts = [];
     this.timeAt = Date.now();
+  }
+
+  setDiplomacy(d) {
+    if (!d) { this.dip = null; return; }
+    const RELS = ["peace", "war_pending", "war", "alliance"];
+    this.dip = {
+      base: d.base ?? "peace",
+      rel: new Map((d.rel ?? []).map(([a, b, s, pendingAt, treatyUntil, noWarUntil, since]) => [a < b ? `${a}:${b}` : `${b}:${a}`, { status: RELS[s] ?? "peace", pendingAt, treatyUntil, noWarUntil, since }])),
+      embargo: new Set((d.embargo ?? []).map(([o, t]) => `${o}>${t}`)),
+      factions: d.factions ?? [],
+      proposals: d.proposals ?? [],
+    };
+    this.dipVersion = (this.dipVersion ?? 0) + 1;
+  }
+
+  relation(a, b) {
+    if (a === b) return { status: "self" };
+    const A = this.nations.get(a), B = this.nations.get(b);
+    if (!A || !B || A.bot || B.bot) return { status: "open" };
+    if (!this.dip) return { status: "war" };
+    const now = this.simNow(), r = this.dip.rel.get(a < b ? `${a}:${b}` : `${b}:${a}`) ?? { status: this.dip.base, pendingAt: 0, treatyUntil: 0, noWarUntil: 0, since: 0 };
+    const status = r.status === "war_pending" && now >= r.pendingAt ? "war" : r.status;
+    return {
+      status, since: status === "war" && r.status === "war_pending" ? r.pendingAt : r.since,
+      startsIn: status === "war_pending" ? r.pendingAt - now : 0,
+      treaty: status === "peace" && r.treatyUntil > now ? r.treatyUntil - now : 0,
+      cooldown: r.noWarUntil > now ? r.noWarUntil - now : 0,
+      embargoes: this.dip.embargo.has(`${a}>${b}`), embargoed: this.dip.embargo.has(`${b}>${a}`),
+    };
+  }
+
+  canAttack(a, b) {
+    const s = this.relation(a, b).status;
+    return s === "open" || (s === "war" && !(this.schedule?.peaceUntil && this.serverNow() < this.schedule.peaceUntil));
   }
 
   simNow() { return this.time + Math.min(2, (Date.now() - this.timeAt) / 1000) * (this.speed || 1); }
@@ -387,6 +423,8 @@ export class ClientWorld {
     }
     if (m.t === "powers") this.powers = m.powers ?? [];
     if (m.t === "nukes" && m.info) this.info = m.info;
+    if (m.t === "diplomacy") this.setDiplomacy(m);
+    if (m.t === "dipRules") { this.dipRules = m.rules ?? this.dipRules; if (m.info) this.info = m.info; }
     if (m.t === "events") {
       for (const e of m.events) {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
