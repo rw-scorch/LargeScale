@@ -141,7 +141,7 @@ await page.screenshot({ path: `${OUT}/2r-research-${MAP}.png` });
   await page.click("#research-queue-add");
   const far = await page.waitForFunction(() => { const q = window.__ls.game.world.purse?.research?.queue ?? []; return q.at(-1) === "jet_engines" ? q.length : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => 0);
   await page.screenshot({ path: `${OUT}/2s-research-far-${MAP}.png` });
-  check(/^Queue all d+$/.test(allLabel) && far > 40, `from the first era, "${allLabel}" on Jet engines queues all ${far} nodes on the way, ages included`);
+  check(/^Queue all \d+$/.test(allLabel) && far > 40, `from the first era, "${allLabel}" on Jet engines queues all ${far} nodes on the way, ages included`);
   await page.evaluate(async list => { const g = window.__ls.game; await g.conn.request({ t: "research", mode: "clear" }); for (const id of list) await g.conn.request({ t: "research", id, mode: "queue" }); }, before);
 }
 const learned = await page.waitForFunction(() => { const k = window.__ls.game.world.purse?.research?.known ?? []; return ["palisades", "fire_keeping", "barter"].every(id => k.includes(id)); }, null, { timeout: 60000 }).then(() => true, () => false);

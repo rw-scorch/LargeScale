@@ -18,7 +18,13 @@ export function installCheats(world) {
 
 export function setCheat(world, n, cheat, on) {
   if (!CHEATS.includes(cheat)) return { error: `the cheats are ${CHEATS.join(", ")}` };
-  const list = new Set(n.cheats ?? []);
+  const list = new Set(n.cheats ?? []), field = cheat === "gold" ? "money" : cheat === "troops" ? "troops" : null;
+  if (field && on && !list.has(cheat)) n.cheatBase = { ...n.cheatBase, [cheat]: n[field] ?? 0 };
+  if (field && !on && list.has(cheat)) {
+    if (n.cheatBase?.[cheat] !== undefined) n[field] = Math.min(n[field], n.cheatBase[cheat]);
+    delete n.cheatBase?.[cheat];
+    if (n.cheatBase && !Object.keys(n.cheatBase).length) delete n.cheatBase;
+  }
   if (on) list.add(cheat);
   else list.delete(cheat);
   if (list.size) n.cheats = [...list];

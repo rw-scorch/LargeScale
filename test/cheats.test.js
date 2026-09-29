@@ -31,11 +31,13 @@ test("cheats keep gold and troops full, finish buildings and research at once, a
   const { w, a, bot, n } = setup();
   assert.equal(runAdmin(w, { op: "cheat", nation: a, cheat: "wood", on: true }).error, "the cheats are gold, troops, build, research");
   assert.equal(runAdmin(w, { op: "cheat", nation: a, cheat: "gold", on: "yes" }).error, "on is true or false");
+  const gold0 = n.money;
   assert.deepEqual(runAdmin(w, { op: "cheat", nation: a, cheat: "gold", on: true }), { ok: true, nation: a, name: "A", cheat: "gold", on: true, cheats: ["gold"] });
   assert.equal(n.money, CHEAT_RULES.gold, "full at once");
   n.money -= 5000;
   w.tick(1);
   assert.equal(n.money, CHEAT_RULES.gold, "and topped up every tick");
+  const troops0 = n.troops;
   runAdmin(w, { op: "cheat", nation: a, cheat: "troops", on: true });
   n.troops = 10;
   w.tick(1);
@@ -53,11 +55,12 @@ test("cheats keep gold and troops full, finish buildings and research at once, a
   assert.equal(n.era, "M", "a queue to the next age finishes in one tick");
   assert.deepEqual(purseOf(n, { cheats: n.cheats }).cheats, ["gold", "troops", "build", "research"]);
   runAdmin(w, { op: "cheat", nation: a, cheat: "gold", on: false });
-  n.money = 50;
+  assert.equal(n.money, gold0, "off again, the gold goes back to what it was before the cheat");
   w.tick(1);
-  assert.ok(n.money < 1000, "off again, the gold is spent like anyone's");
+  assert.ok(n.money < gold0 + 50, "and is not topped up any more");
   for (const c of ["troops", "build", "research"]) runAdmin(w, { op: "cheat", nation: a, cheat: c, on: false });
-  assert.equal(n.cheats, undefined, "no cheats left, nothing saved");
+  assert.ok(n.troops <= troops0, `the troops go back too: ${n.troops} of ${troops0}`);
+  assert.deepEqual([n.cheats, n.cheatBase], [undefined, undefined], "no cheats left, nothing saved");
 });
 
 test("research all finishes every node in every era, and says when there is nothing left", () => {
