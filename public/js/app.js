@@ -31,6 +31,7 @@ import { createArmyPanel } from "./ui/army.js";
 import { createLogisticsPanel } from "./ui/logistics.js";
 import { createPlannerPanel } from "./ui/planner.js";
 import { createMachinePanel } from "./ui/machine.js";
+import { createNukePanel } from "./ui/nukes.js";
 import { createRing, ownerItems } from "./ui/ring.js";
 import { createAttacks } from "./ui/attacks.js";
 import { createGuide } from "./ui/guide.js";
@@ -97,6 +98,7 @@ class Game {
     this.soldiersPanel = createSoldiersPanel(side, this);
     this.notices = createNotices(overlay, this, top);
     this.buildMenu = createBuildMenu(side, this);
+    this.nukePanel = createNukePanel(top, this);
     this.buildingPanel = createBuildingPanel(side, this);
     this.town = createTownPanel(side, this);
     this.planner = createPlannerPanel(side, this);
@@ -262,6 +264,7 @@ class Game {
     if (m.t === "reopened") note(`${m.by} reopened this world.`);
     if (m.t === "speed") note(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
     if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
+    if (m.t === "nukes") note(m.on ? `${m.by} allowed nuclear weapons in this world.` : `${m.by} turned nuclear weapons off in this world. Warheads stay in their silos but cannot be launched or built.`);
     if (m.t === "powers") { note(m.powers.length ? `${m.by} made you a helper in this world. The admin panel, top right or the backquote key, has what you can use.` : `${m.by} took your helper powers in this world.`); if (!m.powers.length) this.toggleAdmin(false); }
     if (m.t === "catchup") this.feed.push({ key: "catchup", text: m.left ? `The world is catching up on ${span(m.of)} while nobody played: ${span(m.left)} to go.` : `The world caught up ${span(m.of)} in ${((m.ms ?? 0) / 1000).toFixed(1)} s.`, tone: "info" });
     if (m.t === "away") this.away.summary(m);
@@ -328,6 +331,12 @@ class Game {
     if (e.type === "roads_waiting" && e.nation === you) say("rwait", `New buildings are waiting for roads: they need ${costText(e.cost)}.`, 60000, "warn");
     if (e.type === "trade_sunk" && e.nation === you) say(`ts${e.machine}`, `A submarine of ${name(e.by)}'s sank your trade ship, worth ${fmt(e.pay)} gold. Destroyers and cruisers hunt submarines.`, 0, "danger", e.at);
     if (e.type === "trade_sunk" && e.by === you) say(`ts${e.machine}`, `Your submarine sank a trade ship of ${name(e.nation)}'s.`, 0, "good", e.at);
+    const warhead = e.kind && w.nukeRules?.warheads?.[e.kind] ? w.nukeRules.warheads[e.kind].name.toLowerCase() : "warhead", aw = /^[aeiou]/.test(warhead) ? "an" : "a", secs = s => (s / (w.speed || 1) >= 90 ? `${Math.round(s / (w.speed || 1) / 60)} min` : `${Math.round(s / (w.speed || 1))} s`);
+    if (e.type === "nuke_launched") say(`nl${e.id}`, e.nation === you ? `You launched ${aw} ${warhead} at ${name(e.toward)}'s land. Impact in ${secs(e.seconds)}.` : e.toward === you ? `${name(e.nation)} launched ${aw} ${warhead} at your land. Impact in ${secs(e.seconds)}. ABM silos and SAM sites near the target may shoot it down.` : `${name(e.nation)} launched ${aw} ${warhead} at ${name(e.toward)}'s land. Impact in ${secs(e.seconds)}.`, 0, e.toward === you ? "danger" : "warn", e.target);
+    if (e.type === "nuke_intercepted") say(`nx${e.id}`, `${e.by === you ? "Your missile defence" : `${name(e.by)}'s missile defence`} shot down ${e.nation === you ? "your" : `${name(e.nation)}'s`} ${warhead} over ${e.toward === you ? "your" : `${name(e.toward)}'s`} land.`, 0, e.nation === you ? "warn" : "good", e.target);
+    if (e.type === "nuke_detonated") say(`nd${e.id ?? e.at}`, `${e.by === you ? "Your" : `${name(e.by)}'s`} ${warhead} struck ${e.nation === you ? "your" : `${name(e.nation)}'s`} land: ${fmt(e.troops)} troops and ${fmt(e.residents)} people lost, ${e.rubble} ${e.rubble === 1 ? "building" : "buildings"} destroyed and ${e.damaged} damaged.`, 0, e.nation === you ? "danger" : "warn", e.at);
+    if (e.type === "warhead_ready" && e.nation === you) say(`wr${e.building}`, `${aw === "an" ? "An" : "A"} ${warhead} is ready in its silo.`, 0, "built", w.buildings.get(e.building)?.anchor ?? null);
+    if (e.type === "warhead_lost" && e.nation === you) say(`wl${e.building}`, `${aw === "an" ? "An" : "A"} ${warhead} was lost with its silo.`, 0, "danger");
     if (e.type === "trade_captured" && e.nation === you) say(`tc${e.machine}`, `${name(e.by)} captured a trade ship of yours, worth ${fmt(e.pay)} gold. Warships near your sea lanes keep them safe.`, 0, "danger", e.at);
     if (e.type === "trade_captured" && e.by === you) say(`tc${e.machine}`, `Your warship captured a trade ship of ${name(e.nation)}'s. It sails for your nearest port, worth ${fmt(e.pay)} gold.`, 0, "good", e.at);
     if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);
@@ -458,6 +467,7 @@ class Game {
       else if (this.group) this.selectGroup(null);
       else if (this.stack.choosing) this.stack.cancel();
       else if (this.machinePanel.choosing) this.machinePanel.cancel();
+      else if (this.nukePanel.choosing) this.nukePanel.cancel();
       else { this.select(null); this.selectMachine(null); this.selectNation(null); }
     }
   }
@@ -967,6 +977,7 @@ class Game {
     if (this.groupPanel.choosing) return this.groupPanel.pick(plot);
     if (this.stack.choosing) return this.stack.pickTarget(plot, sx, sy);
     if (this.machinePanel.choosing) return this.machinePanel.pick(plot, sx, sy);
+    if (this.nukePanel.choosing) return this.nukePanel.pick(plot);
     const hit = v.stackAt(sx, sy), mh = v.machineAt(sx, sy);
     const under = [...(hit !== null ? [["stack", hit]] : []), ...(mh !== null ? [["machine", mh]] : [])];
     if (under.length) {
@@ -1010,7 +1021,7 @@ class Game {
   }
 
   swipeStart(sx, sy, e) {
-    if (this.prefs.crosshair || this.building || this.zoning || this.roading || this.placing || this.stack.choosing || this.machinePanel.choosing || this.groupPanel.choosing || this.soldiersPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
+    if (this.prefs.crosshair || this.building || this.zoning || this.roading || this.placing || this.stack.choosing || this.machinePanel.choosing || this.nukePanel.choosing || this.groupPanel.choosing || this.soldiersPanel.choosing || !this.view || !this.world?.ready || this.world.frozen) return null;
     if (this.armies && this.world.soldierRules) return e.shiftKey && e.pointerType === "mouse" ? "soldierBox" : "soldiers";
     if (e.shiftKey && e.pointerType === "mouse") return "box";
     const id = this.view.stackAt(sx, sy);
@@ -1300,7 +1311,7 @@ class Game {
       for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
       if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
     }
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

@@ -24,6 +24,8 @@ const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air
   return u;
 };
 
+const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner });
+
 export class ClientWorld {
   constructor(hello) {
     this.w = hello.w;
@@ -91,6 +93,22 @@ export class ClientWorld {
     this.shrinkIn = null;
     this.locks = lockMap(this.tech);
     this.effects = [];
+    this.nukeRules = hello.nukeRules ?? null;
+    this.nukes = (hello.nukes ?? []).map(flightOf);
+    this.blasts = [];
+    this.timeAt = Date.now();
+  }
+
+  simNow() { return this.time + Math.min(2, (Date.now() - this.timeAt) / 1000) * (this.speed || 1); }
+
+  siloOf(id) {
+    const r = this.purse?.nukes?.silos?.[id];
+    return r ? { kind: r[0], left: r[1], ready: !!r[2] } : null;
+  }
+
+  abmOf(id) {
+    const r = this.purse?.nukes?.abms?.[id];
+    return r ? { interceptors: r[0], max: r[1], reloadIn: r[2] } : null;
   }
 
   serverNow() { return Date.now() + (this.skew ?? 0); }
@@ -309,6 +327,7 @@ export class ClientWorld {
     if (m.v !== undefined && m.v !== PROTOCOL) { this.stale = true; return m; }
     if (m.t === "state") {
       this.time = m.time;
+      this.timeAt = Date.now();
       this.shrinkIn = m.shrinkIn ?? null;
       for (const [id, plots, troops, alive, spawned, era] of m.n) {
         if (!this.nations.has(id)) this.nations.set(id, { id, name: `Nation ${id}`, colour: "#8a8a8a" });
@@ -328,7 +347,7 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null, sams: m.sams ?? null, cheats: m.cheats ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null, sams: m.sams ?? null, cheats: m.cheats ?? null, nukes: m.nukes ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "plan") this.planQueue = m.queue ?? [];
     if (m.t === "pilots") this.setPilots(m.p ?? [], m.shots ?? []);
@@ -339,12 +358,19 @@ export class ClientWorld {
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));
     }
     if (m.t === "powers") this.powers = m.powers ?? [];
+    if (m.t === "nukes" && m.info) this.info = m.info;
     if (m.t === "events") {
       for (const e of m.events) {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
         if (e.type === "capital_moved" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.to;
         if (e.type === "deposit_depleted") this.depleted.add(e.at);
         if (e.type === "bombed") this.effects.push({ kind: "bomb", plot: e.at, at: Date.now(), bombs: e.bombs ?? 1, heading: this.machines.get(e.machine)?.air?.heading ?? 0 });
+        if (e.type === "nuke_launched") { this.nukes = this.nukes.filter(f => f.id !== e.id); this.nukes.push(flightOf(e)); }
+        if (e.type === "nuke_intercepted" || e.type === "nuke_detonated") {
+          const f = this.nukes.find(f => f.id === e.id);
+          this.nukes = this.nukes.filter(f => f.id !== e.id);
+          this.blasts.push({ kind: e.type === "nuke_detonated" ? "blast" : "intercept", plot: e.type === "nuke_detonated" ? e.at : e.target, radius: e.radius ?? f?.radius ?? 8, inner: e.inner ?? f?.inner ?? 3, by: e.by, at: Date.now() });
+        }
         if (e.type === "sam_fired" && e.from && e.to) this.effects.push({ kind: "sam", from: e.from, to: e.to, at: Date.now() });
         if (e.type === "landed" && this.machines.get(e.machine)?.def.domain === "air") this.effects.push({ kind: this.machines.get(e.machine).def.paraOnly ? "chute" : "heli", plot: e.at, at: Date.now(), n: Math.max(1, Math.min(6, Math.round(e.troops / 30))) });
         if (e.type === "era_up" && this.nations.has(e.nation)) {

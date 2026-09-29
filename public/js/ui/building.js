@@ -14,6 +14,10 @@ function airText(w, b) {
     const sam = w.samOf(0, b.id);
     if (sam) out.push(`${sam.missiles} of ${sam.max} missiles${sam.reloadIn ? `, the next ready in ${sam.reloadIn} s` : ""}${sam.missiles < sam.max && (w.purse?.money ?? 0) < d.sam.reloadCost ? ": reloading needs gold" : ""}.`);
   }
+  if (d.abm && b.state === "active") {
+    const a = w.abmOf(b.id);
+    if (a) out.push(`${a.interceptors} of ${a.max} interceptors${a.reloadIn ? `, the next ready in ${a.reloadIn} s` : ""}${a.interceptors < a.max && (w.purse?.money ?? 0) < d.abm.reloadCost ? ": making more needs gold" : ""}.`);
+  }
   if (d.airbase && b.state === "active") {
     const mine = w.myMachines().filter(u => u.air?.landed && Math.hypot(u.air.x - ((b.anchor % w.w) + d.fp[0] / 2), u.air.y - (Math.floor(b.anchor / w.w) + d.fp[1] / 2)) < 0.6);
     const waiting = mine.filter(u => u.air.queued).length;
@@ -72,7 +76,7 @@ export function createBuildingPanel(root, game) {
   const queue = el("span", { id: "building-queue", class: "muted" });
   const make = el("div", { id: "building-make", class: "row wrap" });
   const upg = el("span", { id: "building-upgrade-info", class: "muted" });
-  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, work, queue, make, upg, actions);
+  const box = el("section", { id: "building-panel", class: "panel card", hidden: true }, el("div", { class: "row" }, title, info), desc, work, queue, make, upg, game.nukePanel?.silo ?? "", actions);
   root.append(box);
   let key = "";
 
