@@ -169,3 +169,14 @@ test("the browser reads the same relations as the server", async () => {
   cw.message({ v: PROTOCOL, t: "diplomacy", ...w.dip.view(w.time), proposals: w.dip.proposalsOf(a) });
   assert.deepEqual(cw.dip.proposals.map(p => [p.from, p.kind]), [[b, "peace"]]);
 });
+
+test("a war declared while you were away is in the away summary", async () => {
+  const { startAway, recordAway, awaySummary } = await import("../src/sim/offline.js");
+  const { w, a, b } = world();
+  startAway(w, w.nations.get(b), Date.now() - 60000, 0.9);
+  run(w, a, { t: "diplo", op: "war", to: b });
+  w.tick(1);
+  recordAway(w, w.events);
+  const s = awaySummary(w, w.nations.get(b), Date.now());
+  assert.deepEqual(s?.diplo, [["war_declared", a, 0, null]]);
+});
