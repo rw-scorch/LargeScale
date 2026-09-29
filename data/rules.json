@@ -20,7 +20,7 @@
   "market": { "fee": 0.03, "deliverySeconds": 60, "listingLifeSeconds": 86400 },
   "engineering": { "baseHp": {"rock": 300, "hard": 180, "soft": 90, "made": 40}, "digRate": 6, "blastPower": 150, "chargeCost": {"money": 200} },
   "cbd": { "radius": 14, "maxBonus": 0.5, "attackShare": 0.6 },
-  "research": { "base": 0.2, "perPerson": 0.002, "bankCap": 500, "maxQueue": 40, "speed": 1, "starterQueue": ["fire_keeping", "stone_tools", "foraging", "barter", "farming"] },
+  "research": { "base": 0.2, "perPerson": 0.002, "bankCap": 500, "maxQueue": 150, "speed": 1, "starterQueue": ["fire_keeping", "stone_tools", "foraging", "barter", "farming"] },
   "seasons": { "dayLengthMinutes": 60, "daysPerSeason": 6 },
   "effects": { "every": 2, "cell": 16 },
   "offline": { "defenceMult": 0.95, "offlineOutputShare": 0.9, "maxCatchupSeconds": 259200, "catchupStep": 60, "catchupSteps": 240, "catchupBudgetMs": 40, "awaySummarySeconds": 120, "threatRadius": 6, "fallbackRatio": 1.5, "standingEvery": 2 },

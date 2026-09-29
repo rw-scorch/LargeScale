@@ -4,18 +4,21 @@ import { areaAround } from "../shared/buildings.js";
 import { People } from "./people.js";
 import { placeLabels } from "./labels.js";
 import { roadSprite } from "../shared/roads.js";
-import { soldierCount, soldierTypes, typeOfSlot, formationSlot } from "../shared/soldiers.js";
+import { soldierCount, soldierTypes, typeOfSlot, rankSlots } from "../shared/soldiers.js";
 
 export const ZOOM = { max: 64, sprites: 10, icons: 3, maxRatio: 2, out: 0.5 };
 export const CHUNK = 256;
 export const NIGHT = "rgba(12,18,52,0.62)";
 const FORMATION = [[0, 0], [-0.32, 0.12], [0.32, 0.12], [-0.18, -0.2], [0.18, -0.2]];
-const SLOTS = { spacing: 0, list: [] };
-const slotOf = (k, spacing) => {
-  if (SLOTS.spacing !== spacing) { SLOTS.spacing = spacing; SLOTS.list = []; }
-  while (SLOTS.list.length <= k) SLOTS.list.push(formationSlot(SLOTS.list.length, spacing));
-  return SLOTS.list[k];
+const RANKS = new Map();
+const ranksOf = (n, spacing) => {
+  const key = `${n}:${spacing}`;
+  let list = RANKS.get(key);
+  if (!list) { if (RANKS.size > 400) RANKS.clear(); RANKS.set(key, (list = rankSlots(n, spacing))); }
+  return list;
 };
+const noise = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
+const dirOf = a => { const c = Math.cos(a), s = Math.sin(a); return Math.abs(c) >= Math.abs(s) ? (c > 0 ? "e" : "w") : s > 0 ? "s" : "n"; };
 const ROAD_COLOUR = [null, "#e2c38a", "#d9d4c8", "#b8b8b8", "#f0f0f0", "#8a6a4a"];
 const DIRS = [[1, "N"], [2, "E"], [4, "S"], [8, "W"]];
 const ZONE_SPRITE = [null, "ov_zone_residential", "ov_zone_commercial", "ov_zone_industrial", "ov_zone_farmland"];
@@ -309,7 +312,7 @@ export class MapRenderer {
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
       const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) || this.picked?.get(st.id)?.size ? "selected" : st.order === "hold" ? "idle" : "moving";
-      const [x, y] = this.stackPoint(st);
+      const [x, y] = this.leaderAt?.get(st.id) ?? this.stackPoint(st);
       out.push({ id: st.id, owner: st.owner, x, y, troops: st.troops, soldiers: this.soldiersIn(st), era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
     }
     return out;
@@ -830,6 +833,8 @@ export class MapRenderer {
     }
     for (const f of this.people.figures(r, this.time)) items.push({ key: f.y + 0.1, x: f.x, draw: () => this.drawPerson(f, px) });
     for (const f of this.soldiers(r)) items.push({ key: f.y + 0.05, x: f.x, draw: () => this.drawPerson(f, px) });
+    const now = performance.now();
+    for (const f of this.fallen ?? []) items.push({ key: f.y - 0.3, x: f.x, draw: () => { this.ctx.globalAlpha = Math.max(0, 1 - (now - f.at) / 3000); this.drawPerson({ ...f, size: 0.62 }, px); this.ctx.globalAlpha = 1; } });
     for (const f of this.convoyFigures(r)) items.push({ key: f.y + 0.05, x: f.x, draw: () => this.drawPerson(f, px) });
     const shown = [];
     for (const u of s.machines?.values() ?? []) {
@@ -1115,16 +1120,27 @@ export class MapRenderer {
     return !!rules && this.cam.scale >= rules.drawZoom * (this.ratio ?? 1);
   }
 
-  soldierSpots(st, share = 1) {
+  soldierSpots(st, share = 1, dt = 0) {
     const s = this.state, rules = s.soldierRules, n = soldierCount(st.troops, rules.troopsEach), out = [];
     if (!n) return out;
     const [cx, cy] = this.stackPoint(st), m = Math.max(1, Math.min(n, Math.round(n * share)));
+    const face = this.facing.get(st.id), ang = face?.angle ?? Math.PI / 2, fight = !!face?.fighting;
+    const gap = rules.spacing * (fight ? 1.35 : 1), c = Math.cos(ang), sn = Math.sin(ang), list = ranksOf(m, gap);
     const land = (x, y) => { const i = Math.floor(y) * s.w + Math.floor(x); return x >= 0 && y >= 0 && x < s.w && y < s.h && TERRAIN[s.terrain?.[i]]?.land; };
+    this.troopPos ??= new Map();
     for (let k = 0; k < m; k++) {
-      const slot = m === n ? k : Math.floor((k * n) / m), [ox, oy] = slotOf(slot, rules.spacing);
-      let x = cx + ox, y = cy + oy;
-      if (!land(x, y)) { x = cx + ox * 0.4; y = cy + oy * 0.4; if (!land(x, y)) { x = cx + ox * 0.1; y = cy + oy * 0.1; } }
-      out.push({ slot, x, y });
+      const slot = m === n ? k : Math.floor((k * n) / m), [fw, side] = list[k], wob = fight && k ? Math.sin(this.time * 3 + slot * 1.7) * gap * 0.18 : 0;
+      let x = cx + c * (fw + wob * 0.5) - sn * (side + wob), y = cy + sn * (fw + wob * 0.5) + c * (side + wob);
+      if (!land(x, y)) { x = cx + (x - cx) * 0.4; y = cy + (y - cy) * 0.4; if (!land(x, y)) { x = cx + (x - cx) * 0.25; y = cy + (y - cy) * 0.25; } }
+      const key = `${st.id}:${slot}`;
+      let p = this.troopPos.get(key);
+      if (!p || Math.hypot(p.x - x, p.y - y) > 4) this.troopPos.set(key, (p = { x, y, t: this.time }));
+      else if (dt > 0) {
+        const d = Math.hypot(x - p.x, y - p.y), step = Math.min(d, (1.2 + 0.9 * noise(slot, st.id)) * dt);
+        if (d > 1e-3) { p.x += ((x - p.x) / d) * step; p.y += ((y - p.y) / d) * step; }
+        p.t = this.time;
+      }
+      out.push({ slot, x: p.x, y: p.y, leader: k === 0, moving: Math.hypot(x - p.x, y - p.y) > 0.04 });
     }
     return out;
   }
@@ -1139,31 +1155,49 @@ export class MapRenderer {
       if (one && this.soldiersIn(st) !== null) { lines.add(st); total += this.soldiersIn(st); }
     }
     const R = this.ratio ?? 1, budget = Math.max(60, Math.floor((this.canvas.width * this.canvas.height) / (R * R) / (s.soldierRules?.drawArea ?? 900)));
-    const share = total > budget ? budget / total : 1;
+    const share = total > budget ? budget / total : 1, clock = performance.now(), dt = this.soldierClock ? Math.min(0.1, (clock - this.soldierClock) / 1000) : 0;
+    this.soldierClock = clock;
     this.soldierShare = share;
+    this.leaderAt = new Map();
+    this.soldierCounts ??= new Map();
+    this.fallen = (this.fallen ?? []).filter(f => clock - f.at < 3000);
+    if (this.troopPos && clock > (this.purgeAt ?? 0)) {
+      this.purgeAt = clock + 5000;
+      for (const [k, p] of this.troopPos) if (this.time - p.t > 5) this.troopPos.delete(k);
+      for (const id of this.soldierCounts.keys()) if (!s.stacks.has(id)) this.soldierCounts.delete(id);
+    }
     for (const st of near) {
       const x = st.pos % s.w, y = (st.pos / s.w) | 0;
-      const seen = this.facing.get(st.id);
-      if (!seen) this.facing.set(st.id, { pos: st.pos, dir: "s" });
+      let seen = this.facing.get(st.id);
+      if (!seen) this.facing.set(st.id, (seen = { pos: st.pos, dir: "s", angle: Math.PI / 2 }));
       else if (seen.pos !== st.pos) {
-        const dx = x - (seen.pos % s.w), dy = y - ((seen.pos / s.w) | 0);
-        seen.dir = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? "e" : "w") : dy > 0 ? "s" : "n";
+        seen.angle = Math.atan2(y - ((seen.pos / s.w) | 0), x - (seen.pos % s.w));
         seen.pos = st.pos;
       }
+      const foe = near.find(o => o.owner !== st.owner && Math.max(Math.abs((o.pos % s.w) - x), Math.abs(((o.pos / s.w) | 0) - y)) <= 1);
+      seen.fighting = !!foe;
+      if (foe && foe.pos !== st.pos) seen.angle = Math.atan2(((foe.pos / s.w) | 0) - y, (foe.pos % s.w) - x);
       const pl = s.pilots?.get(`s:${st.id}`), steering = !!pl && (pl.x !== pl.px || pl.y !== pl.py);
-      if (steering) { const c = Math.cos(pl.heading), sn = Math.sin(pl.heading); this.facing.get(st.id).dir = Math.abs(c) >= Math.abs(sn) ? (c > 0 ? "e" : "w") : sn > 0 ? "s" : "n"; }
-      const dir = this.facing.get(st.id).dir;
+      if (steering) seen.angle = pl.heading;
+      const dir = (seen.dir = dirOf(seen.angle));
       let main = "levy", most = st.troops - Object.values(st.mix ?? {}).reduce((a, b) => a + b, 0);
       for (const [id, n] of Object.entries(st.mix ?? {})) if (n > most) { most = n; main = id; }
       const base = types.table[main]?.sprite ?? "hunter";
-      const fighting = near.some(o => o.owner !== st.owner && Math.max(Math.abs((o.pos % s.w) - x), Math.abs(((o.pos / s.w) | 0) - y)) <= 1);
+      const fighting = !!foe;
       if (lines.has(st)) {
         const rules = s.soldierRules, kinds = soldierTypes(st.troops, st.mix, rules.troopsEach), walking = pl ? steering : st.order !== "hold" || (st.movedAt && Date.now() - st.movedAt < 1000);
         const whole = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id), picked = this.picked?.get(st.id);
-        for (const p of this.soldierSpots(st, share)) {
+        const count = soldierCount(st.troops, rules.troopsEach), before = this.soldierCounts.get(st.id) ?? count;
+        if (count < before && this.troopPos) for (let slot = count; slot < before && this.fallen.length < 200; slot++) {
+          const p = this.troopPos.get(`${st.id}:${slot}`);
+          if (p) this.fallen.push({ x: p.x, y: p.y + 0.2, sprite: `${base}_dead`, owner: st.owner, at: clock });
+        }
+        this.soldierCounts.set(st.id, count);
+        for (const p of this.soldierSpots(st, share, dt)) {
           const kind = typeOfSlot(kinds, p.slot) ?? "levy", sprite = types.table[kind]?.sprite ?? "hunter", beat = Math.floor(this.time * 4 + p.slot * 0.37 + st.id) % 2;
-          const frame = fighting ? (beat ? "attack" : "idle") : walking ? (beat ? "walk1" : "walk2") : "idle";
-          out.push({ x: p.x, y: p.y + 0.2, sprite: `${sprite}_${dir === "w" ? "e" : dir}_${frame}`, flip: dir === "w", owner: st.owner, stack: st.id, slot: p.slot, size: 0.62, picked: whole || !!picked?.has(p.slot) });
+          const frame = fighting ? (beat ? "attack" : "idle") : walking || p.moving ? (beat ? "walk1" : "walk2") : "idle";
+          if (p.leader) this.leaderAt.set(st.id, [p.x, p.y]);
+          out.push({ x: p.x, y: p.y + 0.2, sprite: `${sprite}_${dir === "w" ? "e" : dir}_${frame}`, flip: dir === "w", owner: st.owner, stack: st.id, slot: p.slot, size: p.leader ? 0.74 : 0.62, picked: whole || !!picked?.has(p.slot) });
         }
         continue;
       }

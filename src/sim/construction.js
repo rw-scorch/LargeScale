@@ -106,13 +106,19 @@ export function progressConstruction(world, dt) {
     if (b.need) continue;
     b.progress += (dt * speed) / table[b.type].time;
     touched(world, b);
-    if (b.progress >= 1) {
-      b.state = "active";
-      b.progress = 1;
-      cons?.timers.delete(id);
-      world.emit("built", { nation: b.owner, building: b.id, kind: b.type });
-    }
+    if (b.progress >= 1) finishBuilding(world, b);
   }
+}
+
+export function finishBuilding(world, b) {
+  if (b.state !== "construction") return false;
+  b.state = "active";
+  b.progress = 1;
+  delete b.need;
+  world.cons?.timers.delete(b.id);
+  touched(world, b);
+  world.emit("built", { nation: b.owner, building: b.id, kind: b.type });
+  return true;
 }
 
 const levels = new WeakMap();

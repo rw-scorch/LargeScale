@@ -73,6 +73,7 @@ export class ClientWorld {
     this.buildingsReady = !hello.frames?.buildings;
     this.early = new Set();
     this.purse = hello.purse ?? null;
+    this.powers = hello.powers ?? [];
     this.consRules = { demolishRefund: 0.5, refundOnCancel: 0.5, instantPremium: 1.5, moneyForMissing: 4, ...hello.consRules };
     this.disbandLoss = hello.disbandLoss ?? 0.25;
     this.seasonRules = { dayLengthMinutes: 60, daysPerSeason: 6, ...hello.seasonRules };
@@ -337,6 +338,7 @@ export class ClientWorld {
       const n = this.nations.get(m.nation) ?? { id: m.nation, plots: 0, troops: 0, alive: true, spawned: false, bot: false, capital: null };
       this.nations.set(m.nation, Object.assign(n, { name: m.name, colour: m.colour ?? n.colour }));
     }
+    if (m.t === "powers") this.powers = m.powers ?? [];
     if (m.t === "events") {
       for (const e of m.events) {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;

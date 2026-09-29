@@ -19,7 +19,7 @@ export const ACTIONS = {
   pilot: { key: "p", label: "Pilot the selected company or machine: WASD to move, the mouse to aim" },
   logistics: { key: "l", label: "Trade: ports, stations, and what trade earns" },
   info: { key: "i", label: "World info: schedule, how to win and settings" },
-  admin: { key: "`", label: "Admin panel (host only)" },
+  admin: { key: "`", label: "Admin panel (admins and helpers)" },
   next: { key: "Tab", label: "Select your next stack" },
   home: { key: "h", label: "Go to your capital" },
   confirm: { key: "Enter", label: "Build here: confirm the building you placed" },

@@ -38,7 +38,8 @@ import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
 import { runOrder, RateLimit, applyPresence, victory, StateFeed, BuildingFeed, purseOf, publicEvents, ordersOf, vitalsOf } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
-import { runAdmin, parseSpeed, cleanName, ADMIN_RULES } from "./admin.js";
+import { runAdmin, parseSpeed, cleanName, ADMIN_RULES, adminAllowed, cleanPowers, POWERS } from "./admin.js";
+import { installCheats } from "./sim/cheats.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
 const SAVE_VERSION = 4;
@@ -190,6 +191,7 @@ export class World extends DurableObject {
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
     installOvertime(this.sim, { every: this.schedule().shrinkEvery ?? rules.schedule.shrinkEvery });
+    installCheats(this.sim);
     const hostile = this.sim.hostile;
     this.sim.hostile = (a, b) => hostile(a, b) && !(this.sim.peace && this.sim.nations.get(a)?.human && this.sim.nations.get(b)?.human);
     this.sim.peace = phaseAt(this.schedule(), Date.now()).peace;
@@ -417,7 +419,7 @@ export class World extends DurableObject {
       watch, defs: buildingData.buildings, purse: nation === null ? null : this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale }, powerRules: this.sim.power ? { ...this.sim.power.rules, reach: buildingData.buildings.find(d => d.id === "power_pole").pole.reach * this.sim.power.scale, scale: this.sim.power.scale } : null,
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, soldierRules: this.sim.soldiers?.rules ?? null, pilotRules: this.sim.pilot?.rules ?? null, pilots: this.sim.pilot ? pilotRows(this.sim) : [], time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
-      victory: this.meta("victory"), frozen: this.frozen,
+      victory: this.meta("victory"), frozen: this.frozen, powers: account.admin ? POWERS : this.powersOf(account.id),
       plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
     }));
     for (const f of terrainFrames) server.send(f);
@@ -577,7 +579,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n), sams: n ? samView(this.sim, n.id) : null });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n), sams: n ? samView(this.sim, n.id) : null, cheats: n?.cheats ?? null });
   }
 
   sendState() {
@@ -678,7 +680,7 @@ export class World extends DurableObject {
       }
       case "admin": {
         const op = String(m.op ?? "").slice(0, 20);
-        if (!me.admin) return reply({ t: "result", of: "admin", op, ok: false, error: "not allowed" });
+        if (!adminAllowed(me, this.powersOf(me.account), op)) return reply({ t: "result", of: "admin", op, ok: false, error: "not allowed" });
         let r;
         try { r = await this.adminOp(me, m); } catch (e) { r = { ok: false, error: e.message }; }
         return reply({ t: "result", of: "admin", op, ...r });
@@ -699,9 +701,25 @@ export class World extends DurableObject {
     switch (m.op) {
       case "save": this.save(true); return { ok: true };
       case "hashes": this.flushDiffs(); return { ok: true, ...this.layerHashes() };
-      case "log": return { ok: true, log: this.adminLog() };
+      case "log": return { ok: true, log: this.adminLog(), ...(me.admin ? { powers: this.powerList() } : {}), ...(adminAllowed(me, this.powersOf(me.account), "cheat") ? { cheats: this.cheatList() } : {}) };
+      case "powers": {
+        if (!me.admin) return fail("only an admin gives powers");
+        const account = Number.isInteger(m.nation) ? this.accounts.get(m.nation) : undefined;
+        if (account === undefined) return fail("that nation has no player");
+        const list = cleanPowers(m.powers);
+        if (!list) return fail(`powers are some of ${POWERS.join(", ")}`);
+        const all = { ...(this.meta("powers") ?? {}) }, name = this.sim.nations.get(m.nation)?.name ?? "someone";
+        if (list.length) all[account] = list;
+        else delete all[account];
+        this.meta("powers", all);
+        this.logAdmin(me, "powers", { nation: m.nation, name, powers: list });
+        for (const ws of this.ctx.getWebSockets(`acc:${account}`)) try { ws.send(JSON.stringify({ v: PROTOCOL, t: "powers", powers: list, by: me.name })); } catch {}
+        return { ok: true, nation: m.nation, name, powers: list };
+      }
       case "give":
-      case "finish": {
+      case "finish":
+      case "researchAll":
+      case "cheat": {
         const r = runAdmin(this.sim, m);
         if (!r.ok) return r;
         this.logAdmin(me, m.op, r);
@@ -783,6 +801,22 @@ export class World extends DurableObject {
     this.applyPhase(now);
     this.broadcast({ t: "schedule", schedule: r.schedule, info: this.worldInfo(), by });
     return { ok: true, schedule: r.schedule };
+  }
+
+  powersOf(account) {
+    return (this.meta("powers") ?? {})[account] ?? [];
+  }
+
+  cheatList() {
+    const out = {};
+    for (const n of this.sim.nations.values()) if (n.cheats?.length) out[n.id] = n.cheats;
+    return out;
+  }
+
+  powerList() {
+    const all = this.meta("powers") ?? {}, out = {};
+    for (const [nation, account] of this.accounts) if (all[account]?.length) out[nation] = all[account];
+    return out;
   }
 
   logAdmin(me, op, detail = {}) {

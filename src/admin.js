@@ -2,10 +2,23 @@ import { complete, knownOf } from "./sim/research.js";
 import { addUnits } from "./sim/troops.js";
 import { giveMachine, limitError, UNIT_TYPES } from "./sim/units.js";
 import { nextResearch, researchError } from "./shared/research.js";
+import { setCheat, researchAll, CHEATS } from "./sim/cheats.js";
 import rules from "../data/rules.json" with { type: "json" };
 
 export const ADMIN_RULES = rules.admin;
 export const GIVE = ["money", "troops", "unit", "machine"];
+export const POWERS = ["world", "speed", "schedule", "kick", "give", "cheats"];
+export const POWER_OF = { save: "world", rename: "world", end: "world", reopen: "world", speed: "speed", schedule: "schedule", kick: "kick", give: "give", finish: "give", researchAll: "give", cheat: "cheats" };
+
+export function adminAllowed(me, powers, op) {
+  if (me.admin) return true;
+  if (op === "log" || op === "hashes") return powers.length > 0;
+  return !!POWER_OF[op] && powers.includes(POWER_OF[op]);
+}
+
+export function cleanPowers(list) {
+  return Array.isArray(list) && list.every(p => POWERS.includes(p)) ? POWERS.filter(p => list.includes(p)) : null;
+}
 
 const fail = error => ({ ok: false, error });
 
@@ -62,7 +75,25 @@ export const ADMIN_OPS = {
     if (!done.length) return fail(waiting ? `nothing in the queue can be finished: ${waiting}` : `${n.name} has nothing queued`);
     return { ok: true, nation: n.id, name: n.name, done, era: n.era, waiting };
   },
+  researchAll(sim, m) {
+    const n = living(sim, m.nation);
+    if (!n) return fail("pick a living nation");
+    if (!sim.research || !n.research) return fail(`${n.name} does not research`);
+    const done = researchAll(sim, n);
+    if (!done.length) return fail(`${n.name} already knows everything`);
+    return { ok: true, nation: n.id, name: n.name, done, era: n.era };
+  },
+  cheat(sim, m) {
+    const n = living(sim, m.nation);
+    if (!n) return fail("pick a living nation");
+    if (!sim.cheats) return fail("cheats are not running in this world");
+    if (typeof m.on !== "boolean") return fail("on is true or false");
+    const r = setCheat(sim, n, m.cheat, m.on);
+    return r.error ? fail(r.error) : { ok: true, nation: n.id, name: n.name, cheat: m.cheat, on: m.on, cheats: r.cheats };
+  },
 };
+
+export { CHEATS };
 
 export function runAdmin(sim, m) {
   const f = Object.hasOwn(ADMIN_OPS, m.op) ? ADMIN_OPS[m.op] : null;

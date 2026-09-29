@@ -124,6 +124,26 @@ const queued = await page.waitForFunction(() => { const q = window.__ls.game.wor
 const pal = queued.indexOf("palisades");
 check(queued[0] === "clubs" && pal > 0 && pal <= 2 && queued.indexOf("stone_tools") < pal, `Research next queues what the node still needs first: ${queued.join(", ")}`);
 await page.screenshot({ path: `${OUT}/2r-research-${MAP}.png` });
+{
+  await page.click("#research-panel [data-node=herding]");
+  const box = await (await page.$("#research-queue-add")).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  const rebuilt = await page.evaluate(() => { const g = window.__ls.game, before = document.querySelector("#research-queue-add"); g.world.purse.research.progress += 50; g.updatePanels(); return document.querySelector("#research-queue-add") !== before; });
+  await page.mouse.up();
+  const landed = await page.waitForFunction(() => window.__ls.game.world.purse?.research?.queue?.includes("herding") || null, null, { timeout: 4000 }).then(() => true, () => false);
+  check(!rebuilt && landed, "a panel does not rebuild under a pressed button, so a press made while research points come in still queues the node");
+}
+{
+  const before = await page.evaluate(() => [...(window.__ls.game.world.purse?.research?.queue ?? [])]);
+  await page.click("#research-panel [data-node=jet_engines]");
+  const allLabel = await page.textContent("#research-queue-add").catch(() => "");
+  await page.click("#research-queue-add");
+  const far = await page.waitForFunction(() => { const q = window.__ls.game.world.purse?.research?.queue ?? []; return q.at(-1) === "jet_engines" ? q.length : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => 0);
+  await page.screenshot({ path: `${OUT}/2s-research-far-${MAP}.png` });
+  check(/^Queue all d+$/.test(allLabel) && far > 40, `from the first era, "${allLabel}" on Jet engines queues all ${far} nodes on the way, ages included`);
+  await page.evaluate(async list => { const g = window.__ls.game; await g.conn.request({ t: "research", mode: "clear" }); for (const id of list) await g.conn.request({ t: "research", id, mode: "queue" }); }, before);
+}
 const learned = await page.waitForFunction(() => { const k = window.__ls.game.world.purse?.research?.known ?? []; return ["palisades", "fire_keeping", "barter"].every(id => k.includes(id)); }, null, { timeout: 60000 }).then(() => true, () => false);
 check(learned, "the queue researches through to Palisades, Fire keeping and Barter");
 await page.screenshot({ path: `${OUT}/2s-researched-${MAP}.png` });
@@ -441,6 +461,19 @@ const named = await page.evaluate(() => { const g = window.__ls.game, w = g.worl
 await page.screenshot({ path: `${OUT}/6b-names-${MAP}.png` });
 check(named.count > 1 && named.me?.inside, `nations' names and troops are written on their land (${named.count} labels; yours sits inside your land, ${named.me?.r} plots from its edge)`);
 await page.click("#open-settings");
+{
+  await page.click("#settings-panel [data-theme=iron]");
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--signal").trim());
+  await page.evaluate(() => { const i = document.querySelector("#settings-panel [data-section=feed] input[data-part=bg]"); i.value = "#402060"; i.dispatchEvent(new Event("change")); });
+  const feedBg = await page.evaluate(() => getComputedStyle(document.querySelector("#feed")).backgroundColor);
+  const leaderBg = await page.evaluate(() => getComputedStyle(document.querySelector("#nations")).backgroundColor);
+  await page.screenshot({ path: `${OUT}/2t-theme-${MAP}.png` });
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("ls_theme")));
+  await page.click("#theme-reset");
+  const back = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--signal").trim());
+  check(accent === "#ff9a3c" && /64, 32, 96/.test(feedBg) && !/64, 32, 96/.test(leaderBg) && kept?.preset === "iron" && back === "#e8c84a",
+    `Settings, Colours: the Iron theme recolours the page (${accent}), the events panel takes its own colour (${feedBg}) while the leaderboard keeps the theme's, it is kept in the browser, and Back to the usual colours restores ${back}`);
+}
 const setOpen = await page.isVisible("#settings-panel");
 await page.uncheck("#set-names");
 const namesOff = await page.evaluate(() => window.__ls.game.view.showNames === false && JSON.parse(localStorage.getItem("ls_prefs")).names === false);
@@ -868,6 +901,30 @@ await fix.click("#admin-reopen");
 const reopenedUi = await fix.waitForFunction(() => !window.__ls.game.world.frozen && document.querySelector("#notice")?.hidden, null, { timeout: 5000 }).then(() => true, () => false);
 await fix.click("#admin-panel [data-speed='1']");
 check(reopenedUi, "Reopen world unfreezes it and the banner goes");
+{
+  const friendId = await friend.evaluate(() => window.__ls.game.world.you);
+  const tick = `#admin-players [data-player="${friendId}"] input[data-power=give]`;
+  await fix.waitForSelector(tick, { timeout: 5000 }).catch(() => {});
+  await fix.click(tick).catch(() => {});
+  const helper = await friend.waitForSelector("#open-admin:not([hidden])", { timeout: 5000 }).then(() => true, () => false);
+  if (helper) await friend.click("#open-admin");
+  const parts = await friend.evaluate(() => ({ open: !document.querySelector("#admin-panel").hidden, world: !document.querySelector("#admin-world").hidden, speed: !document.querySelector("#admin-speed").hidden, give: !document.querySelector("#admin-testing").hidden, cheats: !document.querySelector("#admin-cheat").hidden, title: document.querySelector("#admin-panel .title").textContent }));
+  await friend.screenshot({ path: `${OUT}/21b-helper-panel.png` });
+  const gold = await fix.evaluate(() => window.__ls.game.world.purse?.money ?? 0);
+  if (parts.give) await friend.click("#admin-panel [data-give=money]").catch(() => {});
+  const given = await fix.waitForFunction(g => (window.__ls.game.world.purse?.money ?? 0) > g + 500 || null, gold, { timeout: 5000 }).then(() => true, () => false);
+  check(helper && parts.open && parts.give && !parts.world && !parts.speed && !parts.cheats && given && /^Helper/.test(parts.title),
+    `the host ticks Give and research for a friend: the friend gets the admin button, a "${parts.title}" panel with only that part, and can give gold`);
+  await fix.click(tick).catch(() => {});
+  const gone = await friend.waitForFunction(() => document.querySelector("#open-admin").hidden && document.querySelector("#admin-panel").hidden, null, { timeout: 5000 }).then(() => true, () => false);
+  check(gone, "untick it and the friend's admin button and panel go");
+  await fix.click("#admin-cheat [data-cheat=gold]");
+  const endless = await fix.waitForFunction(() => document.querySelector("#control [data-res=gold] b")?.textContent === "\u221e" || null, null, { timeout: 5000 }).then(() => true, () => false);
+  await fix.screenshot({ path: `${OUT}/21c-cheats.png` });
+  await fix.click("#admin-cheat [data-cheat=gold]");
+  const finite = await fix.waitForFunction(() => /^[\d,.]+[kM]?$/.test(document.querySelector("#control [data-res=gold] b")?.textContent ?? "") || null, null, { timeout: 5000 }).then(() => true, () => false);
+  check(endless && finite, "the Cheats tick box for infinite gold shows gold as \u221e, and unticking it brings the number back");
+}
 await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#admin-panel")), "Esc closes the Admin panel");
 await fix.keyboard.press("y");

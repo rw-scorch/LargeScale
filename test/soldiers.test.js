@@ -135,3 +135,23 @@ test("many companies told to advance at once take turns to find the border, and 
   for (let k = 0; k < 4; k++) w.tick(0.25);
   assert.ok(list.every(s => s.path.length || s.order !== "advance" || w.owner[s.pos] !== a), "every company is on its way");
 });
+
+test("a company forms up as a leader in front and even ranks behind, never on top of each other", async () => {
+  const { rankSlots } = await import("../src/shared/soldiers.js");
+  const spacing = 0.34;
+  for (const n of [1, 2, 7, 25, 100, 400]) {
+    const list = rankSlots(n, spacing);
+    assert.equal(list.length, n);
+    const [leader, ...rest] = list;
+    assert.equal(leader[1], 0, "the leader walks in the middle");
+    assert.ok(rest.every(([f]) => f < leader[0] - spacing), `${n}: every soldier is behind the leader`);
+    const fronts = [...new Set(rest.map(([f]) => f.toFixed(4)))];
+    const width = Math.max(0, ...fronts.map(k => rest.filter(([f]) => f.toFixed(4) === k).length));
+    assert.ok(width <= 12, `${n}: ranks at most 12 wide, here ${width}`);
+    let close = Infinity;
+    for (let i = 0; i < Math.min(list.length, 150); i++) for (let j = i + 1; j < Math.min(list.length, 150); j++) close = Math.min(close, Math.hypot(list[i][0] - list[j][0], list[i][1] - list[j][1]));
+    if (n > 1) assert.ok(close >= spacing * 0.89, `${n}: nobody stands on anyone: ${close.toFixed(3)}`);
+    const sides = rest.map(([, s]) => s), mid = sides.reduce((a, b) => a + b, 0) / Math.max(1, sides.length);
+    assert.ok(Math.abs(mid) < 1e-9, `${n}: the ranks are centred on the leader`);
+  }
+});
