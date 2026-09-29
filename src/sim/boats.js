@@ -1,6 +1,7 @@
 import rules from "../../data/rules.json" with { type: "json" };
 import { isLand } from "../shared/terrain.js";
 import { UNIT_TYPES, spawnUnit, embark, orderUnit, waterGraph, bodiesOf, waterOk, ownsPort, wreck } from "./units.js";
+import { knownOf } from "./research.js";
 
 export const BOATS = { type: "transport_boat", maxBoats: 3, search: 40, embarkSearch: 120, sinkMult: 40, loss: { min: 0.01, perPlot: 0.001, max: 0.15 }, ...rules.boats };
 
@@ -53,9 +54,14 @@ export function crossingOf(world, from, via, to) {
   return null;
 }
 
-export function boatLoss(world, crossing, safe = false) {
+export function boatLoss(world, crossing, safe = false, mult = 1) {
   const l = world.boats.rules.loss;
-  return safe ? 0 : Math.min(l.max, l.min + (l.perPlot / world.boats.scale) * crossing);
+  return safe ? 0 : Math.min(l.max, l.min + (l.perPlot / world.boats.scale) * crossing) * mult;
+}
+
+export function boatType(world, nid) {
+  const n = world.nations.get(nid);
+  return UNIT_TYPES.landing_craft && n?.research && knownOf(n).has("amphibious_warfare") ? "landing_craft" : world.boats.rules.type;
 }
 
 export function boatPlan(world, nid, from, target) {
@@ -93,7 +99,7 @@ export function boatPlan(world, nid, from, target) {
   }
   if (embarkAt === null) return { error: "your land does not reach that sea yet; take land down to the coast first" };
   const crossing = g.dist(sea, landSea);
-  return { embark: embarkAt, sea, landing, landSea, crossing, loss: boatLoss(world, crossing, ownsPort(world, nid, landing)) };
+  return { embark: embarkAt, sea, landing, landSea, crossing, loss: boatLoss(world, crossing, ownsPort(world, nid, landing), UNIT_TYPES[boatType(world, nid)].lossMult ?? 1) };
 }
 
 export function sendByBoat(world, sid, target, then = {}, { from = null, via = [], group = null } = {}) {
@@ -138,7 +144,7 @@ function launchBoats(world) {
       continue;
     }
     s.sail = null;
-    const u = spawnUnit(world, s.owner, world.boats.rules.type, p.sea);
+    const u = spawnUnit(world, s.owner, boatType(world, s.owner), p.sea);
     if (!u) { world.emit("board_failed", { stack: s.id, nation: s.owner, why: "no water to launch from" }); continue; }
     const troops = s.troops;
     u.transport = { then: p.then, target: p.target, crossing: p.crossing, loss: p.loss, home: p.embark, homeSea: p.sea, group: p.group ?? null };

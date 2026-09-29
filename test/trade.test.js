@@ -150,3 +150,23 @@ test("while away, only ports and stations with somewhere to trade earn", () => {
   w.catchUp(600);
   assert.ok(na.money > before, `with a partner across the water they earn while away: ${Math.round(na.money - before)} gold`);
 });
+
+test("a submarine sinks a trade ship instead of capturing it, even with a port of its own", () => {
+  const { w, g, a, b, port } = sea();
+  const c = w.addNation({ name: "C", human: true });
+  w.spawn(c, 50, 2);
+  Object.assign(w.nations.get(c), { money: 0, era: "Mo" });
+  for (let y = 0; y < 3; y++) for (let x = 45; x < 55; x++) { w.terrain[g.idx(x, y)] = TID.grassland; w.claim(g.idx(x, y), c); }
+  w.units.water = null;
+  port(a, 19, 15);
+  port(b, 80, 15);
+  port(c, 50, 2);
+  w.hostile = (x, y) => (x === c) !== (y === c);
+  w.tick(1.01);
+  const target = ships(w).find(u => u.owner === a);
+  spawnUnit(w, c, "submarine", g.idx(g.x(target.at) + 12, 15));
+  assert.ok(until(w, () => target.wreck, 200) >= 0, "sunk");
+  const sunk = w.events.find(e => e.type === "trade_sunk");
+  assert.deepEqual([sunk?.nation, sunk?.by], [a, c]);
+  assert.ok(!w.events.some(e => e.type === "trade_captured"), "not taken home");
+});

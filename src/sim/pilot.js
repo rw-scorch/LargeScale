@@ -1,6 +1,6 @@
 import rules from "../../data/rules.json" with { type: "json" };
 import { isLand } from "../shared/terrain.js";
-import { UNIT_TYPES, unitCost, wreck } from "./units.js";
+import { UNIT_TYPES, unitCost, wreck, canHit } from "./units.js";
 import { stackPower, COMBAT } from "./combat.js";
 import { drop, dropTroops } from "./air.js";
 
@@ -136,8 +136,9 @@ function targetsNear(world, P, ax, ay, reach) {
     const x = g.x(s.pos) + 0.5, y = g.y(s.pos) + 0.5;
     if (near(x, y)) out.push({ kind: "s", u: s, x, y, d: Math.hypot(x - ax, y - ay) });
   }
+  const by = P.kind === "m" ? UNIT_TYPES[world.units.list.get(P.id)?.type] : null;
   for (const m of world.units?.list.values() ?? []) {
-    if (m.wreck || m.owner === P.owner || !world.hostile(P.owner, m.owner)) continue;
+    if (m.wreck || m.owner === P.owner || !world.hostile(P.owner, m.owner) || !canHit(world, by, m)) continue;
     const x = g.x(m.at) + 0.5, y = g.y(m.at) + 0.5;
     if (near(x, y)) out.push({ kind: "m", u: m, x, y, d: Math.hypot(x - ax, y - ay) });
   }

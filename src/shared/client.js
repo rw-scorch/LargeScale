@@ -16,10 +16,10 @@ const MACHINE_STATES = ["idle", "moving", "wreck"];
 
 const MISSIONS = [null, "patrol", "bomb", "return", "drop"];
 
-const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air], units) => {
+const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air, navy], units) => {
   const def = units.byNum[num];
   if (!def) return null;
-  const u = { id, owner, type: def.id, def, at, hp, state: MACHINE_STATES[state] ?? "idle", cargo, follow: follow || null, face: face ?? 1 };
+  const u = { id, owner, type: def.id, def, at, hp, state: MACHINE_STATES[state] ?? "idle", cargo, follow: follow || null, face: face ?? 1, dive: navy?.[0] ?? 0, firing: navy && navy[1] >= 0 ? navy[1] : null };
   if (air) u.air = { x: air[0] / 10, y: air[1] / 10, heading: air[2] / 100, landed: !!air[3], bombs: air[4], fuel: air[5], mission: MISSIONS[air[6]] ?? null, rearm: air[7] ?? 0, queued: !!air[8], target: air.length > 10 ? [air[9] / 10, air[10] / 10] : null };
   return u;
 };

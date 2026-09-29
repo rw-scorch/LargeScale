@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (278)
+npm test                  # unit tests (287)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -373,10 +373,18 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
   - **Colours.** `public/js/ui/theme.js` (`THEMES`, `SECTIONS`, `applyTheme`), stored as `ls_theme`; Settings has Colours. Buttons and fields use `--btn`, `--field`, `--primary`, `--on-bg`.
   - **Bombers** (branch `m8-bombers`, stacked on `m8-asks`): both reach 4,000 plots with 6,000 and 8,000 s of fuel, so they bomb anywhere on the map.
   - **Ranks.** `rankSlots` in `src/shared/soldiers.js` replaces the spiral: the leader in front, ranks of at most 12. The renderer keeps each drawn soldier's position (`troopPos`), moves it at its own pace, faces the company (`facing` angle), draws the fallen for 3 s, and puts the marker over the leader (`leaderAt`).
+- **Part D, the Modern navy (29 September 2026, branch `m8-navy`, stacked on `m8-bombers`, PR 42 against `main`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Content.** Modern navy, Submarines, Aircraft carriers and Amphibious warfare. The cruiser, battleship, submarine and aircraft carrier (units 48 to 51, naval dock), and the landing craft (52, free).
+  - **Submarines.** `diveOf` gives the depth by water (0 shallow, 1 open, 2 deep), and `canHit` says who can hit it (`asw`, `sub` or `strike` at depth 1, nobody at 2), both in `src/sim/units.js`. Ship battles, flak, helicopter strikes and piloting all ask `canHit`. Firing holds a submarine at depth 1 for `navy.surfaceSeconds`. A submarine sinks trade ships (`sink` in `src/sim/trade.js`, `trade_sunk`).
+  - **`src/sim/navy.js`** (`installNavy`) keeps `u.dive` and lets battleships (`shell`) hit the nearest hostile company in range (`u.shelling`).
+  - **Carriers.** A plane's home is an airfield or a carrier (`homeOf`, `nearestHome`, `A.ship` in `src/sim/air.js`). The `air` order's `base` moves it. Machines with `antiAir` fire like flak.
+  - **Landing craft.** `boatType` in `src/sim/boats.js` picks them after Amphibious warfare; `lossMult` halves the loss.
+  - **Rows.** A ship's machine row adds an eleventh field, `[dive, firing]`, when it dives or fires.
+  - **Gifts.** `giveMachine` puts a ship at the dock or port on the biggest body of water (`bodySize`), not in a lake by the capital.
 
 Open items as of 29 September 2026, in order:
 
-1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`. PR 35 brings `m6-industry` into `main`. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C), PR 33 (`m7-pilot`, Part D) and PR 34 (`m7-air`, Part E) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PR 36 (`m8-modern`, the planner, base `m7-air`) PR 37 (`m8-army`, the Modern army, base `m8-modern`) PR 38 (`m8-air`, air power and SAMs, base `m8-army`) and PR 39 (`m8-asks`, his asks after PR 38, base `m8-air`) wait for Ryan. Smoke, UI and soak passed on `m8-asks` (117, 183, clean). Part D, the Modern navy, is next.
+1. PRs 14 to 35 are merged. PR 35 brought `m6-industry` into `main`, and PR 30 (`m7-boats`) reached `main` with it. PRs 31 to 34 (milestone seven, Parts B to E) are merged into their stacked branches only. After PRs 41 and 42 Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for milestone seven's Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PRs 36 to 40 (the planner, the Modern army, air power, his asks after PR 38, bombers) are merged too. But every PR from 31 to 40 was merged into the branch below it, after that branch had gone into `main`, so `main` stopped at PRs 30 and 35. PR 41 brings `m8-bombers` into `main`: it merges cleanly, and the result is identical to `m8-bombers`. PR 42 (`m8-navy`, Part D) is against `main` too, so its diff narrows to Part D once PR 41 is in. Smoke, UI and soak passed on `m8-asks` (117, 183, clean); Part D's checks are written but wait for a dev server run. Part E, nukes, is next.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.

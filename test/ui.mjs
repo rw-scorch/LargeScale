@@ -2076,6 +2076,36 @@ check(railRow && !railRow.disabled && /Railway12 gold a plot/.test(railRow.text)
   const parts = baseUp ? await gp.evaluate(id => window.__ls.game.world.buildings.get(id)?.def.parts?.length ?? 0, c.base) : 0;
   check(baseUp && parts === 7, `after Jet engines an air base stands, drawn from its terminal, hangar and runway (${parts} parts)${c.baseWhy ? `: ${c.baseWhy}` : ""}`);
 }
+{
+  const n = await gp.evaluate(async () => {
+    const g = window.__ls.game, w = g.world, wait = async (f, ms = 6000) => { const end = Date.now() + ms; let v; while (!(v = f()) && Date.now() < end) await new Promise(r => setTimeout(r, 100)); return v; };
+    for (const id of ["modern_navy", "submarines", "carriers"]) await g.conn.request({ t: "research", id, mode: "queue" });
+    await g.conn.request({ t: "admin", op: "finish", nation: w.you });
+    await wait(() => !w.lockOf("aircraft_carrier", "units"));
+    const give = async unit => (await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit, amount: 1 })).machines?.[0] ?? null;
+    const car = await give("aircraft_carrier"), sub = await give("submarine"), jet = await give("jet_fighter");
+    await wait(() => w.machines.get(car) && w.machines.get(sub) && w.machines.get(jet)?.air);
+    return { car, sub, jet, carAt: w.machines.get(car)?.at ?? null, jetAt: w.machines.get(jet)?.at ?? null };
+  });
+  await gp.evaluate(({ jet, carAt }) => { const g = window.__ls.game; g.select(null); g.selectMachine(jet); g.focus(carAt, 20); }, n);
+  await gp.waitForTimeout(500);
+  const carScreen = await toScreen(gp, n.carAt);
+  await gp.mouse.click(carScreen.x, carScreen.y, { button: "right" });
+  const baseItem = await gp.waitForFunction(() => [...document.querySelectorAll("#ring .ring-item")].find(b => b.dataset.ring === "base")?.textContent ?? null, null, { timeout: 3000 }).then(h => h.jsonValue(), () => null);
+  if (baseItem) await gp.click("#ring .ring-item[data-ring=base]");
+  const onDeck = await gp.waitForFunction(({ jet, car }) => { const w = window.__ls.game.world, j = w.machines.get(jet), c = w.machines.get(car); return j?.air?.landed && c && j.at === c.at || null; }, n, { timeout: 45000 }).then(() => true, () => false);
+  await gp.evaluate(({ car, carAt }) => { const g = window.__ls.game; g.selectMachine(car); g.focus(carAt, 28); }, n);
+  const carText = await gp.waitForFunction(() => { const t = document.querySelector("#machine-cargo")?.textContent ?? ""; return /1 of 12 planes aboard/.test(t) ? t : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+  await gp.waitForTimeout(400);
+  await gp.screenshot({ path: `${OUT}/77-carrier.png` });
+  check(baseItem?.startsWith("Base on this carrier") && onDeck && carText, `a jet right-clicks its own carrier ("${baseItem}"), flies out and lands on it; the carrier's card reads "${carText}"`);
+  await gp.evaluate(({ sub }) => { const g = window.__ls.game, u = g.world.machines.get(sub); g.selectMachine(sub); g.focus(u.at, 28); }, n);
+  const subText = await gp.waitForFunction(() => { const t = document.querySelector("#machine-info")?.textContent ?? ""; return /can hit it|nothing can hit/.test(t) ? t : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+  await gp.waitForTimeout(400);
+  await gp.screenshot({ path: `${OUT}/78-submarine.png` });
+  check(!!subText, `a submarine's card says how deep it runs and what can hit it: "${subText?.trim()}"`);
+  await gp.evaluate(() => window.__ls.game.selectMachine(null));
+}
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await login(ip, "rw_scorch", "correct horse");
 await ip.goto(`${BASE}/#w=${indId}`);

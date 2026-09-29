@@ -923,7 +923,8 @@ export class MapRenderer {
 
   machineSprite(u) {
     const era = this.state.nations.get(u.owner)?.era ?? "T", base = u.def.sprites?.[era] ?? u.def.sprite ?? u.type;
-    return u.state === "wreck" && this.atlas.has(`${base}_wreck`) ? `${base}_wreck` : base;
+    const id = u.dive && this.atlas.has(`${base}_submerged`) ? `${base}_submerged` : base;
+    return u.state === "wreck" && this.atlas.has(`${id}_wreck`) ? `${id}_wreck` : id;
   }
 
   machinePoint(u) {
@@ -990,7 +991,41 @@ export class MapRenderer {
     if (u.air) return this.drawPlane(u, k);
     const m = this.machineBox(u, k);
     const p = this.state.pilotAt?.(`m:${u.id}`), left = p ? Math.cos(p[2]) < 0 : u.face < 0;
-    if (m) this.atlas.draw(this.ctx, this.machineSprite(u), m.sx - m.w / 2, m.sy - m.h / 2, k, this.state.nations.get(u.owner)?.colour, left);
+    if (!m) return;
+    if (u.dive === 2) this.ctx.globalAlpha = 0.35;
+    this.atlas.draw(this.ctx, this.machineSprite(u), m.sx - m.w / 2, m.sy - m.h / 2, k, this.state.nations.get(u.owner)?.colour, left);
+    this.ctx.globalAlpha = 1;
+  }
+
+  drawNavalFire(u, k) {
+    const s = this.state, ctx = this.ctx, R = this.ratio ?? 1, now = Date.now();
+    const [ax, ay] = this.machinePoint(u), bx = (u.firing % s.w) + 0.5, by = ((u.firing / s.w) | 0) + 0.5;
+    if (u.def.sub) {
+      const t = ((now + u.id * 373) % 1500) / 800;
+      if (t > 1) return;
+      const [sx, sy] = this.plotToScreen(ax + (bx - ax) * t, ay + (by - ay) * t), kk = Math.max(R, k);
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(Math.atan2(by - ay, bx - ax));
+      this.atlas.draw(ctx, "proj_torpedo", -8 * kk, -8 * kk, kk);
+      ctx.restore();
+      return;
+    }
+    const beat = Math.floor(now / 600 + u.id), phase = (now % 600) / 600;
+    const ox = Math.sin(beat * 1.9) * 0.6, oy = Math.cos(beat * 2.7) * 0.6, [sx, sy] = this.plotToScreen(ax, ay), [tx, ty] = this.plotToScreen(bx + ox, by + oy);
+    if (phase < 0.25) {
+      ctx.save();
+      ctx.globalAlpha = 1 - phase * 4;
+      ctx.strokeStyle = "#ff9a3c";
+      ctx.lineWidth = 2.5 * R;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const size = Math.max(22 * R, this.cam.scale * 1.8);
+    this.atlas.draw(ctx, `flak_burst_${Math.min(2, Math.floor(phase * 3))}`, tx - size / 2, ty - size / 2, size / 16);
   }
 
   machineOverlay(u, k) {
@@ -1010,6 +1045,7 @@ export class MapRenderer {
     const k = this.machineScale();
     for (const u of this.state.machines?.values() ?? []) this.drawMachine(u, k);
     for (const u of this.state.machines?.values() ?? []) this.machineOverlay(u, k);
+    for (const u of this.state.machines?.values() ?? []) if (u.firing != null && u.state !== "wreck") this.drawNavalFire(u, k);
     this.drawConvoys(k);
   }
 

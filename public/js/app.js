@@ -326,6 +326,8 @@ class Game {
     if (e.type === "machine_captured" && e.by === you) say(`mc${e.machine}`, `You captured a ${machine} from ${name(e.nation)}.`, 0, "good");
     if (e.type === "roads_connected" && e.nation === you) say(`rc${e.plots}${e.stores}`, `Roads laid by themselves: ${fmt(e.plots)} plots for ${costText(e.cost)}, linking ${e.stores} more ${e.stores === 1 ? "building" : "buildings"} to your capital.`, 0, "built");
     if (e.type === "roads_waiting" && e.nation === you) say("rwait", `New buildings are waiting for roads: they need ${costText(e.cost)}.`, 60000, "warn");
+    if (e.type === "trade_sunk" && e.nation === you) say(`ts${e.machine}`, `A submarine of ${name(e.by)}'s sank your trade ship, worth ${fmt(e.pay)} gold. Destroyers and cruisers hunt submarines.`, 0, "danger", e.at);
+    if (e.type === "trade_sunk" && e.by === you) say(`ts${e.machine}`, `Your submarine sank a trade ship of ${name(e.nation)}'s.`, 0, "good", e.at);
     if (e.type === "trade_captured" && e.nation === you) say(`tc${e.machine}`, `${name(e.by)} captured a trade ship of yours, worth ${fmt(e.pay)} gold. Warships near your sea lanes keep them safe.`, 0, "danger", e.at);
     if (e.type === "trade_captured" && e.by === you) say(`tc${e.machine}`, `Your warship captured a trade ship of ${name(e.nation)}'s. It sails for your nearest port, worth ${fmt(e.pay)} gold.`, 0, "good", e.at);
     if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);

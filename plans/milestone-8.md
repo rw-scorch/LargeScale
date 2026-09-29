@@ -420,3 +420,70 @@ This part builds on the kit's `tourism.js`.
   - Both bombers reach 4,000 plots from their airfield, more than the Earth map's corner-to-corner distance of 3,877. The early bomber carries 6,000 s of fuel and the strategic bomber 8,000 s: at 3 and 4.5 plots a second (speed times the world's 1.5), that is about 5 and 10 Earth widths. Fighters, helicopters and transports keep their reach.
   - Crossing the Earth map one way takes the early bomber about 20 minutes and the strategic bomber about 13. They still turn home when fuel runs low, and still rearm at their airfield.
   - Evidence: `npm test` 278 of 278. A new test flies both bombers across a map 3,600 plots wide; they bomb the far end and land with over a third of their fuel left (the early bomber: back after 2,395 s with 3,605 s left).
+- **Part D, the Modern navy (29 September 2026, branch `m8-navy`, stacked on `m8-bombers`).** Built as planned, with these specifics:
+  - **Research.** Four military Modern nodes:
+    - Modern navy (1,200): the cruiser and the battleship.
+    - Submarines (1,100).
+    - Aircraft carriers (1,400, after Modern navy and Jet engines).
+    - Amphibious warfare (900): landing craft.
+  - **Ships** (units 48 to 52). The first four are built at the naval dock and count toward the 100 warships; the landing craft is free.
+
+    | Ship | Health | Attack | Defence | Range | Speed | Gold | Job |
+    | --- | --- | --- | --- | --- | --- | --- | --- |
+    | Cruiser | 260 | 34 | 26 | 3 | 3.4 | 4,400 | hunts submarines; fires at planes within 3 plots, 8 damage a second |
+    | Battleship | 520 | 60 | 44 | 4 | 2.4 | 7,200 | shells companies within 4 plots, 5 troops a second; land there costs a third to take |
+    | Submarine | 140 | 70 | 12 | 1 | 2.6 | 3,600 | torpedoes; dives |
+    | Aircraft carrier | 600 | 8 | 30 | 1 | 2.4 | 9,000 | 12 planes, rearms 6 at once; fires at planes within 2 plots |
+    | Landing craft | 60 | 0 | 3 | 1 | 4 | free | replaces the free transport boat |
+
+  - **Submarines.**
+    - Depth comes from the water under it (`diveOf` in `src/sim/units.js`): 0 in shallow water, 1 in open ocean, 2 in deep ocean.
+    - Who can hit it (`canHit`): anything at depth 0; at depth 1 only ships marked `asw` (destroyers and cruisers), other submarines and attack helicopters; at depth 2 nothing.
+    - Ship battles, flak, helicopter strikes and piloted fire all ask `canHit`. Bombs have never hit ships, so they do not hit submarines either.
+    - A submarine that fires is held at depth 1 for 20 s (`navy.surfaceSeconds`), so a hunter can answer it.
+    - It fights with its attack of 70 whether it attacks or is attacked. The torpedo is the attack: 70 against a destroyer's gun of 28.
+    - It sinks trade ships rather than capturing them (`sink` in `src/sim/trade.js`). The `trade_sunk` event goes to both sides.
+  - **Battleships** (`src/sim/navy.js`, `installNavy`, after the air module). Each tick a battleship fires at the nearest hostile company within 4 plots and records the plot it fires at (`u.shelling`). Siege 3 uses the existing siege code, so land within reach costs a third as much to take.
+  - **Aircraft carriers.**
+    - A plane's home is either an airfield or a carrier. `homeOf` in `src/sim/air.js` gives either one's position, reach and rearming slots, and `A.ship` marks a carrier home.
+    - The `air` order's `base` sends a plane to one of your airfields or carriers. It flies there and makes it home. It is refused when the carrier is full ("that aircraft carrier is full: 12 planes") or too far for its fuel.
+    - Planes on the deck sail with the carrier, and their reach is measured from wherever it is.
+    - When a carrier sinks, the planes on deck are lost ("its carrier was lost"), and those in the air make for the nearest other home.
+    - A new plane starts at the nearest airfield, or carrier with room.
+  - **Anti-aircraft fire from ships.** Any machine with `antiAir` fires like a flak tower; the cruiser and the carrier have it.
+  - **Landing craft.** Once Amphibious warfare is known, `boatType` in `src/sim/boats.js` makes every free crossing a landing craft: speed 4 instead of 2.5, and half the loss (`lossMult` 0.5). The Move preview's loss and time use it too.
+  - **Rows.** A ship's machine row adds an eleventh field, `[dive, firing]`, only while it dives or fires; the tenth, the plane field, is empty for ships.
+  - **Client.**
+    - A submarine below the surface is drawn with its submerged frame, and faint when deep.
+    - Torpedoes run from a firing submarine to its target. Battleships draw a tracer and a burst where the shells land.
+    - The submarine's card says how deep it runs and what can hit it. A carrier's card counts the planes aboard. A plane's card has Base, and its ring over one of your carriers has "Base on this carrier".
+    - The feed reports trade ships sunk, to both sides.
+  - **Found by the bench: gifts in lakes.** The admin's gift put a ship in the water nearest the capital. On the Earth map that is often a lake, so the bench's ships and an admin's test ships could not reach the sea.
+    - A given ship now comes out at one of the nation's docks or ports, the one on the biggest body of water. A dock that builds that ship wins a tie.
+    - The nearest water is used only when the nation has neither.
+    - The bench now gives its warships after placing its jetties, and counts the ships behind failed sail orders. Most bench players spawn inland and have only lake shores; 504 of the 824 ships never find a way to their random targets.
+  - **Evidence:**
+    - `npm test`: 287 of 287. `test/navy.test.js` has 8 tests:
+      - the content;
+      - the depth rules;
+      - a deep submarine against an ironclad and a destroyer;
+      - battleship shelling and siege;
+      - a cruiser against a plane;
+      - the carrier: basing, reach, sailing with planes aboard, full and sunk;
+      - landing craft;
+      - gifts at ports.
+    - `test/trade.test.js` has a submarine sinking a trade ship. The reference tests: 95 of 95.
+    - `npm run bench -- --navy 100` on mains power: each of the 8 players has 100 Modern warships (25 of each), plus the 100 planes, SAM sites and trucks of Part C.
+      - The navy module's tick: 0.16 ms at the median, 1.1 ms at worst, with 40 submarines deep at the end.
+      - Two full runs of the whole tick:
+
+        | Run | Median | p99 | Worst | Path work in the worst tick |
+        | --- | --- | --- | --- | --- |
+        | 1 | 12.2 ms | 36.7 ms | 49.2 ms (pass) | 0.7 ms |
+        | 2 | 12.5 ms | 37.9 ms | 54.5 ms (fail) | 0.7 ms |
+
+        The worst ticks are economy ticks. Part C's run, before the navy, had a worst of 103.6 ms from path extension. Run 2's worst without the economy was 51.1 ms.
+    - Smoke, `npm run ui` and the soak have Part D checks written but not run yet; they need the dev server:
+      - smoke: a submarine reports its depth, and a jet bases on a carrier and lands on it;
+      - UI: right-clicking the carrier with a jet selected, the carrier card's plane count, and the submarine card's depth text (screens `77-carrier` and `78-submarine`);
+      - soak: ship gifts and base orders.

@@ -54,7 +54,7 @@ test("the Modern Age needs twelve Industrial nodes in all four branches, and eac
   const moBuildings = Object.values(BUILDINGS.table).filter(d => d.era === "Mo" && !d.retired).map(d => d.id);
   assert.deepEqual(moBuildings.map(b), ["reinforced_concrete", "modern_oil", "high_rise", "consumer_society", "automation", "open_pit_mining", "modern_oil", "natural_gas", "jet_engines", "guided_missiles"], `every Modern building is behind a node: ${moBuildings.join(", ")}`);
   const modern = TREE.nodes.filter(t => t.era === "Mo");
-  assert.equal(modern.length, 17);
+  assert.equal(modern.length, 21);
   const costs = modern.map(t => t.cost);
   assert.ok(Math.min(...costs) === 800 && Math.max(...costs) === 1400, `Modern nodes cost 800 to 1,400: ${costs.join(" ")}`);
   const path = planPath(locks, new Set(TREE.nodes.filter(t => t.era !== "Mo" && t.id !== "age_modern").map(t => t.id)), "rocketry");

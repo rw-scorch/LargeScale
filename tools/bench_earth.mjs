@@ -35,6 +35,7 @@ import allRules from "../data/rules.json" with { type: "json" };
 import { encodeRows } from "../src/shared/buildings.js";
 import { installSoldiers, fieldOf } from "../src/sim/soldiers.js";
 import { installAir, orderPlane, planeOf } from "../src/sim/air.js";
+import { installNavy } from "../src/sim/navy.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -49,6 +50,7 @@ const { values: a } = parseArgs({ options: {
   roads: { type: "string", default: "1500" },
   rail: { type: "string", default: "200" },
   tanks: { type: "string", default: "4" },
+  navy: { type: "string", default: "20" },
   plan: { type: "string", default: "1" },
   power: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
@@ -148,10 +150,16 @@ const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
 installBoats(w, { scale });
 const soldiers = Number(a.companies) > 0 ? installSoldiers(w) : null;
-const air = Number(a.planes) > 0 ? installAir(w) : null;
+const air = Number(a.planes) > 0 ? installAir(w) : null, airIdx = w.hooks.postTick.length - 1;
+installNavy(w);
+const navyTime = { ms: [], worst: 0 };
+{
+  const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k];
+  w.hooks.postTick[k] = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; navyTime.ms.push(ms); navyTime.worst = Math.max(navyTime.worst, ms); };
+}
 const airTime = { ms: [], worst: 0 };
 if (air) {
-  const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k];
+  const k = airIdx, hook = w.hooks.postTick[k];
   const timed = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; airTime.ms.push(ms); airTime.worst = Math.max(airTime.worst, ms); };
   timed.whole = hook.whole;
   w.hooks.postTick[k] = timed;
@@ -206,6 +214,7 @@ if (Number(a.ports) > 0) {
   const docks = [...bld.list.values()].filter(b => b.type === "jetty" && dockOf(w, b)).length;
   seaSetup = { ports: placed, docks, docksMs: +(performance.now() - t0).toFixed(1) };
 }
+for (const id of players) for (let k = 0; k < Number(a.navy); k++) giveMachine(w, id, ["cruiser", "battleship", "submarine", "aircraft_carrier"][k % 4]);
 let railPlots = 0, stations = 0;
 for (const id of players) {
   const n = w.nations.get(id), cy = w.grid.y(n.capital);
@@ -340,12 +349,12 @@ function playerOrders() {
         if (u.follow === null && mine.length) u.follow = mine[u.id % mine.length].id;
         continue;
       }
-      if (u.path.length || u.route) continue;
+      if (u.air || u.path.length || u.route) continue;
       for (let tries = 0; tries < 50; tries++) {
         const x = w.grid.x(u.at) + rng.int(-300, 300), y = w.grid.y(u.at) + rng.int(-150, 150);
         if (!w.grid.inside(x, y) || isLand(terrain[w.grid.idx(x, y)])) continue;
         const m0 = performance.now(), err = orderUnit(w, u.id, w.grid.idx(x, y));
-        sails.push({ ms: performance.now() - m0, ok: !err });
+        sails.push({ ms: performance.now() - m0, ok: !err, err, type: u.type, id: u.id });
         break;
       }
     }
@@ -499,10 +508,11 @@ const report = {
     return { passMs: +ms.toFixed(1), grids: views.reduce((t, v) => t + v.grids.length, 0), plants: [...w.bld.list.values()].filter(b => b.type === "coal_plant").length, poles: [...w.bld.list.values()].filter(b => b.type === "power_pole").length, users: views.reduce((t, v) => t + Object.keys(v.users).length, 0), powered: views.reduce((t, v) => t + Object.values(v.users).filter(k => k >= 0).length, 0) };
   })(),
   tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
+  navy: { ships: [...w.units.list.values()].filter(u => ["cruiser", "battleship", "submarine", "aircraft_carrier"].includes(u.type) && !u.wreck).length, subsDeep: [...w.units.list.values()].filter(u => u.dive === 2).length, tickMs: navyTime.ms.length ? { p50: +[...navyTime.ms].sort((x, y) => x - y)[navyTime.ms.length >> 1].toFixed(2), worst: +navyTime.worst.toFixed(1) } : null },
   planner: planSetup && { ...planSetup, piecesLeft: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.pieces.length, 0), 0), done: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.done, 0), 0) + planDone, dropped: planDropped },
   trade: seaSetup && { ...seaSetup, shipsAtSea: [...w.units.list.values()].filter(u => u.trade && !u.wreck).length, goldEarned: Math.round(players.reduce((t, id) => t + (w.nations.get(id).tradeGold ?? 0), 0)) },
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
-  machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },
+  machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, shipsOrdered: new Set(sails.map(s => s.id)).size, shipsNeverOk: (ok => new Set(sails.filter(s => !ok.has(s.id)).map(s => s.id)).size)(new Set(sails.filter(s => s.ok).map(s => s.id))), sailWorstMs: +sails.reduce((m, s) => Math.max(m, s.ms), 0).toFixed(1), sailErrors: sails.reduce((o, s) => { if (s.err) o[`${s.type}: ${s.err}`] = (o[`${s.type}: ${s.err}`] ?? 0) + 1; return o; }, {}) },
   ownedPlots: owned,
   ownerRuns: countRuns(w.owner),
   borderPlots,

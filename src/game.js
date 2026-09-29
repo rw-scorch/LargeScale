@@ -6,7 +6,7 @@ import { orderResearch } from "./sim/research.js";
 import { layRoad, layRoute, roadView } from "./sim/logistics.js";
 import { polePlan } from "./shared/power.js";
 import { connectPlan, connectStores } from "./sim/autoroads.js";
-import { sendByBoat, boatPlan, boatsAtSea, crossingOf } from "./sim/boats.js";
+import { sendByBoat, boatPlan, boatsAtSea, crossingOf, boatType } from "./sim/boats.js";
 import { coarseRoute } from "./shared/pathfind.js";
 import { trainRow, tradePerSecond } from "./sim/trade.js";
 import { fieldError, companyError, detachSoldiers } from "./sim/soldiers.js";
@@ -96,7 +96,7 @@ function boatTrip(sim, nation, s, via, to) {
   const walk = legsOf(sim, s.pos, c.before, plan.embark);
   if (!walk) return { error: "no land route to your coast there" };
   const co = waterGraph(sim), g = sim.grid, r = coarseRoute(co, co.regionOf(plan.sea), co.regionOf(plan.landSea));
-  const boat = UNIT_TYPES[sim.boats.rules.type], sea = Math.max(r?.cost ?? 0, plan.crossing);
+  const boat = UNIT_TYPES[boatType(sim, nation)], sea = Math.max(r?.cost ?? 0, plan.crossing);
   return {
     plan, walk: walkOf(sim, walk), land: walkOf(sim, legsOf(sim, plan.landing, c.then, to) ?? []),
     sea: r ? r.regions.map(k => cellPoint(co, g, co.cellOfRegion[k])) : [],
@@ -344,7 +344,7 @@ export const ORDERS = {
   air(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
     if (!sim.air) return fail("planes are not flying in this world");
-    if (!["patrol", "bomb", "drop", "return"].includes(m.do)) return fail("the order is patrol, bomb, drop or return");
+    if (!["patrol", "bomb", "drop", "base", "return"].includes(m.do)) return fail("the order is patrol, bomb, drop, base or return");
     if (m.do !== "return" && !isPlot(sim, m.at)) return fail("that spot is off the map");
     const ids = Array.isArray(m.planes) ? m.planes.slice(0, MAX_GROUP) : [m.plane];
     let done = 0, error = null, rearming = 0;
@@ -606,7 +606,9 @@ const stackRow = s => {
 };
 const machineRow = u => {
   const row = [u.id, u.owner, UNITS.table[u.type].num, u.at, Math.ceil(u.hp), u.wreck ? 2 : u.path.length || u.route || (u.air && !u.air.landed) ? 1 : 0, Math.floor(u.cargo?.troops ?? 0), u.follow ?? 0, u.face ?? 1];
-  if (u.air) row.push(planeRow(u));
+  const dive = u.dive ?? 0, firing = u.firing ?? u.shelling ?? null, navy = dive || firing !== null;
+  if (u.air || navy) row.push(u.air ? planeRow(u) : null);
+  if (navy) row.push([dive, firing ?? -1]);
   return row;
 };
 const NONE = [];

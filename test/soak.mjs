@@ -27,7 +27,7 @@ async function join(world, token) {
     const m = JSON.parse(e.data);
     if (m.t === "hello") { p.cw = new ClientWorld(m); p.hello = m; return; }
     if (m.t === "result" && p.waits.has(m.of)) { const q = p.waits.get(m.of); p.waits.delete(m.of); q(m); }
-    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
+    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
     p.cw?.message(m);
   };
   ws.onclose = e => { p.closed = e.code; };
@@ -124,6 +124,8 @@ async function fly(p) {
   } else if (roll < 0.7 && stacks.length && planes.some(u => u.def.capacity && u.air?.landed && !u.cargo)) {
     const u = pick(planes.filter(u => u.def.capacity && u.air?.landed && !u.cargo));
     m = { t: "board", stack: pick(stacks).id, ship: u.id };
+  } else if (roll < 0.74 && planes.length && [...w.machines.values()].some(u => u.owner === you && u.def.carrier && u.state !== "wreck")) {
+    m = { t: "air", do: "base", plane: pick(planes).id, at: pick([...w.machines.values()].filter(u => u.owner === you && u.def.carrier && u.state !== "wreck")).at };
   } else if (roll < 0.8 && planes.some(u => u.def.capacity && u.cargo)) {
     m = { t: "air", do: "drop", plane: pick(planes.filter(u => u.def.capacity && u.cargo)).id, at: near(w, cap, 20) };
   } else if (planes.length) {
@@ -217,6 +219,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
     await airfield();
     await samSite();
     note("admin give plane", await A.send({ t: "admin", op: "give", nation: A.cw.you, what: "machine", unit: pick(["biplane", "early_bomber", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane"]), amount: 2 }));
+    if (rounds % 50 === 1) for (const p of [A, B]) note("admin give ship", await A.send({ t: "admin", op: "give", nation: p.cw.you, what: "machine", unit: pick(["cruiser", "battleship", "submarine", "aircraft_carrier"]), amount: 1 }));
     if (rounds % 75 === 1) note("admin give sam truck", await A.send({ t: "admin", op: "give", nation: B.cw.you, what: "machine", unit: "sam_truck", amount: 1 }));
   }
   await Promise.all([act(A), act(B)]);

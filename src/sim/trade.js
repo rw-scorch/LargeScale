@@ -116,6 +116,14 @@ function capture(world, u, by) {
   if (orderUnit(world, u.id, to.dock)) world.units.list.delete(u.id);
 }
 
+function sink(world, u, by) {
+  const port = world.trade.ports.get(u.trade.from);
+  if (port?.ship === u.id) port.ship = null;
+  world.emit("trade_sunk", { nation: u.owner, by: by.owner, machine: u.id, submarine: by.id, at: u.at, pay: u.trade.pay });
+  u.trade = null;
+  wreck(world, u);
+}
+
 function shipsTick(world) {
   const t = world.trade, g = world.grid, r = t.rules, warships = [];
   for (const u of world.units.list.values()) {
@@ -124,8 +132,9 @@ function shipsTick(world) {
   }
   for (const u of [...world.units.list.values()]) {
     if (!u.trade || u.wreck) continue;
-    const by = warships.find(([w, range]) => w.owner !== u.owner && world.hostile(w.owner, u.owner) && g.cheb(w.at, u.at) <= range * r.range)?.[0].owner;
-    if (by !== undefined) { capture(world, u, by); continue; }
+    const hunter = warships.find(([w, range]) => w.owner !== u.owner && world.hostile(w.owner, u.owner) && g.cheb(w.at, u.at) <= range * r.range)?.[0];
+    if (hunter && UNIT_TYPES[hunter.type].sub) { sink(world, u, hunter); continue; }
+    if (hunter) { capture(world, u, hunter.owner); continue; }
     const arrived = u.at === u.trade.dock || (!u.path.length && !u.route && g.cheb(u.at, u.trade.dock) <= 1);
     if (arrived) {
       const n = world.nations.get(u.owner), dest = world.bld.list.get(u.trade.to), home = t.ports.get(u.trade.from);

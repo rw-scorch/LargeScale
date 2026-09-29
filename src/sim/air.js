@@ -1,5 +1,5 @@
 import rules from "../../data/rules.json" with { type: "json" };
-import { UNIT_TYPES, wreck, disembark } from "./units.js";
+import { UNIT_TYPES, wreck, disembark, canHit } from "./units.js";
 import { touched } from "./buildings.js";
 import { isLand } from "../shared/terrain.js";
 
@@ -50,6 +50,66 @@ export function nearestBase(world, nid, x, y) {
   return best;
 }
 
+const carrierOf = u => UNIT_TYPES[u?.type]?.carrier;
+const liveCarrier = (c, nid) => !!c && !c.wreck && c.owner === nid && !!carrierOf(c);
+
+export function aboard(world, cid, except = null) {
+  let n = 0;
+  for (const p of world.units.list.values()) if (p !== except && !p.wreck && p.air?.ship === cid) n++;
+  return n;
+}
+
+export function homeOf(world, A, nid) {
+  const g = world.grid;
+  if (A.ship != null) {
+    const c = world.units.list.get(A.ship);
+    if (!liveCarrier(c, nid)) return null;
+    const cr = carrierOf(c);
+    return { key: `u${c.id}`, ship: c, x: g.x(c.at) + 0.5, y: g.y(c.at) + 0.5, reach: cr.reach ?? 1, slots: cr.slots, name: UNIT_TYPES[c.type].name.toLowerCase() };
+  }
+  const b = A.base != null ? world.bld?.list.get(A.base) : null;
+  if (!liveBase(world, b, nid)) return null;
+  const [x, y] = centreOf(world, b), br = baseRules(world, b);
+  return { key: `b${b.id}`, b, x, y, reach: br.reach, slots: br.slots, name: world.bld.table[b.type].name.toLowerCase() };
+}
+
+function setHome(A, home) {
+  A.base = home?.b ? home.b.id : null;
+  if (home?.ship) A.ship = home.ship.id;
+  else delete A.ship;
+}
+
+export function nearestHome(world, nid, x, y, plane = null) {
+  let best = null, bd = Infinity;
+  const b = nearestBase(world, nid, x, y);
+  if (b) { const [cx, cy] = centreOf(world, b); bd = Math.hypot(cx - x, cy - y); best = { base: b.id }; }
+  for (const c of world.units?.list.values() ?? []) {
+    if (!liveCarrier(c, nid)) continue;
+    const d = Math.hypot(world.grid.x(c.at) + 0.5 - x, world.grid.y(c.at) + 0.5 - y);
+    if (d < bd && aboard(world, c.id, plane) < carrierOf(c).planes) { bd = d; best = { ship: c.id }; }
+  }
+  return best ? homeOf(world, best, nid) : null;
+}
+
+function rebase(world, u, A, def, at) {
+  const g = world.grid, bid = world.bld?.at.get(at), b = bid === undefined ? null : world.bld.list.get(bid);
+  let home = b && liveBase(world, b, u.owner) ? homeOf(world, { base: b.id }, u.owner) : null;
+  if (!home) for (const c of world.units.list.values()) {
+    if (!liveCarrier(c, u.owner) || g.cheb(c.at, at) > 1) continue;
+    const cap = carrierOf(c).planes;
+    if (aboard(world, c.id, u) >= cap) return { error: `that ${UNIT_TYPES[c.type].name.toLowerCase()} is full: ${cap} planes` };
+    home = homeOf(world, { ship: c.id }, u.owner);
+    break;
+  }
+  if (!home) return { error: "pick one of your airfields or aircraft carriers" };
+  const d = Math.hypot(home.x - A.x, home.y - A.y), sp = def.speed * (world.rules.stackSpeed ?? 1);
+  if (d / sp > A.fuel) return { error: `too far for its fuel: ${Math.round(d)} plots` };
+  setHome(A, home);
+  A.mission = { kind: "return" };
+  if (A.landed && d > 0.6) Object.assign(A, { landed: false, rearm: 0, queued: false });
+  return { ok: true, base: home.name };
+}
+
 function plotAt(world, x, y) {
   const g = world.grid;
   return g.idx(Math.max(0, Math.min(g.w - 1, Math.floor(x))), Math.max(0, Math.min(g.h - 1, Math.floor(y))));
@@ -57,9 +117,10 @@ function plotAt(world, x, y) {
 
 export function planeOf(world, u) {
   if (u.air) return u.air;
-  const def = UNIT_TYPES[u.type], g = world.grid, base = nearestBase(world, u.owner, g.x(u.at) + 0.5, g.y(u.at) + 0.5);
-  const [x, y] = base ? centreOf(world, base) : [g.x(u.at) + 0.5, g.y(u.at) + 0.5];
-  u.air = { base: base?.id ?? null, x, y, heading: 0, fuel: def.endurance, bombs: def.bombs ?? 0, mission: null, landed: true, rearm: 0 };
+  const def = UNIT_TYPES[u.type], g = world.grid, home = nearestHome(world, u.owner, g.x(u.at) + 0.5, g.y(u.at) + 0.5, u);
+  const [x, y] = home ? [home.x, home.y] : [g.x(u.at) + 0.5, g.y(u.at) + 0.5];
+  u.air = { base: null, x, y, heading: 0, fuel: def.endurance, bombs: def.bombs ?? 0, mission: null, landed: true, rearm: 0 };
+  setHome(u.air, home);
   u.at = plotAt(world, x, y);
   return u.air;
 }
@@ -79,11 +140,12 @@ export function orderPlane(world, u, kind, at) {
     const o = world.owner[at];
     if (o && o !== u.owner && !world.passable(u.owner, o) && !world.hostile(u.owner, o)) return { error: `you are at peace with ${world.nations.get(o)?.name ?? "them"}` };
   }
-  if (kind !== "bomb" && kind !== "patrol" && kind !== "drop") return { error: "the order is patrol, bomb, drop or return" };
-  let base = world.bld.list.get(A.base);
-  if (!liveBase(world, base, u.owner)) { base = nearestBase(world, u.owner, A.x, A.y); if (!base) return { error: "it has no airfield to fly from" }; A.base = base.id; }
-  const [bx, by] = centreOf(world, base), tx = g.x(at) + 0.5, ty = g.y(at) + 0.5, d = Math.hypot(tx - bx, ty - by), reach = def.radius * scaleOf(world) * baseRules(world, base).reach;
-  if (d > reach) return { error: `out of range: ${Math.round(d)} plots from its ${world.bld.table[base.type].name.toLowerCase()}, at most ${Math.round(reach)}` };
+  if (kind === "base") return rebase(world, u, A, def, at);
+  if (kind !== "bomb" && kind !== "patrol" && kind !== "drop") return { error: "the order is patrol, bomb, drop, base or return" };
+  let home = homeOf(world, A, u.owner);
+  if (!home) { home = nearestHome(world, u.owner, A.x, A.y, u); if (!home) return { error: "it has no airfield to fly from" }; setHome(A, home); }
+  const tx = g.x(at) + 0.5, ty = g.y(at) + 0.5, d = Math.hypot(tx - home.x, ty - home.y), reach = def.radius * scaleOf(world) * home.reach;
+  if (d > reach) return { error: `out of range: ${Math.round(d)} plots from its ${home.name}, at most ${Math.round(reach)}` };
   A.mission = { kind, at, x: tx, y: ty };
   return { ok: true, rearming: A.landed && A.rearm > 0 ? Math.ceil(A.rearm) : 0 };
 }
@@ -123,14 +185,14 @@ function stick(world, u) {
 
 function fly(world, u, dt) {
   const T = world.air, r = T.rules, def = UNIT_TYPES[u.type], A = planeOf(world, u), sc = scaleOf(world), sp = def.speed * (world.rules.stackSpeed ?? 1);
-  let base = world.bld.list.get(A.base);
-  if (!liveBase(world, base, u.owner)) {
+  let base = homeOf(world, A, u.owner);
+  if (!base) {
     if (A.landed) {
       if (u.cargo?.troops > 0 && isLand(world.terrain[u.at])) unload(world, u, u.at);
-      return down(world, u, "its airfield was lost");
+      return down(world, u, A.ship != null ? "its carrier was lost" : "its airfield was lost");
     }
-    base = nearestBase(world, u.owner, A.x, A.y);
-    A.base = base?.id ?? null;
+    base = nearestHome(world, u.owner, A.x, A.y, u);
+    setHome(A, base);
   }
   if (u.pilot) {
     const P = world.pilot?.list.get(`m:${u.id}`);
@@ -143,10 +205,11 @@ function fly(world, u, dt) {
     return;
   }
   if (A.landed) {
+    if (base.ship) { A.x = base.x; A.y = base.y; u.at = plotAt(world, A.x, A.y); }
     if (A.rearm > 0) {
-      const left = T.slots.get(base.id) ?? baseRules(world, base).slots;
+      const left = T.slots.get(base.key) ?? base.slots;
       if (left <= 0) { A.queued = true; return; }
-      T.slots.set(base.id, left - 1);
+      T.slots.set(base.key, left - 1);
       A.queued = false;
       A.rearm -= dt;
       if (A.rearm > 0) return;
@@ -158,7 +221,7 @@ function fly(world, u, dt) {
   }
   A.fuel -= dt;
   if (A.fuel <= 0) return down(world, u, "it ran out of fuel");
-  const [bx, by] = base ? centreOf(world, base) : [A.x, A.y], home = Math.hypot(bx - A.x, by - A.y);
+  const [bx, by] = base ? [base.x, base.y] : [A.x, A.y], home = Math.hypot(bx - A.x, by - A.y);
   if (base && A.mission?.kind !== "return" && A.fuel <= (home / sp) * r.reserve + dt) {
     A.mission = { kind: "return" };
     world.emit("plane_returning", { machine: u.id, nation: u.owner, kind: u.type });
@@ -289,8 +352,12 @@ function sites(world) {
 }
 
 function flak(world, map, cell, dt, hits) {
-  const T = world.air, sc = scaleOf(world);
-  for (const [b, aa, x, y] of T.flak) {
+  const T = world.air, sc = scaleOf(world), g = world.grid, guns = [...T.flak];
+  for (const m of world.units.list.values()) {
+    const aa = !m.wreck && UNIT_TYPES[m.type]?.antiAir;
+    if (aa) guns.push([m, aa, g.x(m.at) + 0.5, g.y(m.at) + 0.5]);
+  }
+  for (const [b, aa, x, y] of guns) {
     const reach = aa.radius * sc;
     near(map, cell, x, y, reach, e => {
       if (e.hp <= 0 || e.owner === b.owner || !world.hostile(b.owner, e.owner) || Math.hypot(e.air.x - x, e.air.y - y) > reach) return;
@@ -377,7 +444,7 @@ function strikes(world, flying, dt) {
       if (d <= reach && d < bd) { bd = d; best = { s, x, y }; }
     });
     near(ground, cell, A.x, A.y, reach, m => {
-      if (m.wreck || !foe(m.owner)) return;
+      if (m.wreck || !foe(m.owner) || !canHit(world, UNIT_TYPES[u.type], m)) return;
       const [x, y] = xyOf(m.at), d = Math.hypot(x - A.x, y - A.y);
       if (d <= reach && d < bd) { bd = d; best = { m, x, y }; }
     });
@@ -450,10 +517,11 @@ function airTick(world, dt) {
 function airWhole(world, dt) {
   for (const u of [...(world.units?.list.values() ?? [])]) {
     if (u.wreck || !isPlane(u)) continue;
-    const A = planeOf(world, u), def = UNIT_TYPES[u.type], base = nearestBase(world, u.owner, A.x, A.y);
+    const A = planeOf(world, u), def = UNIT_TYPES[u.type], base = homeOf(world, A, u.owner) ?? nearestHome(world, u.owner, A.x, A.y, u);
     if (!base) continue;
-    [A.x, A.y] = centreOf(world, base);
-    Object.assign(A, { base: base.id, landed: true, rearm: 0, mission: null, fuel: def.endurance, bombs: def.bombs ?? 0, queued: false, target: null });
+    setHome(A, base);
+    [A.x, A.y] = [base.x, base.y];
+    Object.assign(A, { landed: true, rearm: 0, mission: null, fuel: def.endurance, bombs: def.bombs ?? 0, queued: false, target: null });
     u.at = plotAt(world, A.x, A.y);
   }
   sites(world);
