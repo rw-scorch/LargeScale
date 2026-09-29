@@ -978,6 +978,32 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   check(sub && (sub.dive ?? 0) === want && based?.ok && landed,
     `after the Modern navy research a submarine in ${water} water reports depth ${sub?.dive ?? 0}, and a jet told to base on an aircraft carrier flies out and lands on it${based?.ok ? "" : ` (${based?.error ?? "no carrier"})`}`);
 }
+{
+  for (const id of ["nuclear_weapons", "missile_defence"]) await ask({ t: "research", id, mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  await until(() => !IM.pump().world.lockOf("missile_silo") && !IM.world.lockOf("abm_silo") ? true : null, 5000);
+  await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 60000 });
+  const siloId = await buildAt("missile_silo", spotFor("missile_silo", inCap, 2, 16));
+  const siloUp = siloId !== null && await until(() => IM.pump().world.buildings.get(siloId)?.state === "active", 20000);
+  const made = siloUp ? await ask({ t: "nuke", op: "build", silo: siloId, kind: "atomic" }) : null;
+  const building = made?.ok && await until(() => IM.pump().world.siloOf(siloId), 5000);
+  await adminOp(IN, { op: "cheat", nation: ih.you, cheat: "build", on: true });
+  const ready = building && await until(() => IM.pump().world.siloOf(siloId)?.ready ? true : null, 10000);
+  await adminOp(IN, { op: "cheat", nation: ih.you, cheat: "build", on: false });
+  const w = IM.pump().world, foe = [...w.nations.values()].find(n => n.id !== ih.you && n.plots > 20 && n.capital != null);
+  let target = null;
+  if (foe) for (let i = 0; i < w.owner.length && target === null; i++) if (w.owner[i] === foe.id && i !== foe.capital && Math.hypot((i % w.w) - (foe.capital % w.w), Math.floor(i / w.w) - Math.floor(foe.capital / w.w)) >= 2 && isLand(w.terrain[i])) target = i;
+  const aimed = ready && target !== null ? await ask({ t: "nuke", op: "check", silo: siloId, at: target }) : null;
+  const fired = aimed?.ok ? await ask({ t: "nuke", op: "launch", silo: siloId, at: target }) : null;
+  const inEvents = () => IN.json.filter(m => m.t === "events").flatMap(m => m.events);
+  const heard = fired?.ok && await until(() => inEvents().find(e => e.type === "nuke_launched" && e.id === fired.id), 5000);
+  const seen = heard && IM.pump().world.nukes.some(f => f.id === fired.id);
+  const boom = fired?.ok && await until(() => inEvents().find(e => (e.type === "nuke_detonated" || e.type === "nuke_intercepted") && e.id === fired.id), 40000);
+  const scar = boom?.type === "nuke_detonated" && await until(() => IM.pump().world.owner[target] === 0 && TERRAIN[IM.world.terrain[target]]?.name === "crater" ? true : null, 5000);
+  const capitalKept = IM.pump().world.owner[foe?.capital] === foe?.id;
+  check(ready && fired?.ok && heard && seen && scar && capitalKept,
+    `after Nuclear weapons a silo builds an atomic warhead, aimed at ${foe?.name ?? "nobody"}'s land (${Math.round((aimed?.chance ?? 0) * 100)}% to be shot down, ${aimed?.flight} s); everyone hears the launch, and the blast leaves a crater and clears the land but the capital (${boom?.type ?? "no impact"}, ${boom?.cleared ?? 0} plots cleared)${fired?.ok ? "" : ` (${fired?.error ?? aimed?.error ?? made?.error ?? (siloUp ? "not ready" : "no silo")})`}`);
+}
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);

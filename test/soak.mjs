@@ -27,7 +27,7 @@ async function join(world, token) {
     const m = JSON.parse(e.data);
     if (m.t === "hello") { p.cw = new ClientWorld(m); p.hello = m; return; }
     if (m.t === "result" && p.waits.has(m.of)) { const q = p.waits.get(m.of); p.waits.delete(m.of); q(m); }
-    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
+    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
     p.cw?.message(m);
   };
   ws.onclose = e => { p.closed = e.code; };
@@ -73,8 +73,30 @@ await A.send({ t: "admin", op: "speed", factor: 8 });
 const mine = p => { const w = p.cw, out = []; for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === w.you) out.push(i); return out; };
 const near = (w, from, r) => { const x = from % w.w, y = (from / w.w) | 0; return Math.max(0, Math.min(w.h - 1, y + Math.floor(rand() * (2 * r + 1)) - r)) * w.w + Math.max(0, Math.min(w.w - 1, x + Math.floor(rand() * (2 * r + 1)) - r)); };
 
-for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
+for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles", "nuclear_weapons"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: A.cw.you }));
+note("research", await B.send({ t: "research", id: "missile_defence", mode: "queue" }));
+note("admin finish", await A.send({ t: "admin", op: "finish", nation: B.cw.you }));
+async function nukes() {
+  const w = A.cw, silos = [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "missile_silo");
+  if (silos.length < 2 && !w.lockOf("missile_silo")) for (const at of mine(A).sort(() => rand() - 0.5).slice(0, 300)) if (!w.placeError("missile_silo", at)) { note("build missile_silo", await A.send({ t: "build", type: "missile_silo", at })); break; }
+  const v = B.cw;
+  if (![...v.buildings.values()].some(b => b.owner === v.you && b.type === "abm_silo") && !v.lockOf("abm_silo")) for (const at of mine(B).sort(() => rand() - 0.5).slice(0, 300)) if (!v.placeError("abm_silo", at)) { note("build abm_silo", await B.send({ t: "build", type: "abm_silo", at })); break; }
+  for (const b of silos.filter(b => b.state === "active")) {
+    const st = w.siloOf(b.id);
+    if (!st) {
+      note("admin give", await A.send({ t: "admin", op: "give", nation: w.you, what: "money", amount: 40000 }));
+      note("nuke build", await A.send({ t: "nuke", op: "build", silo: b.id, kind: "atomic" }));
+      note("cheat build", await A.send({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: true }));
+      await sleep(800);
+      note("cheat build", await A.send({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: false }));
+    } else if (st.ready) {
+      const theirs = mine(B), at = theirs.length ? pick(theirs) : near(w, b.anchor, 20);
+      note("nuke check", await A.send({ t: "nuke", op: "check", silo: b.id, at }));
+      note(rand() < 0.2 ? "nuke cancel" : "nuke launch", await A.send(rand() < 0.2 ? { t: "nuke", op: "cancel", silo: b.id } : { t: "nuke", op: "launch", silo: b.id, at }));
+    }
+  }
+}
 async function airfield() {
   const w = A.cw;
   if ([...w.buildings.values()].some(b => b.owner === w.you && b.type === "airfield")) return;
@@ -220,6 +242,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
     await samSite();
     note("admin give plane", await A.send({ t: "admin", op: "give", nation: A.cw.you, what: "machine", unit: pick(["biplane", "early_bomber", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane"]), amount: 2 }));
     if (rounds % 50 === 1) for (const p of [A, B]) note("admin give ship", await A.send({ t: "admin", op: "give", nation: p.cw.you, what: "machine", unit: pick(["cruiser", "battleship", "submarine", "aircraft_carrier"]), amount: 1 }));
+    if (rounds % 50 === 26) await nukes();
     if (rounds % 75 === 1) note("admin give sam truck", await A.send({ t: "admin", op: "give", nation: B.cw.you, what: "machine", unit: "sam_truck", amount: 1 }));
   }
   await Promise.all([act(A), act(B)]);
