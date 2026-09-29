@@ -43,6 +43,7 @@ export function createHud(root, game) {
     iconButton("go-map", "ui_map", "Whole map", () => game.fit()),
     iconButton("zoom-out", "ui_zoom_out", "Zoom out (-)", () => game.zoom(1 / 1.6)),
     iconButton("zoom-in", "ui_zoom_in", "Zoom in (+)", () => game.zoom(1.6)),
+    iconButton("show-deposits", "ui_map_resources", `Deposits on the map (${keyTag("deposits").textContent})`, () => game.toggleDeposits()),
     full,
     iconButton("open-info", "ui_info", "World info: schedule, how to win and settings (I)", () => game.toggleInfo()),
     iconButton("open-settings", "ui_settings", "Settings: keys and display", () => game.toggleSettings()),
@@ -79,9 +80,8 @@ export function createHud(root, game) {
   const army = action("open-army", "ui_army", "Army", "army", () => game.toggleArmy());
   const logistics = action("open-logistics", "res_trade", "Trade", "logistics", () => game.toggleLogistics());
   const plan = action("open-planner", "tool_grid", "Plan", "plan", () => game.togglePlanner());
-  const deposits = action("show-deposits", "ui_map_resources", "Deposits", "deposits", () => game.toggleDeposits());
   const armies = action("pick-armies", "cursor_select", "Armies", "armies", () => game.toggleArmies());
-  const bar = el("nav", { id: "action-bar", class: "panel" }, armies, build, plan, town, research, upgrade, army, logistics, deposits);
+  const bar = el("nav", { id: "action-bar", class: "panel" }, armies, build, plan, town, research, upgrade, army, logistics);
 
   const armiesHint = el("div", { id: "armies-hint", class: "banner", hidden: true }, "Armies: ", el("span", { class: "fine-only", text: "drag across your soldiers to pick them, or Shift and drag a box. Click one to add it, and click a picked one for all of its kind on screen. Right-drag or the arrow keys move the map. " }), el("span", { class: "coarse-only", text: "swipe across your soldiers to pick them. Tap one to add it, and tap a picked one for all of its kind on screen. Two fingers move the map. " }), "Esc or Armies again stops.");
   const placeHint = el("div", { id: "place-hint", class: "banner", hidden: true }, "Click your own land to place the stack. ", el("span", { class: "fine-only", text: "Or point and press F. " }), "Esc cancels.");
@@ -153,7 +153,7 @@ export function createHud(root, game) {
       logistics.classList.toggle("on", !!game.logistics?.open);
       logistics.querySelector(".alert").hidden = true;
       logistics.title = p?.trade ? `Trade: ${fmt(p.trade.perMinute)} gold a minute (${keyTag("logistics").textContent})` : `Trade (${keyTag("logistics").textContent})`;
-      deposits.classList.toggle("on", !!game.view?.showDeposits);
+      corner.querySelector("#show-deposits").classList.toggle("on", !!game.view?.showDeposits);
       plan.disabled = form.disabled || !p;
       plan.classList.toggle("on", !!game.planner?.open);
       const pq = p?.plan?.projects ?? [];
