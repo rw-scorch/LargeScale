@@ -113,6 +113,8 @@ export function createResearchPanel(root, game) {
     const trains = units.filter(d => d.kind === "troop").map(d => d.name), machines = units.filter(d => d.kind === "machine").map(d => d.name);
     if (trains.length) out.push(`Trains: ${trains.join(", ")}`);
     if (machines.length) out.push(`Machines: ${machines.join(", ")}`);
+    const warheads = Object.values(w.nukeRules?.warheads ?? {}).filter(W => W.needs === node.id).map(W => `${W.name} (${fmt(W.cost)} gold)`);
+    if (warheads.length) out.push(`Silos build: ${warheads.join(", ")}`);
     const laterUnits = (u.units ?? []).filter(id => !w.unitTypes.table[id]).map(pretty);
     if (later.length || laterUnits.length) out.push(`Later updates: ${[...later, ...laterUnits].join(", ")}`);
     return out;
