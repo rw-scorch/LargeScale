@@ -84,7 +84,8 @@ export function createStackPanel(root, game) {
       const s = mine();
       if (!s) return;
       cancel();
-      return order({ t: "board", stack: s.id, ship }, () => game.toast("The stack marches to the ship and boards it."));
+      const u = game.world.machines.get(ship);
+      return order({ t: "board", stack: s.id, ship }, () => game.toast(u?.def.domain === "land" ? `The stack marches to the ${u.def.name} and gets in.` : "The stack marches to the ship and boards it."));
     },
     async moveNow(plot) {
       const s = mine();
@@ -192,7 +193,7 @@ export function createStackPanel(root, game) {
       if (!s) return [];
       const o = w.owner[plot], onLand = isLand(w.terrain[plot]), items = [];
       const ship = w.machines.get(game.view?.machineAt(sx, sy));
-      if (ship && ship.owner === w.you && ship.def.capacity && ship.state !== "wreck") items.push({ id: "board", label: "Board ship", note: `${fmt(ship.cargo)} of ${ship.def.capacity}`, icon: "ui_map_supply", run: () => act.boardNow(ship.id) });
+      if (ship && ship.owner === w.you && ship.def.capacity && ship.def.domain !== "air" && !ship.def.transport && ship.state !== "wreck") items.push({ id: "board", label: ship.def.domain === "land" ? `Board the ${ship.def.name}` : "Board ship", note: `${fmt(ship.cargo)} of ${ship.def.capacity}`, icon: "ui_map_supply", run: () => act.boardNow(ship.id) });
       if (onLand) items.push({ id: "move", label: "Move here", icon: "cursor_move", run: () => act.moveNow(plot) });
       if (onLand && o && o !== w.you) items.push({ id: "attack", label: `Attack ${w.nations.get(o)?.name ?? "them"}`, icon: "dip_war", run: () => order({ t: "advance", stack: s.id, only: o }) });
       if (onLand && !o) items.push({ id: "take", label: "Take unclaimed", icon: "ui_flag", run: () => order({ t: "advance", stack: s.id, only: "free" }) });
@@ -204,7 +205,7 @@ export function createStackPanel(root, game) {
       if (!s) return cancel();
       if (mode === "board") {
         const u = w.machines.get(game.view?.machineAt(sx, sy));
-        if (!u || u.owner !== w.you || !u.def.capacity) return game.toast("Click one of your ships.");
+        if (!u || u.owner !== w.you || !u.def.capacity || u.def.domain === "air") return game.toast("Click one of your ships or carriers.");
         return act.boardNow(u.id);
       }
       if (mode === "nation") {
@@ -242,7 +243,7 @@ export function createStackPanel(root, game) {
       info.textContent = ` ${statusOf(s, w)}`;
       hint.textContent = preview?.boat ? `No way by land: they walk to your coast and cross ${preview.boat.crossing} plots of water in a free boat, losing about ${Math.round(preview.boat.loss * 100)}% as they land. About ${preview.seconds} s in all.`
         : preview ? `About ${preview.plots} plots and ${preview.seconds} s. Stacks take neutral and enemy land on the way.`
-        : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "board" ? "Click one of your ships." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."
+        : mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : mode === "board" ? "Click one of your ships or carriers." : mode === "draw" ? "Drag along the way the stack should go. It takes neutral and enemy land on the way."
         : yours && !w.frozen ? "Right-click the map for its orders, or right-drag to draw its way." : "";
       hint.classList.toggle("fine-only", !preview && !mode);
       const k = `${s.id}:${yours}:${mode}:${!!preview}:${w.frozen}:${adjacent(s).length}:${confirming()}:${ships().length > 0}`;
