@@ -71,9 +71,11 @@ export function attackMultiplier(world, nid, plot) {
 export function installCombatHooks(world) {
   const baseCapture = world.captureCost.bind(world);
   world.captureCost = (i, attacker) => {
-    const owner = world.owner[i];
-    const base = baseCapture(i, attacker);
-    if (!owner || !world.cbd.centres.length) return base;
-    return base * defenceMultiplier(world, owner, i) / attackMultiplier(world, attacker, i);
+    const base = baseCapture(i, attacker), C = world.cbd, owner = world.owner[i];
+    if (!owner || !C.centres.length) return base;
+    if (!C.field) rebuildField(world);
+    const d = C.field.get(owner), a = C.field.get(attacker);
+    if (!d && !a) return base;
+    return (base * (1 + (d?.get(i) ?? 0))) / (1 + (a?.get(i) ?? 0) * C.rules.attackShare);
   };
 }
