@@ -672,7 +672,12 @@ This part builds on the kit's `tourism.js`.
 
         All four pass the 50 ms budget. The median is about 1.5 ms higher with tourism, but the modules account for under 0.2 ms a tick. The runs are deterministic, and with tourism the game plays out differently: the 12-hour catch-up earns 18.4 million gold instead of 8.3 million. Path extension also takes 7% longer in total with slightly fewer stacks, which is not explained yet.
       - An earlier full run with tourism measured a worst tick of 55.8 ms, a tick with no economy pass and 1.6 ms of path work.
-    - Smoke, `npm run ui` and the soak have Part F checks written; they need the dev server:
-      - **smoke:** a park and the stone circle are built, everyone hears of the wonder, the purse shows tourism, and a second circle is refused;
-      - **UI:** the Tourism and Wonders tabs, and the Town panel's tourism lines (screens `83-tourism-tab` and `84-town-tourism`);
-      - **soak:** attractions and wonder races for both players.
+    - **Dev server run (30 September 2026).** All three pass.
+      - **Smoke: 120 of 120.** A park and the stone circle are built and pay 2.12 gold a second, everyone hears of the wonder, and a second stone circle is refused with "you already have this wonder".
+      - **`npm run ui`: 190 of 190.** The Tourism and Wonders tabs are checked, and the Town panel reads "0.55 gold a second" and "2 attractions of 2 kinds" (screens `83-tourism-tab` and `84-town-tourism`).
+        - Two bugs in the test itself were fixed on the way. An edit script had turned `$$eval` into `$eval`, which left the tab's rows empty. And the museum found no room on a small spawn island, so the test now builds a plaza, kept off the park's plot.
+        - One run failed the Attack ring check on Bot 3, which depends on where the bot spawns. It passed on the next run.
+      - **Soak: 180 s, 1,200 rounds, 0 tick errors, no problems found.**
+        - The host earned 46.08 gold a second from 25 attractions of 7 kinds and 2 wonders. The friend earned 92.07 from 30 attractions of 10 kinds and 5 wonders.
+        - 52 attractions and 5 wonders were placed. Across both players, `wonder_built` was heard 16 times and `wonder_lost` twice.
+        - A first run managed only 576 rounds. Both players' tourism steps sent an admin gift through the host at once, and the soak matches answers by message type, so one of them waited out its 4 s timeout every 25 rounds. The steps now run one after the other.
