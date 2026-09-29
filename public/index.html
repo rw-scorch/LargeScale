@@ -96,6 +96,11 @@ button.big{padding:8px 24px;font-weight:700}
 #top-mid{left:50%;top:max(8px,env(safe-area-inset-top));transform:translateX(-50%);align-items:center;width:max-content;max-width:calc(100% - 2 * var(--left-w) - 48px)}
 #top-mid>.banner{position:static;transform:none;max-width:100%}
 #top-mid>#toasts{pointer-events:none}
+.nuke-alert{display:flex;flex-direction:column;gap:4px;pointer-events:auto;max-width:100%}
+.nuke-row{display:flex;align-items:center;gap:8px;background:rgba(58,12,8,.92);border:1px solid #ff4a2a;color:#ffe6d8;border-radius:8px;padding:4px 8px;font-size:13px}
+.nuke-row .icon{--k:1.5;flex:none}
+.nuke-row.danger{animation:nukepulse .8s infinite alternate}
+@keyframes nukepulse{from{border-color:#ff4a2a;box-shadow:0 0 0 rgba(255,74,42,0)}to{border-color:#ffd24a;box-shadow:0 0 12px rgba(255,74,42,.8)}}
 .pill{display:flex;gap:10px;align-items:center;padding:5px 14px;border-radius:999px;background:var(--panel);border:1px solid var(--edge);white-space:nowrap;box-shadow:0 4px 18px rgba(0,0,0,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .pill .badge{margin:0}
 #world-clock,#world-season{color:var(--mute);font-size:13px}

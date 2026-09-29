@@ -41,6 +41,7 @@ import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { runAdmin, parseSpeed, cleanName, ADMIN_RULES, adminAllowed, cleanPowers, POWERS } from "./admin.js";
 import { installCheats } from "./sim/cheats.js";
 import { installNavy } from "./sim/navy.js";
+import { installNukes, nukeView, flightsOf, NUKE_RULES } from "./sim/nukes.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
 const SAVE_VERSION = 4;
@@ -183,6 +184,7 @@ export class World extends DurableObject {
     installPilot(this.sim);
     installAir(this.sim);
     installNavy(this.sim);
+    installNukes(this.sim, { speed: info.rules?.buildSpeed ?? 1, rng: makeRng((info.seed ?? 1) + 13) }).on = info.nukes !== false;
     const trimmed = trimField(this.sim);
     if (trimmed.size) this.fieldTrimmed = Object.fromEntries(trimmed);
     if (this.upgradedFrom && this.upgradedFrom < 4) this.goldLoaded = convertToGold(this.sim);
@@ -422,6 +424,7 @@ export class World extends DurableObject {
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, soldierRules: this.sim.soldiers?.rules ?? null, pilotRules: this.sim.pilot?.rules ?? null, pilots: this.sim.pilot ? pilotRows(this.sim) : [], time: Math.floor(this.sim.time),
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen, powers: account.admin ? POWERS : this.powersOf(account.id),
+      nukes: flightsOf(this.sim), nukeRules: { warheads: NUKE_RULES.warheads, samChance: NUKE_RULES.samChance, overlap: NUKE_RULES.overlap, outerLoss: NUKE_RULES.outerLoss, scale: this.info.map.scale ?? 1 },
       plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
     }));
     for (const f of terrainFrames) server.send(f);
@@ -464,7 +467,7 @@ export class World extends DurableObject {
     return {
       map: i.map?.kind ?? "test", crop: i.map?.name ?? null, detail: i.map?.scale > 1 ? "fine" : "normal", w: i.w, h: i.h, landPlots: i.landPlots, bots: i.bots,
       speed: this.speed ?? 1, rules: i.rules ?? {}, maxCatchupHours: i.maxCatchupHours ?? 72, shrinkEvery: s.shrinkEvery ?? rules.schedule.shrinkEvery,
-      offline: { defence: rules.offline.defenceMult, output: rules.offline.offlineOutputShare }, win: "last",
+      offline: { defence: rules.offline.defenceMult, output: rules.offline.offlineOutputShare }, win: "last", nukes: i.nukes !== false,
     };
   }
 
@@ -581,7 +584,7 @@ export class World extends DurableObject {
   }
 
   purse(n) {
-    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n), sams: n ? samView(this.sim, n.id) : null, cheats: n?.cheats ?? null });
+    return purseOf(n, { season: n?.capital != null ? this.seasonOf(n.capital) : null, research: researchView(this.sim, n), orders: n ? ordersOf(this.sim, n.id) : [], army: armyView(this.sim, n), field: n?.human ? fieldOf(this.sim, n.id) : null, machines: n ? machineOrdersOf(this.sim, n.id) : null, vitals: vitalsOf(this.sim, n), trade: tradeView(this.sim, n), power: powerView(this.sim, n), plan: planSummary(n), sams: n ? samView(this.sim, n.id) : null, cheats: n?.cheats ?? null, nukes: n ? nukeView(this.sim, n.id) : null });
   }
 
   sendState() {
@@ -634,9 +637,9 @@ export class World extends DurableObject {
           this.notify(e.nation, "attack", `${by} is taking your land.`);
         }
         if (e.type === "eliminated" && e.nation !== undefined) this.notify(e.nation, "eliminated", "Your nation has been eliminated. You can still watch, or join a faction.");
-        if (e.type === "nuke_launched" && e.target !== undefined) {
-          const owner = this.sim.owner[e.target];
-          if (owner) this.notify(owner, "missile", "A missile is inbound. Impact in about a minute.");
+        if (e.type === "nuke_launched" && e.toward) {
+          const by = this.sim.nations.get(e.nation)?.name ?? "someone";
+          this.notify(e.toward, "missile", `${by} launched a nuclear warhead at your land. Impact in ${e.seconds} s.`);
         }
       }
     }
@@ -763,6 +766,15 @@ export class World extends DurableObject {
         this.broadcast({ t: "reopened", by: me.name });
         this.startLoop();
         return { ok: true };
+      }
+      case "nukes": {
+        if (typeof m.on !== "boolean") return fail("say on or off");
+        this.info.nukes = m.on;
+        this.meta("info", this.info);
+        this.sim.nukes.on = m.on;
+        this.logAdmin(me, "nukes", { on: m.on });
+        this.broadcast({ t: "nukes", on: m.on, info: this.worldInfo(), by: me.name });
+        return { ok: true, on: m.on };
       }
       case "rename": {
         const name = cleanName(m.name);

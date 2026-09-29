@@ -143,6 +143,7 @@ export class MapRenderer {
       return a.has(`${d.sprite}_${b.state}`) ? `${d.sprite}_${b.state}` : a.has(`${b.type}_${b.state}`) ? `${b.type}_${b.state}` : d.seasonSprites?.winter ?? d.sprite;
     }
     if (b.state && b.state !== "active" && a.has(`${b.type}_${b.state}`)) return `${b.type}_${b.state}`;
+    if (d?.abm && b.state === "active" && b.owner === this.state.you && this.state.abmOf?.(b.id)?.interceptors === 0 && a.has(`${b.type}_empty`)) return `${b.type}_empty`;
     return this.frameFor(b.type);
   }
 
@@ -442,6 +443,7 @@ export class MapRenderer {
     this.drawRoadPlan();
     this.drawGhost();
     this.drawEffects();
+    this.drawNukes();
     this.drawFlak();
     this.drawShots();
     this.drawRoute();
@@ -595,6 +597,84 @@ export class MapRenderer {
       const size = Math.max(48 * R, this.cam.scale * 3), k = size / 32;
       const [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5, ((fx.plot / s.w) | 0) + 0.5);
       this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, k);
+    }
+  }
+
+  nukeRings(plot, radius, inner, alpha) {
+    const s = this.state, ctx = this.ctx, R = this.ratio ?? 1, k = this.cam.scale;
+    const [sx, sy] = this.plotToScreen((plot % s.w) + 0.5, ((plot / s.w) | 0) + 0.5);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(255,60,30,.25)";
+    ctx.strokeStyle = "#ff4a2a";
+    ctx.lineWidth = 2 * R;
+    ctx.beginPath();
+    ctx.arc(sx, sy, Math.max(3 * R, inner * k), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([8 * R, 6 * R]);
+    ctx.strokeStyle = "#ffae3a";
+    ctx.beginPath();
+    ctx.arc(sx, sy, Math.max(6 * R, radius * k), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawNukes() {
+    const s = this.state, ctx = this.ctx, R = this.ratio ?? 1, now = Date.now(), k = this.cam.scale;
+    const aim = this.nukeAim;
+    if (aim) this.nukeRings(aim.plot, aim.radius, aim.inner, 0.9);
+    if (!s.nukes?.length && !s.blasts?.length) return;
+    const pulse = 0.55 + 0.3 * Math.sin(now / 250), sim = s.simNow?.() ?? s.time;
+    const centre = p => [(p % s.w) + 0.5, ((p / s.w) | 0) + 0.5];
+    for (const f of s.nukes ?? []) {
+      this.nukeRings(f.target, f.radius, f.inner, pulse);
+      const [ax, ay] = centre(f.from), [bx, by] = centre(f.target), span = Math.max(1, f.due - f.launched);
+      const lift = Math.hypot(bx - ax, by - ay) * 0.25 + 4, at = t => [ax + (bx - ax) * t, ay + (by - ay) * t - Math.sin(Math.PI * t) * lift];
+      const t = Math.max(0, Math.min(1, (sim - f.launched) / span)), m = Math.max(R * 1.5, k / 12);
+      ctx.save();
+      ctx.strokeStyle = "rgba(240,240,240,.55)";
+      ctx.lineWidth = 2 * R;
+      ctx.beginPath();
+      for (let j = 0; j <= 24; j++) {
+        const [x, y] = at(Math.max(0, t - 0.25) + (Math.min(t, 0.25) * j) / 24), [px, py] = this.plotToScreen(x, y);
+        if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+      const [x, y] = at(t), [x2, y2] = at(Math.min(1, t + 0.01)), [px, py] = this.plotToScreen(x, y);
+      ctx.translate(px, py);
+      ctx.rotate(Math.atan2(y2 - y, x2 - x));
+      this.atlas.draw(ctx, "proj_ballistic_missile", -8 * m, -8 * m, m);
+      ctx.restore();
+      if (sim - f.launched < 6) {
+        const [lx, ly] = this.plotToScreen(ax, ay), size = Math.max(24 * R, k * 2);
+        this.atlas.draw(ctx, `launch_smoke_${Math.floor((now / 200) % 3)}`, lx - size / 2, ly - size, size / 16);
+      }
+    }
+    const list = s.blasts ?? [];
+    for (let j = list.length - 1; j >= 0; j--) if (now - list[j].at > 7000) list.splice(j, 1);
+    for (const b of list) {
+      const age = now - b.at, [sx, sy] = this.plotToScreen(...centre(b.plot));
+      if (b.kind === "intercept") {
+        if (age > 1500) continue;
+        const size = Math.max(40 * R, k * 4);
+        this.atlas.draw(ctx, `flak_burst_${Math.min(2, Math.floor(age / 500))}`, sx - size / 2, sy - size / 2, size / 16);
+        continue;
+      }
+      if (age < 400) {
+        ctx.save();
+        ctx.globalAlpha = 1 - age / 400;
+        ctx.fillStyle = "#fff8e0";
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(20 * R, b.radius * k * 1.2), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      if (age < 3000) {
+        const size = Math.max(64 * R, b.radius * 2 * k);
+        this.atlas.draw(ctx, `nuke_${Math.min(4, Math.floor(age / 600))}`, sx - size / 2, sy - size * 0.75, size / 48);
+      }
+      this.nukeRings(b.plot, b.radius, b.inner, Math.max(0, 1 - age / 7000) * 0.6);
     }
   }
 

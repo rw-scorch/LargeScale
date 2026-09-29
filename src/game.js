@@ -12,6 +12,7 @@ import { trainRow, tradePerSecond } from "./sim/trade.js";
 import { fieldError, companyError, detachSoldiers } from "./sim/soldiers.js";
 import { takeControl, release, pilotOf } from "./sim/pilot.js";
 import { orderPlane, planeRow, planeOf } from "./sim/air.js";
+import { buildWarhead, cancelWarhead, checkLaunch, launchWarhead } from "./sim/nukes.js";
 import { planOrder } from "./sim/planner.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
@@ -355,6 +356,15 @@ export const ORDERS = {
       else { done++; rearming = Math.max(rearming, r.rearming ?? 0); }
     }
     return done ? { ok: true, done, failed: ids.length - done, error, rearming } : fail(error ?? "pick a plane");
+  },
+  nuke(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    if (!sim.nukes) return fail("nuclear weapons are not in this world");
+    if (!Number.isInteger(m.silo)) return fail("pick one of your missile silos");
+    const aim = f => (isPlot(sim, m.at) ? f(sim, nation, m.silo, m.at) : { error: "that spot is off the map" });
+    const r = m.op === "build" ? buildWarhead(sim, nation, m.silo, m.kind) : m.op === "cancel" ? cancelWarhead(sim, nation, m.silo)
+      : m.op === "check" ? aim(checkLaunch) : m.op === "launch" ? aim(launchWarhead) : { error: "the order is build, cancel, check or launch" };
+    return r.error ? fail(r.error) : { ...r, ok: true, op: m.op };
   },
   pilot(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
@@ -735,7 +745,7 @@ export function purseOf(n, extra = {}) {
   return { money: Math.floor(n.money), era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, autoRoads: n.autoRoads ?? null, ...extra };
 }
 
-const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink"]);
+const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink", "nuke_launched", "nuke_intercepted", "nuke_detonated"]);
 const QUIET = new Set(["civ_build", "civ_upgrade"]);
 
 const lowName = name => (/^[A-Z]{2}/.test(name) ? name : name.toLowerCase());

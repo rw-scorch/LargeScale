@@ -227,3 +227,15 @@ test("a Modern plan puts SAM sites over the capital and airfields that no SAM co
   assert.equal(byKey(plan(), "sams")?.title, "1 SAM site over your airfield", "a covered capital needs no more");
   assert.equal(byKey(world({ era: "I" }).plan(), "sams"), undefined, "not before the Modern Age");
 });
+
+test("a Modern plan puts an ABM silo over the capital, and none where one already covers it", () => {
+  const { w, g, a, put, plan } = world({ era: "Mo" });
+  const abms = byKey(plan(), "abms");
+  assert.deepEqual(abms?.pieces.map(p => p.type), ["abm_silo"]);
+  assert.equal(abms.title, "1 ABM silo over the capital");
+  assert.match(abms.reason, /^A nuclear warhead falling within 20 plots of an ABM silo has a 60% chance of being shot down/);
+  assert.equal(canPlace(w, a, "abm_silo", abms.pieces[0].at), null);
+  assert.ok(g.cheb(abms.pieces[0].at, g.idx(19, 19)) <= 6, "beside the capital");
+  put("abm_silo", g.x(abms.pieces[0].at), g.y(abms.pieces[0].at));
+  assert.equal(byKey(plan(), "abms"), undefined);
+});

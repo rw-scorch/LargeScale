@@ -36,6 +36,7 @@ import { encodeRows } from "../src/shared/buildings.js";
 import { installSoldiers, fieldOf } from "../src/sim/soldiers.js";
 import { installAir, orderPlane, planeOf } from "../src/sim/air.js";
 import { installNavy } from "../src/sim/navy.js";
+import { installNukes, launchWarhead } from "../src/sim/nukes.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -51,6 +52,7 @@ const { values: a } = parseArgs({ options: {
   rail: { type: "string", default: "200" },
   tanks: { type: "string", default: "4" },
   navy: { type: "string", default: "20" },
+  nukes: { type: "string", default: "2" },
   plan: { type: "string", default: "1" },
   power: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
@@ -157,6 +159,33 @@ const navyTime = { ms: [], worst: 0 };
   const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k];
   w.hooks.postTick[k] = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; navyTime.ms.push(ms); navyTime.worst = Math.max(navyTime.worst, ms); };
 }
+installNukes(w);
+const nukeTime = { ms: [], worst: 0, launched: 0, detonated: 0, intercepted: 0 };
+{
+  const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k];
+  const timed = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; nukeTime.ms.push(ms); nukeTime.worst = Math.max(nukeTime.worst, ms); };
+  timed.whole = hook.whole;
+  w.hooks.postTick[k] = timed;
+}
+const launchNukes = () => {
+  const bots = [...w.nations.values()].filter(n => !n.human && n.alive && n.capital != null && n.plots > 30);
+  for (const id of players) {
+    const n = w.nations.get(id), cap = n.capital;
+    for (let k = 0; k < Number(a.nukes) && bots.length; k++) {
+      let at = null;
+      for (let r = 3; r < 40 && at === null; r++) for (let d = 0; d < 8 * r && at === null; d++) {
+        const i = w.grid.idx(Math.max(0, Math.min(w.grid.w - 1, w.grid.x(cap) + Math.round(Math.cos(d / r) * r))), Math.max(0, Math.min(w.grid.h - 1, w.grid.y(cap) + Math.round(Math.sin(d / r) * r))));
+        if (w.owner[i] === id && isLand(terrain[i]) && !bld.at.has(i)) at = i;
+      }
+      if (at === null) continue;
+      const b = addBuilding(w, { type: "missile_silo", owner: id, anchor: at, plots: [at], state: "active", progress: 1 });
+      n.nuke ??= { silos: {}, flying: [], next: 1 };
+      n.nuke.silos[b.id] = { kind: k % 2 ? "hydrogen" : "atomic", left: 0, ready: true, paid: 0 };
+      const foe = bots[rng.int(0, bots.length - 1)];
+      if (launchWarhead(w, id, b.id, foe.capital + 2).ok || launchWarhead(w, id, b.id, foe.capital).ok) nukeTime.launched++;
+    }
+  }
+};
 const airTime = { ms: [], worst: 0 };
 if (air) {
   const k = airIdx, hook = w.hooks.postTick[k];
@@ -395,6 +424,7 @@ feed.delta(w);
 let maxEvents = 0, maxDiffBytes = 0, blocked = 0, airBombs = 0, airDowns = 0, samShots = 0;
 for (let i = 0; i < Number(a.ticks); i++) {
   if (i % 800 === 400) queuePlans();
+  if (i === Math.floor(Number(a.ticks) / 2)) launchNukes();
   if (i % 20 === 0) {
     playerOrders();
     feed0();
@@ -414,7 +444,7 @@ for (let i = 0; i < Number(a.ticks); i++) {
     const d = feed.delta(w);
     stateSizes.push(d ? Buffer.byteLength(JSON.stringify({ v: 2, t: "state", time: Math.floor(w.time), ...d })) : 0);
   }
-  for (const e of w.events) { if (e.type === "bombed") airBombs++; if (e.type === "plane_down") airDowns++; if (e.type === "sam_fired") samShots++; if (e.type === "plan_done") planDone += e.done; if (e.type === "plan_dropped") planDropped++; }
+  for (const e of w.events) { if (e.type === "bombed") airBombs++; if (e.type === "plane_down") airDowns++; if (e.type === "sam_fired") samShots++; if (e.type === "plan_done") planDone += e.done; if (e.type === "plan_dropped") planDropped++; if (e.type === "nuke_detonated") nukeTime.detonated++; if (e.type === "nuke_intercepted") nukeTime.intercepted++; }
   const shown = publicEvents(w, w.events);
   eventSizes.push(shown.length ? Buffer.byteLength(JSON.stringify({ v: 2, t: "events", events: shown })) : 0);
   maxEvents = Math.max(maxEvents, w.events.length);
@@ -509,6 +539,7 @@ const report = {
   })(),
   tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
   navy: { ships: [...w.units.list.values()].filter(u => ["cruiser", "battleship", "submarine", "aircraft_carrier"].includes(u.type) && !u.wreck).length, subsDeep: [...w.units.list.values()].filter(u => u.dive === 2).length, tickMs: navyTime.ms.length ? { p50: +[...navyTime.ms].sort((x, y) => x - y)[navyTime.ms.length >> 1].toFixed(2), worst: +navyTime.worst.toFixed(1) } : null },
+  nukes: { launched: nukeTime.launched, detonated: nukeTime.detonated, intercepted: nukeTime.intercepted, tickMs: nukeTime.ms.length ? { p50: +[...nukeTime.ms].sort((x, y) => x - y)[nukeTime.ms.length >> 1].toFixed(2), worst: +nukeTime.worst.toFixed(1) } : null },
   planner: planSetup && { ...planSetup, piecesLeft: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.pieces.length, 0), 0), done: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.done, 0), 0) + planDone, dropped: planDropped },
   trade: seaSetup && { ...seaSetup, shipsAtSea: [...w.units.list.values()].filter(u => u.trade && !u.wreck).length, goldEarned: Math.round(players.reduce((t, id) => t + (w.nations.get(id).tradeGold ?? 0), 0)) },
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },

@@ -112,7 +112,7 @@ export function createWorldInfo(root, game) {
       editor.hidden = !game.can("schedule");
       const s = w.schedule ?? {}, i = w.info ?? {}, speed = w.speed || 1;
       title.textContent = `World info: ${game.name}`;
-      const sig = JSON.stringify([s, Math.floor(now / 1000), w.shrinkIn, speed, w.victory, w.ended, w.nations.size]);
+      const sig = JSON.stringify([s, Math.floor(now / 1000), w.shrinkIn, speed, w.victory, w.ended, w.nations.size, i.nukes, game.can("world")]);
       if (sig === key) return;
       key = sig;
       const any = EVENTS.some(k => s[k] != null);
@@ -137,6 +137,7 @@ export function createWorldInfo(root, game) {
         line("Speed", `${speed}x`),
         line("Away", `Players who are away defend at ${Math.round((i.offline?.defence ?? 0.95) * 100)}% and produce ${Math.round((i.offline?.output ?? 0.9) * 100)}%`),
         line("Catch-up", `up to ${i.maxCatchupHours ?? 72} hours while nobody is on`),
+        line("Nuclear weapons", i.nukes === false ? "off" : "allowed", game.can("world") ? el("button", { id: "info-nukes", class: "ghost", text: i.nukes === false ? "Allow" : "Turn off", onclick: async () => { const r = await game.conn.request({ t: "admin", op: "nukes", on: i.nukes === false }); if (!r.ok) game.toast(r.error ?? "that did not work"); } }) : null),
         tests.length ? line("Test speeds", tests.join(", ")) : null].filter(Boolean));
     },
   };

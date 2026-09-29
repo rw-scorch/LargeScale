@@ -120,3 +120,18 @@ test("the browser keeps every field of the purse the server sends", async () => 
   c.message(msg);
   for (const k of keys) assert.deepEqual(c.purse[k], { sent: k }, `the purse keeps ${k}`);
 });
+
+test("the browser follows a warhead from launch to impact, and reads its silos from the purse", () => {
+  const c = new ClientWorld(hello({ nukeRules: { warheads: { atomic: { name: "Atomic warhead", radius: 8, inner: 3 } }, scale: 1 }, nukes: [{ id: 7, nation: 1, kind: "atomic", from: 3, target: 50, launched: 10, due: 70, toward: 2, radius: 8, inner: 3 }] }));
+  assert.deepEqual(c.nukes.map(f => [f.id, f.toward, f.due]), [[7, 2, 70]], "a warhead already in flight comes with the hello");
+  c.message({ t: "events", events: [{ type: "nuke_launched", id: 8, nation: 1, kind: "atomic", from: 3, target: 60, launched: 20, due: 80, toward: 2, radius: 8, inner: 3, seconds: 60 }] });
+  assert.equal(c.nukes.length, 2);
+  c.message({ t: "events", events: [{ type: "nuke_intercepted", id: 7, nation: 1, by: 2, kind: "atomic", target: 50 }, { type: "nuke_detonated", id: 8, by: 1, nation: 2, at: 60, kind: "atomic", radius: 8, inner: 3 }] });
+  assert.deepEqual([c.nukes.length, c.blasts.map(b => [b.kind, b.plot, b.radius])], [0, [["intercept", 50, 8], ["blast", 60, 8]]]);
+  c.message({ t: "purse", money: 5, era: "Mo", town: {}, nukes: { silos: { 4: ["atomic", 0, 1] }, abms: { 9: [1, 2, 120] } } });
+  assert.deepEqual([c.siloOf(4), c.abmOf(9), c.siloOf(5)], [{ kind: "atomic", left: 0, ready: true }, { interceptors: 1, max: 2, reloadIn: 120 }, null]);
+  c.message({ t: "state", time: 100, n: [], s: [], gone: [] });
+  assert.ok(c.simNow() >= 100 && c.simNow() < 102.5, "game time runs on between state messages");
+  c.message({ t: "nukes", on: false, info: { nukes: false } });
+  assert.equal(c.info.nukes, false);
+});
