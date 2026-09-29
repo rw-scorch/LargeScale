@@ -8,7 +8,7 @@ import rules from "../data/rules.json" with { type: "json" };
 export const ADMIN_RULES = rules.admin;
 export const GIVE = ["money", "troops", "unit", "machine"];
 export const POWERS = ["world", "speed", "schedule", "kick", "give", "cheats"];
-export const POWER_OF = { save: "world", rename: "world", end: "world", reopen: "world", speed: "speed", schedule: "schedule", kick: "kick", give: "give", finish: "give", researchAll: "give", cheat: "cheats", nukes: "world" };
+export const POWER_OF = { save: "world", rename: "world", end: "world", reopen: "world", speed: "speed", schedule: "schedule", kick: "kick", give: "give", finish: "give", researchAll: "give", cheat: "cheats", nukes: "world", diplomacy: "world" };
 
 export function adminAllowed(me, powers, op) {
   if (me.admin) return true;

@@ -27,7 +27,7 @@ export function installTrade(world, { scale = 1, rules: r = TRADE, seed = 1 } = 
 
 const portOf = (t, id) => { let p = t.ports.get(id); if (!p) t.ports.set(id, (p = { next: 0, ship: null, train: null })); return p; };
 const ownOrAlly = (world, nid, i) => { const o = world.owner[i]; return o === nid || (!!o && world.passable(nid, o)); };
-const friendly = (world, a, b) => a === b || (!world.hostile(a, b) && !world.hostile(b, a));
+export const friendly = (world, a, b) => a === b || (!world.hostile(a, b) && !world.hostile(b, a) && !world.dip?.blocksTransit(a, b) && !world.dip?.blocksTransit(b, a));
 const shipDef = world => UNIT_TYPES[world.trade.rules.ship];
 
 function live(world, b) {
