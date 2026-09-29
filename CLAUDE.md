@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (295)
+npm test                  # unit tests (304)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -388,10 +388,31 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
   - **Network.** The purse carries `nukes` (`nukeView`: silos and ABM interceptors), and `hello` carries `nukes` (`flightsOf`) and `nukeRules`. `ClientWorld` keeps `nukes`, `blasts`, `siloOf`, `abmOf` and `simNow`.
   - **Client.** `public/js/ui/nukes.js` has the silo card, the aiming (`game.view.nukeAim`) and the alert (`#nuke-alert`). The renderer's `drawNukes` draws flights, circles and blasts.
   - **Planner.** `planMissileDefence` proposes ABM silos (`planner.abms`, `abmNear`).
+- **Part F, tourism and downtowns (30 September 2026, branch `m8-tourism`, stacked on `m8-nukes`, PR 44 against `main`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Content.**
+    - Mass tourism and Skyscrapers research.
+    - Ten tourism buildings (73 to 82, a `tourism` block with `value` and an optional `season`; `rule: "coast"`, or `near` for terrain within a distance).
+    - Office block and skyscraper (83, 84: civilian commercial, `downtown`, `core`, `variants`).
+    - Nine wonders (85 to 93, `wonder: true`).
+    - The air base has `airport`.
+  - **`src/shared/tourism.js`** has `tourismIncome` (variety, reach, wonders), `coreCentre` and `coreStrength`. `src/shared/buildings.js` has `wonderErrorOf` and `nearTerrain` in `placeError`; views supply `buildingList` and `nameOf`.
+  - **`src/sim/tourism.js`** (`installTourism`, every 5 s):
+    - `tourismOf` works out a nation's tourism, and pays it into `n.money`.
+    - `wonderRace` announces `wonder_built` and clears rival sites with `wonder_lost`.
+    - The purse carries `tourism` (`tourismView`).
+  - **`src/sim/cbd.js`** (`installCbd`): a sparse per-nation core field from buildings with `core`, refreshed every 5 s, and a `captureCost` wrapper.
+  - **Downtowns.** In `src/sim/civilians.js`, `downtownError` checks the roads on two sides and the busy shops, and `absorbable` lets a downtown upgrade take in shops inside its footprint.
+  - **Client.**
+    - Tourism and Wonders tabs.
+    - `ClientWorld.coreAt` and `wonderOf`.
+    - The Town panel's `#town-tourism` and `#town-visitors`.
+    - Sprite `variants` in the renderer.
+    - `hello` carries `tourismRules` and `cbdRules`.
+  - **Planner.** `planTourism` proposes new kinds of attraction and a free wonder (`planner.tourism`, `tourismNear`).
 
 Open items as of 29 September 2026, in order:
 
-1. PRs 14 to 35 are merged. PR 35 brought `m6-industry` into `main`, and PR 30 (`m7-boats`) reached `main` with it. PRs 31 to 34 (milestone seven, Parts B to E) are merged into their stacked branches only. After PRs 41 and 42 Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for milestone seven's Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PRs 36 to 40 (the planner, the Modern army, air power, his asks after PR 38, bombers) are merged too. But every PR from 31 to 40 was merged into the branch below it, after that branch had gone into `main`, so `main` stopped at PRs 30 and 35. PR 41 brings `m8-bombers` into `main`: it merges cleanly, and the result is identical to `m8-bombers`. PR 42 (`m8-navy`, Part D) and PR 43 (`m8-nukes`, Part E) are against `main` too, so each diff narrows to its own part once the PRs before it are in. Merge 41, 42, 43 in that order. Smoke, UI and soak passed on `m8-asks` (117, 183, clean), and on `m8-nukes` with Parts D and E on 30 September 2026 (119, 188, clean). Part F, tourism and downtowns, is next.
+1. PRs 14 to 35 are merged. PR 35 brought `m6-industry` into `main`, and PR 30 (`m7-boats`) reached `main` with it. PRs 31 to 34 (milestone seven, Parts B to E) are merged into their stacked branches only. After PRs 41 and 42 Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for milestone seven's Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PRs 36 to 40 (the planner, the Modern army, air power, his asks after PR 38, bombers) are merged too. But every PR from 31 to 40 was merged into the branch below it, after that branch had gone into `main`, so `main` stopped at PRs 30 and 35. PR 41 brings `m8-bombers` into `main`: it merges cleanly, and the result is identical to `m8-bombers`. PR 42 (`m8-navy`, Part D), PR 43 (`m8-nukes`, Part E) and PR 44 (`m8-tourism`, Part F) are against `main` too, so each diff narrows to its own part once the PRs before it are in. Merge 41, 42, 43, 44 in that order. Smoke, UI and soak passed on `m8-asks` (117, 183, clean), and on `m8-nukes` with Parts D and E on 30 September 2026 (119, 188, clean). Part F's checks are written and wait for a dev server run. With Part F, milestone eight is built; Ryan's check of it is next.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.

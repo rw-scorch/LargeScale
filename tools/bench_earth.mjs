@@ -177,7 +177,7 @@ if (Number(a.tourism)) installCbd(w, { scale });
 const cbdTime = { ms: [], worst: 0 };
 if (w.cbd) timeHook(cbdTime);
 let captureCalls = 0;
-{ const f = w.captureCost; w.captureCost = (i, att) => { captureCalls++; return f(i, att); }; }
+{ const f = w.captureCost.bind(w); w.captureCost = (i, att) => { captureCalls++; return f(i, att); }; }
 const guard = installGuard(w, { scale });
 const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
