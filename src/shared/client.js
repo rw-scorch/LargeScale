@@ -7,6 +7,7 @@ import { lockMap, lockReason, researchError } from "./research.js";
 import { ERA_ORDER } from "./buildings.js";
 import { unitTable, mixFromRow, mixParts, powerOf } from "./units.js";
 import { piecePlots } from "./planner.js";
+import { coreCentre, coreStrength } from "./tourism.js";
 
 const LEVY_ONLY = [{ id: "levy", num: 1, name: "Levies", kind: "troop", era: "T", attack: 1, defence: 1, speed: 1, capture: 1 }];
 
@@ -94,6 +95,8 @@ export class ClientWorld {
     this.locks = lockMap(this.tech);
     this.effects = [];
     this.nukeRules = hello.nukeRules ?? null;
+    this.cbdRules = hello.cbdRules ?? null;
+    this.tourismRules = hello.tourismRules ?? null;
     this.nukes = (hello.nukes ?? []).map(flightOf);
     this.blasts = [];
     this.timeAt = Date.now();
@@ -195,6 +198,7 @@ export class ClientWorld {
     const def = this.defs.byNum[num];
     if (!def) return;
     this.forts = null;
+    this.cores = null;
     const old = this.buildings.get(id);
     if (old) this.dropBuilding(old);
     const b = { id, type: def.id, def, owner, anchor, state: STATES[state] ?? "active", progress: pct / 100 };
@@ -208,6 +212,7 @@ export class ClientWorld {
     for (const i of b.plots) if (this.at.get(i) === b.id) this.at.delete(i);
     this.buildings.delete(b.id);
     this.forts = null;
+    this.cores = null;
   }
 
   removeBuilding(id) {
@@ -233,6 +238,29 @@ export class ClientWorld {
     return best;
   }
 
+  coreAt(owner, i) {
+    if (!owner || !this.cbdRules) return 0;
+    if (!this.cores) {
+      this.cores = new Map();
+      for (const b of this.buildings.values()) {
+        if (!b.def?.core || b.state !== "active") continue;
+        if (!this.cores.has(b.owner)) this.cores.set(b.owner, []);
+        this.cores.get(b.owner).push(coreCentre(this.w, b, b.def));
+      }
+    }
+    return coreStrength(this.cores.get(owner) ?? [], i % this.w, Math.floor(i / this.w), this.cbdRules, this.cbdRules.scale ?? 1);
+  }
+
+  wonderOf(type) {
+    let site = null;
+    for (const b of this.buildings.values()) {
+      if (b.type !== type || b.state === "rubble") continue;
+      if (b.state !== "construction") return { standing: b };
+      if (b.owner === this.you || !site) site = b;
+    }
+    return site ? { site } : null;
+  }
+
   buildingAt(i) {
     const id = this.at.get(i);
     return id === undefined ? null : this.buildings.get(id);
@@ -241,7 +269,7 @@ export class ClientWorld {
   placeError(type, anchor) {
     const def = this.defs.table[type], me = this.nations.get(this.you);
     if (!def || !me) return "unknown building";
-    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id), road: this.roads };
+    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id), road: this.roads, buildingList: () => this.buildings.values(), nameOf: id => this.nations.get(id)?.name ?? "another nation" };
     const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0 };
     return placeError(view, nation, def, anchor) ?? costError(def, nation);
   }
@@ -347,7 +375,7 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null, sams: m.sams ?? null, cheats: m.cheats ?? null, nukes: m.nukes ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null, sams: m.sams ?? null, cheats: m.cheats ?? null, nukes: m.nukes ?? null, tourism: m.tourism ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "plan") this.planQueue = m.queue ?? [];
     if (m.t === "pilots") this.setPilots(m.p ?? [], m.shots ?? []);

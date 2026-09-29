@@ -142,6 +142,10 @@ export class MapRenderer {
       if (b.state === "active") return d.sam && b.owner === this.state.you && this.state.samOf?.(0, b.id)?.missiles === 0 && a.has(`${d.sprite}_empty`) ? `${d.sprite}_empty` : d.seasonSprites?.[this.season] ?? d.sprite;
       return a.has(`${d.sprite}_${b.state}`) ? `${d.sprite}_${b.state}` : a.has(`${b.type}_${b.state}`) ? `${b.type}_${b.state}` : d.seasonSprites?.winter ?? d.sprite;
     }
+    if (d?.variants) {
+      const base = d.variants[b.id % d.variants.length];
+      return b.state && b.state !== "active" && a.has(`${base}_${b.state}`) ? `${base}_${b.state}` : base;
+    }
     if (b.state && b.state !== "active" && a.has(`${b.type}_${b.state}`)) return `${b.type}_${b.state}`;
     if (d?.abm && b.state === "active" && b.owner === this.state.you && this.state.abmOf?.(b.id)?.interceptors === 0 && a.has(`${b.type}_empty`)) return `${b.type}_empty`;
     return this.frameFor(b.type);

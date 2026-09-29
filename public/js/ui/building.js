@@ -30,6 +30,9 @@ function workText(w, def, town) {
   const out = [], g = w.goldRules;
   if (def.gathers && g) out.push(`Earns ${Object.entries(def.gathers).reduce((s, [k, v]) => s + v * (g.worth[k] ?? 1) * g.yield, 0).toFixed(2)} gold a second, no workers needed.`);
   if (def.producer) out.push(`${earnText(w, def)}.`);
+  if (def.tourism) out.push(`Visitors pay ${def.tourism.value} gold a second here${def.tourism.season ? ", more or less with the season at its latitude" : ""}, before variety, links and wonders; see Town.`);
+  if (def.wonder) out.push("The only one in the world: it adds 10% to all your tourism.");
+  if (def.downtown) out.push(`Part of your downtown: land within ${Math.round((w.cbdRules?.radius ?? 14) * (w.cbdRules?.scale ?? 1) * def.core)} plots is harder to take.`);
   if (def.producer && town) {
     const staffed = Math.round(Math.max(0.25, town.worked ?? 0) * 100);
     out.push(`${def.jobs} ${def.jobs === 1 ? "job" : "jobs"}. Your workplaces are ${staffed}% staffed${(town.worked ?? 0) < 0.25 ? ": with too few people they work at the 25% floor, so grow your town" : ""}.`);
