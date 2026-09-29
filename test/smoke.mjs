@@ -488,7 +488,7 @@ check(bSpawn >= 0, `the friend spawns ${Math.round(dist(bSpawn))} plots away`);
   A.ws.send(JSON.stringify({ t: "attack", at: bSpawn }));
   const wait = await nextResult(A, "attack");
   const begun = await waitFor(B, m => m.t === "events" && m.events.some(e => e.type === "war_started"), 15000);
-  check(emb?.on && embHeard && decl?.ok && told && /starts in d+ s/.test(wait?.error ?? "") && begun, `an embargo is heard; the host declares war, the friend is told, attacks wait for the notice ("${wait?.error}"), and the war starts`);
+  check(emb?.on && embHeard && decl?.ok && told && /starts in \d+ s/.test(wait?.error ?? "") && begun, `an embargo is heard; the host declares war, the friend is told, attacks wait for the notice ("${wait?.error}"), and the war starts${emb?.on && embHeard && decl?.ok && told && begun ? "" : ` [embargo ${JSON.stringify(emb)}, heard ${!!embHeard}, declared ${JSON.stringify(decl)}, told ${!!told}, begun ${!!begun}; friend's diplomacy events ${JSON.stringify(B.json.filter(m => m.t === "events").flatMap(m => m.events).filter(e => e.a !== undefined).map(e => e.type))}]`}`);
 }
 B.ws.send(JSON.stringify({ t: "stack", share: 0.1 }));
 const bs = await nextResult(B, "stack");

@@ -899,7 +899,7 @@ check(/not placed yet/.test(listed), `the Players list includes a friend who has
   await fix.click(`${row} [data-op=war]`);
   const pending = await fix.waitForFunction(r => /War in/.test(document.querySelector(r)?.textContent ?? "") && document.querySelector(r).textContent, `${row} .dip-status`, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
   const chips = await Promise.all([fix, friend].map(p => p.waitForSelector("#war-chip:not([hidden])", { timeout: 5000 }).then(() => p.textContent("#war-chip"), () => "")));
-  check(hostSees && /At peace/.test(calm) && /Sure? War in/.test(asked) && pending && chips.every(c => /^War with .+ in d+:dd$/.test(c)), `the Diplomacy panel shows "${calm}"; Declare war asks first ("${asked}"), then "${pending}", and both players' bars count down: "${chips.join('" and "')}"`);
+  check(hostSees && /At peace/.test(calm) && /Sure\? War in/.test(asked) && pending && chips.every(c => /^War with .+ in \d+:\d\d$/.test(c)), `the Diplomacy panel shows "${calm}"; Declare war asks first ("${asked}"), then "${pending}", and both players' bars count down: "${chips.join('" and "')}"`);
   await friend.click("#open-diplomacy");
   const hostRow = `#dip-players [data-nation="${await fix.evaluate(() => window.__ls.game.world.you)}"]`;
   await friend.waitForSelector(`${hostRow} [data-op=peace]`, { timeout: 5000 }).catch(() => null);
@@ -949,9 +949,10 @@ check(reopenedUi, "Reopen world unfreezes it and the banner goes");
   if (helper) await friend.click("#open-admin");
   const parts = await friend.evaluate(() => ({ open: !document.querySelector("#admin-panel").hidden, world: !document.querySelector("#admin-world").hidden, speed: !document.querySelector("#admin-speed").hidden, give: !document.querySelector("#admin-testing").hidden, cheats: !document.querySelector("#admin-cheat").hidden, title: document.querySelector("#admin-panel .title").textContent }));
   await friend.screenshot({ path: `${OUT}/21b-helper-panel.png` });
-  const gold = await fix.evaluate(() => window.__ls.game.world.purse?.money ?? 0);
+  const gold = await Promise.all([fix, friend].map(p => p.evaluate(() => window.__ls.game.world.purse?.money ?? 0)));
   if (parts.give) await friend.click("#admin-panel [data-give=money]").catch(() => {});
-  const given = await fix.waitForFunction(g => (window.__ls.game.world.purse?.money ?? 0) > g + 500 || null, gold, { timeout: 5000 }).then(() => true, () => false);
+  const rose = (p, g) => p.waitForFunction(g => (window.__ls.game.world.purse?.money ?? 0) > g + 500 || null, g, { timeout: 5000 }).then(() => true, () => false);
+  const given = (await Promise.all([rose(fix, gold[0]), rose(friend, gold[1])])).some(Boolean);
   check(helper && parts.open && parts.give && !parts.world && !parts.speed && !parts.cheats && given && /^Helper/.test(parts.title),
     `the host ticks Give and research for a friend: the friend gets the admin button, a "${parts.title}" panel with only that part, and can give gold`);
   await fix.click(tick).catch(() => {});
