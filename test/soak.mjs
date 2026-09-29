@@ -252,7 +252,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
     note("admin give plane", await A.send({ t: "admin", op: "give", nation: A.cw.you, what: "machine", unit: pick(["biplane", "early_bomber", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane"]), amount: 2 }));
     if (rounds % 50 === 1) for (const p of [A, B]) note("admin give ship", await A.send({ t: "admin", op: "give", nation: p.cw.you, what: "machine", unit: pick(["cruiser", "battleship", "submarine", "aircraft_carrier"]), amount: 1 }));
     if (rounds % 50 === 26) await nukes();
-    await Promise.all([tourism(A), tourism(B)]);
+    for (const p of [A, B]) await tourism(p);
     if (rounds % 75 === 1) note("admin give sam truck", await A.send({ t: "admin", op: "give", nation: B.cw.you, what: "machine", unit: "sam_truck", amount: 1 }));
   }
   await Promise.all([act(A), act(B)]);
