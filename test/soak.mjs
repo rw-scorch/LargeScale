@@ -27,7 +27,7 @@ async function join(world, token) {
     const m = JSON.parse(e.data);
     if (m.t === "hello") { p.cw = new ClientWorld(m); p.hello = m; return; }
     if (m.t === "result" && p.waits.has(m.of)) { const q = p.waits.get(m.of); p.waits.delete(m.of); q(m); }
-    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
+    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead|wonder/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
     p.cw?.message(m);
   };
   ws.onclose = e => { p.closed = e.code; };
@@ -77,6 +77,15 @@ for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: A.cw.you }));
 note("research", await B.send({ t: "research", id: "missile_defence", mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: B.cw.you }));
+async function tourism(p) {
+  const w = p.cw;
+  if (!w.purse || !w.nations.get(w.you)?.alive) return;
+  const kinds = ["park", "plaza", "museum", "zoo", "arena", "wonder_stone_circle", "wonder_pyramid", "wonder_colossus"].filter(t => !w.lockOf(t));
+  const type = pick(kinds);
+  if (!type) return;
+  note("admin give", await A.send({ t: "admin", op: "give", nation: w.you, what: "money", amount: w.defs.table[type].cost.money }));
+  for (const at of mine(p).sort(() => rand() - 0.5).slice(0, 200)) if (!w.placeError(type, at)) { note(`build ${w.defs.table[type].wonder ? "wonder" : "attraction"}`, await p.send({ t: "build", type, at })); return; }
+}
 async function nukes() {
   const w = A.cw, silos = [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "missile_silo");
   if (silos.length < 2 && !w.lockOf("missile_silo")) for (const at of mine(A).sort(() => rand() - 0.5).slice(0, 300)) if (!w.placeError("missile_silo", at)) { note("build missile_silo", await A.send({ t: "build", type: "missile_silo", at })); break; }
@@ -243,6 +252,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
     note("admin give plane", await A.send({ t: "admin", op: "give", nation: A.cw.you, what: "machine", unit: pick(["biplane", "early_bomber", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane"]), amount: 2 }));
     if (rounds % 50 === 1) for (const p of [A, B]) note("admin give ship", await A.send({ t: "admin", op: "give", nation: p.cw.you, what: "machine", unit: pick(["cruiser", "battleship", "submarine", "aircraft_carrier"]), amount: 1 }));
     if (rounds % 50 === 26) await nukes();
+    await Promise.all([tourism(A), tourism(B)]);
     if (rounds % 75 === 1) note("admin give sam truck", await A.send({ t: "admin", op: "give", nation: B.cw.you, what: "machine", unit: "sam_truck", amount: 1 }));
   }
   await Promise.all([act(A), act(B)]);
@@ -260,6 +270,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
 const st = (await api(`/api/worlds/${wid}/status`, null, admin.token)).body;
 console.log(`\n${rounds} rounds, ${Math.round(st.time / 60)} game minutes, tick errors ${st.tickErrors ?? 0}${st.lastError ? `: ${st.lastError}` : ""}`);
 for (const [k, v] of [...tally].sort((a, b) => a[0].localeCompare(b[0]))) console.log(`${String(v).padStart(5)}  ${k}`);
+for (const [who, p] of [["host", A], ["friend", B]]) console.log(`${who} tourism: ${JSON.stringify(p.cw.purse?.tourism ?? null)}`);
 console.log(`\nmost planes held by the host: ${stats.planes}; most soldiers in the field: ${stats.soldiers}; most projects proposed at once: ${stats.proposals}; air events seen by both: ${JSON.stringify(Object.fromEntries(seen))}`);
 console.log(problems.length ? `\n${problems.length} problems` : "\nno problems found");
 A.ws.close();
