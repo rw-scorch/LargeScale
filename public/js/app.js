@@ -307,7 +307,8 @@ class Game {
       const node = w.locks.nodes.get(e.node), builds = [...(node?.unlocks?.buildings ?? []).map(b => w.defs.table[b]?.name), ...(node?.unlocks?.units ?? []).map(u => w.unitTypes.table[u]?.name)].filter(Boolean);
       say(`res${e.node}`, `Researched ${node?.name ?? e.node}.${builds.length ? ` You can now build or train: ${builds.join(", ")}.` : ""}`, 0, "research");
     }
-    const machine = e.kind && w.unitTypes.table[e.kind]?.name.toLowerCase();
+    const machine = e.kind && ((n => (/^[A-Z]{2}/.test(n) ? n : n.toLowerCase()))(w.unitTypes.table[e.kind]?.name ?? "machine"));
+    const carrier = e.machine !== undefined && w.machines.get(e.machine)?.def.domain === "land" ? w.machines.get(e.machine).def.name : null;
     if (e.type === "machine_built" && e.nation === you) say(`mb${e.machine}`, `A ${machine} is ready.`, 0, "built", machineAt(e.machine));
     if (e.type === "machine_destroyed" && e.nation === you && !w.unitTypes.table[e.kind]?.domain?.startsWith("air")) say(`md${e.machine}`, e.lost ? `Your ${machine} was sunk, and the ${Math.round(e.lost)} troops aboard were lost.` : `Your ${machine} was destroyed.`, 0, "danger");
     if (e.type === "bombed" && e.nation === you) say(`bomb${e.at}`, `${name(e.by)} bombed your land: ${e.troops ? `${fmt(e.troops)} troops lost` : "no troops lost"}${e.buildings ? `, ${e.buildings} ${e.buildings === 1 ? "building" : "buildings"} damaged` : ""}. Flak towers and fighters on patrol stop bombers.`, 0, "danger", e.at);
@@ -321,9 +322,9 @@ class Game {
     if (e.type === "trade_captured" && e.nation === you) say(`tc${e.machine}`, `${name(e.by)} captured a trade ship of yours, worth ${fmt(e.pay)} gold. Warships near your sea lanes keep them safe.`, 0, "danger", e.at);
     if (e.type === "trade_captured" && e.by === you) say(`tc${e.machine}`, `Your warship captured a trade ship of ${name(e.nation)}'s. It sails for your nearest port, worth ${fmt(e.pay)} gold.`, 0, "good", e.at);
     if (e.type === "boat_launched" && e.nation === you) say(`boat${e.machine}`, `A boat sets off with ${Math.round(e.troops)} troops.`, 0, "info", e.at);
-    if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
+    if (e.type === "embarked" && e.nation === you) say(`em${e.stack}`, carrier ? (e.left ? `${Math.round(e.troops)} troops got into the ${carrier}. It is full, so ${Math.round(e.left)} stay behind.` : `${Math.round(e.troops)} troops got into the ${carrier}.`) : e.left ? `${Math.round(e.troops)} troops boarded. The ship is full, so ${Math.round(e.left)} stay ashore.` : `${Math.round(e.troops)} troops boarded.`, 0, "info", machineAt(e.machine));
     if (e.type === "board_failed" && e.nation === you) say(`bf${e.stack}`, `A stack could not board: ${e.why}.`, 0, "warn", stackAt(e.stack));
-    if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0, "good");
+    if (e.type === "landed" && e.nation === you) say(`ld${e.stack}`, carrier ? (e.lost > 0.5 ? `${Math.round(e.troops)} troops got out of the ${carrier} and took the plot, losing ${Math.round(e.lost)}.` : `${Math.round(e.troops)} troops got out of the ${carrier}.`) : e.lost > 0.5 ? `${Math.round(e.troops)} troops landed. ${Math.round(e.lost)} were lost in the landing.` : `${Math.round(e.troops)} troops landed without loss.`, 0, "good");
     if (e.type === "landing_failed" && e.nation === you) say(`lf${e.machine}`, e.why ? `The landing did not happen: ${e.why}.` : `The landing failed: all ${Math.round(e.lost)} troops were lost against the defenders.`, 0, "danger");
     if (e.type === "machine_blocked" && e.nation === you) say(`mbk${e.machine}`, "A machine's way is blocked. Give it a new order.", 5000, "warn", machineAt(e.machine));
     if (e.type === "kit" && e.nation === you) {

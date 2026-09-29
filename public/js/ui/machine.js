@@ -18,6 +18,7 @@ export function createMachinePanel(root, game) {
   const w = () => game.world;
   const isShip = u => u.def.domain === "sea";
   const isPlane = u => u.def.domain === "air";
+  const low = s => (/^[A-Z]{2}/.test(s) ? s : s.toLowerCase());
   const carrier = u => u.def.domain === "land" && !!u.def.capacity;
   const mine = () => {
     const u = w()?.machines.get(game.selectedMachine);
@@ -36,10 +37,10 @@ export function createMachinePanel(root, game) {
     const id = game.view?.stackAt(sx, sy), s = id === null || id === undefined ? null : w().stacks.get(id);
     return s && s.owner === w().you ? s : null;
   };
-  const follow = (u, s) => order({ t: "machine", machine: u.id, do: "follow", stack: s.id }, () => game.toast(`The ${u.def.name.toLowerCase()} follows that stack.`));
-  const land = (u, plot) => order({ t: "machine", machine: u.id, do: "land", at: plot }, () => game.toast(carrier(u) ? `The ${u.def.name} drives there and sets ${fmt(u.cargo)} troops down.` : `The ${u.def.name.toLowerCase()} sails there to land ${fmt(u.cargo)} troops.`));
+  const follow = (u, s) => order({ t: "machine", machine: u.id, do: "follow", stack: s.id }, () => game.toast(`The ${low(u.def.name)} follows that stack.`));
+  const land = (u, plot) => order({ t: "machine", machine: u.id, do: "land", at: plot }, () => game.toast(carrier(u) ? `The ${u.def.name} drives there and sets ${fmt(u.cargo)} troops down.` : `The ${low(u.def.name)} sails there to land ${fmt(u.cargo)} troops.`));
 
-  const fly = (u, what, plot) => order({ t: "air", plane: u.id, do: what, ...(plot === undefined ? {} : { at: plot }) }, r => game.toast(what === "return" ? `The ${u.def.name.toLowerCase()} flies home.` : `The ${u.def.name.toLowerCase()} ${what === "bomb" ? "flies to bomb that spot" : "flies to patrol there"}${r.rearming ? ` once it has rearmed, in ${r.rearming} s` : ""}.`));
+  const fly = (u, what, plot) => order({ t: "air", plane: u.id, do: what, ...(plot === undefined ? {} : { at: plot }) }, r => game.toast(what === "return" ? `The ${low(u.def.name)} flies home.` : `The ${low(u.def.name)} ${what === "bomb" ? "flies to bomb that spot" : "flies to patrol there"}${r.rearming ? ` once it has rearmed, in ${r.rearming} s` : ""}.`));
   const act = {
     patrol() { const u = mine(); if (u && isPlane(u) && u.def.attack > 0) { cancel(); mode = "patrol"; } },
     bomb() { const u = mine(); if (u && isPlane(u) && u.def.bomb) { cancel(); mode = "bomb"; } },
@@ -123,7 +124,7 @@ export function createMachinePanel(root, game) {
       }
       box.hidden = false;
       drawRoute(u);
-      const yours = u.owner === world.you, owner = world.nations.get(u.owner)?.name ?? "someone", name = u.def.name.toLowerCase();
+      const yours = u.owner === world.you, owner = world.nations.get(u.owner)?.name ?? "someone", name = low(u.def.name);
       title.textContent = yours ? `Your ${name}` : `${owner}'s ${name}`;
       info.textContent = ` ${u.state === "wreck" ? "" : `${Math.ceil(u.hp)} of ${u.def.hp} health, `}${statusOf(u)}`;
       cargo.textContent = u.air && u.def.bomb && u.state !== "wreck" ? (u.air.bombs ? "Bombs aboard: it drops them where it is sent." : "No bombs aboard: it rearms at its airfield.") : u.def.freight && u.state !== "wreck" ? "Sailing to another port with trade: both ends earn gold when it arrives." : u.def.transport && u.state !== "wreck" ? `${fmt(u.cargo)} troops aboard.` : (isShip(u) || carrier(u)) && u.def.capacity && u.state !== "wreck" ? `${fmt(u.cargo)} of ${u.def.capacity} troops aboard.${carrier(u) && u.cargo ? " They get off where it stops." : ""}` : "";
