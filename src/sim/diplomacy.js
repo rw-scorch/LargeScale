@@ -268,7 +268,14 @@ export function installDiplomacy(world, { rules: r = {}, saved = null, fresh = t
   else dip.base = fresh ? "peace" : "war";
   world.dip = dip;
   const nations = world.nations, hostile = world.hostile, passable = world.passable;
-  const players = (a, b) => a !== b && nations.get(a)?.human === true && nations.get(b)?.human === true;
+  let flags = new Uint8Array(64);
+  const human = id => {
+    if (id >= flags.length) { const f = new Uint8Array(Math.max(id + 1, flags.length * 2)); f.set(flags); flags = f; }
+    let v = flags[id];
+    if (v === 0) { const n = nations.get(id); if (!n) return false; v = flags[id] = n.human === true ? 2 : 1; }
+    return v === 2;
+  };
+  const players = (a, b) => a !== b && human(a) && human(b);
   world.hostile = (a, b) => (players(a, b) ? dip.hostile(a, b, world.time) : hostile(a, b));
   world.passable = (a, b) => (players(a, b) ? dip.passable(a, b, world.time) : passable(a, b));
   let clock = 0;
