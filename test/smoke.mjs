@@ -1,4 +1,4 @@
-import { isLand } from "../src/shared/terrain.js";
+import { isLand, TERRAIN } from "../src/shared/terrain.js";
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const INVITE = process.env.INVITE ?? "test-invite";
 const ADMIN = process.env.ADMIN ?? "rw_scorch";
@@ -960,6 +960,23 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   const samUp = samId !== null && await until(() => IM.pump().world.buildings.get(samId)?.state === "active", 20000);
   const loaded = samUp && await until(() => IM.pump().world.samOf(0, samId), 5000);
   check(samUp && loaded?.missiles === 4 && loaded.max === 4, `after Guided missiles a SAM site stands with ${loaded?.missiles} of ${loaded?.max} missiles${samUp ? "" : ` (spot ${samSpot}, ${samTry?.error ?? (samId === null ? "no spot" : IM.world.buildings.get(samId)?.state)}, locked: ${IM.world.lockOf("sam_site")})`}${samUp && !loaded ? ` (purse sams ${JSON.stringify(inPurse()?.sams)})` : ""}`);
+}
+{
+  for (const id of ["modern_navy", "submarines", "carriers", "jet_engines"]) await ask({ t: "research", id, mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  await until(() => !IM.pump().world.lockOf("aircraft_carrier", "units") && !IM.world.lockOf("submarine", "units") ? true : null, 5000);
+  const subGift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "submarine", amount: 1 });
+  const carGift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "aircraft_carrier", amount: 1 });
+  const jetGift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "jet_fighter", amount: 1 });
+  const subId = subGift?.machines?.[0], carId = carGift?.machines?.[0], jetId = jetGift?.machines?.[0];
+  const sub = await until(() => IM.pump().world.machines.get(subId), 5000);
+  const water = sub ? TERRAIN[IM.world.terrain[sub.at]]?.water : null, want = water === "deep" ? 2 : water === "open" ? 1 : 0;
+  const car = await until(() => IM.pump().world.machines.get(carId), 5000);
+  await until(() => IM.pump().world.machines.get(jetId)?.air, 5000);
+  const based = car && jetId ? await ask({ t: "air", plane: jetId, do: "base", at: car.at }) : null;
+  const landed = based?.ok && await until(() => { const j = IM.pump().world.machines.get(jetId), c = IM.world.machines.get(carId); return j?.air?.landed && c && j.at === c.at ? j : null; }, 60000);
+  check(sub && (sub.dive ?? 0) === want && based?.ok && landed,
+    `after the Modern navy research a submarine in ${water} water reports depth ${sub?.dive ?? 0}, and a jet told to base on an aircraft carrier flies out and lands on it${based?.ok ? "" : ` (${based?.error ?? "no carrier"})`}`);
 }
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;

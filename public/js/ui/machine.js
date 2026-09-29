@@ -43,12 +43,21 @@ export function createMachinePanel(root, game) {
   const follow = (u, s) => order({ t: "machine", machine: u.id, do: "follow", stack: s.id }, () => game.toast(`The ${low(u.def.name)} follows that stack.`));
   const land = (u, plot) => order({ t: "machine", machine: u.id, do: "land", at: plot }, () => game.toast(carrier(u) ? `The ${u.def.name} drives there and sets ${fmt(u.cargo)} troops down.` : `The ${low(u.def.name)} sails there to land ${fmt(u.cargo)} troops.`));
 
-  const flyText = { bomb: "flies to bomb that spot", patrol: "flies to patrol there", strike: "flies there to hover and fire on enemy troops and vehicles", drop: "flies there to drop its paratroopers", land: "flies there to set its troops down" };
+  const DEPTH = ["surfaced in shallow water: anything can hit it", "at attack depth: only destroyers, cruisers, submarines and helicopters can hit it", "deep: nothing can hit it until it fires"];
+  const planesOn = u => [...w().machines.values()].filter(p => p.owner === u.owner && p.air?.landed && p.at === u.at && p.state !== "wreck").length;
+  const baseAt = (u, plot, sx, sy) => {
+    const c = w().machines.get(game.view?.machineAt(sx, sy)), b = w().buildingAt?.(plot);
+    if (c && c !== u && c.owner === w().you && c.def.carrier && c.state !== "wreck") return { at: c.at, label: "Base on this carrier", note: `${planesOn(c)} of ${c.def.carrier.planes}` };
+    if (b && b.owner === w().you && b.def?.airbase && b.state === "active") return { at: plot, label: "Base here" };
+    return null;
+  };
+  const flyText = { base: "flies to its new base", bomb: "flies to bomb that spot", patrol: "flies to patrol there", strike: "flies there to hover and fire on enemy troops and vehicles", drop: "flies there to drop its paratroopers", land: "flies there to set its troops down" };
   const fly = (u, what, plot) => order({ t: "air", plane: u.id, do: what, ...(plot === undefined ? {} : { at: plot }) }, r => game.toast(what === "return" ? `The ${low(u.def.name)} flies home.` : `The ${low(u.def.name)} ${flyText[what === "patrol" && striker(u) ? "strike" : what === "drop" && !u.def.paraOnly ? "land" : what]}${r.rearming ? ` once it has rearmed, in ${r.rearming} s` : ""}.`));
   const act = {
     patrol() { const u = mine(); if (u && isPlane(u) && u.def.attack > 0) { cancel(); mode = "patrol"; } },
     bomb() { const u = mine(); if (u && isPlane(u) && u.def.bomb) { cancel(); mode = "bomb"; } },
     drop() { const u = mine(); if (u && lift(u) && u.cargo) { cancel(); mode = "drop"; } },
+    base() { const u = mine(); if (u && isPlane(u)) { cancel(); mode = "base"; } },
     home() { const u = mine(); if (u && isPlane(u)) fly(u, "return"); },
     move() { if (mine()) { cancel(); mode = "move"; } },
     follow() { const u = mine(); if (u && !isShip(u)) { cancel(); mode = "follow"; } },
@@ -65,6 +74,8 @@ export function createMachinePanel(root, game) {
       return A.mission === "patrol" ? `patrolling, ${fuel}` : A.mission === "bomb" ? `flying to bomb, ${fuel}` : A.mission === "drop" ? `flying to ${u.def.paraOnly ? "drop its paratroopers" : "set its troops down"}, ${fuel}` : `flying home, ${fuel}`;
     }
     const o = u.owner === w().you ? orderOf(u) : null;
+    if (u.def.sub) return `${STATE_TEXT[u.state]}, ${DEPTH[u.dive ?? 0]}`;
+    if (u.def.shell && u.firing != null) return "shelling the coast";
     if (o?.land !== null && o?.land !== undefined) return carrier(u) ? "driving to set its troops down" : "sailing to land its troops";
     if (u.follow) {
       const s = w().stacks.get(u.follow);
@@ -77,6 +88,7 @@ export function createMachinePanel(root, game) {
     if (u.air && u.def.bomb) return u.air.bombs ? `${u.air.bombs === 1 ? "A bomb" : `${u.air.bombs} bombs`} aboard: it drops ${u.air.bombs === 1 ? "it" : "them"} where it is sent.` : "No bombs aboard: it rearms at its airfield.";
     if (u.def.freight) return "Sailing to another port with trade: both ends earn gold when it arrives.";
     if (u.def.transport) return `${fmt(u.cargo)} troops aboard.`;
+    if (u.def.carrier) return `${planesOn(u)} of ${u.def.carrier.planes} planes aboard.${yours ? " Select a plane and right-click this carrier to base it here." : ""}`;
     if (lift(u)) return `${fmt(u.cargo)} of ${u.def.capacity} troops aboard${u.def.paraOnly ? ", paratroopers only" : ""}.${u.cargo ? "" : " Select a company and right-click this while it is at its airfield to board it."}`;
     if ((isShip(u) || carrier(u)) && u.def.capacity) return `${fmt(u.cargo)} of ${u.def.capacity} troops aboard.${carrier(u) && u.cargo ? " They get off where it stops." : ""}`;
     const sam = u.def.sam && yours ? w().samOf(1, u.id) : null;
@@ -110,6 +122,7 @@ export function createMachinePanel(root, game) {
         return s ? follow(u, s) : game.toast("Click one of your stacks.");
       }
       if (m === "land") return land(u, plot);
+      if (m === "base") { const b = baseAt(u, plot, sx, sy); return b ? fly(u, "base", b.at) : game.toast("Click one of your airfields or aircraft carriers."); }
       if (m === "patrol" || m === "bomb" || m === "drop") return fly(u, m, plot);
       return order({ t: "machine", machine: u.id, do: "move", to: plot });
     },
@@ -120,6 +133,7 @@ export function createMachinePanel(root, game) {
         ...(u.def.attack > 0 ? [{ id: "patrol", label: striker(u) ? "Strike here" : "Patrol here", icon: "ui_air_defence", run: () => fly(u, "patrol", plot) }] : []),
         ...(u.def.bomb ? [{ id: "bomb", label: "Bomb here", icon: "ui_blast_radius", run: () => fly(u, "bomb", plot) }] : []),
         ...(lift(u) && u.cargo && isLand(w().terrain[plot]) ? [{ id: "drop", label: `${dropWord(u)} here`, note: fmt(u.cargo), icon: "ui_flag", run: () => fly(u, "drop", plot) }] : []),
+        ...((b => (b ? [{ id: "base", label: b.label, ...(b.note ? { note: b.note } : {}), icon: "ui_air_defence", run: () => fly(u, "base", b.at) }] : []))(baseAt(u, plot, sx, sy))),
         { id: "home", label: "Fly home", icon: "ui_flag", run: () => fly(u, "return") },
         { id: "pilot", label: "Pilot", icon: "cursor_attack", run: () => game.startPilot("m", u.id) },
       ];
@@ -148,7 +162,7 @@ export function createMachinePanel(root, game) {
       cargo.textContent = u.state === "wreck" ? "" : cargoText(u, yours);
       cargo.hidden = !cargo.textContent;
       desc.textContent = u.def.description ?? "";
-      hint.textContent = mode === "patrol" ? (striker(u) ? "Click where it should hover and fire." : "Click where it should patrol.") : mode === "bomb" ? "Click what it should bomb." : mode === "drop" ? (u.def.paraOnly ? "Click where the paratroopers should jump." : "Click where to set the troops down.")
+      hint.textContent = mode === "base" ? "Click one of your airfields or aircraft carriers." : mode === "patrol" ? (striker(u) ? "Click where it should hover and fire." : "Click where it should patrol.") : mode === "bomb" ? "Click what it should bomb." : mode === "drop" ? (u.def.paraOnly ? "Click where the paratroopers should jump." : "Click where to set the troops down.")
         : isPlane(u) && yours && u.state !== "wreck" && !world.frozen ? "Right-click the map for its orders. It flies home by itself when its fuel runs low."
         : mode === "move" ? (isShip(u) ? "Click the water to sail to." : "Click where it should go.")
         : mode === "follow" ? "Click one of your stacks."
@@ -166,6 +180,7 @@ export function createMachinePanel(root, game) {
         ...(lift(u) ? [el("button", { id: "plane-drop", class: "primary", text: dropWord(u), disabled: !u.cargo, title: u.def.paraOnly ? "click a spot: it flies there and the paratroopers jump" : "click a spot: it flies there and sets the troops down", onclick: () => act.drop() })] : []),
         ...(u.def.bomb ? [el("button", { id: "plane-bomb", class: "primary", text: "Bomb", title: "click a spot: it flies there, drops its bombs and comes home", onclick: () => act.bomb() })] : []),
         el("button", { id: "plane-home", text: "Fly home", onclick: () => act.home() }),
+        el("button", { id: "plane-base", text: "Base", title: "click one of your airfields or aircraft carriers: it flies there and makes it home", onclick: () => act.base() }),
         el("button", { id: "machine-pilot", title: "fly it yourself", onclick: () => game.startPilot("m", u.id) }, "Pilot ", keyTag("pilot")),
       ] : [
         el("button", { id: "machine-move", onclick: () => act.move() }, "Move ", keyTag("move")),
