@@ -955,10 +955,11 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   const ashore = landed && await until(() => [...IM.pump().world.stacks.values()].find(s => s.owner === ih.you && s.pos === dest), 3000);
   check(aboard > 0 && aboard <= 200 && flight?.ok && landed && ashore,
     `after Helicopters a transport helicopter lifts ${aboard} troops from its airfield, flies ${Math.round(Math.hypot((dest % ih.w) - (heliAt % ih.w), Math.floor(dest / ih.w) - Math.floor(heliAt / ih.w)))} plots and sets ${Math.round(landed?.troops ?? 0)} down${flight?.ok ? "" : ` (${flight?.error ?? boarded?.error ?? st?.error})`}`);
-  const samId = await buildAt("sam_site", spotFor("sam_site", inCap, 2, 12));
-  const samUp = await until(() => IM.pump().world.buildings.get(samId)?.state === "active", 20000);
+  const samSpot = spotFor("sam_site", inCap, 2, 16), samTry = samSpot === null ? null : await ask({ t: "build", type: "sam_site", at: samSpot });
+  const samId = samTry?.ok ? samTry.building : null;
+  const samUp = samId !== null && await until(() => IM.pump().world.buildings.get(samId)?.state === "active", 20000);
   const loaded = samUp && await until(() => IM.pump().world.samOf(0, samId), 5000);
-  check(samUp && loaded?.missiles === 4 && loaded.max === 4, `after Guided missiles a SAM site stands with ${loaded?.missiles} of ${loaded?.max} missiles`);
+  check(samUp && loaded?.missiles === 4 && loaded.max === 4, `after Guided missiles a SAM site stands with ${loaded?.missiles} of ${loaded?.max} missiles${samUp ? "" : ` (spot ${samSpot}, ${samTry?.error ?? (samId === null ? "no spot" : IM.world.buildings.get(samId)?.state)}, locked: ${IM.world.lockOf("sam_site")})`}${samUp && !loaded ? ` (purse sams ${JSON.stringify(inPurse()?.sams)})` : ""}`);
 }
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;

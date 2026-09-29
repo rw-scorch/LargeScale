@@ -8,6 +8,7 @@ import { api, session } from "./api.js";
 import { showLogin } from "./ui/login.js";
 import { showWorlds } from "./ui/worlds.js";
 import { createMenu } from "./ui/menu.js";
+import { applyTheme } from "./ui/theme.js";
 import { createHud } from "./ui/hud.js";
 import { createSpawnHint } from "./ui/spawn.js";
 import { createNations } from "./ui/nations.js";
@@ -109,7 +110,7 @@ class Game {
     this.place = createPlaceConfirm(overlay, this);
     this.aim = createAim(overlay, this);
     this.ring = createRing(overlay, this);
-    this.adminPanel = this.admin ? createAdminPanel(overlay, this) : null;
+    this.adminPanel = createAdminPanel(overlay, this);
     this.worldInfo = createWorldInfo(overlay, this);
     this.settings = createSettings(overlay, this);
     this.away = createAwayPanel(overlay, this);
@@ -117,6 +118,9 @@ class Game {
     this.piloting = null;
     this.pilotKeys = new Set();
     this.pilotSent = { json: "", at: 0 };
+    this.uiHold = 0;
+    document.addEventListener("pointerdown", e => { if (e.target.closest?.("button, input, select, label, summary, .ring-item, .chip, [data-tap]")) this.uiHold = performance.now(); }, true);
+    for (const t of ["click", "pointercancel"]) document.addEventListener(t, () => { this.uiHold = 0; }, true);
     canvas.addEventListener("pointerdown", e => { this.lastPointer = e.pointerType; if (this.piloting && e.pointerType === "mouse" && e.button === 0) this.mouseFire = true; });
     addEventListener("pointerup", e => { if (e.pointerType === "mouse") this.mouseFire = false; });
     this.layout = createLayout(overlay, this);
@@ -172,6 +176,7 @@ class Game {
     this.onGesture = e => e.preventDefault();
     addEventListener("wheel", this.onWheel, { passive: false });
     addEventListener("gesturestart", this.onGesture);
+    applyTheme();
     this.ui = setInterval(() => this.updatePanels(), 250);
     let last = performance.now();
     const loop = now => {
@@ -257,6 +262,7 @@ class Game {
     if (m.t === "reopened") note(`${m.by} reopened this world.`);
     if (m.t === "speed") note(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
     if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
+    if (m.t === "powers") { note(m.powers.length ? `${m.by} made you a helper in this world. The admin panel, top right or the backquote key, has what you can use.` : `${m.by} took your helper powers in this world.`); if (!m.powers.length) this.toggleAdmin(false); }
     if (m.t === "catchup") this.feed.push({ key: "catchup", text: m.left ? `The world is catching up on ${span(m.of)} while nobody played: ${span(m.left)} to go.` : `The world caught up ${span(m.of)} in ${((m.ms ?? 0) / 1000).toFixed(1)} s.`, tone: "info" });
     if (m.t === "away") this.away.summary(m);
     if (m.t === "schedule") this.worldInfo.changed(m);
@@ -481,8 +487,12 @@ class Game {
     this.updatePanels();
   }
 
+  can(power) { return this.admin || !!this.world?.powers?.includes(power); }
+
+  get canAdmin() { return this.admin || (this.world?.powers?.length ?? 0) > 0; }
+
   toggleAdmin(on = !this.adminPanel?.open) {
-    if (!this.adminPanel) return;
+    if (!this.adminPanel || (on && !this.canAdmin)) return;
     if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.settings.show(false); }
     this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
@@ -1282,7 +1292,7 @@ class Game {
   }
 
   updatePanels() {
-    if (this.left) return;
+    if (this.left || (this.uiHold && performance.now() - this.uiHold < 600)) return;
     this.powerOverlay();
     if (this.picked && this.world) {
       for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
@@ -1306,6 +1316,8 @@ class Game {
     this.onLeave();
   }
 }
+
+applyTheme();
 
 function showScreen(which) {
   screen.hidden = which !== "screen";

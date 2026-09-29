@@ -17,10 +17,10 @@ export function clockOf(world) {
   return `Day ${Math.floor(t / day) + 1}, ${String(hour).padStart(2, "0")}:00`;
 }
 
-function chip(key, value, change, hint) {
-  const r = rate(change);
-  return el("span", { class: "res", "data-res": key, title: `${hint ?? key}${r ? `, ${r.replace("/s", " a second")}` : ""}` },
-    icon(RES_ICON[key] ?? `res_${key}`, 1), el("b", { text: fmt(value) }), r ? el("small", { class: change < 0 ? "down" : "up", text: r }) : null);
+function chip(key, value, change, hint, endless = false) {
+  const r = endless ? "" : rate(change);
+  return el("span", { class: "res", "data-res": key, title: endless ? `${hint ?? key}: without limit (a cheat is on)` : `${hint ?? key}${r ? `, ${r.replace("/s", " a second")}` : ""}` },
+    icon(RES_ICON[key] ?? `res_${key}`, 1), el("b", { text: endless ? "∞" : fmt(value) }), r ? el("small", { class: change < 0 ? "down" : "up", text: r }) : null);
 }
 
 export function createHud(root, game) {
@@ -36,7 +36,7 @@ export function createHud(root, game) {
   const pill = el("header", { id: "status-pill", class: "pill" }, worldName, speed, clock, season, next, el("span", { class: "status" }, dot, status));
 
   const iconButton = (id, ic, hint, onclick, extra = {}) => el("button", { id, class: "icon-btn", title: hint, "aria-label": hint, onclick, ...extra }, typeof ic === "string" ? icon(ic, 1.5) : ic);
-  const admin = game.admin ? iconButton("open-admin", "ui_dev", "Admin panel (`)", () => game.toggleAdmin()) : null;
+  const admin = iconButton("open-admin", "ui_dev", "Admin panel (`)", () => game.toggleAdmin());
   const full = document.fullscreenEnabled ? iconButton("full-screen", el("i", { class: "fs-mark" }), "Full screen", () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {})) : null;
   const corner = el("nav", { id: "corner", class: "icons" },
     iconButton("go-home", "ui_flag", "Your capital (H)", () => game.home()),
@@ -107,7 +107,8 @@ export function createHud(root, game) {
       const p = w?.purse;
       season.hidden = !p?.season;
       season.textContent = p?.season ? title(p.season) : "";
-      admin?.classList.toggle("on", !!game.adminPanel?.open);
+      admin.classList.toggle("on", !!game.adminPanel?.open);
+      admin.hidden = !game.canAdmin;
       corner.querySelector("#open-info").classList.toggle("on", !!game.worldInfo?.open);
       const nl = w?.ready ? nextLine(w, w.serverNow()) : null;
       next.hidden = !nl;
@@ -123,11 +124,12 @@ export function createHud(root, game) {
       swatch.style.background = n?.colour ?? "transparent";
       mine.textContent = n?.name ?? "";
       plots.textContent = n?.spawned ? `${fmt(n.plots)} plots` : n ? "not placed yet" : "";
-      troops.textContent = n?.spawned ? (v ? `${fmt(n.troops)} / ${fmt(v.cap)}` : fmt(n.troops)) : "-";
+      const endless = new Set(p?.cheats ?? []);
+      troops.textContent = n?.spawned ? (endless.has("troops") ? "∞" : v ? `${fmt(n.troops)} / ${fmt(v.cap)}` : fmt(n.troops)) : "-";
       troopRate.textContent = v ? (v.grow ? rate(v.grow) : "full") : "";
       fill.style.width = v?.cap ? `${Math.min(100, (n.troops / v.cap) * 100)}%` : "0";
-      const list = p ? [["gold", p.money, v?.income ?? 0], ...(p.town ? [["population", p.town.pop, 0, "people"]] : [])] : [];
-      const sig = list.map(([k, x, r]) => `${k}${fmt(x)}${rate(r)}`).join();
+      const list = p ? [["gold", p.money, v?.income ?? 0, "gold", endless.has("gold")], ...(p.town ? [["population", p.town.pop, 0, "people"]] : [])] : [];
+      const sig = list.map(([k, x, r, , e]) => `${k}${e ? "inf" : fmt(x)}${rate(r)}`).join();
       if (purse.dataset.sig !== sig) { purse.dataset.sig = sig; purse.replaceChildren(...list.map(a => chip(...a))); }
       shareLabel.textContent = `${share.value}%${n?.spawned ? ` (${fmt(n.troops * readShare())})` : ""}`;
       form.disabled = !n?.spawned || !n.alive || w.frozen;

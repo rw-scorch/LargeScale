@@ -381,4 +381,37 @@ This part builds on the kit's `tourism.js`.
     - `npm run bench` on mains power, with a Modern air force: each of the 8 players has 100 planes (jet fighters, strategic bombers, attack helicopters and early bombers), 4 SAM sites and 4 SAM trucks.
       - The air module's own tick: 1.05 ms at the median, 14.5 ms at worst, 3.3 s over 2,400 ticks. 1,655 missions were flown, 763 bomb runs, 19 SAM missiles fired and 4 planes shot down.
       - The whole tick: 19.2 ms at the median, 103.6 ms at worst, so the bench still fails its 50 ms budget. The worst tick is path extension (60 ms for 12 paths), as before this part; the bench now takes `--modern` and `--sams`.
-    - Smoke, `npm run ui` and the soak have Part C checks written (a helicopter lift and a SAM site in the smoke; boarding, Land troops, Strike, the SAM card and the air base drawing in the UI test; transports, drops, SAM sites and trucks in the soak). They have not been run: they need the dev server.
+    - Smoke, `npm run ui` and the soak have Part C checks written (a helicopter lift and a SAM site in the smoke; boarding, Land troops, Strike, the SAM card and the air base drawing in the UI test; transports, drops, SAM sites and trucks in the soak). They ran with the next branch, `m8-asks`, on 29 September 2026: smoke 117 of 117, `npm run ui` 183 of 183, and the soak clean (see below).
+- **Ryan's asks after PR 38 (29 September 2026, branch `m8-asks`, stacked on `m8-air`).** His answers: a leader in front with ranks behind; cheats per player, admin rights for others and a Research all button; queueing in the research panel only; and on phones, taps that sometimes do nothing, plus colours for every part of the screen with ready-made themes.
+  - **Cheats** (`src/sim/cheats.js`, `installCheats`, installed last so it runs after all spending):
+    - `n.cheats` lists what is on: `gold` keeps gold at 1,000,000,000, `troops` keeps troops at 100,000 (`rules.json` `admin.cheats` can change both), `build` finishes that player's sites and paid machines at once, `research` finishes the queue at once.
+    - The `cheat` admin op turns one on or off for any living player, bots included. The purse carries `cheats`, and the HUD shows the infinity sign for gold or troops.
+    - Turning infinite gold or troops off puts them back to what they were when it went on, or less if the player now has less (`n.cheatBase`). Otherwise switching it off would leave a billion gold.
+    - `researchAll` finishes every node in every era (`researchAll` in `src/sim/cheats.js`).
+  - **Helpers.** An admin ticks powers for another player in one world: World (rename, save, end, reopen), Speed, Schedule, Remove players, Give and research, Cheats.
+    - They are kept in the world's `meta` `powers` by account, checked by `adminAllowed` in `src/admin.js` for every admin op, and sent as `hello.powers` and a `powers` message when they change.
+    - A helper gets the admin button and a Helper panel with only the ticked parts, plus the schedule editor in World info with Schedule. Only full admins give powers; deleting worlds and accounts stays theirs.
+  - **Research.** The server already queued everything a node needs, eras included, but the queue held 40 nodes, and the path from the first era to a Modern node is longer, so the order was refused. The queue now holds 150; the tree has 78 nodes. The panel's buttons come first on its card and say how many they queue ("Research next, with the 23 it needs", "Queue all 24").
+  - **Taps that did nothing.** Panels rebuild their buttons when what they show changes; the research card did it every few points. A finger that went down on a button that was replaced before it came up clicked nothing. Now any press on a button, box or ring item holds panel refreshes (at most 600 ms), and the click lets them go before its own action runs.
+  - **Colours** (`public/js/ui/theme.js`, Settings, Colours):
+    - Seven themes: Harbour (the old colours), Parchment, Iron, Forest, Crimson, Ocean and High contrast, and a panel opacity slider.
+    - Ten parts of the screen can each take their own background, text, accent and button colours: the leaderboard, status line, corner buttons, your nation, the action bar, events and chat, the cards, the big panels, the orders ring, and the menu and world list. Reset gives a part the theme's colours again.
+    - Kept in the browser (`ls_theme`). Buttons, fields and panels now read colour variables instead of fixed colours.
+  - **A leader and ranks.** Drawn soldiers form up behind a leader: the first soldier walks in front, a little larger, with the company's marker above him, and the rest follow in ranks of at most 12 (`rankSlots` in `src/shared/soldiers.js`).
+    - Each soldier walks to his place at his own pace (1.2 to 2.1 plots a second), so the ranks trail and close up as the company moves.
+    - The company faces the way it moves, or the enemy beside it; in a fight the ranks loosen and sway.
+    - When the company loses soldiers, the ones gone fall where they stood and fade over 3 s.
+    - Orders and battles still work on the whole company; only the drawing changed.
+  - **Found by the smoke run:** the browser copied the purse field by field and dropped `sams` and `cheats`, so SAM missiles and the infinity sign would never have shown. Fixed, and `test/client.test.js` now reads the purse fields from `src/world.js` and checks the browser keeps each one.
+  - **Evidence:**
+    - `npm test`: 277 of 277 (cheats, Research all, helper powers, queueing a Modern node from the first era, the ranks, the themes, the purse fields).
+    - `npm run smoke` on the test map: 117 of 117, with Part C's helicopter lift and SAM site. Two earlier runs each had failures that depend on where the players land: once the moving company, once the road strip. They passed on the next run.
+    - `npm run ui` on the test map: 183 of 183, with screenshots of the helper panel (`21b`), the cheats with gold shown as infinity (`21c`), the Iron theme with the events panel in its own colour (`2t`), and the ranks on a desktop and a phone (`66` to `69`). The new checks:
+      - A press on a button while research points come in still lands: the panel waits instead of replacing the button.
+      - "Queue all 40" on Jet engines, from the first era, queues all 48 nodes on the way.
+      - A friend ticked for Give and research gets a Helper panel with only that part and can give gold; unticked, the button goes.
+      - Infinite gold shows the infinity sign, and off again shows the number.
+      - The Iron theme, one part's own colour, and Back to the usual colours.
+      - Part C: a company boards a transport helicopter and is set down with Land troops; the attack helicopter's card has Strike; a SAM site's card reads "4 of 4 missiles"; the air base is drawn from its 7 parts.
+    - Two runs before that each had failures from the tests themselves: a pattern that lost its backslash, and the cheat check leaving the host a billion gold, which stopped a later check setting gold to 400. That led to putting gold back when the cheat goes off. The upgrade checks also placed their towers on a sparse grid near the capital, which found only 2 free spots when the host held little land; they now search every plot within 12.
+    - `npm run soak`, 180 s: 1,309 rounds, 24 game minutes, no tick errors, no problems. Both players saw 30 boardings, 28 landings, 128 SAM missiles, 210 bomb runs and 44 planes down.

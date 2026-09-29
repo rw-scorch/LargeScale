@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (269)
+npm test                  # unit tests (277)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -365,10 +365,17 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
   - **`src/sim/air.js`.** `airbase` blocks give reach and rearming slots (`baseRules`, `A.queued`). Bombers drop in a line (`stick`). `hover` and `strike` make the attack helicopter. Transports take the `drop` mission (`unload`, `dropTroops` for piloting). SAM sites and trucks (`sam` blocks, `launchers`, `samView` in the purse as `sams`) fire `sam_fired` missiles and reload for gold. All air-defence hits on a plane in a tick combine through `combined` with `air.overlap`.
   - **Boarding.** `embark` takes a transport on the ground; `paraOnly` takes only paratroopers.
   - **Planner.** `planAirDefence` proposes SAM sites (`planner.sams`, `samNear`).
+- **Ryan's asks after PR 38 (29 September 2026, PR 39, base `m8-air`).** Details and evidence are in `plans/milestone-8.md`.
+  - **Cheats** (`src/sim/cheats.js`, `installCheats`, installed last): `n.cheats` holds `gold`, `troops`, `build`, `research`. Admin ops `cheat` and `researchAll`; the purse carries `cheats`.
+  - **Helpers.** `meta` `powers` maps accounts to powers (`POWERS` in `src/admin.js`: world, speed, schedule, kick, give, cheats); `adminAllowed` checks every admin op. The `powers` op is for full admins; `hello.powers` and the `powers` message tell the client, and `game.can(power)` and `game.canAdmin` gate the panel.
+  - **Research.** `research.maxQueue` is 150, so a whole path from the first era fits.
+  - **Taps.** A press on a control sets `game.uiHold`; `updatePanels` waits (at most 600 ms) and the click clears it first.
+  - **Colours.** `public/js/ui/theme.js` (`THEMES`, `SECTIONS`, `applyTheme`), stored as `ls_theme`; Settings has Colours. Buttons and fields use `--btn`, `--field`, `--primary`, `--on-bg`.
+  - **Ranks.** `rankSlots` in `src/shared/soldiers.js` replaces the spiral: the leader in front, ranks of at most 12. The renderer keeps each drawn soldier's position (`troopPos`), moves it at its own pace, faces the company (`facing` angle), draws the fallen for 3 s, and puts the marker over the leader (`leaderAt`).
 
 Open items as of 29 September 2026, in order:
 
-1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`. PR 35 brings `m6-industry` into `main`. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C), PR 33 (`m7-pilot`, Part D) and PR 34 (`m7-air`, Part E) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PR 36 (`m8-modern`, the planner, base `m7-air`) PR 37 (`m8-army`, the Modern army, base `m8-modern`) and PR 38 (`m8-air`, air power and SAMs, base `m8-army`) wait for Ryan. Part C's smoke, UI and soak checks wait for a dev server run. Part D, the Modern navy, is next.
+1. PRs 14 to 29 are merged, but PR 29 (the Industrial era) was merged into the `m5-sea` branch after PR 28 had gone into `main`. PR 35 brings `m6-industry` into `main`. PR 30 (`m7-boats`, base `m6-industry`), PR 31 (`m7-gold`, Part B), PR 32 (`m7-soldiers`, Part C), PR 33 (`m7-pilot`, Part D) and PR 34 (`m7-air`, Part E) wait for Ryan, each stacked on the one before. Then Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PR 36 (`m8-modern`, the planner, base `m7-air`) PR 37 (`m8-army`, the Modern army, base `m8-modern`) PR 38 (`m8-air`, air power and SAMs, base `m8-army`) and PR 39 (`m8-asks`, his asks after PR 38, base `m8-air`) wait for Ryan. Smoke, UI and soak passed on `m8-asks` (117, 183, clean). Part D, the Modern navy, is next.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
 3. The new main menu is merged (PR 27); Ryan's check is next. Later: military as individual units instead of numbered stacks (Ryan, 27 September 2026).
 4. The Gunpowder era is built (milestone four), and Ryan's check (G7) is next. Ryan chose full logistics before the Industrial era (27 September 2026): `plans/milestone-5.md` is logistics, agreed with his four answers (materials carried, stacks carry 10 minutes of supplies, raiders take convoy cargo, bots ignore supply), and `plans/milestone-6.md` is the Industrial era with his decisions (aircraft wait for Modern, stop at the end of Industrial, a real power grid). Then Modern and Future, and the dev panel. Walls are not buildable yet: the tree names wall sprites, but only towers are buildings.
