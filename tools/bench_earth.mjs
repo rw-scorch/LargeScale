@@ -352,11 +352,11 @@ function playerOrders() {
 }
 
 const econTimes = [], plainTimes = [], times = [], saveTimes = [], stateSizes = [], eventSizes = [];
-const part = { seek: 0, seeks: 0, extend: 0, extends: 0 };
+const part = { seek: 0, seeks: 0, extend: 0, extends: 0 }, total = { seek: 0, seeks: 0, extend: 0, extends: 0 };
 let worstParts = null;
 for (const [name, key] of [["seek", "seek"], ["extendPath", "extend"]]) {
   const f = w[name].bind(w);
-  w[name] = (...args) => { const t0 = performance.now(); try { return f(...args); } finally { part[key] += performance.now() - t0; part[key + "s"]++; } };
+  w[name] = (...args) => { const t0 = performance.now(); try { return f(...args); } finally { const d = performance.now() - t0; part[key] += d; part[key + "s"]++; total[key] += d; total[key + "s"]++; } };
 }
 const feed = new StateFeed(0.01, 5);
 feed.delta(w);
@@ -465,6 +465,7 @@ const report = {
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
   worstTickParts: worstParts,
+  pathTotals: { seekMs: Math.round(total.seek), seeks: total.seeks, extendMs: Math.round(total.extend), extends: total.extends, perExtendMs: +(total.extend / Math.max(1, total.extends)).toFixed(2) },
   air: air && { ...airSetup, orders: airOrders, flyingNow: [...w.units.list.values()].filter(u => u.air && !u.air.landed).length, planesNow: [...w.units.list.values()].filter(u => u.air).length, bombRuns: airBombs, shotDown: airDowns },
   soldiers: soldiers && { perPlayerPeak: fieldPeak, cap: soldiers.rules.fieldCap, stacksNow: w.stacks.size, playerStacksNow: [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human).length, battlesNow: [...w.stacks.values()].filter(s => s.engaged).length },
   rail: { plots: railPlots, stations, trainsNow: trade.trains.size, railSearch: (() => { const list = [...bld.list.values()].filter(b => b.type === "station_large"), t0 = performance.now(); trade.paths.clear(); let found = 0; for (const b of list) for (const c of list) if (b !== c && b.owner === c.owner && railPath(w, b.owner, b, c)) found++; return { pairs: found, ms: +(performance.now() - t0).toFixed(1) }; })() },

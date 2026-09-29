@@ -224,4 +224,60 @@ This part builds on the kit's `tourism.js`.
 
 ## Progress
 
-Nothing is built yet.
+- **Part A, the planner (29 September 2026, branch `m8-modern`, stacked on `m7-air`).** Built as planned, with these specifics:
+  - **Proposals** (`proposePlan` in `src/shared/planner.js`) are worked out from a view of the world. `ClientWorld.planView()` gives the browser's, and `planView` in `src/sim/planner.js` gives the server's, for tests and for bots later. A unit test builds both from one world and gets identical projects.
+    - **Towns.**
+      - A block is 7 by 7 plots: four 3 by 3 lots with two crossing streets, or 5 by 5 with one street where 7 by 7 does not fit.
+      - A housing block comes when fewer than 6 free housing plots are left. Shops and works come only with demand.
+      - Works start at least 6 plots out from the town centre.
+      - A connecting road joins the block's streets to the nearest road, and towns whose roads do not reach the capital's get a road to it.
+      - The best road known is used: cobble after Paved roads, otherwise dirt.
+    - **Economy.**
+      - The newest unlocked mine or well goes on each unworked deposit, at most 12 a kind, the kinds worth most first.
+      - Fields come when workers have no job, one per spare worker, at most 12.
+      - A building off the grid gets a pole line to the nearest grid within 40 plots, or a plant of its own. A grid short of power gets another plant.
+      - A port comes if you have none, and a second one 12 plots or more from the first.
+      - Once Railways is known, stations at your two biggest towns with rail between them.
+    - **Civic.** Buildings that count up to their `cap`: income first, then research, town growth and troop limit, at most 2 of a kind at a time. Upgrades of every player building are one project.
+    - **Defence.**
+      - The strongest neighbour is the one with the most troops times the square root of the border you share.
+      - The best one-plot tower is placed until that border is covered, at most 8.
+      - An airfield comes once Flight is known, if none is within 20 plots of that border.
+  - **The queue** (`installPlanner`, rank 5, every second).
+    - Zones cost nothing and are painted at once.
+    - Paid pieces are built in order. While one waits for gold, only zones may pass it.
+    - A piece that cannot be placed any more is dropped at once with its reason (`plan_dropped`), and a finished project reports `plan_done`.
+    - The `plan` order takes `add` (one project, up to 60 pieces, 400 in the queue), `cancel`, `clear` and `keep` (up to 32 areas, each up to 128 by 128).
+    - A socket message is at most 4,000 characters, so the browser sends one project per order.
+  - **Network.**
+    - The purse carries a small `plan` summary.
+    - The whole queue goes as a `plan` message only when it changes, and in `hello` with `planRules`.
+  - **Client.**
+    - The Planner card is `public/js/ui/planner.js`: the O key, and the Plan button in the action bar with the queue's progress.
+    - It lists projects by kind with price, reason and pieces, and has Build, Show, Skip (kept per world in the browser), Build these, Build all and Look again.
+    - Proposals are drawn as outlines while it is open (`drawPlan`); queued pieces are dashed blue.
+    - Keep land clear paints areas with the zone drag. The feed reports finished and dropped projects.
+  - **Evidence:**
+    - `npm test`: 253 of 253, with nine planner tests:
+      - blocks and streets;
+      - mines, keep clear and skip;
+      - fields, civic and upgrades;
+      - towers and the airfield;
+      - power;
+      - the queue;
+      - order checks;
+      - the rules;
+      - the browser's plan against the server's.
+    - Reference: 95 of 95.
+    - One plan, measured in Node:
+      - fine Europe size (1400 by 760) with a 90,000-plot nation: 18 to 56 ms;
+      - Earth size (3600 by 1440) with a 160,000-plot nation: 19 to 71 ms.
+      - The browser plans again every 5 s while the card is open.
+    - The drawing, run in Node against a recording canvas: 23 fills and 5 outlines for a known plan, as counted by hand, with queued items dashed.
+    - **Bench.** It now queues every player's proposals twice during the run, and reports them under `planner`. It also reports `pathTotals`, the path work over the whole run.
+      - A short run (1,300 ticks, 400 bots): the players, Medieval by then, queued 9 projects of 37 pieces in the first round. All were built, and none were dropped.
+      - The bench cannot give a pass or fail today: the laptop is on battery (39%, Balanced plan), and the same code swings several times between runs.
+        - The previous commit, without the planner, measured a p99 of 52.5 ms, where it measured 30.1 ms this morning.
+        - Two runs of this branch, back to back: with the planner off, worst 273 ms (p99 159); with it on, worst 63 ms (p99 51). The median was 12 ms in both.
+      - It is rerun on mains power before this part is called done.
+    - Smoke, `npm run ui` and the soak have planner checks written, but they have not been run: the dev server stays off until Ryan asks for it.
