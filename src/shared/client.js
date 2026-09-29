@@ -328,7 +328,7 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null, sams: m.sams ?? null, cheats: m.cheats ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "plan") this.planQueue = m.queue ?? [];
     if (m.t === "pilots") this.setPilots(m.p ?? [], m.shots ?? []);

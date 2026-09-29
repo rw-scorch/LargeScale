@@ -106,3 +106,17 @@ test("pilot positions glide between samples, and shots are kept for a second", (
   assert.equal(c.pilots.size, 0, "let go: nothing piloted");
   assert.equal(c.shots.length, 1, "the shot still shows for a moment");
 });
+
+test("the browser keeps every field of the purse the server sends", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/world.js", import.meta.url), "utf8");
+  const call = src.match(/return purseOf\(n, \{([^\n]*)\}\);/);
+  assert.ok(call, "the purse call is found");
+  const keys = [...call[1].matchAll(/(?:^|, )([a-zA-Z]+):/g)].map(m => m[1]);
+  assert.ok(keys.includes("sams") && keys.includes("cheats") && keys.length >= 10, keys.join(" "));
+  const c = new ClientWorld({ t: "hello", v: 5, you: 1, w: 4, h: 4, map: { kind: "test" }, hashes: {}, nations: [], stacks: [], units: [], chat: [] });
+  const msg = { t: "purse", money: 1, era: "T", town: {} };
+  for (const k of keys) msg[k] = { sent: k };
+  c.message(msg);
+  for (const k of keys) assert.deepEqual(c.purse[k], { sent: k }, `the purse keeps ${k}`);
+});
