@@ -12,6 +12,19 @@ export const MINES = { stackShare: 0.25, stackMax: 200, vehicleDamage: 60 };
 export const MACHINE_RULES = { wreckSeconds: 300, queueMax: 10, hpPerLoss: 1, supportScale: 1, portRadius: 2, followEvery: 1, lethality: rules.combat?.lethality ?? 0.08, ...rules.machines };
 
 export const waterOk = t => !TERRAIN[t].land && TERRAIN[t].water !== "ice";
+export const NAVY_RULES = { surfaceSeconds: 20, cell: 8, ...rules.navy };
+
+export function diveOf(world, u) {
+  if (u.wreck || !UNIT_TYPES[u.type]?.sub) return 0;
+  const water = TERRAIN[world.terrain[u.at]]?.water;
+  if (water === "deep") return u.surfaced > world.time ? 1 : 2;
+  return water === "open" ? 1 : 0;
+}
+
+export function canHit(world, by, target) {
+  const d = diveOf(world, target);
+  return !d || (d === 1 && !!(by?.asw || by?.sub || by?.strike));
+}
 const WATER_MOVE = Float32Array.from({ length: 256 }, (_, t) => (TERRAIN[t] && waterOk(t) ? 1 : Infinity));
 
 function around(grid, i, r = 1) {
@@ -483,7 +496,11 @@ function boardShips(world) {
 
 function shipBattles(world, dt) {
   const r = world.machines.rules, g = world.grid, ships = [];
-  for (const u of world.units.list.values()) if (!u.wreck && UNIT_TYPES[u.type]?.domain === "sea" && !UNIT_TYPES[u.type].freight) ships.push(u);
+  for (const u of world.units.list.values()) {
+    const d = UNIT_TYPES[u.type];
+    if (d?.sub && u.firing != null) u.firing = null;
+    if (!u.wreck && d?.domain === "sea" && !d.freight) ships.push(u);
+  }
   if (ships.length < 2) return;
   const byPlot = new Map();
   for (const u of ships) byPlot.set(u.at, [...(byPlot.get(u.at) ?? []), u]);
@@ -496,9 +513,10 @@ function shipBattles(world, dt) {
           foes.set(a.id, (foes.get(a.id) ?? 0) + 1);
           foes.set(b.id, (foes.get(b.id) ?? 0) + 1);
         }
-  const power = u => UNIT_TYPES[u.type][u.path.length ? "attack" : "defence"] / foes.get(u.id);
-  const hits = pairs.map(([a, b]) => [a, b, power(a), power(b)]);
+  const power = u => UNIT_TYPES[u.type][u.path.length || UNIT_TYPES[u.type].sub ? "attack" : "defence"] / foes.get(u.id);
+  const hits = pairs.map(([a, b]) => [a, b, canHit(world, UNIT_TYPES[a.type], b) ? power(a) : 0, canHit(world, UNIT_TYPES[b.type], a) ? power(b) : 0]);
   for (const [a, b, pa, pb] of hits) {
+    for (const [u, p, t] of [[a, pa, b], [b, pb, a]]) if (p > 0 && UNIT_TYPES[u.type].sub) { u.surfaced = world.time + NAVY_RULES.surfaceSeconds; u.firing = t.at; }
     if (pb > 0) a.hitBy = b.owner;
     if (pa > 0) b.hitBy = a.owner;
     damage(world, a, r.lethality * pb * dt * r.hpPerLoss);

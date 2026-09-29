@@ -40,6 +40,7 @@ import { runOrder, RateLimit, applyPresence, victory, StateFeed, BuildingFeed, p
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { runAdmin, parseSpeed, cleanName, ADMIN_RULES, adminAllowed, cleanPowers, POWERS } from "./admin.js";
 import { installCheats } from "./sim/cheats.js";
+import { installNavy } from "./sim/navy.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
 const SAVE_VERSION = 4;
@@ -181,6 +182,7 @@ export class World extends DurableObject {
     installSoldiers(this.sim);
     installPilot(this.sim);
     installAir(this.sim);
+    installNavy(this.sim);
     const trimmed = trimField(this.sim);
     if (trimmed.size) this.fieldTrimmed = Object.fromEntries(trimmed);
     if (this.upgradedFrom && this.upgradedFrom < 4) this.goldLoaded = convertToGold(this.sim);
