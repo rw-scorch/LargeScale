@@ -6,6 +6,7 @@ import { emptyDeposits, decodeDeposits, cropDeposits, depositIndex } from "./dep
 import { lockMap, lockReason, researchError } from "./research.js";
 import { ERA_ORDER } from "./buildings.js";
 import { unitTable, mixFromRow, mixParts, powerOf } from "./units.js";
+import { piecePlots } from "./planner.js";
 
 const LEVY_ONLY = [{ id: "levy", num: 1, name: "Levies", kind: "troop", era: "T", attack: 1, defence: 1, speed: 1, capture: 1 }];
 
@@ -54,6 +55,8 @@ export class ClientWorld {
     this.goldRules = hello.goldRules ?? null;
     this.soldierRules = hello.soldierRules ?? null;
     this.pilotRules = hello.pilotRules ?? null;
+    this.planRules = hello.planRules ?? null;
+    this.planQueue = hello.plan ?? [];
     this.pilots = new Map();
     this.shots = [];
     this.setPilots(hello.pilots ?? [], []);
@@ -219,6 +222,21 @@ export class ClientWorld {
     return placeError(view, nation, def, anchor) ?? costError(def, nation);
   }
 
+  planView(extra = {}) {
+    const p = this.purse, me = this.nations.get(this.you);
+    const occupant = i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; };
+    const view = {
+      w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, zone: this.zone, road: this.roads, occupant, blocked: i => !!occupant(i),
+      deposit: i => this.depositAt(i), depositPlots: this.deposits.plots, depositName: k => this.depositNames[this.depositIds.indexOf(k)] ?? k,
+      lockOf: (id, kind) => this.lockOf(id, kind), buildings: [...this.buildings.values()], defs: this.defs.table,
+      me: { id: this.you, era: p?.era ?? "T", money: p?.money ?? 0, capital: me?.capital ?? null }, town: p?.town ?? {},
+      nations: [...this.nations.values()], power: p?.power ?? null, roadRules: this.roadRules, powerRules: this.powerRules,
+      worth: this.goldRules?.worth, keep: p?.plan?.keep ?? [], premium: this.consRules.instantPremium, reserved: [],
+    };
+    for (const q of this.planQueue) for (const piece of q.pieces) if (piece.t === "build" || piece.t === "zone") view.reserved.push(...piecePlots(view, piece));
+    return Object.assign(view, extra);
+  }
+
   costError(type) {
     const def = this.defs.table[type];
     return def ? costError(def, { money: this.purse?.money ?? 0 }) : "unknown building";
@@ -304,8 +322,9 @@ export class ClientWorld {
       for (const r of m.b ?? []) { if (!this.buildingsReady) this.early.add(r[0]); this.setBuilding(r); }
       for (const id of m.bg ?? []) { if (!this.buildingsReady) this.early.add(id); this.removeBuilding(id); }
     }
-    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null };
+    if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
+    if (m.t === "plan") this.planQueue = m.queue ?? [];
     if (m.t === "pilots") this.setPilots(m.p ?? [], m.shots ?? []);
     if (m.t === "schedule") { this.schedule = m.schedule ?? {}; if (m.info) this.info = m.info; }
     if (m.t === "phase") this.lastPhase = m;

@@ -27,7 +27,9 @@ import { makeRng } from "../src/shared/rng.js";
 import { isLand } from "../src/shared/terrain.js";
 import { encodeRuns, countRuns } from "../src/shared/codec.js";
 import { MSG, partFrames } from "../src/shared/protocol.js";
-import { StateFeed, BuildingFeed, publicEvents } from "../src/game.js";
+import { StateFeed, BuildingFeed, publicEvents, runOrder } from "../src/game.js";
+import { installPlanner, planView, PLAN_RULES } from "../src/sim/planner.js";
+import { proposePlan } from "../src/shared/planner.js";
 import { planCatchUp, runCatchUp } from "../src/sim/offline.js";
 import allRules from "../data/rules.json" with { type: "json" };
 import { encodeRows } from "../src/shared/buildings.js";
@@ -47,6 +49,7 @@ const { values: a } = parseArgs({ options: {
   roads: { type: "string", default: "1500" },
   rail: { type: "string", default: "200" },
   tanks: { type: "string", default: "4" },
+  plan: { type: "string", default: "1" },
   power: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
   companies: { type: "string", default: "100" },
@@ -251,6 +254,23 @@ for (const id of players) {
   }
   mines += here;
 }
+let planSetup = null, planDone = 0, planDropped = 0;
+if (a.plan !== "0") {
+  installPlanner(w, { run: (nid, m) => runOrder(w, nid, m), scale });
+  planSetup = { proposeMs: [], projects: 0, pieces: 0, refused: 0, eras: "" };
+}
+function queuePlans() {
+  if (!planSetup) return;
+  planSetup.eras = players.map(id => w.nations.get(id).era).join("");
+  for (const id of players) {
+    const t0 = performance.now(), list = proposePlan(planView(w, id), { ...PLAN_RULES, scale });
+    planSetup.proposeMs.push(+(performance.now() - t0).toFixed(1));
+    for (const p of list) {
+      const r = runOrder(w, id, { t: "plan", op: "add", project: { key: p.key, kind: p.kind, name: p.title, pieces: p.pieces } });
+      if (r.ok) { planSetup.projects++; planSetup.pieces += p.pieces.length; } else planSetup.refused++;
+    }
+  }
+}
 const feed0 = () => { for (const id of players) { const n = w.nations.get(id); if (n.money !== undefined && n.money < 1e6) n.money = 1e7; } };
 feed0();
 if (woodCut) bld.changed.add("wood");
@@ -332,16 +352,17 @@ function playerOrders() {
 }
 
 const econTimes = [], plainTimes = [], times = [], saveTimes = [], stateSizes = [], eventSizes = [];
-const part = { seek: 0, seeks: 0, extend: 0, extends: 0 };
+const part = { seek: 0, seeks: 0, extend: 0, extends: 0 }, total = { seek: 0, seeks: 0, extend: 0, extends: 0 };
 let worstParts = null;
 for (const [name, key] of [["seek", "seek"], ["extendPath", "extend"]]) {
   const f = w[name].bind(w);
-  w[name] = (...args) => { const t0 = performance.now(); try { return f(...args); } finally { part[key] += performance.now() - t0; part[key + "s"]++; } };
+  w[name] = (...args) => { const t0 = performance.now(); try { return f(...args); } finally { const d = performance.now() - t0; part[key] += d; part[key + "s"]++; total[key] += d; total[key + "s"]++; } };
 }
 const feed = new StateFeed(0.01, 5);
 feed.delta(w);
 let maxEvents = 0, maxDiffBytes = 0, blocked = 0, airBombs = 0, airDowns = 0;
 for (let i = 0; i < Number(a.ticks); i++) {
+  if (i % 800 === 400) queuePlans();
   if (i % 20 === 0) {
     playerOrders();
     feed0();
@@ -361,7 +382,7 @@ for (let i = 0; i < Number(a.ticks); i++) {
     const d = feed.delta(w);
     stateSizes.push(d ? Buffer.byteLength(JSON.stringify({ v: 2, t: "state", time: Math.floor(w.time), ...d })) : 0);
   }
-  for (const e of w.events) { if (e.type === "bombed") airBombs++; if (e.type === "plane_down") airDowns++; }
+  for (const e of w.events) { if (e.type === "bombed") airBombs++; if (e.type === "plane_down") airDowns++; if (e.type === "plan_done") planDone += e.done; if (e.type === "plan_dropped") planDropped++; }
   const shown = publicEvents(w, w.events);
   eventSizes.push(shown.length ? Buffer.byteLength(JSON.stringify({ v: 2, t: "events", events: shown })) : 0);
   maxEvents = Math.max(maxEvents, w.events.length);
@@ -444,6 +465,7 @@ const report = {
   overtime: shrink,
   roads: { plots: roadPlots, minStep: +w.pathMinStep().toFixed(3) },
   worstTickParts: worstParts,
+  pathTotals: { seekMs: Math.round(total.seek), seeks: total.seeks, extendMs: Math.round(total.extend), extends: total.extends, perExtendMs: +(total.extend / Math.max(1, total.extends)).toFixed(2) },
   air: air && { ...airSetup, orders: airOrders, flyingNow: [...w.units.list.values()].filter(u => u.air && !u.air.landed).length, planesNow: [...w.units.list.values()].filter(u => u.air).length, bombRuns: airBombs, shotDown: airDowns },
   soldiers: soldiers && { perPlayerPeak: fieldPeak, cap: soldiers.rules.fieldCap, stacksNow: w.stacks.size, playerStacksNow: [...w.stacks.values()].filter(s => w.nations.get(s.owner)?.human).length, battlesNow: [...w.stacks.values()].filter(s => s.engaged).length },
   rail: { plots: railPlots, stations, trainsNow: trade.trains.size, railSearch: (() => { const list = [...bld.list.values()].filter(b => b.type === "station_large"), t0 = performance.now(); trade.paths.clear(); let found = 0; for (const b of list) for (const c of list) if (b !== c && b.owner === c.owner && railPath(w, b.owner, b, c)) found++; return { pairs: found, ms: +(performance.now() - t0).toFixed(1) }; })() },
@@ -454,6 +476,7 @@ const report = {
     return { passMs: +ms.toFixed(1), grids: views.reduce((t, v) => t + v.grids.length, 0), plants: [...w.bld.list.values()].filter(b => b.type === "coal_plant").length, poles: [...w.bld.list.values()].filter(b => b.type === "power_pole").length, users: views.reduce((t, v) => t + Object.keys(v.users).length, 0), powered: views.reduce((t, v) => t + Object.values(v.users).filter(k => k >= 0).length, 0) };
   })(),
   tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
+  planner: planSetup && { ...planSetup, piecesLeft: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.pieces.length, 0), 0), done: players.reduce((t, id) => t + (w.nations.get(id).plan ?? []).reduce((s, p) => s + p.done, 0), 0) + planDone, dropped: planDropped },
   trade: seaSetup && { ...seaSetup, shipsAtSea: [...w.units.list.values()].filter(u => u.trade && !u.wreck).length, goldEarned: Math.round(players.reduce((t, id) => t + (w.nations.get(id).tradeGold ?? 0), 0)) },
   effects: { buildings: forts, fortLookupMs: fortProbe.ms, lookups: fortProbe.lookups },
   machines: { count: w.units.list.size, following: [...w.units.list.values()].filter(u => u.follow !== null).length, sailOrders: sails.length, sailOk: sails.filter(s => s.ok).length, sailWorstMs: +Math.max(0, ...sails.map(s => s.ms)).toFixed(1) },

@@ -28,6 +28,7 @@
   "world": { "botsPerMillionLand": 200, "maxBots": 400, "minMapSide": 64, "maxTestSide": 2000, "maxPlots": 5184000, "baseWidth": 3600, "messagesPerSecond": 20, "messageBurst": 40, "botTroopShare": 0.01, "botStateEvery": 5 },
   "troops": { "xpLevels": [0, 0.3, 1, 3], "xpBonus": [0, 0.1, 0.2, 0.35], "trainEvery": 5, "keepMax": 1000000 },
   "machines": { "wreckSeconds": 300, "queueMax": 10, "hpPerLoss": 1, "supportScale": 1, "portRadius": 2, "followEvery": 1, "limits": { "land": 100, "sea": 100, "air": 100 } },
+  "planner": { "every": 1, "perTick": 6, "maxPieces": 400, "maxProjectPieces": 60, "maxProjects": 40, "keepMax": 32, "keepSide": 128, "block": 7, "search": 30, "freeRes": 6, "freeCom": 4, "freeInd": 4, "indFrom": 6, "towns": 6, "townCell": 12, "farms": 12, "farmRing": [3, 16], "perDeposit": 12, "towers": 8, "airNear": 20, "powerNear": 40, "civicEach": 2 },
   "admin": { "maxGive": 1000000, "maxSpeed": 8, "logShown": 30, "nameLength": 40 },
   "detail": {
     "fineDir": "map/fine",
