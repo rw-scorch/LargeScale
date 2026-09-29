@@ -39,6 +39,7 @@ import { installNavy } from "../src/sim/navy.js";
 import { installNukes, launchWarhead } from "../src/sim/nukes.js";
 import { installTourism } from "../src/sim/tourism.js";
 import { installCbd, strengthAt } from "../src/sim/cbd.js";
+import { installDiplomacy } from "../src/sim/diplomacy.js";
 
 const { values: a } = parseArgs({ options: {
   bots: { type: "string", default: "400" },
@@ -56,6 +57,7 @@ const { values: a } = parseArgs({ options: {
   navy: { type: "string", default: "20" },
   nukes: { type: "string", default: "2" },
   tourism: { type: "string", default: "1" },
+  diplomacy: { type: "string", default: "1" },
   plan: { type: "string", default: "1" },
   power: { type: "string", default: "1" },
   ports: { type: "string", default: "4" },
@@ -85,6 +87,7 @@ console.log(`map ${a.map}${a.crop ? ` crop ${a.crop}` : ""}: ${meta.w} by ${meta
 
 let t = performance.now();
 const bots = spawnBots(w, Number(a.bots), rng);
+if (Number(a.diplomacy)) installDiplomacy(w, { fresh: false });
 installBots(w, rng);
 const players = [];
 for (let k = 0; k < Number(a.players); k++) {
@@ -176,7 +179,8 @@ if (w.tourism) timeHook(tourismTime);
 if (Number(a.tourism)) installCbd(w, { scale });
 const cbdTime = { ms: [], worst: 0 };
 if (w.cbd) timeHook(cbdTime);
-let captureCalls = 0;
+let captureCalls = 0, hostileCalls = 0;
+{ const f = w.hostile; w.hostile = (x, y) => { hostileCalls++; return f(x, y); }; }
 { const f = w.captureCost.bind(w); w.captureCost = (i, att) => { captureCalls++; return f(i, att); }; }
 const guard = installGuard(w, { scale });
 const overtime = installOvertime(w, { every: allRules.overtime.every });
@@ -577,6 +581,7 @@ const report = {
   tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
   tourism: w.tourism && (() => { const v = players.map(id => w.tourism.last.get(id)).filter(Boolean); const p50 = x => (x.ms.length ? +[...x.ms].sort((a, b) => a - b)[x.ms.length >> 1].toFixed(3) : null), p99 = x => (x.ms.length ? +[...x.ms].sort((a, b) => a - b)[Math.floor(x.ms.length * 0.99)].toFixed(2) : null), busy = x => { const m = x.ms.filter(v => v > 0.05); return m.length ? +(m.reduce((t, v) => t + v, 0) / m.length).toFixed(2) : null; }; return { setup: tourismSetup, mid: tourismMid, sites: v.reduce((t, x) => t + x.sites, 0), goldPerSecond: +v.reduce((t, x) => t + x.perSecond, 0).toFixed(1), wonders: [...w.bld.list.values()].filter(b => b.type === "wonder_pyramid").length, tickMs: { p50: p50(tourismTime), p99: p99(tourismTime), everyFiveSecondsAvg: busy(tourismTime), worst: +tourismTime.worst.toFixed(1) } }; })(),
   captureCallsPerTick: Math.round(captureCalls / Number(a.ticks)),
+  hostileCallsPerTick: Math.round(hostileCalls / Number(a.ticks)), diplomacy: !!w.dip,
   cbd: w.cbd && (() => { const t0 = performance.now(); w.cbd.field = null; let hits = 0; for (let i = 0; i < w.grid.size; i += 7) if (w.owner[i] && strengthAt(w, w.owner[i], i) > 0) hits++; return { centres: w.cbd.centres.length, rebuildAndLookupMs: +(performance.now() - t0).toFixed(1), plotsSampledInACore: hits, tickWorstMs: +cbdTime.worst.toFixed(1) }; })(),
   navy: { ships: [...w.units.list.values()].filter(u => ["cruiser", "battleship", "submarine", "aircraft_carrier"].includes(u.type) && !u.wreck).length, subsDeep: [...w.units.list.values()].filter(u => u.dive === 2).length, tickMs: navyTime.ms.length ? { p50: +[...navyTime.ms].sort((x, y) => x - y)[navyTime.ms.length >> 1].toFixed(2), worst: +navyTime.worst.toFixed(1) } : null },
   nukes: { launched: nukeTime.launched, detonated: nukeTime.detonated, intercepted: nukeTime.intercepted, tickMs: nukeTime.ms.length ? { p50: +[...nukeTime.ms].sort((x, y) => x - y)[nukeTime.ms.length >> 1].toFixed(2), worst: +nukeTime.worst.toFixed(1) } : null },

@@ -197,7 +197,7 @@ export class World extends DurableObject {
     installPower(this.sim, { scale: info.map.scale ?? 1 });
     installAutoRoads(this.sim);
     installPlanner(this.sim, { run: (nid, m) => runOrder(this.sim, nid, m), scale: info.map.scale ?? 1 });
-    installDiplomacy(this.sim, { rules: { warNotice: info.warNotice ?? DIPLO.warNotice }, saved: saved?.diplomacy ?? null, fresh: !saved });
+    installDiplomacy(this.sim, { rules: { warNotice: info.warNotice ?? info.rules?.warNotice ?? DIPLO.warNotice }, saved: saved?.diplomacy ?? null, fresh: !saved });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
     installOvertime(this.sim, { every: this.schedule().shrinkEvery ?? rules.schedule.shrinkEvery });
@@ -245,6 +245,7 @@ export class World extends DurableObject {
       save: SAVE_VERSION, name: config.name ?? "World", map: base.map, w: base.w, h: base.h, landPlots: land,
       bots: cfg.bots ?? defaultBots(land, base.map.scale ?? 1), rules: config.rules ?? {}, maxCatchupHours: config.maxCatchupHours ?? 72,
       seed: crypto.getRandomValues(new Uint32Array(1))[0], id: config.id ?? null,
+      ...(DIPLO.noticeChoices.includes(config.warNotice) ? { warNotice: config.warNotice } : {}),
     };
     this.writeRows("terrain", await gzip(base.terrain));
     this.meta("info", info);

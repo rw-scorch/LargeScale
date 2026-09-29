@@ -147,7 +147,7 @@ check(denied.status === 403 && denied.body.error === "only the host can create w
 const bogus = await api("/api/worlds", { name: "Bad", config: { map: "mars" } }, ta);
 check(bogus.status === 400 && /unknown map/.test(bogus.body.error), "an unknown map choice is refused");
 const created = Date.now();
-const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200, researchSpeed: 100, trainSpeed: 5 } } }, ta);
+const world = await api("/api/worlds", { name: "Smoke test", config: { ...M.config, rules: { stackSpeed: 6 * K, enemyCostFactor: 0.01, advanceRate: 30 * K * K, buildSpeed: 10, produceSpeed: 200, researchSpeed: 100, trainSpeed: 5, warNotice: 5 } } }, ta);
 check(world.status === 200 && world.body.id, `host creates a ${MAP} world (${world.body.w} by ${world.body.h}, ${world.body.bots} bots planned) in ${Date.now() - created} ms`);
 const wid = world.body.id;
 const outsiderOpened = await new Promise(res => {
@@ -465,6 +465,31 @@ for (const i of land.filter(i => dist(i) >= 22 * K && dist(i) <= 45 * K).sort((p
   if ((await nextResult(B, "spawn"))?.ok) { bSpawn = i; break; }
 }
 check(bSpawn >= 0, `the friend spawns ${Math.round(dist(bSpawn))} plots away`);
+{
+  const aHello = A.json.find(m => m.t === "hello");
+  A.ws.send(JSON.stringify({ t: "attack", at: bSpawn }));
+  const early = await nextResult(A, "attack");
+  check(bHello.diplomacy?.base === "peace" && aHello?.dipRules?.warNotice === 5 && /declare war first/.test(early?.error ?? ""), `players start at peace, and an attack on another player needs a declared war first ("${early?.error}")`);
+  A.ws.send(JSON.stringify({ t: "diplo", op: "propose", to: bNation, kind: "alliance" }));
+  const offer = await nextResult(A, "diplo");
+  const got = await waitFor(B, m => m.t === "diplomacy" && m.proposals?.some(p => p.id === offer?.proposal && p.from === you && p.kind === "alliance"), 4000);
+  B.ws.send(JSON.stringify({ t: "diplo", op: "decline", id: offer?.proposal }));
+  const declined = await nextResult(B, "diplo");
+  const gone = await waitFor(A, m => m.t === "diplomacy" && !m.proposals?.length, 4000);
+  check(offer?.ok && got && declined?.ok && gone, `the host proposes an alliance, only the two of them see it, and the friend declines it`);
+  A.ws.send(JSON.stringify({ t: "diplo", op: "embargo", to: bNation, on: true }));
+  const emb = await nextResult(A, "diplo");
+  const embHeard = await waitFor(B, m => m.t === "events" && m.events.some(e => e.type === "embargo" && e.a === you && e.b === bNation && e.on), 4000);
+  A.ws.send(JSON.stringify({ t: "diplo", op: "embargo", to: bNation, on: false }));
+  await nextResult(A, "diplo");
+  A.ws.send(JSON.stringify({ t: "diplo", op: "war", to: bNation }));
+  const decl = await nextResult(A, "diplo");
+  const told = await waitFor(B, m => m.t === "events" && m.events.some(e => e.type === "war_declared" && e.a === you && e.b === bNation), 4000);
+  A.ws.send(JSON.stringify({ t: "attack", at: bSpawn }));
+  const wait = await nextResult(A, "attack");
+  const begun = await waitFor(B, m => m.t === "events" && m.events.some(e => e.type === "war_started"), 15000);
+  check(emb?.on && embHeard && decl?.ok && told && /starts in d+ s/.test(wait?.error ?? "") && begun, `an embargo is heard; the host declares war, the friend is told, attacks wait for the notice ("${wait?.error}"), and the war starts`);
+}
 B.ws.send(JSON.stringify({ t: "stack", share: 0.1 }));
 const bs = await nextResult(B, "stack");
 B.ws.send(JSON.stringify({ t: "move", stack: st2.stack, to: bSpawn }));
@@ -725,7 +750,7 @@ writeFileSync(new URL("./.last.json", import.meta.url), JSON.stringify({ ...JSON
 check(zAway && zAway.gold > 0 && zAway.pop[1] > zAway.pop[0] && zAway.town > 0 && zAway.share === 0.9,
   `the "while you were away" summary shows the economy moved on: ${zAway?.gold} gold, people ${zAway?.pop?.join(" to ")}, ${zAway?.town} town buildings, research ${zAway?.researched?.length}, output at ${zAway?.share}`);
 Z.ws.close();
-const gw = await api("/api/worlds", { name: "Guard test", config: { w: 120, h: 90, seed: 5, bots: 0, rules: { stackSpeed: 6 } } }, ta);
+const gw = await api("/api/worlds", { name: "Guard test", config: { w: 120, h: 90, seed: 5, bots: 0, rules: { stackSpeed: 6, warNotice: 1 } } }, ta);
 const gwid = gw.body.id;
 await api(`/api/worlds/${gwid}/join`, {}, tb);
 const GA = await connect(gwid, ta), GB = await connect(gwid, tb);
@@ -749,6 +774,8 @@ if (gSpots) {
   const sb = await nextResult(GB, "spawn");
   GA.ws.send(JSON.stringify({ t: "guard", home: true }));
   const guardOn = await nextResult(GA, "guard");
+  GB.ws.send(JSON.stringify({ t: "diplo", op: "war", to: gah.you }));
+  await nextResult(GB, "diplo");
   await sleep(1500);
   GB.ws.send(JSON.stringify({ t: "attack", at: gy * 120 + gx }));
   const attack = await nextResult(GB, "attack");
@@ -760,7 +787,7 @@ if (gSpots) {
 } else check(false, "the guard test map has two spots joined by land");
 GA.ws.close();
 GB.ws.close();
-const sch = await api("/api/worlds", { name: "Schedule test", config: { w: 120, h: 90, seed: 8, bots: 0 } }, ta);
+const sch = await api("/api/worlds", { name: "Schedule test", config: { w: 120, h: 90, seed: 8, bots: 0, rules: { warNotice: 1 } } }, ta);
 const schId = sch.body.id;
 await api(`/api/worlds/${schId}/join`, {}, tb);
 const SA = await connect(schId, ta), SB = await connect(schId, tb);
@@ -781,9 +808,12 @@ check(sah.schedule && sah.info?.win === "last" && badOrder?.error === "peace end
 const started = await waitFor(SB, m => m.t === "phase" && m.key === "startAt", 10000);
 SA.ws.send(JSON.stringify({ t: "admin", op: "speed", factor: 8 }));
 await nextResult(SA, "admin");
+SB.ws.send(JSON.stringify({ t: "diplo", op: "war", to: sah.you }));
+const schWar = await nextResult(SB, "diplo");
+await sleep(600);
 SB.ws.send(JSON.stringify({ t: "attack", at: 45 * 120 + 25 }));
 const peaceful = await nextResult(SB, "attack");
-check(started && /^you are at peace with/.test(peaceful?.error ?? ""), `at the start time the world opens, and until peace ends players cannot attack each other ("${peaceful?.error}")`);
+check(started && schWar?.ok && /peace period is still on/.test(peaceful?.error ?? ""), `at the start time the world opens, and until peace ends players cannot attack each other ("${peaceful?.error}")`);
 const overtime = await waitFor(SA, m => m.t === "phase" && m.key === "overtimeAt", 15000);
 const plots0 = await until(() => SA.json.filter(m => m.t === "state").flatMap(m => m.n ?? []).filter(r => r[0] === sah.you).at(-1)?.[1] ?? null, 2000);
 const shrank = await waitFor(SA, m => m.t === "events" && m.events.some(e => e.type === "overtime_shrink"), 12000);
@@ -820,7 +850,7 @@ check(httpSched.status === 200 && friendSched.status === 403 && heardHttp?.sched
   `the host schedules a world from the list, players and watchers hear at once, the list shows the new time, and a friend cannot (${friendSched.status})`);
 W.ws.close();
 HA.ws.close();
-const indWorld = await api("/api/worlds", { name: "Industry test", config: { w: 160, h: 100, seed: 5, bots: 0, rules: { buildSpeed: 60, produceSpeed: 5 } } }, ta);
+const indWorld = await api("/api/worlds", { name: "Industry test", config: { w: 160, h: 100, seed: 5, bots: 0, rules: { buildSpeed: 60, produceSpeed: 5, warNotice: 1 } } }, ta);
 const IN = await connect(indWorld.body.id, ta);
 const ih = await waitFor(IN, m => m.t === "hello");
 const IM = await new Mirror(IN, ih).load();
@@ -901,6 +931,7 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
     if ((await nextResult(FR, "spawn"))?.ok) fSpawn = y * ih.w + x;
   }
   await adminOp(IN, { op: "give", nation: fh.you, what: "troops", amount: 3000 });
+  if (fSpawn !== null) { await ask({ t: "diplo", op: "war", to: fh.you }); await sleep(1500); }
   FR.ws.send(JSON.stringify({ t: "stack", share: 0.5, at: fSpawn }));
   const fStack = await nextResult(FR, "stack");
   await adminOp(IN, { op: "speed", factor: 4 });
