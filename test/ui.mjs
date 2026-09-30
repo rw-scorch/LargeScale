@@ -386,7 +386,7 @@ const ringAt = async (p, plot) => {
 };
 const ownRing = await ringAt(page, capital);
 await page.screenshot({ path: `${OUT}/5b-ring-own-${MAP}.png` });
-check(ownRing.join() === "form,build,zone,info", `with nothing selected, a right-click on your land opens the ring: ${ownRing.join(", ")}, with Form stack in the centre`);
+check(ownRing.join() === "form,build,zone,note,info", `with nothing selected, a right-click on your land opens the ring: ${ownRing.join(", ")}, with Form stack in the centre`);
 await page.keyboard.press("Escape");
 check(await page.evaluate(() => document.querySelector("#ring").hidden), "Esc closes the ring");
 const ringSpots = await page.evaluate(() => {
@@ -403,13 +403,13 @@ const ringSpots = await page.evaluate(() => {
 const freeRing = ringSpots.free === null ? [] : await ringAt(page, ringSpots.free);
 if (freeRing[0] === "take") await page.click("#ring [data-ring=take]");
 const took = await page.waitForFunction(() => (window.__ls.game.world.purse?.orders ?? []).some(o => o.only === 0), null, { timeout: 5000 }).then(() => true, () => false);
-check(freeRing.join() === "take,info" && took, `on unclaimed land the ring offers ${freeRing.join(", ")}; Take land forms a stack that takes unclaimed land only`);
+check(freeRing.join() === "take,note,info" && took, `on unclaimed land the ring offers ${freeRing.join(", ")}; Take land forms a stack that takes unclaimed land only`);
 const foeRing = ringSpots.foe === null ? [] : await ringAt(page, ringSpots.foe);
 const attackLabel = await page.textContent("#ring [data-ring=attack] .label").catch(() => "");
 await page.screenshot({ path: `${OUT}/5c-ring-attack-${MAP}.png` });
 if (foeRing[0] === "attack") await page.click("#ring [data-ring=attack]");
 const attacking = await page.waitForFunction(id => { const w = window.__ls.game.world; return (w.purse?.orders ?? []).some(o => o.only === id) || w.myMachines().some(u => u.type === "transport_boat"); }, ringSpots.foeId, { timeout: 5000 }).then(() => true, () => false);
-check(foeRing.join() === "attack,info" && attackLabel === `Attack ${ringSpots.foeName}` && attacking, `on ${ringSpots.foeName}'s land the ring offers "${attackLabel}", which forms a stack at your nearest land that advances into that nation only`);
+check(foeRing.join() === "attack,note,info" && attackLabel === `Attack ${ringSpots.foeName}` && attacking, `on ${ringSpots.foeName}'s land the ring offers "${attackLabel}", which forms a stack at your nearest land that advances into that nation only`);
 await page.keyboard.press("Escape");
 const cardSpot = await page.evaluate(([foe, id]) => {
   const g = window.__ls.game, w = g.world, v = g.view;

@@ -256,13 +256,15 @@ check(aSpawn >= 0, "player spawns on land");
   check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
   const rr = async (kind, via) => { A.ws.send(JSON.stringify({ t: "road", kind, via })); return nextResult(A, "road"); };
   const runNear = () => {
-    for (let dy = -12; dy <= 12; dy++) {
-      let run = [];
-      for (let dx = -14; dx <= 14; dx++) {
-        const i = (cy + dy) * M.w + cx + dx;
-        if (cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && !cw.zone[i]) { run.push(i); if (run.length >= 6) return run; } else run = [];
+    const free = i => cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && !cw.zone[i];
+    for (const [du, dv] of [[1, M.w], [M.w, 1]])
+      for (let a = -12; a <= 12; a++) {
+        let run = [];
+        for (let b = -14; b <= 14; b++) {
+          const i = (cy * M.w + cx) + a * dv + b * du;
+          if (i >= 0 && i < cw.owner.length && free(i)) { run.push(i); if (run.length >= 6) return run; } else run = [];
+        }
       }
-    }
     return null;
   };
   const run = runNear(), gold0 = cw.purse.money;
@@ -460,7 +462,7 @@ let bSpawn = -1;
 for (const i of land.filter(i => dist(i) >= 22 * K && dist(i) <= 45 * K).sort((p, q) => dist(p) - dist(q)).filter((_, k) => k % 5 === 0)) {
   A.ws.send(JSON.stringify({ t: "route", stack: st.stack, to: i }));
   const way = await nextResult(A, "route");
-  if (!way?.ok || way.plots > 3 * dist(i)) continue;
+  if (!way?.ok || way.boat || way.plots > 3 * dist(i)) continue;
   B.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
   if ((await nextResult(B, "spawn"))?.ok) { bSpawn = i; break; }
 }

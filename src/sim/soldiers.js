@@ -15,6 +15,7 @@ export function fieldTroops(world, nid) {
 export function companiesOf(world, nid) {
   let k = 0;
   for (const s of world.stacks.values()) if (s.owner === nid) k++;
+  for (const u of world.units?.list.values() ?? []) if (!u.wreck && u.cargo?.owner === nid && u.cargo.troops > 0) k++;
   return k;
 }
 
