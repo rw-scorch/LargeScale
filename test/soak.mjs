@@ -96,7 +96,7 @@ async function diplo() {
   else if (!mine && roll < 0.08) m = { t: "diplo", op: "faction", name: pick(["North", "South", "East", "West"]) };
   else if (mine?.leader === p.cw.you && !other && roll < 0.2) m = { t: "diplo", op: "invite", to };
   else if (mine && roll > 0.94) m = { t: "diplo", op: rand() < 0.5 || mine.leader !== p.cw.you || !mine.members.includes(to) ? "quit" : "expel", to };
-  else if (theirs.length && roll < 0.4) m = { t: "diplo", op: rand() < 0.7 ? "accept" : "decline", id: pick(theirs).id };
+  else if (theirs.length && roll < 0.4) { const p = pick(theirs); m = { t: "diplo", op: p.kind !== "surrender" && rand() < 0.7 ? "accept" : "decline", id: p.id }; }
   else if (rel.status === "peace" && roll < 0.55) m = { t: "diplo", op: "war", to };
   else if (rel.status === "war" || rel.status === "war_pending") m = { t: "diplo", op: "propose", to, kind: "peace" };
   else if (rel.status === "alliance") m = rand() < 0.5 ? { t: "diplo", op: "leave", to } : { t: "diplo", op: "embargo", to, on: !rel.embargoes };
