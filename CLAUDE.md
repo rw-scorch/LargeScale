@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (326)
+npm test                  # unit tests (333)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -427,10 +427,14 @@ Written 30 September 2026 (`plans/milestone-9.md`), on branch `m9-diplomacy`, st
   - **Notes.** `src/sim/notes.js`: the `note` order, up to 20 a nation, shared with allies (`notesFor`), and the `notes` message.
   - **Client.** The Faction section of the Diplomacy panel, the chat tab's channel picker, the note card (`public/js/ui/notes.js`), the ring's Note item and the pins (`drawNotes`).
   - **Fixed.** A carrier holding troops counts as a company (`companiesOf`), so landing cannot pass the 100-company limit.
+- **Part C, the endgame (30 September 2026, branch `m9-endgame`).** Details and evidence are in `plans/milestone-9.md`.
+  - **Vassals.** `surrender` in a war, accepted by the other side. A vassal follows its overlord's relations (`lords`, `status`), cannot declare war or propose, counts on its side (`winnerKey`), and pays `tribute` (25%) of its income (`incomeOf`, from `vitalsOf`). `free` releases it; a fallen overlord frees it.
+  - **Second commanders.** `command` invites an eliminated player (up to `maxCommanders`). Their socket acts for that nation (`nation` and `self` in the attachment and `hello`); `CLOSE.ROLE` (4004) makes their page reconnect when the role changes. `resign`, `dismiss`, or the nation's fall ends it.
+  - **The record.** The `record` table (`keepRecord`, `RECORD`) and the `history` table of quarter-size owner pictures (`snapshot`, every game hour, `rules.json` `history`). `GET /api/worlds/:id/history[/:n]` opens when the world has ended, or to admins. The record panel is `public/js/ui/record.js`.
 
 Open items as of 30 September 2026, in order:
 
-0. Milestone nine is under way. Part A (`m9-diplomacy`, PR 45) passed smoke (123), UI (192) and the soak; Part B (`m9-factions`, stacked on it) passed smoke (126), UI (194) and the soak. Part C (second commanders, vassals, the public record) is next. After it, in order: the Future era with cruise missiles, engineers and terrain destruction, atmosphere, and host rules with the dev panel.
+0. Milestone nine is built: Part A (`m9-diplomacy`, PR 45), Part B (`m9-factions`, PR 46) and Part C (`m9-endgame`), each stacked on the one before and each against `main`. Their last dev server runs passed smoke (123, 126, 130), UI (192, 194, 195) and the soak. Next: the Future era with cruise missiles, then engineers and terrain destruction, atmosphere, and host rules with the dev panel. After it, in order: the Future era with cruise missiles, engineers and terrain destruction, atmosphere, and host rules with the dev panel.
 
 Earlier open items (29 September 2026):
 

@@ -208,3 +208,40 @@ In order: the Future era with cruise missiles; engineers and terrain destruction
         - Its road check also looks for vertical runs of free land.
         - The UI ring checks expect the new Note item.
         - One UI run failed the piloting check on timing; it passed on the next run.
+- **Part C, the endgame (30 September 2026, branch `m9-endgame`, stacked on `m9-factions`).** With it, milestone nine is built.
+  - **Surrender and vassals** (`src/sim/diplomacy.js`):
+    - In a war, the `diplo` order's `surrender` offers to surrender, and the other side accepts. A player with vassals must set them free first.
+    - The vassal leaves its faction. Its relations follow its overlord's: its overlord's wars and alliances are its own (`status` looks through `lords`).
+    - A vassal cannot declare war or make proposals, and a war on it must be declared on its overlord.
+    - It counts on its overlord's side for the win (`winnerKey`) and the end-time land count.
+    - **Tribute:** 25% of the vassal's income every 5 s, never more than it has, in catch-up too. The income is the HUD's figure, passed in as `incomeOf`.
+    - The overlord sets a vassal free (`free`), with the 10-minute treaty. A fallen overlord frees it (`vassal_freed` with `why: "fell"`).
+    - In a world of two players, an accepted surrender leaves one side standing, so it wins, as a surrender should.
+  - **Second commanders:**
+    - A player invites an eliminated player (`command`), up to 2 of them, and the eliminated player accepts. The `diplo` order accepts `accept`, `decline` and `resign` from a fallen nation.
+    - The commander's socket then acts for the nation it commands: at connect, `nation` is the commanded nation, and `self` is their own; `hello` carries both.
+    - When the role changes (`commander_joined` or `commander_left`), the commander's socket gets a `role` message and is closed with `CLOSE.ROLE` (4004), so the page reconnects in the new role.
+    - The commander resigns (`resign`, run as `self`), the owner dismisses them (`dismiss`), or the nation's fall ends it.
+  - **The public record** (`src/world.js`):
+    - Every diplomacy event, eliminations, eras, wonders, nuclear launches and strikes, moved capitals and the win go to a `record` table (`keepRecord`, `RECORD`).
+    - A picture of who owns what, at a quarter of the map's size, run-length encoded with the names and colours of the nations in it, goes to a `history` table. One is kept when the first player spawns, every game hour after that (`rules.json` `history`), at the win, and when an admin ends the world.
+    - `GET /api/worlds/:id/history` gives the events, the list of pictures and the nations; `.../history/:n` gives one picture. Both open to anyone who can see the world once it has ended, and to admins at any time.
+  - **Client.**
+    - The Diplomacy panel shows your role at the top: a commander with Resign, a fallen player waiting for an invitation, a vassal and what it pays, or an overlord and its vassals.
+    - Surrender is in a war's actions, asked twice. Set free is on a vassal's row. An eliminated player's row has Invite to command, and your commander's has Dismiss.
+    - The leaderboard marks vassals and commanders, and the feed reports each change.
+    - The record panel (`public/js/ui/record.js`, from World info) draws each picture over the terrain, with a slider, a legend and the list of what happened.
+  - **Evidence:**
+    - `npm test`: 333 of 333. `test/endgame.test.js` has 7 tests:
+      - surrender, and a vassal following its overlord;
+      - tribute, live and in catch-up, capped at the vassal's gold;
+      - setting free, and a fallen overlord;
+      - the win and the land count with a vassal;
+      - commanders: invite, accept, resign, dismiss and the fall;
+      - saving;
+      - the browser's view.
+    - **Dev server run (30 September 2026):**
+      - **Smoke: 130 of 130.** The friend surrenders in a war, and as the host's vassal cannot declare war ("a vassal cannot declare war: its overlord decides"). The host sets it free. The host beats a third player and invites them to command; after reconnecting, that player's page says it commands the host's nation, and its stack order makes a stack of the host's. The record is closed (403) while the world runs; once it ends, the friend reads 13 events and 2 map pictures of 30 by 23.
+      - **`npm run ui`: 195 of 195.** The host, an admin, opens the record before the end: a 60 by 40 picture and the events, the last "pal joined The North" (screen `89-record`).
+      - **Soak: 180 s, 1,238 rounds, 0 tick errors, no problems found.** Surrender offers were made and always declined, since with two players an accepted one ends the world; both players saw the same vassals and factions at the end.
+      - **Test fixes on the way.** The rival's first spawn spot was refused as too close to the host, so the smoke now tries several spots. I found this with a probe of the same steps against the dev server, then deleted the probe.
