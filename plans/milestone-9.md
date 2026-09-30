@@ -158,3 +158,53 @@ In order: the Future era with cruise missiles; engineers and terrain destruction
       - **`npm run ui`: 192 of 192.** In the browser, Declare war asks first ("Sure? War in 5 min"). Both players' bars then count down ("War with pal in 5:01"). The host's corner shows 1 proposal waiting; accepting peace gives "Treaty, 10 min left", and an alliance after it shows "Allied" in the panel and on the leaderboard (screens `85-diplomacy` and `86-diplomacy-allied`).
       - **Soak: 180 s, 1,194 rounds, 0 tick errors, no problems found.** Random declarations, proposals, accepts, embargoes, leaves and breaks, including their refusals. Both players saw the same relation at the end.
       - **Test fixes on the way.** An edit script dropped the backslashes from three regexes in the new checks. The helper check in the UI test now accepts a gift to either nation, since the friend has a nation now.
+- **Part B, factions, chat channels and map notes (30 September 2026, branch `m9-factions`, stacked on `m9-diplomacy`).**
+  - **Factions** (in `src/sim/diplomacy.js`, through the `diplo` order):
+    - `faction` founds one. The name is 1 to 24 characters and no other faction may have it.
+    - `invite` is the leader's, through the kit's `faction_invite` proposal, accepted like any other.
+    - `quit` leaves, `expel` is the leader's, and `rename` is the leader's too.
+    - When the leader leaves, the next member leads, and an empty faction ends.
+    - Members are always allied, and a war declared on one reaches all of them.
+    - Nobody at war with any member can join. The check runs again when an invitation is accepted.
+    - Leaving, or being expelled, starts the 15-minute cooldown with each remaining member, and sends troops in their land home.
+    - The size limit is 2, 3 or 4 players (`factionSizes`). It is a host setting, through the `diplomacy` admin op and World info, and cannot go below a faction's current size.
+    - Events: `faction_created`, `faction_joined`, `faction_left` (with `by` for an expulsion) and `faction_renamed`. They go to everyone.
+  - **Winning** (`victory`, `factionWin` and `mostLand` in `src/game.js`):
+    - The last faction standing wins together. The victory carries the faction and its members, and is named with them, as in "North (Ann and Ben)".
+    - **Added:** a faction that holds every player has beaten nobody, so it does not win until a player is out. Otherwise two friends allying at the start would end the world.
+    - At the end time, the side with the most land wins, a faction's land counted together.
+  - **Chat channels** (`src/world.js`):
+    - `chat` takes `ch`: global, faction, or private with `to`. The chat table gains `ch`, `fid`, `a` and `b` columns, added to old worlds on start.
+    - Faction and private lines go only to those who may read them (`sendTo`, `chatReach`). `hello.chat` holds global lines, your faction's and your private ones.
+    - A `typing` message is passed on to the same readers, at most every 1.5 s per player.
+    - A private message to someone away sends them a notice.
+  - **Map notes** (`src/sim/notes.js`, `installNotes`, the `note` order):
+    - Up to 20 notes a nation, 80 characters each, saved with the nation.
+    - Seen by allies and faction members (`notesFor`).
+    - Sent as a `notes` message when notes or relations change, and in `hello` with `noteRules`.
+  - **Client.**
+    - The Diplomacy panel's Faction section: found, members, rename, and leave (asked twice). Invite and Expel are on players' rows, invitations are among the proposals, and faction tags show on rows and the leaderboard.
+    - The chat tab picks Everyone, your faction or one player; lines are tagged, and "Ben is typing" shows.
+    - The ring's Note item, and the note card (`public/js/ui/notes.js`): pin a note, list yours and your allies'.
+    - Pins are drawn in the owner's colour (`drawNotes`), with the text from the icon zoom, and the tip shows a note.
+  - **Found by the soak, fixed:** a company aboard a boat, ship, APC or plane was not counted against the 100-company limit. A player could board companies, form new ones up to 100 and then land the first ones, and the soak saw 101 to 103. A carrier holding a nation's troops now counts as one company (`companiesOf` in `src/sim/soldiers.js`). This has been possible since milestone seven.
+  - **Evidence:**
+    - `npm test`: 326 of 326. `test/factions.test.js` has 7 tests:
+      - founding and inviting;
+      - wars reaching every member, and joining refused while at war;
+      - size, leaving, expelling and a new leader;
+      - the faction win, and a faction of everyone;
+      - the end-time win by side;
+      - notes;
+      - the browser's view.
+
+      There is also a soldiers test for companies at sea.
+    - **Dev server run (30 September 2026):**
+      - **Smoke: 126 of 126.** A player founds "The North", invites the friend, and the friend accepts. Faction chat, private chat and a typing notice reach the right player, and writing to yourself is refused. A note is shared. On rejoining, the faction and private lines and the note come back. A faction of every player has won nothing.
+      - **`npm run ui`: 194 of 194.** The host founds a faction in the panel. The friend reads "rw_scorch invites you to join The North." and accepts, and then reads "Your faction". Faction chat arrives as "[faction] rw_scorch: north only", and a pinned note shows in the friend's list and on the map (screens `87-faction` and `88-notes`).
+      - **Soak: 180 s, 1,256 rounds, 0 tick errors, no problems found.** Factions were founded, joined, quit and expelled at random, with chat on every channel and notes added and removed. Both players saw the same relation and factions at the end. At 100 companies, orders are refused with the reason.
+      - **Test fixes on the way.**
+        - The smoke's friend now spawns where the host can walk: a boat trip replaces the host's stack, which failed the battle checks when the friend spawned across water.
+        - Its road check also looks for vertical runs of free land.
+        - The UI ring checks expect the new Note item.
+        - One UI run failed the piloting check on timing; it passed on the next run.

@@ -442,6 +442,7 @@ export class MapRenderer {
     if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
     this.drawPlan();
+    this.drawNotes();
     this.drawZoneRect();
     this.drawPowerCover();
     this.drawRoadPlan();
@@ -709,6 +710,27 @@ export class MapRenderer {
         }
         x = e;
       }
+    }
+  }
+
+  drawNotes() {
+    const s = this.state, notes = s?.notes;
+    if (!notes?.length) return;
+    const ctx = this.ctx, k = this.ratio ?? 1, v = this.visibleRange(1), close = this.cam.scale >= ZOOM.icons * k;
+    for (const n of notes) {
+      const x = n.at % s.w, y = (n.at / s.w) | 0;
+      if (x < v.x0 || x > v.x1 || y < v.y0 || y > v.y1) continue;
+      const [sx, sy] = this.plotToScreen(x + 0.5, y + 0.5);
+      ctx.fillStyle = "rgba(15,34,51,.85)";
+      ctx.fillRect(sx - k, sy - 14 * k, 2 * k, 14 * k);
+      ctx.beginPath();
+      ctx.arc(sx, sy - 14 * k, 5 * k, 0, Math.PI * 2);
+      ctx.fillStyle = s.nations.get(n.owner)?.colour ?? "#e8c84a";
+      ctx.fill();
+      ctx.lineWidth = 1.5 * k;
+      ctx.strokeStyle = "#fff";
+      ctx.stroke();
+      if (close) this.label(n.text, sx, sy - 34 * k, 12 * k);
     }
   }
 

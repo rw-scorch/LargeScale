@@ -30,6 +30,7 @@ import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
 import { createLogisticsPanel } from "./ui/logistics.js";
 import { createDiplomacyPanel } from "./ui/diplomacy.js";
+import { createNoteCard } from "./ui/notes.js";
 import { createPlannerPanel } from "./ui/planner.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createNukePanel } from "./ui/nukes.js";
@@ -110,6 +111,7 @@ class Game {
     this.diplomacy = createDiplomacyPanel(overlay, this);
     this.machinePanel = createMachinePanel(side, this);
     this.nationCard = createNationCard(side, this);
+    this.noteCard = createNoteCard(side, this);
     this.tip = createTip(overlay, this);
     this.place = createPlaceConfirm(overlay, this);
     this.aim = createAim(overlay, this);
@@ -266,7 +268,8 @@ class Game {
     if (m.t === "reopened") note(`${m.by} reopened this world.`);
     if (m.t === "speed") note(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
     if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
-    if (m.t === "dipRules" && m.by) { const n = m.rules?.warNotice ?? 300; note(`${m.by} set the war notice to ${n >= 3600 ? `${n / 3600} h` : n >= 60 ? `${n / 60} min` : `${n} s`}: a declared war waits that long before the first attack.`); }
+    if (m.t === "dipRules" && m.by && m.changed === "size") note(`${m.by} set the faction size to at most ${m.rules?.maxFactionSize} players.`);
+    else if (m.t === "dipRules" && m.by) { const n = m.rules?.warNotice ?? 300; note(`${m.by} set the war notice to ${n >= 3600 ? `${n / 3600} h` : n >= 60 ? `${n / 60} min` : `${n} s`}: a declared war waits that long before the first attack.`); }
     if (m.t === "nukes") note(m.on ? `${m.by} allowed nuclear weapons in this world.` : `${m.by} turned nuclear weapons off in this world. Warheads stay in their silos but cannot be launched or built.`);
     if (m.t === "powers") { note(m.powers.length ? `${m.by} made you a helper in this world. The admin panel, top right or the backquote key, has what you can use.` : `${m.by} took your helper powers in this world.`); if (!m.powers.length) this.toggleAdmin(false); }
     if (m.t === "catchup") this.feed.push({ key: "catchup", text: m.left ? `The world is catching up on ${span(m.of)} while nobody played: ${span(m.left)} to go.` : `The world caught up ${span(m.of)} in ${((m.ms ?? 0) / 1000).toFixed(1)} s.`, tone: "info" });
@@ -347,6 +350,11 @@ class Game {
     if (e.type === "non_aggression_signed") say(`na${e.a}:${e.b}`, pair ? `You signed a non-aggression treaty with ${name(other)} for ${e.minutes} minutes.` : `${both} signed a non-aggression treaty.`, 0, pair ? "good" : "info");
     if (e.type === "treaty_broken") say(`tb${e.a}:${e.b}`, e.b === you ? `${name(e.a)} broke their treaty with you. They cannot declare war on you for ${mins("betrayalCooldown")} minutes.` : e.a === you ? `You broke your treaty with ${name(e.b)}.` : `${name(e.a)} broke their treaty with ${name(e.b)}.`, 0, e.b === you ? "warn" : "info");
     if (e.type === "embargo" && pair) say(`em${e.a}:${e.b}`, e.a === you ? (e.on ? `Your embargo on ${name(e.b)} is on: their troops may not cross your land, and no trade flows between you.` : `You lifted your embargo on ${name(e.b)}.`) : e.on ? `${name(e.a)} put an embargo on you: no trade with them, and your troops may not cross their land.` : `${name(e.a)} lifted their embargo on you.`, 0, e.a === you ? "info" : e.on ? "warn" : "good");
+    const fac = e.name ? `the faction ${e.name}` : "a faction";
+    if (e.type === "faction_created") say(`fc${e.faction}`, e.a === you ? `You founded ${fac}. Invite players from the Diplomacy panel.` : `${name(e.a)} founded ${fac}.`, 0, e.a === you ? "good" : "info");
+    if (e.type === "faction_joined") say(`fj${e.faction}:${e.a}`, e.a === you ? `You joined ${fac}: its members are your allies, and you win together.` : w.factionOf?.(you)?.id === e.faction ? `${name(e.a)} joined your faction.` : `${name(e.a)} joined ${fac}.`, 0, e.a === you || w.factionOf?.(you)?.id === e.faction ? "good" : "info");
+    if (e.type === "faction_left") say(`fl${e.faction}:${e.a}`, e.a === you ? (e.by !== undefined ? `${name(e.by)} expelled you from ${fac}.` : `You left ${fac}.`) : e.by !== undefined ? `${name(e.by)} expelled ${name(e.a)} from ${fac}.` : `${name(e.a)} left ${fac}${e.ended ? ", which is no more" : ""}.`, 0, e.a === you && e.by !== undefined ? "warn" : "info");
+    if (e.type === "faction_renamed") say(`fr${e.faction}`, `${name(e.a)} renamed their faction ${e.name}.`, 0, "info");
     if (e.type === "troops_home" && e.nation === you) say(`th${e.from}`, `${e.stacks} of your ${e.stacks === 1 ? "stack" : "stacks"} in ${name(e.from)}'s land went home.`, 0, "info");
     if (e.type === "nuke_launched") say(`nl${e.id}`, e.nation === you ? `You launched ${aw} ${warhead} at ${name(e.toward)}'s land. Impact in ${secs(e.seconds)}.` : e.toward === you ? `${name(e.nation)} launched ${aw} ${warhead} at your land. Impact in ${secs(e.seconds)}. ABM silos and SAM sites near the target may shoot it down.` : `${name(e.nation)} launched ${aw} ${warhead} at ${name(e.toward)}'s land. Impact in ${secs(e.seconds)}.`, 0, e.toward === you ? "danger" : "warn", e.target);
     if (e.type === "nuke_intercepted") say(`nx${e.id}`, `${e.by === you ? "Your missile defence" : `${name(e.by)}'s missile defence`} shot down ${e.nation === you ? "your" : `${name(e.nation)}'s`} ${warhead} over ${e.toward === you ? "your" : `${name(e.toward)}'s`} land.`, 0, e.nation === you ? "warn" : "good", e.target);
@@ -486,6 +494,7 @@ class Game {
       else if (this.stack.choosing) this.stack.cancel();
       else if (this.machinePanel.choosing) this.machinePanel.cancel();
       else if (this.nukePanel.choosing) this.nukePanel.cancel();
+      else if (this.noteCard.open) this.noteCard.show(false);
       else { this.select(null); this.selectMachine(null); this.selectNation(null); }
     }
   }
@@ -546,6 +555,11 @@ class Game {
     if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.logistics.show(on && !!this.world?.purse?.trade && !!me?.spawned);
+    this.updatePanels();
+  }
+
+  noteAt(plot = null) {
+    this.noteCard.show(true, plot);
     this.updatePanels();
   }
 
@@ -1335,7 +1349,7 @@ class Game {
       for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
       if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
     }
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.diplomacy, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.diplomacy, this.machinePanel, this.nationCard, this.noteCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

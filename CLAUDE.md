@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (318)
+npm test                  # unit tests (326)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -420,10 +420,17 @@ Written 30 September 2026 (`plans/milestone-9.md`), on branch `m9-diplomacy`, st
   - **Effects.** Allies cross each other's land (`passable`); peace, a left alliance or an embargo sends stacks in the other's land home (`sendHome`); an embargo stops trade (`friendly` in `src/sim/trade.js`). Refusals give `peaceReason`.
   - **World.** The state row carries `diplomacy`. `hello` carries `diplomacy` and `dipRules`, and `sendDiplomacy` sends changes. The admin op `diplomacy` and the world config set `warNotice`. Diplomacy events go to everyone (`DIPLO_EVENTS` in `src/game.js`) and into the away summary.
   - **Client.** The Diplomacy panel (`public/js/ui/diplomacy.js`, J, a corner icon with a count), relations in the ring, nation card and leaderboard, the war countdown (`#war-chip`), and `ClientWorld.relation` and `canAttack`.
+- **Part B, factions, chat channels and map notes (30 September 2026, branch `m9-factions`).** Details and evidence are in `plans/milestone-9.md`.
+  - **Factions.** The `diplo` order founds (`faction`), `invite`s, `quit`s, `expel`s and `rename`s, up to `maxFactionSize` (a host setting: 2, 3 or 4). Members are allied and defend each other.
+  - **Winning.** `victory` in `src/game.js` gives a faction's win (`factionWin`, with `faction` and `members`), but not while one faction holds every player and nobody is out. `mostLand` decides the end time by side.
+  - **Chat.** Channels are global, faction and private (`chatReach`, `sendTo` in `src/world.js`; new columns in the chat table), with `typing`.
+  - **Notes.** `src/sim/notes.js`: the `note` order, up to 20 a nation, shared with allies (`notesFor`), and the `notes` message.
+  - **Client.** The Faction section of the Diplomacy panel, the chat tab's channel picker, the note card (`public/js/ui/notes.js`), the ring's Note item and the pins (`drawNotes`).
+  - **Fixed.** A carrier holding troops counts as a company (`companiesOf`), so landing cannot pass the 100-company limit.
 
 Open items as of 30 September 2026, in order:
 
-0. Milestone nine is under way on `m9-diplomacy`: Part A is built and passed smoke (123), UI (192) and the soak. Parts B (factions, chat channels, map notes) and C (second commanders, vassals, the public record) are next. After it, in order: the Future era with cruise missiles, engineers and terrain destruction, atmosphere, and host rules with the dev panel.
+0. Milestone nine is under way. Part A (`m9-diplomacy`, PR 45) passed smoke (123), UI (192) and the soak; Part B (`m9-factions`, stacked on it) passed smoke (126), UI (194) and the soak. Part C (second commanders, vassals, the public record) is next. After it, in order: the Future era with cruise missiles, engineers and terrain destruction, atmosphere, and host rules with the dev panel.
 
 Earlier open items (29 September 2026):
 

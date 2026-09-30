@@ -155,3 +155,15 @@ test("a company forms up as a leader in front and even ranks behind, never on to
     assert.ok(Math.abs(mid) < 1e-9, `${n}: the ranks are centred on the leader`);
   }
 });
+
+test("a company at sea still counts against the company limit, so landing cannot go over it", () => {
+  const { w, g, a, order } = world({ maxCompanies: 3 });
+  const one = order({ t: "stack", share: 0.05, at: g.idx(10, 20) }), two = order({ t: "stack", share: 0.05, at: g.idx(11, 20) });
+  assert.ok(one.ok && two.ok);
+  const boat = spawnUnit(w, a, "transport_boat", g.idx(29, 5));
+  boat.cargo = { troops: 500, owner: a, mix: null, xp: 0 };
+  assert.equal(fieldOf(w, a).companies, 3, "two companies on land and one aboard");
+  assert.match(order({ t: "stack", share: 0.05, at: g.idx(12, 20) }).error, /at most 3 companies/);
+  boat.cargo = null;
+  assert.equal(order({ t: "stack", share: 0.05, at: g.idx(12, 20) }).ok, true, "once it has landed as a stack, the count is the same");
+});

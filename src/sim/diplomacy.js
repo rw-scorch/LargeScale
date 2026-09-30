@@ -16,6 +16,7 @@ export const DIPLO = {
 
 export const RELATIONS = ["peace", "war_pending", "war", "alliance"];
 export const PROPOSALS = ["peace", "alliance", "non_aggression"];
+export const cleanFactionName = s => (typeof s === "string" ? s.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e]/g, "").replace(/\s+/g, " ").trim().slice(0, 24) : "");
 
 const SPAN = 1048576;
 const key = (a, b) => (a < b ? a * SPAN + b : b * SPAN + a);
@@ -99,7 +100,8 @@ export class Diplomacy {
       if (f === null || this.factions.get(f).leader !== from) return "only a faction leader can invite";
       if (this.faction(to) !== null) return "they are already in a faction";
       if (this.factions.get(f).members.size >= this.rules.maxFactionSize) return "faction is full";
-      return st === "war" || st === "war_pending" ? "make peace first" : null;
+      for (const m of this.factions.get(f).members) { const s = this.status(m, to, now); if (s === "war" || s === "war_pending") return m === from ? "make peace first" : "make peace with every member first"; }
+      return null;
     }
     return "unknown proposal";
   }
@@ -126,7 +128,7 @@ export class Diplomacy {
     if (p.kind === "alliance") { r.status = "alliance"; r.since = now; }
     if (p.kind === "peace") { r.status = "peace"; r.since = now; r.pendingAt = 0; r.treatyUntil = now + this.rules.peaceTreaty; this.closed.push([p.from, p.to]); }
     if (p.kind === "non_aggression") r.treatyUntil = now + (p.terms.minutes ?? 60) * 60;
-    if (p.kind === "faction_invite") return this.join(this.faction(p.from), by);
+    if (p.kind === "faction_invite") return this.join(this.faction(p.from), by, now);
     this.log.push({ t: now, type: `${p.kind}_signed`, a: p.from, b: p.to, ...(p.kind === "non_aggression" ? { minutes: p.terms.minutes ?? 60 } : {}) });
     return null;
   }
@@ -177,29 +179,42 @@ export class Diplomacy {
     this.version++;
   }
 
-  createFaction(founder, name) {
+  createFaction(founder, name, now = 0) {
     if (this.faction(founder) !== null) return { error: "already in a faction" };
     const id = this.next++;
     this.factions.set(id, { id, name, leader: founder, members: new Set([founder]) });
     this.memberOf.set(founder, id);
+    this.log.push({ t: now, type: "faction_created", a: founder, faction: id, name });
     this.version++;
     return { faction: id };
   }
 
+  renameFaction(nation, name, now = 0) {
+    const fid = this.faction(nation), f = this.factions.get(fid);
+    if (!f) return "not in a faction";
+    if (f.leader !== nation) return "only the leader can rename the faction";
+    f.name = name;
+    this.log.push({ t: now, type: "faction_renamed", a: nation, faction: fid, name });
+    this.version++;
+    return null;
+  }
+
   membersOf(fid) { return [...(this.factions.get(fid)?.members ?? [])]; }
 
-  join(fid, nation) {
+  join(fid, nation, now = 0) {
     const f = this.factions.get(fid);
     if (!f) return "no such faction";
     if (f.members.size >= this.rules.maxFactionSize) return "faction is full";
     f.members.add(nation);
     this.memberOf.set(nation, fid);
     for (const m of f.members) if (m !== nation) { const r = this.get(m, nation); r.status = "peace"; r.pendingAt = 0; }
+    for (const [id, p] of this.proposals) if (p.kind === "faction_invite" && p.to === nation) this.proposals.delete(id);
+    this.log.push({ t: now, type: "faction_joined", a: nation, faction: fid, name: f.name });
     this.version++;
     return null;
   }
 
-  leave(nation, now) {
+  leave(nation, now, by = null) {
     const fid = this.faction(nation);
     if (fid === null) return "not in a faction";
     const f = this.factions.get(fid);
@@ -208,6 +223,8 @@ export class Diplomacy {
     for (const m of f.members) { this.get(m, nation).noWarUntil = now + this.rules.betrayalCooldown; this.closed.push([m, nation]); }
     if (!f.members.size) this.factions.delete(fid);
     else if (f.leader === nation) f.leader = [...f.members][0];
+    for (const [id, p] of this.proposals) if (p.kind === "faction_invite" && (p.from === nation || !this.factions.has(fid))) this.proposals.delete(id);
+    this.log.push({ t: now, type: "faction_left", a: nation, faction: fid, name: f.name, ...(by !== null ? { by } : {}), ...(f.members.size ? { leader: f.leader } : { ended: true }) });
     this.version++;
     return null;
   }
@@ -359,7 +376,9 @@ export function diploOrder(world, nid, m) {
       return r.error ? r : { ok: true, proposal: r.proposal.id, to: t.id, kind: m.kind };
     }
     case "accept": {
-      const p = dip.proposals.get(id), why = dip.accept(nid, id, now);
+      const p = dip.proposals.get(id);
+      if (p?.kind === "faction_invite" && dip.faction(nid) !== null) return { error: "leave your faction first" };
+      const why = dip.accept(nid, id, now);
       return why ? { error: why } : { ok: true, signed: p.kind, with: p.from };
     }
     case "decline": { const why = dip.decline(nid, id); return why ? { error: why } : { ok: true }; }
@@ -383,7 +402,36 @@ export function diploOrder(world, nid, m) {
       dip.setEmbargo(nid, t.id, !!m.on, now);
       return { ok: true, on: !!m.on };
     }
+    case "faction":
+    case "rename": {
+      const name = cleanFactionName(m.name);
+      if (!name) return { error: "a faction name is 1 to 24 characters" };
+      if ([...dip.factions.values()].some(f => f.name.toLowerCase() === name.toLowerCase() && f.id !== dip.faction(nid))) return { error: "another faction has that name" };
+      if (m.op === "rename") { const why = dip.renameFaction(nid, name, now); return why ? { error: why } : { ok: true, name }; }
+      const r = dip.createFaction(nid, name, now);
+      return r.error ? r : { ok: true, faction: r.faction, name };
+    }
+    case "invite": {
+      const { t, error } = target(world, nid, m);
+      if (error) return { error };
+      if (dip.faction(nid) === null) return { error: "found a faction first" };
+      const r = dip.propose(nid, t.id, "faction_invite", now);
+      return r.error ? r : { ok: true, proposal: r.proposal.id, to: t.id, kind: "faction_invite" };
+    }
+    case "quit": {
+      const why = dip.leave(nid, now);
+      return why ? { error: why } : { ok: true };
+    }
+    case "expel": {
+      const { t, error } = target(world, nid, m);
+      if (error) return { error };
+      const fid = dip.faction(nid);
+      if (fid === null || dip.factions.get(fid).leader !== nid) return { error: "only the faction leader can expel" };
+      if (dip.faction(t.id) !== fid) return { error: `${t.name} is not in your faction` };
+      const why = dip.leave(t.id, now, nid);
+      return why ? { error: why } : { ok: true };
+    }
     default:
-      return { error: "the order is war, propose, accept, decline, withdraw, leave, break or embargo" };
+      return { error: "the order is war, propose, accept, decline, withdraw, leave, break, embargo, faction, invite, quit, expel or rename" };
   }
 }

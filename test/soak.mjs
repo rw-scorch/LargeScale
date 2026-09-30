@@ -27,7 +27,7 @@ async function join(world, token) {
     const m = JSON.parse(e.data);
     if (m.t === "hello") { p.cw = new ClientWorld(m); p.hello = m; return; }
     if (m.t === "result" && p.waits.has(m.of)) { const q = p.waits.get(m.of); p.waits.delete(m.of); q(m); }
-    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead|wonder|war_|peace_|alliance_|treaty|embargo|troops_home/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
+    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead|wonder|war_|peace_|alliance_|treaty|embargo|troops_home|faction_/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
     p.cw?.message(m);
   };
   ws.onclose = e => { p.closed = e.code; };
@@ -89,9 +89,12 @@ async function tourism(p) {
 async function diplo() {
   const [p, q] = rand() < 0.5 ? [A, B] : [B, A], to = q.cw.you, rel = p.cw.relation(p.cw.you, to);
   const theirs = p.cw.dip?.proposals.filter(x => x.to === p.cw.you) ?? [];
-  const roll = rand();
+  const roll = rand(), mine = p.cw.factionOf(p.cw.you), other = p.cw.factionOf(to);
   let m;
-  if (theirs.length && roll < 0.4) m = { t: "diplo", op: rand() < 0.7 ? "accept" : "decline", id: pick(theirs).id };
+  if (!mine && roll < 0.08) m = { t: "diplo", op: "faction", name: pick(["North", "South", "East", "West"]) };
+  else if (mine?.leader === p.cw.you && !other && roll < 0.2) m = { t: "diplo", op: "invite", to };
+  else if (mine && roll > 0.94) m = { t: "diplo", op: rand() < 0.5 || mine.leader !== p.cw.you || !mine.members.includes(to) ? "quit" : "expel", to };
+  else if (theirs.length && roll < 0.4) m = { t: "diplo", op: rand() < 0.7 ? "accept" : "decline", id: pick(theirs).id };
   else if (rel.status === "peace" && roll < 0.55) m = { t: "diplo", op: "war", to };
   else if (rel.status === "war" || rel.status === "war_pending") m = { t: "diplo", op: "propose", to, kind: "peace" };
   else if (rel.status === "alliance") m = rand() < 0.5 ? { t: "diplo", op: "leave", to } : { t: "diplo", op: "embargo", to, on: !rel.embargoes };
@@ -99,6 +102,16 @@ async function diplo() {
   else m = rand() < 0.5 ? { t: "diplo", op: "propose", to, kind: "alliance" } : rand() < 0.5 ? { t: "diplo", op: "propose", to, kind: "non_aggression", minutes: pick([30, 60, 120, 240]) } : { t: "diplo", op: "embargo", to, on: !rel.embargoes };
   const r = await p.send(m);
   note(`diplo ${m.op}${m.kind ? ` ${m.kind}` : ""}`, r);
+}
+let chats = 0;
+async function talk() {
+  const [p, q] = rand() < 0.5 ? [A, B] : [B, A], fac = p.cw.factionOf(p.cw.you), roll = rand();
+  const target = roll < 0.3 && fac ? { ch: "faction" } : roll < 0.6 ? { ch: "private", to: q.cw.you } : { ch: "global" };
+  p.ws.send(JSON.stringify({ t: "typing", ...target }));
+  p.ws.send(JSON.stringify({ t: "chat", text: `soak ${++chats}`, ...target }));
+  const mineNotes = p.cw.notes.filter(n => n.owner === p.cw.you);
+  if (mineNotes.length && rand() < 0.4) note("note remove", await p.send({ t: "note", op: "remove", id: pick(mineNotes).id }));
+  else note("note add", await p.send({ t: "note", op: "add", at: near(p.cw, p.cw.nations.get(p.cw.you)?.capital ?? 0, 15), text: `soak note ${chats}` }));
 }
 async function nukes() {
   const w = A.cw, silos = [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "missile_silo");
@@ -274,6 +287,7 @@ while (Date.now() - t0 < SECONDS * 1000) {
   if (rand() < 0.4) await Promise.all([fly(A), fly(B)]);
   if (rounds % 12 === 5) await Promise.all([planSome(A), planSome(B)]);
   if (rounds % 10 === 7) await diplo();
+  if (rounds % 15 === 11) await talk();
   if (rounds % 20 === 0) {
     inspect(A, "host");
     inspect(B, "friend");
@@ -291,6 +305,13 @@ for (const [k, v] of [...tally].sort((a, b) => a[0].localeCompare(b[0]))) consol
   const ra = A.cw.relation(A.cw.you, B.cw.you), rb = B.cw.relation(B.cw.you, A.cw.you);
   console.log(`relation at the end: host sees ${ra.status}, friend sees ${rb.status}`);
   if (ra.status !== rb.status) problem(`the two players see different relations: ${ra.status} and ${rb.status}`);
+  const fa = JSON.stringify(A.cw.dip?.factions ?? []), fb = JSON.stringify(B.cw.dip?.factions ?? []);
+  console.log(`factions at the end: ${fa}`);
+  if (fa !== fb) problem(`the two players see different factions: ${fa} and ${fb}`);
+  const heard = { host: A.cw.chat.filter(c => /^soak /.test(c.text)).length, friend: B.cw.chat.filter(c => /^soak /.test(c.text)).length };
+  const leaked = [...A.cw.chat, ...B.cw.chat].filter(c => c.ch === "private" && c.from !== A.cw.you && c.from !== B.cw.you);
+  console.log(`chat: ${chats} sent, the host holds ${heard.host} and the friend ${heard.friend}; notes the host sees: ${A.cw.notes.length}`);
+  if (leaked.length) problem(`private chat from a third party reached a player: ${JSON.stringify(leaked[0])}`);
 }
 for (const [who, p] of [["host", A], ["friend", B]]) console.log(`${who} tourism: ${JSON.stringify(p.cw.purse?.tourism ?? null)}`);
 console.log(`\nmost planes held by the host: ${stats.planes}; most soldiers in the field: ${stats.soldiers}; most projects proposed at once: ${stats.proposals}; air events seen by both: ${JSON.stringify(Object.fromEntries(seen))}`);

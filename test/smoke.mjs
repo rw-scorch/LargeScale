@@ -256,13 +256,15 @@ check(aSpawn >= 0, "player spawns on land");
   check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
   const rr = async (kind, via) => { A.ws.send(JSON.stringify({ t: "road", kind, via })); return nextResult(A, "road"); };
   const runNear = () => {
-    for (let dy = -12; dy <= 12; dy++) {
-      let run = [];
-      for (let dx = -14; dx <= 14; dx++) {
-        const i = (cy + dy) * M.w + cx + dx;
-        if (cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && !cw.zone[i]) { run.push(i); if (run.length >= 6) return run; } else run = [];
+    const free = i => cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && !cw.zone[i];
+    for (const [du, dv] of [[1, M.w], [M.w, 1]])
+      for (let a = -12; a <= 12; a++) {
+        let run = [];
+        for (let b = -14; b <= 14; b++) {
+          const i = (cy * M.w + cx) + a * dv + b * du;
+          if (i >= 0 && i < cw.owner.length && free(i)) { run.push(i); if (run.length >= 6) return run; } else run = [];
+        }
       }
-    }
     return null;
   };
   const run = runNear(), gold0 = cw.purse.money;
@@ -460,7 +462,7 @@ let bSpawn = -1;
 for (const i of land.filter(i => dist(i) >= 22 * K && dist(i) <= 45 * K).sort((p, q) => dist(p) - dist(q)).filter((_, k) => k % 5 === 0)) {
   A.ws.send(JSON.stringify({ t: "route", stack: st.stack, to: i }));
   const way = await nextResult(A, "route");
-  if (!way?.ok || way.plots > 3 * dist(i)) continue;
+  if (!way?.ok || way.boat || way.plots > 3 * dist(i)) continue;
   B.ws.send(JSON.stringify({ t: "spawn", x: i % M.w, y: Math.floor(i / M.w) }));
   if ((await nextResult(B, "spawn"))?.ok) { bSpawn = i; break; }
 }
@@ -825,6 +827,41 @@ const schWon = await waitFor(SA, m => m.t === "victory", 25000);
 check(schWon && (schWon.winner === sah.you || schWon.winner === sbh.you), `at the end time the world ends and ${schWon?.name} wins with the most land of the players left`);
 SA.ws.close();
 SB.ws.close();
+{
+  const fw = await api("/api/worlds", { name: "Faction test", config: { w: 120, h: 90, seed: 8, bots: 0 } }, ta);
+  await api(`/api/worlds/${fw.body.id}/join`, {}, tb);
+  const FA = await connect(fw.body.id, ta), FB = await connect(fw.body.id, tb);
+  const fah = await waitFor(FA, m => m.t === "hello"), fbh = await waitFor(FB, m => m.t === "hello");
+  const say = async (who, m) => { who.ws.send(JSON.stringify(m)); return nextResult(who, m.t); };
+  const sa = await say(FA, { t: "spawn", x: 25, y: 45 }), sb = await say(FB, { t: "spawn", x: 90, y: 45 });
+  const made = await say(FA, { t: "diplo", op: "faction", name: "The North" });
+  const inv = await say(FA, { t: "diplo", op: "invite", to: fbh.you });
+  const offered = await waitFor(FB, m => m.t === "diplomacy" && m.proposals?.some(p => p.id === inv?.proposal && p.kind === "faction_invite"), 4000);
+  const acc = await say(FB, { t: "diplo", op: "accept", id: inv?.proposal });
+  const joined = await waitFor(FA, m => m.t === "diplomacy" && m.factions?.some(x => x.name === "The North" && x.members.includes(fbh.you)), 4000);
+  const news = await waitFor(FA, m => m.t === "events" && m.events.some(e => e.type === "faction_joined" && e.a === fbh.you), 4000);
+  check(sa?.ok && sb?.ok && made?.ok && inv?.ok && offered && acc?.ok && joined && news, `a player founds "${made?.name}", invites the friend, the friend accepts, and everyone hears it`);
+  FA.ws.send(JSON.stringify({ t: "chat", ch: "faction", text: "north only" }));
+  const fchat = await waitFor(FB, m => m.t === "chat" && m.ch === "faction" && m.text === "north only" && m.from === fah.you, 4000);
+  FB.ws.send(JSON.stringify({ t: "typing", ch: "private", to: fah.you }));
+  const typed = await waitFor(FA, m => m.t === "typing" && m.from === fbh.you && m.ch === "private", 4000);
+  FB.ws.send(JSON.stringify({ t: "chat", ch: "private", to: fah.you, text: "just you" }));
+  const pchat = await waitFor(FA, m => m.t === "chat" && m.ch === "private" && m.text === "just you" && m.to === fah.you, 4000);
+  await sleep(450);
+  FB.ws.send(JSON.stringify({ t: "chat", ch: "private", to: fbh.you, text: "me" }));
+  const selfNote = await nextResult(FB, "chat");
+  check(fchat && typed && pchat && selfNote?.error === "pick a player to write to", `faction chat, private chat and a typing notice reach the right player; writing to yourself is refused ("${selfNote?.error}")`);
+  const pin = await say(FB, { t: "note", op: "add", at: 45 * 120 + 90, text: "Meet at the ford" });
+  const shared = await waitFor(FA, m => m.t === "notes" && m.notes.some(n => n[0] === fbh.you && n[3] === "Meet at the ford"), 4000);
+  FA.ws.close();
+  const FA2 = await connect(fw.body.id, ta);
+  const again = await waitFor(FA2, m => m.t === "hello");
+  const kept = again?.chat?.some(c => c.ch === "private" && c.text === "just you") && again.chat.some(c => c.ch === "faction" && c.text === "north only") && again.notes?.some(n => n[3] === "Meet at the ford");
+  const status = (await api(`/api/worlds/${fw.body.id}/status`, null, ta)).body;
+  check(pin?.ok && shared && kept && !status.victory, `a note is shared with the faction; on rejoining, the faction and private chat and the note come back; and a faction of every player has won nothing yet (${status.victory ? "won" : "still running"})`);
+  FA2.ws.close();
+  FB.ws.close();
+}
 const hour = Date.now() + 3600e3;
 const badMade = await api("/api/worlds", { name: "Bad schedule", config: { w: 120, h: 90, seed: 9, bots: 0, schedule: { startAt: hour, peaceUntil: hour - 60e3 } } }, ta);
 const wat = await api("/api/worlds", { name: "Watch test", config: { w: 120, h: 90, seed: 9, bots: 2, schedule: { startAt: hour } } }, ta);

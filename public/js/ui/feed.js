@@ -23,14 +23,32 @@ export function createFeed(root, game) {
   const list = el("div", { id: "feed-list", class: "lines" });
   const lines = el("div", { class: "lines" });
   const input = el("input", { id: "chat-input", placeholder: "say something", maxlength: 280 });
+  const channel = el("select", { id: "chat-channel", title: "who reads it" });
+  const typing = el("p", { id: "chat-typing", class: "muted typing", hidden: true });
+  let channels = "", typedAt = 0;
+  const target = () => {
+    const [ch, to] = channel.value.split(":");
+    return ch === "private" ? { ch, to: Number(to) } : { ch: ch || "global" };
+  };
   const send = e => {
     e.preventDefault();
     const text = input.value.trim();
     if (!text) return;
-    if (!game.conn.send({ t: "chat", text })) return game.toast("not connected");
+    if (!game.conn.send({ t: "chat", text, ...target() })) return game.toast("not connected");
     input.value = "";
   };
-  const chat = el("div", { id: "chat" }, lines, el("form", { onsubmit: send }, input, el("button", { id: "chat-send", type: "submit", text: "Send" })));
+  input.addEventListener("input", () => {
+    if (!input.value.trim() || performance.now() - typedAt < 2000) return;
+    typedAt = performance.now();
+    game.conn.send({ t: "typing", ...target() });
+  });
+  const tag = m => {
+    const w = game.world, name = id => w.nations.get(id)?.name ?? "someone";
+    if (m.ch === "faction") return el("span", { class: "ch faction", text: "[faction] " });
+    if (m.ch === "private") return el("span", { class: "ch private", text: m.from === w.you ? `[to ${name(m.to)}] ` : "[private] " });
+    return null;
+  };
+  const chat = el("div", { id: "chat" }, lines, typing, el("form", { onsubmit: send }, channel, input, el("button", { id: "chat-send", type: "submit", text: "Send" })));
   const box = el("section", { id: "feed", class: "panel" }, el("div", { class: "row tabs" }, eventsTab, chatTab, el("span", { class: "grow" }), fold), peek, list, chat);
   root.append(box);
 
@@ -77,8 +95,21 @@ export function createFeed(root, game) {
     if (dirty || Date.now() - drawnAt > 20000) draw();
     if (shownChat !== c.length) {
       shownChat = c.length;
-      lines.replaceChildren(...c.slice(-60).map(m => el("p", {}, el("b", { text: `${m.who}: ` }), m.text)));
+      lines.replaceChildren(...c.slice(-60).map(m => el("p", { class: m.ch && m.ch !== "global" ? `ch-${m.ch}` : "" }, tag(m), el("b", { text: `${m.who}: ` }), m.text)));
       lines.scrollTop = lines.scrollHeight;
+    }
+    if (w && open && tab === "chat") {
+      const fac = w.factionOf?.(w.you), others = [...w.nations.values()].filter(n => !n.bot && n.id !== w.you && n.spawned);
+      const key = JSON.stringify([fac?.id, fac?.name, others.map(n => [n.id, n.name])]);
+      if (key !== channels) {
+        channels = key;
+        const keep = channel.value;
+        channel.replaceChildren(el("option", { value: "global", text: "Everyone" }), fac ? el("option", { value: "faction", text: `Faction: ${fac.name}` }) : null, ...others.map(n => el("option", { value: `private:${n.id}`, text: `To ${n.name}` })));
+        channel.value = [...channel.options].some(o => o.value === keep) ? keep : "global";
+      }
+      const now = Date.now(), who = [...(w.typing ?? new Map())].filter(([, t]) => t.until > now).map(([name]) => name);
+      typing.hidden = !who.length;
+      if (who.length) typing.textContent = `${who.join(", ")} ${who.length === 1 ? "is" : "are"} typing`;
     }
   }
 

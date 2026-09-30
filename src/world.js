@@ -36,7 +36,7 @@ import { decodeDeposits, cropDeposits, encodeDeposits, emptyDeposits, latitudeOf
 import { encodeRows } from "./shared/buildings.js";
 import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
-import { runOrder, RateLimit, applyPresence, victory, StateFeed, BuildingFeed, purseOf, publicEvents, ordersOf, vitalsOf } from "./game.js";
+import { runOrder, RateLimit, applyPresence, victory, mostLand, StateFeed, BuildingFeed, purseOf, publicEvents, ordersOf, vitalsOf } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { runAdmin, parseSpeed, cleanName, ADMIN_RULES, adminAllowed, cleanPowers, POWERS } from "./admin.js";
 import { installCheats } from "./sim/cheats.js";
@@ -45,6 +45,7 @@ import { installNukes, nukeView, flightsOf, NUKE_RULES } from "./sim/nukes.js";
 import { installTourism, tourismView, TOURISM_RULES } from "./sim/tourism.js";
 import { installCbd } from "./sim/cbd.js";
 import { installDiplomacy, DIPLO } from "./sim/diplomacy.js";
+import { installNotes, notesFor, NOTES } from "./sim/notes.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
 const SAVE_VERSION = 4;
@@ -76,6 +77,8 @@ export class World extends DurableObject {
         CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, who TEXT, text TEXT);
         CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, who TEXT, op TEXT, detail TEXT);
       `);
+      const cols = new Set(ctx.storage.sql.exec("PRAGMA table_info(chat)").toArray().map(r => r.name));
+      for (const [c, type] of [["ch", "TEXT"], ["fid", "INTEGER"], ["a", "INTEGER"], ["b", "INTEGER"]]) if (!cols.has(c)) ctx.storage.sql.exec(`ALTER TABLE chat ADD COLUMN ${c} ${type}`);
       await this.load();
     });
   }
@@ -197,7 +200,8 @@ export class World extends DurableObject {
     installPower(this.sim, { scale: info.map.scale ?? 1 });
     installAutoRoads(this.sim);
     installPlanner(this.sim, { run: (nid, m) => runOrder(this.sim, nid, m), scale: info.map.scale ?? 1 });
-    installDiplomacy(this.sim, { rules: { warNotice: info.warNotice ?? info.rules?.warNotice ?? DIPLO.warNotice }, saved: saved?.diplomacy ?? null, fresh: !saved });
+    installDiplomacy(this.sim, { rules: { warNotice: info.warNotice ?? info.rules?.warNotice ?? DIPLO.warNotice, maxFactionSize: info.factionSize ?? DIPLO.maxFactionSize }, saved: saved?.diplomacy ?? null, fresh: !saved });
+    installNotes(this.sim);
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
     installOvertime(this.sim, { every: this.schedule().shrinkEvery ?? rules.schedule.shrinkEvery });
@@ -429,10 +433,10 @@ export class World extends DurableObject {
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       watch, defs: buildingData.buildings, purse: nation === null ? null : this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale }, powerRules: this.sim.power ? { ...this.sim.power.rules, reach: buildingData.buildings.find(d => d.id === "power_pole").pole.reach * this.sim.power.scale, scale: this.sim.power.scale } : null,
       units: unitData.units, troopRules: { xpLevels: TROOP_RULES.xpLevels, xpBonus: TROOP_RULES.xpBonus }, policyRules: { ...rules.policy, taxPerResident: rules.economy.taxPerResident, conscriptDefault: rules.civilians.conscriptShare }, seasonRules: rules.seasons, goldRules: { worth: rules.economy.worth, yield: rules.economy.yield }, soldierRules: this.sim.soldiers?.rules ?? null, pilotRules: this.sim.pilot?.rules ?? null, pilots: this.sim.pilot ? pilotRows(this.sim) : [], time: Math.floor(this.sim.time),
-      caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
+      caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(nation), notes: notesFor(this.sim, nation), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen, powers: account.admin ? POWERS : this.powersOf(account.id),
       tourismRules: TOURISM_RULES, cbdRules: { ...this.sim.cbd.rules, scale: this.sim.cbd.scale },
-      diplomacy: this.dipView(nation), dipRules: this.dipRules(),
+      diplomacy: this.dipView(nation), dipRules: this.dipRules(), noteRules: NOTES,
       nukes: flightsOf(this.sim), nukeRules: { warheads: NUKE_RULES.warheads, samChance: NUKE_RULES.samChance, overlap: NUKE_RULES.overlap, outerLoss: NUKE_RULES.outerLoss, scale: this.info.map.scale ?? 1 },
       plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
     }));
@@ -455,8 +459,27 @@ export class World extends DurableObject {
     return [...this.sim.nations.values()].map(n => ({ id: n.id, name: n.name, colour: n.colour, plots: n.plots, troops: Math.floor(n.troops), alive: n.alive, spawned: n.spawned, bot: n.bot, capital: n.capital ?? null, era: n.era ?? "T" }));
   }
 
-  recentChat() {
-    return this.ctx.storage.sql.exec("SELECT t, who, text FROM chat ORDER BY id DESC LIMIT 30").toArray().reverse();
+  recentChat(nation = null) {
+    const fid = nation === null || nation === undefined ? -1 : this.sim.dip?.faction(nation) ?? -1, me = nation ?? -1;
+    return this.ctx.storage.sql.exec("SELECT t, who, text, ch, a, b FROM chat WHERE ch IS NULL OR ch = 'global' OR (ch = 'faction' AND fid = ?) OR (ch = 'private' AND (a = ? OR b = ?)) ORDER BY id DESC LIMIT ?", fid, me, me, rules.chat.history)
+      .toArray().reverse().map(r => ({ t: r.t, who: r.who, text: r.text, ch: r.ch ?? "global", from: r.a ?? null, to: r.b ?? null }));
+  }
+
+  sendTo(nations, msg) {
+    const json = JSON.stringify({ v: PROTOCOL, ...msg });
+    for (const ws of this.sockets()) if (nations.has(ws.deserializeAttachment()?.nation)) try { ws.send(json); } catch {}
+  }
+
+  chatReach(me, m) {
+    const ch = m.ch === "faction" || m.ch === "private" ? m.ch : "global", from = me.nation ?? null;
+    if (ch === "global") return { ch, from };
+    if (from === null) return { error: "join the world first" };
+    if (ch === "faction") {
+      const fid = this.sim.dip?.faction(from) ?? null;
+      return fid === null ? { error: "you are not in a faction" } : { ch, from, fid, reach: new Set(this.sim.dip.membersOf(fid)) };
+    }
+    const to = Number(m.to), t = this.sim.nations.get(to);
+    return !t?.human || to === from ? { error: "pick a player to write to" } : { ch, from, to, reach: new Set([from, to]) };
   }
 
   broadcast(obj) {
@@ -473,7 +496,7 @@ export class World extends DurableObject {
 
   dipRules() {
     const r = this.sim.dip.rules;
-    return { warNotice: r.warNotice, peaceMinWar: r.peaceMinWar, peaceTreaty: r.peaceTreaty, betrayalCooldown: r.betrayalCooldown, treatyMinutes: r.treatyMinutes, maxFactionSize: r.maxFactionSize, noticeChoices: r.noticeChoices };
+    return { warNotice: r.warNotice, peaceMinWar: r.peaceMinWar, peaceTreaty: r.peaceTreaty, betrayalCooldown: r.betrayalCooldown, treatyMinutes: r.treatyMinutes, maxFactionSize: r.maxFactionSize, noticeChoices: r.noticeChoices, factionSizes: r.factionSizes };
   }
 
   dipView(nation) {
@@ -498,7 +521,7 @@ export class World extends DurableObject {
     return {
       map: i.map?.kind ?? "test", crop: i.map?.name ?? null, detail: i.map?.scale > 1 ? "fine" : "normal", w: i.w, h: i.h, landPlots: i.landPlots, bots: i.bots,
       speed: this.speed ?? 1, rules: i.rules ?? {}, maxCatchupHours: i.maxCatchupHours ?? 72, shrinkEvery: s.shrinkEvery ?? rules.schedule.shrinkEvery,
-      offline: { defence: rules.offline.defenceMult, output: rules.offline.offlineOutputShare }, win: "last", nukes: i.nukes !== false, warNotice: this.sim?.dip?.rules.warNotice ?? i.warNotice ?? DIPLO.warNotice,
+      offline: { defence: rules.offline.defenceMult, output: rules.offline.offlineOutputShare }, win: "last", nukes: i.nukes !== false, warNotice: this.sim?.dip?.rules.warNotice ?? i.warNotice ?? DIPLO.warNotice, factionSize: this.sim?.dip?.rules.maxFactionSize ?? i.factionSize ?? DIPLO.maxFactionSize,
     };
   }
 
@@ -520,9 +543,7 @@ export class World extends DurableObject {
   }
 
   endBySchedule() {
-    const left = [...this.sim.nations.values()].filter(n => n.human && n.alive && n.spawned).sort((a, b) => b.plots - a.plots);
-    const top = left[0] ?? null;
-    this.finish({ winner: top?.id ?? null, name: top?.name ?? null, by: "time", plots: top?.plots ?? 0 });
+    this.finish(mostLand(this.sim));
   }
 
   wake() {
@@ -632,6 +653,18 @@ export class World extends DurableObject {
       try { ws.send(JSON.stringify({ v: PROTOCOL, t: "purse", ...p })); } catch {}
     }
     this.sendDiplomacy();
+    const noteKey = `${this.sim.notes.version}:${this.sim.dip.version}`;
+    if (noteKey !== this.notesSent) {
+      this.notesSent = noteKey;
+      for (const ws of this.sockets()) {
+        const me = ws.deserializeAttachment();
+        if (me?.nation === null || me?.nation === undefined) continue;
+        const list = notesFor(this.sim, me.nation), key = JSON.stringify(list);
+        if (this.noteLists?.get(me.account) === key) continue;
+        (this.noteLists ??= new Map()).set(me.account, key);
+        try { ws.send(JSON.stringify({ v: PROTOCOL, t: "notes", notes: list })); } catch {}
+      }
+    }
     const planNews = takePlanNews(this.sim);
     if (planNews) for (const ws of this.sockets()) {
       const me = ws.deserializeAttachment();
@@ -688,7 +721,7 @@ export class World extends DurableObject {
     this.frozen = true;
     this.meta("victory", { ...v, at: Date.now() });
     this.sendState();
-    this.broadcast({ t: "victory", winner: v.winner, name: v.name, by: v.by ?? null });
+    this.broadcast({ t: "victory", winner: v.winner, name: v.name, by: v.by ?? null, members: v.members ?? null });
     const text = v.name ? `${v.name} has won ${info.name ?? "the world"}.` : `Nobody is left standing in ${info.name ?? "the world"}.`;
     for (const nation of this.accounts.keys()) this.notify(nation, "world", text);
     if (this.env.DISCORD_WEBHOOK_URL) postWebhook(this.env.DISCORD_WEBHOOK_URL, `**${text}**`).catch(() => {});
@@ -715,9 +748,22 @@ export class World extends DurableObject {
         if (!text) return;
         const now = Date.now();
         if (now - (this.lastChat?.get(me.account) ?? 0) < 400) return reply({ t: "result", of: "chat", ok: false, error: "slow down" });
+        const c = this.chatReach(me, m);
+        if (c.error) return reply({ t: "result", of: "chat", ok: false, error: c.error });
         (this.lastChat ??= new Map()).set(me.account, now);
-        this.ctx.storage.sql.exec("INSERT INTO chat (t, who, text) VALUES (?, ?, ?)", now, me.name, text);
-        return this.broadcast({ t: "chat", who: me.name, text, at: now });
+        this.ctx.storage.sql.exec("INSERT INTO chat (t, who, text, ch, fid, a, b) VALUES (?, ?, ?, ?, ?, ?, ?)", now, me.name, text, c.ch, c.fid ?? null, c.from, c.to ?? null);
+        const msg = { t: "chat", who: me.name, text, at: now, ch: c.ch, from: c.from, ...(c.to !== undefined ? { to: c.to } : {}) };
+        if (c.ch === "private" && !this.online(c.to)) this.notify(c.to, "message", `${me.name}: ${text}`);
+        return c.reach ? this.sendTo(c.reach, msg) : this.broadcast(msg);
+      }
+      case "typing": {
+        const now = Date.now();
+        if (now - (this.lastTyping?.get(me.account) ?? 0) < rules.chat.typingEvery * 1000) return;
+        const c = this.chatReach(me, m);
+        if (c.error) return;
+        (this.lastTyping ??= new Map()).set(me.account, now);
+        const msg = { t: "typing", who: me.name, from: c.from, ch: c.ch, ...(c.to !== undefined ? { to: c.to } : {}) };
+        return c.reach ? this.sendTo(c.reach, msg) : this.broadcast(msg);
       }
       case "admin": {
         const op = String(m.op ?? "").slice(0, 20);
@@ -806,14 +852,17 @@ export class World extends DurableObject {
         return { ok: true };
       }
       case "diplomacy": {
-        const notice = Number(m.warNotice);
-        if (!this.sim.dip.rules.noticeChoices.includes(notice)) return fail(`the war notice is one of ${this.sim.dip.rules.noticeChoices.join(", ")} seconds`);
-        this.info.warNotice = notice;
+        const r = this.sim.dip.rules, notice = m.warNotice === undefined ? null : Number(m.warNotice), size = m.factionSize === undefined ? null : Number(m.factionSize);
+        if (notice === null && size === null) return fail("set warNotice or factionSize");
+        if (notice !== null && !r.noticeChoices.includes(notice)) return fail(`the war notice is one of ${r.noticeChoices.join(", ")} seconds`);
+        if (size !== null && !r.factionSizes.includes(size)) return fail(`a faction holds ${r.factionSizes.join(", ")} players at most`);
+        if (size !== null && [...this.sim.dip.factions.values()].some(f => f.members.size > size)) return fail("a faction already has more members than that");
+        if (notice !== null) { this.info.warNotice = notice; r.warNotice = notice; }
+        if (size !== null) { this.info.factionSize = size; r.maxFactionSize = size; }
         this.meta("info", this.info);
-        this.sim.dip.rules.warNotice = notice;
-        this.logAdmin(me, "diplomacy", { warNotice: notice });
-        this.broadcast({ t: "dipRules", rules: this.dipRules(), info: this.worldInfo(), by: me.name });
-        return { ok: true, warNotice: notice };
+        this.logAdmin(me, "diplomacy", { warNotice: notice, factionSize: size });
+        this.broadcast({ t: "dipRules", rules: this.dipRules(), info: this.worldInfo(), by: me.name, changed: notice !== null ? "notice" : "size" });
+        return { ok: true, warNotice: r.warNotice, factionSize: r.maxFactionSize };
       }
       case "nukes": {
         if (typeof m.on !== "boolean") return fail("say on or off");

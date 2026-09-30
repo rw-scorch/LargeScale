@@ -5,8 +5,14 @@ import { isLand } from "../shared/terrain.js";
 const RADIUS = 78;
 
 export function ownerItems(game, plot, sx, sy) {
-  const w = game.world, me = w.nations.get(w.you), o = w.owner[plot];
+  const w = game.world;
   if (!isLand(w.terrain[plot])) return [];
+  const list = landItems(game, plot);
+  return w.nations.get(w.you)?.spawned ? [...list, { id: "note", label: "Note", icon: "chat_bubble", run: () => game.noteAt(plot) }] : list;
+}
+
+function landItems(game, plot) {
+  const w = game.world, me = w.nations.get(w.you), o = w.owner[plot];
   const share = game.hud.share, troops = fmt((me?.troops ?? 0) * share);
   if (o === w.you) return [
     { id: "form", label: "Form stack", note: troops, icon: "res_troops", run: () => game.formAt(plot) },
