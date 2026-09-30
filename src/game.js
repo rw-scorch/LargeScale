@@ -15,6 +15,7 @@ import { orderPlane, planeRow, planeOf } from "./sim/air.js";
 import { buildWarhead, cancelWarhead, checkLaunch, launchWarhead } from "./sim/nukes.js";
 import { planOrder } from "./sim/planner.js";
 import { diploOrder, peaceReason } from "./sim/diplomacy.js";
+import { noteOrder } from "./sim/notes.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -358,6 +359,11 @@ export const ORDERS = {
     }
     return done ? { ok: true, done, failed: ids.length - done, error, rearming } : fail(error ?? "pick a plane");
   },
+  note(sim, nation, m) {
+    if (!sim.nations.get(nation)?.spawned) return fail("spawn first");
+    const r = noteOrder(sim, nation, m);
+    return r.error ? fail(r.error) : { ...r, ok: true, op: m.op };
+  },
   diplo(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
     const r = diploOrder(sim, nation, m);
@@ -607,10 +613,39 @@ export function applyPresence(sim, online, offlineMult) {
   for (const n of sim.nations.values()) if (n.human) n.defenceMult = online.has(n.id) ? 1 : offlineMult;
 }
 
+export function factionWin(sim, fid, extra = {}) {
+  const f = sim.dip?.factions.get(fid);
+  if (!f) return null;
+  const alive = [...f.members].filter(id => sim.nations.get(id)?.alive);
+  const lead = alive.includes(f.leader) ? f.leader : alive[0] ?? f.leader;
+  return { winner: lead, name: `${f.name} (${alive.map(id => sim.nations.get(id)?.name ?? "?").join(" and ")})`, faction: f.id, members: [...f.members], ...extra };
+}
+
 export function victory(sim) {
-  const v = checkVictory(sim);
+  const dip = sim.dip, v = checkVictory(sim, dip ? id => dip.winnerKey(id) : id => id);
   if (!v) return null;
-  return { winner: v.winner, name: v.winner === null ? null : sim.nations.get(v.winner)?.name ?? null };
+  if (v.winner === null) return { winner: null, name: null };
+  if (typeof v.winner === "number" && dip?.factions.has(v.winner)) {
+    if (![...sim.nations.values()].some(n => n.human && n.spawned && !n.alive)) return null;
+    return factionWin(sim, v.winner);
+  }
+  const id = typeof v.winner === "string" ? Number(v.winner.slice(1)) : v.winner;
+  return { winner: id, name: sim.nations.get(id)?.name ?? null };
+}
+
+export function mostLand(sim) {
+  const sides = new Map();
+  for (const n of sim.nations.values()) {
+    if (!n.human || !n.alive || !n.spawned) continue;
+    const key = sim.dip?.winnerKey(n.id) ?? `n${n.id}`, s = sides.get(key) ?? { key, plots: 0, lead: n };
+    s.plots += n.plots;
+    if (n.plots > s.lead.plots) s.lead = n;
+    sides.set(key, s);
+  }
+  const top = [...sides.values()].sort((a, b) => b.plots - a.plots)[0];
+  if (!top) return { winner: null, name: null, by: "time", plots: 0 };
+  if (typeof top.key === "number") return factionWin(sim, top.key, { by: "time", plots: top.plots });
+  return { winner: top.lead.id, name: top.lead.name, by: "time", plots: top.plots };
 }
 
 const nationRow = n => [n.id, n.plots, Math.floor(n.troops), n.alive ? 1 : 0, n.spawned ? 1 : 0, Math.max(0, ERA_ORDER.indexOf(n.era ?? "T"))];
@@ -751,7 +786,7 @@ export function purseOf(n, extra = {}) {
   return { money: Math.floor(n.money), era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, autoRoads: n.autoRoads ?? null, ...extra };
 }
 
-export const DIPLO_EVENTS = ["war_declared", "war_started", "peace_signed", "alliance_signed", "alliance_left", "non_aggression_signed", "treaty_broken", "embargo"];
+export const DIPLO_EVENTS = ["war_declared", "war_started", "peace_signed", "alliance_signed", "alliance_left", "non_aggression_signed", "treaty_broken", "embargo", "faction_created", "faction_joined", "faction_left", "faction_renamed"];
 const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink", "nuke_launched", "nuke_intercepted", "nuke_detonated", "wonder_built", ...DIPLO_EVENTS]);
 const QUIET = new Set(["civ_build", "civ_upgrade"]);
 
