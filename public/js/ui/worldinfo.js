@@ -27,7 +27,7 @@ export function nextLine(w, now) {
 export function phaseText(m) {
   if (m.key === "startAt") return ["The world has started. Orders are open.", "good"];
   if (m.key === "peaceUntil") return ["Peace is over: players can attack each other now.", "warn"];
-  if (m.key === "overtimeAt") return [`Overtime has begun: every ${beat(m.shrinkEvery ?? SCHEDULE_RULES.shrinkEvery)} each nation's outer land turns unclaimed. Capitals are safe. Last player standing wins.`, "danger"];
+  if (m.key === "overtimeAt") return [`Overtime has begun: every ${beat(m.shrinkEvery ?? SCHEDULE_RULES.shrinkEvery)} each nation's outer land turns unclaimed. Capitals are safe. Last player or faction standing wins.`, "danger"];
   return ["The world has reached its end time.", "warn"];
 }
 
@@ -99,6 +99,12 @@ export function createWorldInfo(root, game) {
     return pick;
   };
 
+  const sizeSelect = (now, choices) => {
+    const pick = el("select", { id: "info-faction-size", title: "how many players a faction may hold", onchange: async () => { const r = await game.conn.request({ t: "admin", op: "diplomacy", factionSize: Number(pick.value) }); if (!r.ok) { game.toast(r.error ?? "that did not work"); pick.value = String(now); } } }, ...choices.map(c => el("option", { value: c, text: String(c) })));
+    pick.value = String(now);
+    return pick;
+  };
+
   return {
     get open() { return !box.hidden; },
     show(on) {
@@ -120,7 +126,7 @@ export function createWorldInfo(root, game) {
       editor.hidden = !game.can("schedule");
       const s = w.schedule ?? {}, i = w.info ?? {}, speed = w.speed || 1;
       title.textContent = `World info: ${game.name}`;
-      const sig = JSON.stringify([s, Math.floor(now / 1000), w.shrinkIn, speed, w.victory, w.ended, w.nations.size, i.nukes, i.warNotice, game.can("world")]);
+      const sig = JSON.stringify([s, Math.floor(now / 1000), w.shrinkIn, speed, w.victory, w.ended, w.nations.size, i.nukes, i.warNotice, i.factionSize, game.can("world")]);
       if (sig === key) return;
       key = sig;
       const any = EVENTS.some(k => s[k] != null);
@@ -131,8 +137,8 @@ export function createWorldInfo(root, game) {
         : [el("p", { class: "muted", text: "Nothing is scheduled. The world runs until one player is left." })]),
         ...(s.overtimeAt == null ? [] : [line("Overtime beat", `every ${beat(s.shrinkEvery ?? i.shrinkEvery ?? SCHEDULE_RULES.shrinkEvery)}${speed > 1 ? ` of game time (${speed}x now)` : ""}`)]));
       win.replaceChildren(...[
-        el("p", { text: "Last player standing: take every other player's land. Bots do not count." }),
-        s.endAt != null ? el("p", { text: `If more than one player is left at ${when(s.endAt)}, the one with the most land wins.` }) : null,
+        el("p", { text: "Last player or faction standing: take every other player's land. A faction's members win together. Bots do not count." }),
+        s.endAt != null ? el("p", { text: `If more than one side is left at ${when(s.endAt)}, the one with the most land wins, a faction's land counted together.` }) : null,
         s.overtimeAt != null ? el("p", { class: "muted", text: "Overtime makes everyone's border shrink, so holding back does not work: players have to fight for land." }) : null,
         w.victory ? el("p", { class: "up", text: w.victory.name ? `${w.victory.name} has won${w.victory.by === "time" ? " with the most land at the end time" : ""}.` : "Nobody was left standing." }) : null].filter(Boolean));
       const humans = [...w.nations.values()].filter(n => !n.bot), bots = w.nations.size - humans.length;
@@ -147,6 +153,7 @@ export function createWorldInfo(root, game) {
         line("Catch-up", `up to ${i.maxCatchupHours ?? 72} hours while nobody is on`),
         line("Nuclear weapons", i.nukes === false ? "off" : "allowed", game.can("world") ? el("button", { id: "info-nukes", class: "ghost", text: i.nukes === false ? "Allow" : "Turn off", onclick: async () => { const r = await game.conn.request({ t: "admin", op: "nukes", on: i.nukes === false }); if (!r.ok) game.toast(r.error ?? "that did not work"); } }) : null),
         line("War notice", `${noticeText(i.warNotice ?? 300)} between a declaration and the first attack`, game.can("world") && w.dipRules?.noticeChoices ? noticeSelect(i.warNotice ?? 300, w.dipRules.noticeChoices) : null),
+        line("Factions", `up to ${i.factionSize ?? 4} players each`, game.can("world") && w.dipRules?.factionSizes ? sizeSelect(i.factionSize ?? 4, w.dipRules.factionSizes) : null),
         tests.length ? line("Test speeds", tests.join(", ")) : null].filter(Boolean));
     },
   };

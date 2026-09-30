@@ -45,7 +45,7 @@ import { installNukes, nukeView, flightsOf, NUKE_RULES } from "./sim/nukes.js";
 import { installTourism, tourismView, TOURISM_RULES } from "./sim/tourism.js";
 import { installCbd } from "./sim/cbd.js";
 import { installDiplomacy, DIPLO } from "./sim/diplomacy.js";
-import { installNotes, notesFor } from "./sim/notes.js";
+import { installNotes, notesFor, NOTES } from "./sim/notes.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
 const SAVE_VERSION = 4;
@@ -436,7 +436,7 @@ export class World extends DurableObject {
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(nation), notes: notesFor(this.sim, nation), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen, powers: account.admin ? POWERS : this.powersOf(account.id),
       tourismRules: TOURISM_RULES, cbdRules: { ...this.sim.cbd.rules, scale: this.sim.cbd.scale },
-      diplomacy: this.dipView(nation), dipRules: this.dipRules(),
+      diplomacy: this.dipView(nation), dipRules: this.dipRules(), noteRules: NOTES,
       nukes: flightsOf(this.sim), nukeRules: { warheads: NUKE_RULES.warheads, samChance: NUKE_RULES.samChance, overlap: NUKE_RULES.overlap, outerLoss: NUKE_RULES.outerLoss, scale: this.info.map.scale ?? 1 },
       plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
     }));

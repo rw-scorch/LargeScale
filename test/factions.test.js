@@ -143,3 +143,25 @@ test("map notes: at most twenty, shared with allies and faction members only", (
   assert.match(run(w, a, { t: "note", op: "remove", id: r.id }).error, /no such note/);
   assert.equal(DIPLO.maxFactionSize, 4);
 });
+
+test("the browser reads factions, private chat, typing and shared notes", async () => {
+  const { ClientWorld } = await import("../src/shared/client.js");
+  const { PROTOCOL } = await import("../src/shared/protocol.js");
+  const buildingData = (await import("../data/buildings.json", { with: { type: "json" } })).default;
+  const { w, g, ids: [a, b, c] } = world();
+  run(w, a, { t: "diplo", op: "faction", name: "North" });
+  join(w, a, b);
+  run(w, b, { t: "note", op: "add", at: g.idx(30, 4), text: "Ford here" });
+  const cw = new ClientWorld({ t: "hello", v: PROTOCOL, you: a, w: g.w, h: g.h, map: { kind: "test" }, hashes: {}, time: w.time, nations: [...w.nations.values()].map(o => ({ id: o.id, name: o.name, bot: !!o.bot })), defs: buildingData.buildings, tech: { eras: [], branches: [], nodes: [] },
+    diplomacy: { ...w.dip.view(w.time), proposals: [] }, notes: notesFor(w, a), chat: [{ t: 1, who: "Ben", text: "hi", ch: "faction", from: b, to: null }] });
+  assert.deepEqual([cw.relation(a, b).status, cw.relation(a, b).faction, cw.relation(a, c).status], ["alliance", w.dip.faction(a), "peace"]);
+  assert.equal(cw.factionOf(b)?.name, "North");
+  assert.deepEqual(cw.notes, [{ owner: b, id: 1, at: g.idx(30, 4), text: "Ford here" }]);
+  cw.message({ v: PROTOCOL, t: "typing", who: "Cat", from: c, ch: "private", to: a });
+  assert.equal(cw.typing.get("Cat")?.ch, "private");
+  cw.message({ v: PROTOCOL, t: "chat", who: "Cat", text: "psst", at: 2, ch: "private", from: c, to: a });
+  assert.equal(cw.typing.has("Cat"), false, "a message ends the typing notice");
+  assert.deepEqual(cw.chat.map(m => [m.ch, m.from, m.to]), [["faction", b, null], ["private", c, a]]);
+  cw.message({ v: PROTOCOL, t: "notes", notes: [] });
+  assert.deepEqual(cw.notes, []);
+});

@@ -50,6 +50,8 @@ export class ClientWorld {
     this.convoys = new Map();
     for (const r of hello.convoys ?? []) this.setConvoy(r);
     this.chat = [...(hello.chat ?? [])];
+    this.typing = new Map();
+    this.notes = (hello.notes ?? []).map(([owner, id, at, text]) => ({ owner, id, at, text }));
     this.owner = new Uint16Array(this.w * this.h);
     this.zone = new Uint8Array(this.w * this.h);
     this.roads = new Uint8Array(this.w * this.h);
@@ -98,6 +100,7 @@ export class ClientWorld {
     this.cbdRules = hello.cbdRules ?? null;
     this.tourismRules = hello.tourismRules ?? null;
     this.dipRules = hello.dipRules ?? null;
+    this.noteRules = hello.noteRules ?? null;
     this.setDiplomacy(hello.diplomacy ?? null);
     this.nukes = (hello.nukes ?? []).map(flightOf);
     this.blasts = [];
@@ -122,6 +125,8 @@ export class ClientWorld {
     const A = this.nations.get(a), B = this.nations.get(b);
     if (!A || !B || A.bot || B.bot) return { status: "open" };
     if (!this.dip) return { status: "war" };
+    const fa = this.factionOf(a);
+    if (fa && fa === this.factionOf(b)) return { status: "alliance", faction: fa.id, since: 0, startsIn: 0, treaty: 0, cooldown: 0, embargoes: false, embargoed: false };
     const now = this.simNow(), r = this.dip.rel.get(a < b ? `${a}:${b}` : `${b}:${a}`) ?? { status: this.dip.base, pendingAt: 0, treatyUntil: 0, noWarUntil: 0, since: 0 };
     const status = r.status === "war_pending" && now >= r.pendingAt ? "war" : r.status;
     return {
@@ -131,6 +136,10 @@ export class ClientWorld {
       cooldown: r.noWarUntil > now ? r.noWarUntil - now : 0,
       embargoes: this.dip.embargo.has(`${a}>${b}`), embargoed: this.dip.embargo.has(`${b}>${a}`),
     };
+  }
+
+  factionOf(nid) {
+    return this.dip?.factions.find(f => f.members.includes(nid)) ?? null;
   }
 
   canAttack(a, b) {
@@ -448,7 +457,9 @@ export class ClientWorld {
       }
       if (this.events.length > 500) this.events.splice(0, this.events.length - 500);
     }
-    if (m.t === "chat") this.chat.push({ t: m.at, who: m.who, text: m.text });
+    if (m.t === "chat") { this.chat.push({ t: m.at, who: m.who, text: m.text, ch: m.ch ?? "global", from: m.from ?? null, to: m.to ?? null }); this.typing.delete(m.who); }
+    if (m.t === "typing" && m.from !== this.you) this.typing.set(m.who, { until: Date.now() + 4000, ch: m.ch, from: m.from, to: m.to ?? null });
+    if (m.t === "notes") { this.notes = (m.notes ?? []).map(([owner, id, at, text]) => ({ owner, id, at, text })); this.notesVersion = (this.notesVersion ?? 0) + 1; }
     if (m.t === "victory") { this.frozen = true; this.victory = { winner: m.winner, name: m.name, by: m.by ?? null, members: m.members ?? null }; }
     if (m.t === "ended") { this.frozen = true; this.ended = true; }
     if (m.t === "reopened") { this.frozen = !!this.victory; this.ended = false; }
