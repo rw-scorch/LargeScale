@@ -365,7 +365,7 @@ export const ORDERS = {
     return r.error ? fail(r.error) : { ...r, ok: true, op: m.op };
   },
   diplo(sim, nation, m) {
-    if (!living(sim, nation)) return fail("spawn first");
+    if (!living(sim, nation) && !["accept", "decline", "resign"].includes(m.op)) return fail(sim.nations.get(nation)?.spawned ? "your nation has fallen: a friend can invite you to command theirs" : "spawn first");
     const r = diploOrder(sim, nation, m);
     return r.error ? fail(r.error) : { ...r, ok: true, op: m.op };
   },
@@ -786,7 +786,7 @@ export function purseOf(n, extra = {}) {
   return { money: Math.floor(n.money), era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, autoRoads: n.autoRoads ?? null, ...extra };
 }
 
-export const DIPLO_EVENTS = ["war_declared", "war_started", "peace_signed", "alliance_signed", "alliance_left", "non_aggression_signed", "treaty_broken", "embargo", "faction_created", "faction_joined", "faction_left", "faction_renamed"];
+export const DIPLO_EVENTS = ["war_declared", "war_started", "peace_signed", "alliance_signed", "alliance_left", "non_aggression_signed", "treaty_broken", "embargo", "faction_created", "faction_joined", "faction_left", "faction_renamed", "surrendered", "vassal_freed", "commander_joined", "commander_left"];
 const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink", "nuke_launched", "nuke_intercepted", "nuke_detonated", "wonder_built", ...DIPLO_EVENTS]);
 const QUIET = new Set(["civ_build", "civ_upgrade"]);
 

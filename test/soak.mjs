@@ -27,7 +27,7 @@ async function join(world, token) {
     const m = JSON.parse(e.data);
     if (m.t === "hello") { p.cw = new ClientWorld(m); p.hello = m; return; }
     if (m.t === "result" && p.waits.has(m.of)) { const q = p.waits.get(m.of); p.waits.delete(m.of); q(m); }
-    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead|wonder|war_|peace_|alliance_|treaty|embargo|troops_home|faction_/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
+    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead|wonder|war_|peace_|alliance_|treaty|embargo|troops_home|faction_|surrender|vassal_|commander_/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
     p.cw?.message(m);
   };
   ws.onclose = e => { p.closed = e.code; };
@@ -91,10 +91,12 @@ async function diplo() {
   const theirs = p.cw.dip?.proposals.filter(x => x.to === p.cw.you) ?? [];
   const roll = rand(), mine = p.cw.factionOf(p.cw.you), other = p.cw.factionOf(to);
   let m;
-  if (!mine && roll < 0.08) m = { t: "diplo", op: "faction", name: pick(["North", "South", "East", "West"]) };
+  if (rel.vassal === "vassal" && roll < 0.3) m = { t: "diplo", op: "free", to };
+  else if ((rel.status === "war" || rel.status === "war_pending") && roll < 0.15) m = { t: "diplo", op: "surrender", to };
+  else if (!mine && roll < 0.08) m = { t: "diplo", op: "faction", name: pick(["North", "South", "East", "West"]) };
   else if (mine?.leader === p.cw.you && !other && roll < 0.2) m = { t: "diplo", op: "invite", to };
   else if (mine && roll > 0.94) m = { t: "diplo", op: rand() < 0.5 || mine.leader !== p.cw.you || !mine.members.includes(to) ? "quit" : "expel", to };
-  else if (theirs.length && roll < 0.4) m = { t: "diplo", op: rand() < 0.7 ? "accept" : "decline", id: pick(theirs).id };
+  else if (theirs.length && roll < 0.4) { const p = pick(theirs); m = { t: "diplo", op: p.kind !== "surrender" && rand() < 0.7 ? "accept" : "decline", id: p.id }; }
   else if (rel.status === "peace" && roll < 0.55) m = { t: "diplo", op: "war", to };
   else if (rel.status === "war" || rel.status === "war_pending") m = { t: "diplo", op: "propose", to, kind: "peace" };
   else if (rel.status === "alliance") m = rand() < 0.5 ? { t: "diplo", op: "leave", to } : { t: "diplo", op: "embargo", to, on: !rel.embargoes };
@@ -305,6 +307,9 @@ for (const [k, v] of [...tally].sort((a, b) => a[0].localeCompare(b[0]))) consol
   const ra = A.cw.relation(A.cw.you, B.cw.you), rb = B.cw.relation(B.cw.you, A.cw.you);
   console.log(`relation at the end: host sees ${ra.status}, friend sees ${rb.status}`);
   if (ra.status !== rb.status) problem(`the two players see different relations: ${ra.status} and ${rb.status}`);
+  const va = JSON.stringify([...(A.cw.dip?.lords ?? [])]), vb = JSON.stringify([...(B.cw.dip?.lords ?? [])]);
+  console.log(`vassals at the end: ${va}`);
+  if (va !== vb) problem(`the two players see different vassals: ${va} and ${vb}`);
   const fa = JSON.stringify(A.cw.dip?.factions ?? []), fb = JSON.stringify(B.cw.dip?.factions ?? []);
   console.log(`factions at the end: ${fa}`);
   if (fa !== fb) problem(`the two players see different factions: ${fa} and ${fb}`);

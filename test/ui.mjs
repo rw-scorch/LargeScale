@@ -947,6 +947,13 @@ check(/not placed yet/.test(listed), `the Players list includes a friend who has
   check(/\[faction\]/.test(heard) && palNote && /From your allies/.test(listed) && /Hold the ford/.test(listed), `faction chat reaches the friend ("${heard}"), and a note the host pins shows in the friend's list and on the map`);
   await fix.evaluate(() => { window.__ls.game.noteCard.show(false); window.__ls.game.feed.show("events"); });
   await friend.evaluate(() => { window.__ls.game.noteCard.show(false); window.__ls.game.feed.show("events"); });
+  await fix.evaluate(() => window.__ls.game.toggleInfo(true));
+  await fix.waitForSelector("#open-record", { timeout: 5000 }).catch(() => null);
+  await fix.click("#open-record").catch(() => null);
+  const rec = await fix.waitForFunction(() => { const p = document.querySelector("#record-panel"), c = document.querySelector("#record-map"), n = document.querySelectorAll("#record-events .record-line").length; return p && !p.hidden && c?.width > 0 && n > 0 ? [c.width, c.height, n, document.querySelector("#record-when").textContent, [...document.querySelectorAll("#record-events .record-line")].map(x => x.textContent).slice(-3)] : null; }, null, { timeout: 8000 }).then(h => h.jsonValue(), () => null);
+  await fix.screenshot({ path: `${OUT}/89-record.png` });
+  check(rec && rec[2] >= 3 && rec[4].some(t => /founded The North|joined The North/.test(t)), `an admin opens the record before the end: a ${rec?.[0]} by ${rec?.[1]} map picture (${rec?.[3]}) and ${rec?.[2]} events, the last "${rec?.[4]?.at(-1)}"`);
+  await fix.evaluate(() => window.__ls.game.record.show(false));
   await fix.evaluate(() => window.__ls.game.toggleDiplomacy(false));
   await friend.evaluate(() => window.__ls.game.toggleDiplomacy(false));
   await fix.evaluate(() => window.__ls.game.toggleAdmin(true));

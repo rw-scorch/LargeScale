@@ -11,6 +11,9 @@ export const DIPLO = {
   factionDefends: true,
   treatyMinutes: [30, 60, 120, 240],
   every: 1,
+  tribute: 0.25,
+  tributeEvery: 5,
+  maxCommanders: 2,
   ...rules.diplomacy,
 };
 
@@ -35,7 +38,15 @@ export class Diplomacy {
     this.log = [];
     this.closed = [];
     this.version = 0;
+    this.lords = new Map();
+    this.commanders = new Map();
+    this.tributeClock = 0;
+    this.incomeOf = null;
   }
+
+  lordOf(a) { return this.lords.get(a) ?? null; }
+  vassalsOf(a) { return [...this.lords].filter(([, l]) => l === a).map(([v]) => v); }
+  commandersOf(a) { return [...this.commanders].filter(([, n]) => n === a).map(([c]) => c); }
 
   get(a, b) {
     const k = key(a, b);
@@ -49,6 +60,11 @@ export class Diplomacy {
 
   status(a, b, now) {
     if (a === b || this.sameFaction(a, b)) return "alliance";
+    if (this.lords.size) {
+      const la = this.lords.get(a), lb = this.lords.get(b);
+      if (la === b || lb === a) return "alliance";
+      if (la !== undefined || lb !== undefined) return this.status(la ?? a, lb ?? b, now);
+    }
     const r = this.get(a, b);
     if (r.status === "war_pending" && now >= r.pendingAt) {
       r.status = "war";
@@ -66,6 +82,8 @@ export class Diplomacy {
 
   declareWar(a, b, now) {
     if (a === b) return "cannot declare war on yourself";
+    if (this.lords.has(a)) return "a vassal cannot declare war: its overlord decides";
+    if (this.lords.has(b)) return "they are a vassal: declare war on their overlord";
     if (this.sameFaction(a, b)) return "cannot declare war on your own faction";
     const targets = this.rules.factionDefends && this.faction(b) !== null ? this.membersOf(this.faction(b)) : [b];
     for (const t of targets) {
@@ -88,7 +106,19 @@ export class Diplomacy {
 
   check(from, to, kind, now) {
     if (from === to) return "pick another nation";
+    if (kind === "commander") {
+      if (this.commanders.has(to)) return "they already command a nation";
+      if (this.commandersOf(from).length >= this.rules.maxCommanders) return `at most ${this.rules.maxCommanders} commanders`;
+      return null;
+    }
+    if (this.lords.has(from)) return "a vassal leaves diplomacy to its overlord";
+    if (this.lords.has(to)) return "they are a vassal: talk to their overlord";
     const st = this.status(from, to, now);
+    if (kind === "surrender") {
+      if (st !== "war" && st !== "war_pending") return "you can only surrender in a war";
+      if (this.vassalsOf(from).length) return "set your vassals free before you surrender";
+      return null;
+    }
     if (kind === "alliance") return st === "alliance" ? "you are already allied" : st !== "peace" ? "make peace first" : null;
     if (kind === "peace") {
       if (st !== "war" && st !== "war_pending") return "you are not at war";
@@ -129,6 +159,19 @@ export class Diplomacy {
     if (p.kind === "peace") { r.status = "peace"; r.since = now; r.pendingAt = 0; r.treatyUntil = now + this.rules.peaceTreaty; this.closed.push([p.from, p.to]); }
     if (p.kind === "non_aggression") r.treatyUntil = now + (p.terms.minutes ?? 60) * 60;
     if (p.kind === "faction_invite") return this.join(this.faction(p.from), by, now);
+    if (p.kind === "commander") {
+      this.commanders.set(by, p.from);
+      this.log.push({ t: now, type: "commander_joined", a: by, b: p.from });
+      return null;
+    }
+    if (p.kind === "surrender") {
+      if (this.faction(p.from) !== null) this.leave(p.from, now);
+      this.lords.set(p.from, p.to);
+      Object.assign(r, { status: "peace", since: now, pendingAt: 0 });
+      for (const [id, q] of this.proposals) if (q.from === p.from || q.to === p.from) this.proposals.delete(id);
+      this.log.push({ t: now, type: "surrendered", a: p.from, b: p.to });
+      return null;
+    }
     this.log.push({ t: now, type: `${p.kind}_signed`, a: p.from, b: p.to, ...(p.kind === "non_aggression" ? { minutes: p.terms.minutes ?? 60 } : {}) });
     return null;
   }
@@ -229,7 +272,24 @@ export class Diplomacy {
     return null;
   }
 
-  winnerKey(nation) { return this.faction(nation) ?? `n${nation}`; }
+  winnerKey(nation) { const n = this.lords.get(nation) ?? nation; return this.faction(n) ?? `n${n}`; }
+
+  setFree(lord, vassal, now, why = null) {
+    if (this.lords.get(vassal) !== lord) return "not your vassal";
+    this.lords.delete(vassal);
+    Object.assign(this.get(lord, vassal), { status: "peace", since: now, pendingAt: 0, treatyUntil: now + this.rules.peaceTreaty });
+    this.log.push({ t: now, type: "vassal_freed", a: vassal, b: lord, ...(why ? { why } : {}) });
+    this.version++;
+    return null;
+  }
+
+  dismiss(nation, commander, now, why = null) {
+    if (this.commanders.get(commander) !== nation) return "not your commander";
+    this.commanders.delete(commander);
+    this.log.push({ t: now, type: "commander_left", a: commander, b: nation, ...(why ? { why } : {}) });
+    this.version++;
+    return null;
+  }
 
   expire(now) {
     for (const [id, p] of this.proposals) if (now > p.expires) { this.proposals.delete(id); this.version++; }
@@ -242,6 +302,7 @@ export class Diplomacy {
       embargo: [...this.embargo],
       proposals: [...this.proposals.values()],
       factions: [...this.factions.values()].map(f => ({ id: f.id, name: f.name, leader: f.leader, members: [...f.members] })),
+      lords: [...this.lords], commanders: [...this.commanders],
     };
   }
 
@@ -254,6 +315,8 @@ export class Diplomacy {
     this.factions = new Map((o.factions ?? []).map(f => [f.id, { ...f, members: new Set(f.members) }]));
     this.memberOf = new Map();
     for (const f of this.factions.values()) for (const m of f.members) this.memberOf.set(m, f.id);
+    this.lords = new Map(o.lords ?? []);
+    this.commanders = new Map(o.commanders ?? []);
     this.version++;
     return this;
   }
@@ -264,6 +327,7 @@ export class Diplomacy {
       rel: [...this.rel.keys()].map(k => { const [a, b] = pairOf(k), s = this.status(a, b, now), r = this.rel.get(k); return [a, b, RELATIONS.indexOf(s), r.pendingAt, r.treatyUntil, r.noWarUntil, r.since]; }),
       embargo: [...this.embargo].map(e => e.split(">").map(Number)),
       factions: [...this.factions.values()].map(f => ({ id: f.id, name: f.name, leader: f.leader, members: [...f.members] })),
+      vassals: [...this.lords], commanders: [...this.commanders],
     };
   }
 
@@ -278,9 +342,10 @@ export function wireToWorld(world, dip) {
   world.passable = (a, b) => dip.passable(a, b, world.time);
 }
 
-export function installDiplomacy(world, { rules: r = {}, saved = null, fresh = true } = {}) {
+export function installDiplomacy(world, { rules: r = {}, saved = null, fresh = true, incomeOf = null } = {}) {
   if (world.dip) return world.dip;
   const dip = new Diplomacy(r);
+  dip.incomeOf = incomeOf;
   if (saved) dip.load(saved);
   else dip.base = fresh ? "peace" : "war";
   world.dip = dip;
@@ -296,16 +361,32 @@ export function installDiplomacy(world, { rules: r = {}, saved = null, fresh = t
   world.hostile = (a, b) => (players(a, b) ? dip.hostile(a, b, world.time) : hostile(a, b));
   world.passable = (a, b) => (players(a, b) ? dip.passable(a, b, world.time) : passable(a, b));
   let clock = 0;
-  const tick = (w, dt) => { clock += dt; if (clock < dip.rules.every) return; clock = 0; diploTick(w); };
-  tick.whole = w => diploTick(w);
+  const tick = (w, dt) => { clock += dt; if (clock < dip.rules.every) return; const span = clock; clock = 0; diploTick(w, span); };
+  tick.whole = (w, dt) => diploTick(w, dt);
   world.hooks.postTick.push(tick);
   return dip;
 }
 
-export function diploTick(world) {
-  const dip = world.dip, now = world.time;
+export function diploTick(world, dt = 0) {
+  const dip = world.dip, now = world.time, alive = id => !!world.nations.get(id)?.alive;
   for (const [k, r] of dip.rel) if (r.status === "war_pending" && now >= r.pendingAt) dip.status(...pairOf(k), now);
   dip.expire(now);
+  for (const [v, l] of [...dip.lords]) if (!alive(l)) dip.setFree(l, v, now, "fell"); else if (!alive(v)) { dip.lords.delete(v); dip.version++; }
+  for (const [c, n] of [...dip.commanders]) if (!alive(n)) dip.dismiss(n, c, now, "fell");
+  dip.tributeClock += dt;
+  if (dip.lords.size && dip.tributeClock >= dip.rules.tributeEvery) {
+    const span = dip.tributeClock;
+    dip.tributeClock = 0;
+    for (const [v, l] of dip.lords) {
+      const V = world.nations.get(v), L = world.nations.get(l), rate = dip.incomeOf ? dip.incomeOf(V) : 0;
+      const pay = Math.min(Math.max(0, V.money ?? 0), Math.max(0, rate) * dip.rules.tribute * span);
+      if (!(pay > 0)) continue;
+      V.money -= pay;
+      L.money = (L.money ?? 0) + pay;
+      V.tributePaid = (V.tributePaid ?? 0) + pay;
+      L.tributeGot = (L.tributeGot ?? 0) + pay;
+    }
+  } else if (!dip.lords.size) dip.tributeClock = 0;
   for (const [a, b] of dip.closed.splice(0)) sendHome(world, a, b);
   for (const e of dip.log.splice(0)) {
     const { t, type, ...rest } = e;
@@ -402,6 +483,37 @@ export function diploOrder(world, nid, m) {
       dip.setEmbargo(nid, t.id, !!m.on, now);
       return { ok: true, on: !!m.on };
     }
+    case "surrender": {
+      const { t, error } = target(world, nid, m);
+      if (error) return { error };
+      const theirs = [...dip.proposals.values()].find(p => p.from === t.id && p.to === nid && p.kind === "surrender");
+      if (theirs) return { error: "they have offered to surrender to you: accept it instead" };
+      const r = dip.propose(nid, t.id, "surrender", now);
+      return r.error ? r : { ok: true, proposal: r.proposal.id, to: t.id, kind: "surrender" };
+    }
+    case "free": {
+      const { t, error } = target(world, nid, m);
+      if (error) return { error };
+      const why = dip.setFree(nid, t.id, now);
+      return why ? { error: why } : { ok: true };
+    }
+    case "command": {
+      const t = Number.isInteger(m.to) && m.to !== nid ? world.nations.get(m.to) : null;
+      if (!t?.human || !t.spawned) return { error: "pick a player who has been eliminated" };
+      if (t.alive) return { error: `${t.name} still has a nation to run` };
+      const r = dip.propose(nid, t.id, "commander", now);
+      return r.error ? r : { ok: true, proposal: r.proposal.id, to: t.id, kind: "commander" };
+    }
+    case "dismiss": {
+      const why = dip.dismiss(nid, Number(m.to), now);
+      return why ? { error: why } : { ok: true };
+    }
+    case "resign": {
+      const n = dip.commanders.get(nid);
+      if (n === undefined) return { error: "you command no nation" };
+      dip.dismiss(n, nid, now, "resigned");
+      return { ok: true };
+    }
     case "faction":
     case "rename": {
       const name = cleanFactionName(m.name);
@@ -432,6 +544,6 @@ export function diploOrder(world, nid, m) {
       return why ? { error: why } : { ok: true };
     }
     default:
-      return { error: "the order is war, propose, accept, decline, withdraw, leave, break, embargo, faction, invite, quit, expel or rename" };
+      return { error: "the order is war, propose, accept, decline, withdraw, leave, break, embargo, surrender, free, command, dismiss, resign, faction, invite, quit, expel or rename" };
   }
 }

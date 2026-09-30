@@ -7,6 +7,17 @@ const clock = s => {
   return s >= 120 ? `${Math.round(s / 60)} min` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 const KIND = { peace: "peace", alliance: "an alliance", non_aggression: "a non-aggression treaty" };
+const offerText = (p, name, faction) => ({
+  faction_invite: `${name} invites you to join ${faction ?? "their faction"}.`,
+  surrender: `${name} offers to surrender and become your vassal.`,
+  commander: `${name} invites you to command their nation as a second commander.`,
+})[p.kind] ?? `${name} proposes ${kindText(p)}.`;
+const sentText = (p, name) => ({
+  faction_invite: `You invited ${name} to your faction.`,
+  surrender: `You offered to surrender to ${name}.`,
+  commander: `You invited ${name} to command your nation.`,
+})[p.kind] ?? `You proposed ${kindText(p)} to ${name}.`;
+const OFFER_ICON = { peace: "dip_peace", alliance: "dip_alliance", faction_invite: "dip_faction", surrender: "dip_peace", commander: "dip_faction" };
 const kindText = p => (p.kind === "non_aggression" ? `a non-aggression treaty for ${p.minutes} minutes` : KIND[p.kind] ?? p.kind);
 
 export function relationIcon(rel) {
@@ -15,23 +26,25 @@ export function relationIcon(rel) {
 
 export function relationText(rel, speed = 1) {
   const real = s => clock(s / (speed || 1));
-  const main = rel.faction ? "Your faction" : rel.status === "war" ? "At war"
+  const main = rel.faction ? "Your faction" : rel.vassal === "lord" ? "Your overlord" : rel.vassal === "vassal" ? "Your vassal" : rel.status === "war" ? "At war"
     : rel.status === "war_pending" ? `War in ${real(rel.startsIn)}`
     : rel.status === "alliance" ? "Allied"
     : rel.status === "peace" ? (rel.treaty ? `Treaty, ${real(rel.treaty)} left` : "At peace")
     : rel.status === "open" ? "Bot: no declaration needed" : "";
   const extra = [rel.embargoes ? "you embargo them" : "", rel.embargoed ? "they embargo you" : "", rel.cooldown && rel.status !== "war" && rel.status !== "war_pending" ? `no war for ${real(rel.cooldown)}` : ""].filter(Boolean);
+  if (rel.through !== undefined) extra.push("through an overlord");
   return extra.length ? `${main}; ${extra.join("; ")}` : main;
 }
 
 export function createDiplomacyPanel(root, game) {
   const intro = el("p", { id: "dip-intro", class: "muted" });
+  const role = el("div", { id: "dip-role", class: "dip-faction", hidden: true });
   const faction = el("div", { id: "dip-faction", class: "dip-faction" });
   const offers = el("div", { id: "dip-proposals", class: "dip-list" });
   const rows = el("div", { id: "dip-players", class: "dip-list" });
   const box = el("section", { id: "diplomacy-panel", class: "panel center", hidden: true },
     el("div", { class: "row spread" }, el("b", { class: "title" }, icon("dip_alliance", 1), " Diplomacy"), el("span", { class: "row" }, el("button", { id: "dip-notes", class: "ghost", text: "Map notes", onclick: () => { game.toggleDiplomacy(false); game.noteAt(null); } }), el("button", { class: "ghost", text: "Close", onclick: () => game.toggleDiplomacy(false) }))),
-    intro, faction, offers, rows);
+    intro, role, faction, offers, rows);
   root.append(box);
   let sig = "", focus = null;
   const live = new Map();
@@ -46,8 +59,10 @@ export function createDiplomacyPanel(root, game) {
   const nameOf = id => game.world.nations.get(id)?.name ?? "them";
 
   const actions = (n, rel) => {
-    const to = n.id, war = rel.status === "war" || rel.status === "war_pending";
+    const to = n.id, war = rel.status === "war" || rel.status === "war_pending", w = game.world;
     const out = [];
+    if (rel.vassal === "vassal") return [armed("Set free", `Sure? ${n.name} goes free`, () => ask({ op: "free", to }, `${n.name} is free.`), { "data-op": "free" })];
+    if (rel.vassal || w.lordOf(w.you) !== null || w.lordOf(to) !== null) return out;
     if (rel.status === "peace") {
       out.push(armed("Declare war", `Sure? War in ${clock((game.world.dipRules?.warNotice ?? 300) / (game.world.speed || 1))}`, () => ask({ op: "war", to }, r => `You declared war on ${n.name}. It starts in ${clock((r.starts - game.world.simNow()) / (game.world.speed || 1))}.`), { class: "dip-war", "data-op": "war" }));
       if (rel.treaty) out.push(armed("Break treaty", `Sure? No war for ${clock((game.world.dipRules?.betrayalCooldown ?? 900) / (game.world.speed || 1))} after`, () => ask({ op: "break", to }, `You broke your treaty with ${n.name}.`), { "data-op": "break" }));
@@ -59,6 +74,7 @@ export function createDiplomacyPanel(root, game) {
     if (war) {
       const young = rel.status === "war" && game.world.simNow() - rel.since < (game.world.dipRules?.peaceMinWar ?? 600);
       out.push(el("button", { "data-op": "peace", text: "Propose peace", disabled: young, title: young ? `peace talks open once the war is ${clock((game.world.dipRules?.peaceMinWar ?? 600) / (game.world.speed || 1))} old` : null, onclick: () => ask({ op: "propose", to, kind: "peace" }, r => (r.signed ? `Peace signed with ${n.name}.` : `Peace proposed to ${n.name}.`)) }));
+      if (!w.dip.lords.size || ![...w.dip.lords.values()].includes(w.you)) out.push(armed("Surrender", `Sure? You become their vassal`, () => ask({ op: "surrender", to }, `You offered to surrender to ${n.name}.`), { "data-op": "surrender", title: "offer to become their vassal: the war ends, you follow their wars and pay them a share of your income" }));
     }
     const mine = game.world.factionOf(game.world.you), theirs = game.world.factionOf(to);
     if (mine && mine.leader === game.world.you && !theirs && !war) out.push(el("button", { "data-op": "invite", text: `Invite to ${mine.name}`, onclick: () => ask({ op: "invite", to }, `${n.name} is invited to ${mine.name}.`) }));
@@ -69,6 +85,16 @@ export function createDiplomacyPanel(root, game) {
     if (rel.status === "alliance") out.push(armed("Leave alliance", "Sure? Troops in their land come home", () => ask({ op: "leave", to }, `You left your alliance with ${n.name}.`), { "data-op": "leave" }));
     out.push(el("button", { "data-op": "embargo", class: rel.embargoes ? "on" : "", text: rel.embargoes ? "Lift embargo" : "Embargo", title: "an embargo closes your land to their troops and stops trade between you", onclick: () => ask({ op: "embargo", to, on: !rel.embargoes }, r => (r.on ? `Embargo on ${n.name}.` : `Embargo on ${n.name} lifted.`)) }));
     return out;
+  };
+
+  const deadRow = n => {
+    const w = game.world, me = w.nations.get(w.you), leads = w.commandsOf(n.id);
+    if (n.alive) return el("span", { class: "muted", text: "" });
+    if (n.id === w.self) return el("span", { class: "muted", text: "Eliminated; that is you" });
+    const bits = [el("span", { class: "muted", text: leads !== null ? `Eliminated; commands ${leads === w.you ? "your nation" : `${nameOf(leads)}'s nation`}` : "Eliminated" })];
+    if (leads === w.you && !w.frozen) bits.push(armed("Dismiss", `Sure? ${n.name} stops commanding`, () => ask({ op: "dismiss", to: n.id }, `${n.name} no longer commands your nation.`), { "data-op": "dismiss" }));
+    else if (leads === null && me?.alive && !w.frozen) bits.push(el("button", { "data-op": "command", text: "Invite to command", title: "an eliminated player can help run your nation as a second commander", onclick: () => ask({ op: "command", to: n.id }, `${n.name} is invited to command your nation.`) }));
+    return el("div", { class: "row wrap dip-actions" }, ...bits);
   };
 
   return {
@@ -87,8 +113,14 @@ export function createDiplomacyPanel(root, game) {
         sig = next;
         live.clear();
         intro.textContent = `Players start at peace. A declared war starts ${clock((w.dipRules?.warNotice ?? 300) / speed)} after it is declared, and nobody can attack before. Bots need no declaration.${ph ? " The scheduled peace period is still on: no attack lands until it ends." : ""}`;
-        const mine = w.dip.proposals.filter(p => p.to === w.you), sent = w.dip.proposals.filter(p => p.from === w.you);
-        const fac = w.factionOf(w.you), size = w.dipRules?.maxFactionSize ?? 4;
+        const mine = w.dip.proposals.filter(p => p.to === w.you || p.to === w.self), sent = w.dip.proposals.filter(p => p.from === w.you);
+        const fac = w.factionOf(w.you), size = w.dipRules?.maxFactionSize ?? 4, lord = w.lordOf(w.you), vassals = [...w.dip.lords].filter(([, l]) => l === w.you).map(([v]) => v), share = Math.round((w.dipRules?.tribute ?? 0.25) * 100);
+        const commanding = w.self !== undefined && w.self !== w.you, fallen = !commanding && me?.spawned && !me.alive;
+        role.hidden = !(commanding || fallen || lord !== null || vassals.length);
+        role.replaceChildren(...(commanding ? [el("span", { text: `You command ${me?.name ?? "this nation"} as a second commander, since your own nation fell.` }), armed("Resign", "Sure? You go back to watching", () => ask({ op: "resign" }, "You resigned. Reconnecting."), { "data-op": "resign" })]
+          : fallen ? [el("span", { text: "Your nation has fallen. You can watch, or a friend can invite you to command their nation: invitations show below." })]
+          : lord !== null ? [el("span", { text: `You are a vassal of ${nameOf(lord)}: you pay them ${share}% of your income, and follow their wars and alliances. Only they can set you free.` })]
+          : [el("span", { text: `Your ${vassals.length === 1 ? "vassal" : "vassals"} ${vassals.map(nameOf).join(" and ")} ${vassals.length === 1 ? "pays" : "each pay"} you ${share}% of ${vassals.length === 1 ? "its" : "their"} income.` })]));
         if (!fac) {
           const name = el("input", { id: "faction-name", placeholder: "faction name", maxlength: 24 });
           faction.replaceChildren(el("b", {}, icon("dip_faction", 1), " Faction"),
@@ -103,18 +135,18 @@ export function createDiplomacyPanel(root, game) {
               armed("Leave faction", "Sure? No war with them for 15 min", () => ask({ op: "quit" }, `You left ${fac.name}.`), { "data-op": "quit" })));
         }
         offers.replaceChildren(...(mine.length || sent.length ? [el("b", { text: "Proposals" })] : []),
-          ...mine.map(p => el("div", { class: "dip-offer", "data-proposal": p.id }, icon(p.kind === "peace" ? "dip_peace" : p.kind === "alliance" ? "dip_alliance" : p.kind === "faction_invite" ? "dip_faction" : "dip_treaty", 1),
-            el("span", { text: p.kind === "faction_invite" ? `${nameOf(p.from)} invites you to join ${w.factionOf(p.from)?.name ?? "their faction"}.` : `${nameOf(p.from)} proposes ${kindText(p)}.` }),
-            el("button", { class: "primary", "data-op": "accept", text: "Accept", onclick: () => ask({ op: "accept", id: p.id }, r => `${KIND[r.signed] ? `${KIND[r.signed][0].toUpperCase()}${KIND[r.signed].slice(1)}` : "Agreement"} signed with ${nameOf(r.with)}.`) }),
+          ...mine.map(p => el("div", { class: "dip-offer", "data-proposal": p.id }, icon(OFFER_ICON[p.kind] ?? "dip_treaty", 1),
+            el("span", { text: offerText(p, nameOf(p.from), w.factionOf(p.from)?.name) }),
+            el("button", { class: "primary", "data-op": "accept", text: "Accept", onclick: () => ask({ op: "accept", id: p.id }, r => r.signed === "commander" ? `You now command ${nameOf(r.with)}'s nation. Reconnecting.` : r.signed === "surrender" ? `${nameOf(r.with)} is now your vassal.` : `${KIND[r.signed] ? `${KIND[r.signed][0].toUpperCase()}${KIND[r.signed].slice(1)}` : "Agreement"} signed with ${nameOf(r.with)}.`) }),
             el("button", { "data-op": "decline", text: "Decline", onclick: () => ask({ op: "decline", id: p.id }, "Declined.") }))),
-          ...sent.map(p => el("div", { class: "dip-offer sent", "data-proposal": p.id }, el("span", { class: "muted", text: p.kind === "faction_invite" ? `You invited ${nameOf(p.to)} to your faction.` : `You proposed ${kindText(p)} to ${nameOf(p.to)}.` }),
+          ...sent.map(p => el("div", { class: "dip-offer sent", "data-proposal": p.id }, el("span", { class: "muted", text: sentText(p, nameOf(p.to)) }),
             el("button", { class: "ghost", "data-op": "withdraw", text: "Withdraw", onclick: () => ask({ op: "withdraw", id: p.id }, "Withdrawn.") }))));
         rows.replaceChildren(...(players.length ? [] : [el("p", { class: "muted", text: "No other players have spawned yet." })]), ...players.map(n => {
           const rel = rels.get(n.id), text = el("span", { class: "dip-status" }), ic = relationIcon(rel);
           live.set(n.id, text);
           return el("div", { class: `dip-row ${n.alive ? "" : "dead"} ${focus === n.id ? "focus" : ""} rel-${rel.status}`, "data-nation": n.id },
             el("div", { class: "row" }, el("i", { class: "swatch", style: `background:${n.colour}` }), el("b", { text: n.name }), w.factionOf(n.id) ? el("span", { class: "muted", text: `[${w.factionOf(n.id).name}]` }) : null, el("i", { class: `dot ${w.online?.has(n.id) ? "on" : "off"}`, title: w.online?.has(n.id) ? "online now" : "away" }), ic ? icon(ic, 1) : null, text),
-            n.alive && me?.alive && !w.frozen ? el("div", { class: "row wrap dip-actions" }, ...actions(n, rel)) : el("span", { class: "muted", text: n.alive ? "" : "Eliminated" }));
+            n.alive && me?.alive && !w.frozen ? el("div", { class: "row wrap dip-actions" }, ...actions(n, rel)) : deadRow(n));
         }));
         if (focus !== null) rows.querySelector(`[data-nation="${focus}"]`)?.scrollIntoView({ block: "nearest" });
       }

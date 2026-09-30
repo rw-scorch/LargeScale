@@ -140,7 +140,9 @@ export function createWorldInfo(root, game) {
         el("p", { text: "Last player or faction standing: take every other player's land. A faction's members win together. Bots do not count." }),
         s.endAt != null ? el("p", { text: `If more than one side is left at ${when(s.endAt)}, the one with the most land wins, a faction's land counted together.` }) : null,
         s.overtimeAt != null ? el("p", { class: "muted", text: "Overtime makes everyone's border shrink, so holding back does not work: players have to fight for land." }) : null,
-        w.victory ? el("p", { class: "up", text: w.victory.name ? `${w.victory.name} has won${w.victory.by === "time" ? " with the most land at the end time" : ""}.` : "Nobody was left standing." }) : null].filter(Boolean));
+        w.victory ? el("p", { class: "up", text: w.victory.name ? `${w.victory.name} has won${w.victory.by === "time" ? " with the most land at the end time" : ""}.` : "Nobody was left standing." }) : null,
+        el("p", { class: "muted", text: "When the world ends, its record opens to everyone: what happened, and a picture of the map every game hour." }),
+        w.victory || w.ended || game.admin ? el("button", { id: "open-record", class: w.victory || w.ended ? "primary" : "ghost", text: w.victory || w.ended ? "Open the record" : "Open the record (admins only until the end)", onclick: () => game.openRecord() }) : null].filter(Boolean));
       const humans = [...w.nations.values()].filter(n => !n.bot), bots = w.nations.size - humans.length;
       const tests = Object.entries(i.rules ?? {}).filter(([k, v]) => TEST_RULES[k] && v !== 1).map(([k, v]) => `${TEST_RULES[k]} ${v}x`);
       const map = MAPS[i.map] ?? (i.crop && i.crop !== "custom" ? i.crop[0].toUpperCase() + i.crop.slice(1) : "A region of Earth");
