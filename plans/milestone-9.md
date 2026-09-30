@@ -94,3 +94,67 @@ Diplomacy is the part the game is built around: the win is the last player or fa
 ## After this milestone
 
 In order: the Future era with cruise missiles; engineers and terrain destruction; atmosphere; host rules and the dev panel.
+
+## Progress
+
+- **Part A, relations and war (30 September 2026, branch `m9-diplomacy`, stacked on `m8-tourism`).** Built as planned, with these specifics:
+  - **`src/sim/diplomacy.js`**, the kit's module extended:
+    - `installDiplomacy` wraps `world.hostile` and `world.passable` for pairs of players only. Which nations are players is read from a small array, not the nations map.
+    - Relations are keyed by a number, not a string.
+    - `check` holds the rules for each proposal, and runs again when a proposal is accepted, so an old alliance offer cannot be signed in the middle of a war.
+    - The kit's `propose` and `accept`, and `decline`, `withdraw`, `save`, `load`, `view` and `proposalsOf`.
+    - `diploTick` runs every second on world time, and in catch-up. It starts pending wars, drops old proposals, sends troops home and turns the log into events.
+  - **The `diplo` order** (`diploOrder`): `war`, `propose` (peace, alliance, or a non-aggression treaty of 30, 60, 120 or 240 minutes), `accept`, `decline`, `withdraw`, `leave`, `break` and `embargo`.
+    - Proposing what the other side has already proposed signs it at once.
+    - A declaration against a bot is refused with the reason: bots need none.
+  - **Rules** (`rules.json` `diplomacy`):
+    - The notice is 5 minutes.
+    - Peace talks open once a war is 10 minutes old, and a signed peace gives 10 minutes without war.
+    - Breaking a treaty or leaving an alliance stops a declaration for 15 minutes.
+    - **Changed from the kit:** proposals last a day of game time, not 10 minutes, because friends in a long world are away for hours.
+  - **Troops sent home.** When peace is signed, an alliance is left or an embargo starts, stacks standing where they may no longer be are moved to their nation's nearest plot and set to hold (`sendHome`, the `troops_home` event). In a war an advance takes the land it stands on, so this matters mostly for allies' land.
+  - **Embargoes.** `passable` is false for an embargoed traveller, and `friendly` in `src/sim/trade.js` (now exported) refuses trade either way.
+  - **Reasons.** The attack, advance and landing orders give `peaceReason`: "declare war first", "the war with X starts in N s", "X is your ally" or "the peace period is still on".
+  - **Old worlds** have no `diplomacy` in their state, so every pair of players starts at war. New worlds start at peace. The state row carries `diplomacy`.
+  - **World.**
+    - `hello` carries `diplomacy` (relations, embargoes, factions, and your own proposals) and `dipRules`.
+    - `sendDiplomacy` sends a `diplomacy` message to each player when the version changes, and straight after a `diplo` order.
+    - The eight diplomacy events go to everyone.
+    - Away players get a notice for a war declared on them and for proposals.
+    - The admin op `diplomacy` (World power) sets the war notice (1, 5, 10, 30 or 60 minutes). A world's config takes `warNotice` too, and test rules may set any notice.
+  - **Away summary.** Wars, peace, alliances, treaties and embargoes from while you were away are listed. A war declared on you shows the summary even after a short absence.
+  - **Client.**
+    - The Diplomacy panel (`public/js/ui/diplomacy.js`, J, and a corner icon counting the proposals that wait for you). Each player's row has a relation icon, a live countdown and the actions that fit. Declare war, Leave alliance and Break treaty each ask twice.
+    - The ring offers Declare war and Diplomacy on a player at peace, and greys out Attack while a war is pending.
+    - The nation card shows the relation and has a Diplomacy button, and the leaderboard shows relation icons.
+    - The status bar counts down a pending war (`#war-chip`).
+    - World info shows the war notice, with a selector for the host.
+    - `ClientWorld` has `setDiplomacy`, `relation(a, b)` and `canAttack`.
+  - **Evidence:**
+    - `npm test`: 318 of 318. `test/diplomacy.test.js` has 9 tests:
+      - peace at the start, and bots left out;
+      - the notice;
+      - alliances and leaving one;
+      - peace and treaties;
+      - embargoes;
+      - saving;
+      - catch-up;
+      - the browser against the server;
+      - the away summary.
+
+      `test/kit/diplomacy.test.js` runs the kit's 5 tests against `src/sim`. The reference tests: 95 of 95.
+    - **Cost of the check.** Timed alone on 400 bots and 8 players, a hostility check costs 30.3 ns with diplomacy against 28.9 ns without. The bench makes 32,991 checks a tick, so that is about 0.05 ms a tick.
+    - **`npm run bench`** (diplomacy installs with every player at war, so the game is the same; `--diplomacy 0` leaves it out):
+
+      | Diplomacy | Median | p99 | Worst |
+      | --- | --- | --- | --- |
+      | On | 9.0 ms | 31.0 ms | 51.3 ms |
+      | Off | 10.3 ms | 34.1 ms | 45.2 ms |
+
+      The worst tick with diplomacy on was an economy tick, over the budget by 1.3 ms; the tick without the economy pass was 39.9 ms. Given the 0.05 ms measured, this is the bench's usual noise.
+    - **Dev server run (30 September 2026):**
+      - **Smoke: 123 of 123.** Players start at peace, and an attack needs a declaration ("you are at peace with friend: declare war first"). A proposal reaches only the two players and is declined. An embargo is heard. A declared war makes attacks wait ("the war with friend starts in 4 s") and then starts. With a war declared, the scheduled peace still stops attacks ("the peace period is still on").
+      - The smoke test's battles now declare war first, with short notices set in test rules.
+      - **`npm run ui`: 192 of 192.** In the browser, Declare war asks first ("Sure? War in 5 min"). Both players' bars then count down ("War with pal in 5:01"). The host's corner shows 1 proposal waiting; accepting peace gives "Treaty, 10 min left", and an alliance after it shows "Allied" in the panel and on the leaderboard (screens `85-diplomacy` and `86-diplomacy-allied`).
+      - **Soak: 180 s, 1,194 rounds, 0 tick errors, no problems found.** Random declarations, proposals, accepts, embargoes, leaves and breaks, including their refusals. Both players saw the same relation at the end.
+      - **Test fixes on the way.** An edit script dropped the backslashes from three regexes in the new checks. The helper check in the UI test now accepts a gift to either nation, since the friend has a nation now.
