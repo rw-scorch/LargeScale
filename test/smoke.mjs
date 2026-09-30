@@ -862,6 +862,56 @@ SB.ws.close();
   FA2.ws.close();
   FB.ws.close();
 }
+{
+  const rc = await api("/api/register", { name: "rival" + suffix, password: "third pass", invite: INVITE });
+  const tc = rc.body.token;
+  const ew = await api("/api/worlds", { name: "Endgame test", config: { w: 120, h: 90, seed: 8, bots: 0, rules: { warNotice: 1, stackSpeed: 6, advanceRate: 30 } } }, ta);
+  const eid = ew.body.id;
+  await api(`/api/worlds/${eid}/join`, {}, tb);
+  await api(`/api/worlds/${eid}/join`, {}, tc);
+  const EA = await connect(eid, ta), EB = await connect(eid, tb);
+  let EC = await connect(eid, tc);
+  const eah = await waitFor(EA, m => m.t === "hello"), ebh = await waitFor(EB, m => m.t === "hello"), ech = await waitFor(EC, m => m.t === "hello");
+  const say = async (who, m, ms) => { who.ws.send(JSON.stringify(m)); return nextResult(who, m.t, ms); };
+  const spawned = [await say(EA, { t: "spawn", x: 25, y: 45 }), await say(EB, { t: "spawn", x: 90, y: 45 }), await say(EC, { t: "spawn", x: 40, y: 45 })];
+  await adminOp(EA, { op: "speed", factor: 8 });
+  await say(EA, { t: "diplo", op: "war", to: ebh.you });
+  await sleep(600);
+  const offer = await say(EB, { t: "diplo", op: "surrender", to: eah.you });
+  const took = await say(EA, { t: "diplo", op: "accept", id: offer?.proposal });
+  const vassal = await waitFor(EB, m => m.t === "diplomacy" && m.vassals?.some(([v, l]) => v === ebh.you && l === eah.you), 4000);
+  EB.ws.send(JSON.stringify({ t: "diplo", op: "war", to: ech.you }));
+  const barred = await nextResult(EB, "diplo");
+  check(spawned.every(r => r?.ok) && offer?.ok && took?.signed === "surrender" && vassal && /a vassal cannot declare war/.test(barred?.error ?? ""), `the friend surrenders in a war and becomes the host's vassal, which cannot declare war itself ("${barred?.error}")`);
+  const freed = await say(EA, { t: "diplo", op: "free", to: ebh.you });
+  const free = await waitFor(EB, m => m.t === "events" && m.events.some(e => e.type === "vassal_freed" && e.a === ebh.you), 4000);
+  check(freed?.ok && free, "the host sets the vassal free, and it hears so");
+  await adminOp(EA, { op: "give", nation: eah.you, what: "troops", amount: 20000 });
+  await say(EA, { t: "diplo", op: "war", to: ech.you });
+  await sleep(600);
+  let fell = null;
+  for (const end = Date.now() + 60000; !fell && Date.now() < end; ) {
+    const r = await say(EA, { t: "attack", at: 45 * 120 + 40, share: 0.9 });
+    fell = await waitFor(EA, m => m.t === "events" && m.events.some(e => e.type === "eliminated" && e.nation === ech.you), r?.ok ? 8000 : 1500);
+  }
+  const inv = fell ? await say(EA, { t: "diplo", op: "command", to: ech.you }) : null;
+  const acc = inv?.ok ? await say(EC, { t: "diplo", op: "accept", id: inv.proposal }) : null;
+  const told = await waitFor(EC, m => m.t === "role", 4000);
+  const closed = await until(() => EC.ws.readyState === 3, 4000);
+  EC = await connect(eid, tc);
+  const asCommander = await waitFor(EC, m => m.t === "hello");
+  const ordered = await say(EC, { t: "stack", share: 0.05 });
+  const ownerOf = ordered?.stack && await until(() => EA.json.some(m => m.t === "state" && (m.s ?? []).some(r => r[0] === ordered.stack && r[1] === eah.you)), 4000);
+  check(!!fell && inv?.ok && acc?.signed === "commander" && told && closed && asCommander?.you === eah.you && asCommander.self === ech.you && ordered?.ok && ownerOf, `the host beats the rival, invites them to command, and after reconnecting the rival gives orders for the host's nation (a stack of the host's: ${!!ownerOf})`);
+  const early = await api(`/api/worlds/${eid}/history`, null, tb);
+  await adminOp(EA, { op: "end" });
+  const rec = await api(`/api/worlds/${eid}/history`, null, tb);
+  const types = new Set((rec.body.events ?? []).map(e => e.type));
+  const pic = rec.body.frames?.length ? await api(`/api/worlds/${eid}/history/${rec.body.frames[0].id}`, null, tb) : null;
+  check(early.status === 403 && rec.status === 200 && ["surrendered", "eliminated", "commander_joined", "war_declared"].every(t => types.has(t)) && rec.body.frames.length >= 1 && pic?.status === 200 && pic.body.w === 30 && pic.body.runs?.length > 0,
+    `the record is closed while the world runs (${early.status}); once it ends a friend reads ${rec.body.events?.length} events and ${rec.body.frames?.length} map pictures of ${pic?.body.w} by ${pic?.body.h}`);
+  for (const p of [EA, EB, EC]) p.ws.close();
+}
 const hour = Date.now() + 3600e3;
 const badMade = await api("/api/worlds", { name: "Bad schedule", config: { w: 120, h: 90, seed: 9, bots: 0, schedule: { startAt: hour, peaceUntil: hour - 60e3 } } }, ta);
 const wat = await api("/api/worlds", { name: "Watch test", config: { w: 120, h: 90, seed: 9, bots: 2, schedule: { startAt: hour } } }, ta);

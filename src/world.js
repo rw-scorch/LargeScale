@@ -892,6 +892,8 @@ export class World extends DurableObject {
         if (this.meta("ended")) return fail("the world has already ended");
         this.meta("ended", true);
         this.frozen = true;
+        this.keepRecord([{ type: "victory", name: null, by: "ended" }]);
+        this.snapshot();
         this.logAdmin(me, "end");
         this.broadcast({ t: "ended", by: me.name });
         this.stopLoop();
