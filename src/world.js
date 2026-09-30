@@ -36,7 +36,7 @@ import { decodeDeposits, cropDeposits, encodeDeposits, emptyDeposits, latitudeOf
 import { encodeRows } from "./shared/buildings.js";
 import buildingData from "../data/buildings.json" with { type: "json" };
 import { makeRng } from "./shared/rng.js";
-import { runOrder, RateLimit, applyPresence, victory, mostLand, StateFeed, BuildingFeed, purseOf, publicEvents, ordersOf, vitalsOf } from "./game.js";
+import { runOrder, RateLimit, applyPresence, victory, mostLand, DIPLO_EVENTS, StateFeed, BuildingFeed, purseOf, publicEvents, ordersOf, vitalsOf } from "./game.js";
 import { NotifyQueue, formatBatch, prefsFor, wants } from "./notify.js";
 import { runAdmin, parseSpeed, cleanName, ADMIN_RULES, adminAllowed, cleanPowers, POWERS } from "./admin.js";
 import { installCheats } from "./sim/cheats.js";
@@ -54,6 +54,8 @@ const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
 const SEASON_SECONDS = rules.seasons.dayLengthMinutes * 60 * rules.seasons.daysPerSeason;
 const COLOURS = ["#e0413a", "#f08a24", "#d63fbf", "#f2d02b", "#8e4fe0", "#f4f4f4", "#ff7ab8", "#1f1f1f"];
+
+const RECORD = new Set([...DIPLO_EVENTS, "eliminated", "era_up", "wonder_built", "nuke_launched", "nuke_detonated", "capital_moved", "victory"]);
 
 export class World extends DurableObject {
   constructor(ctx, env) {
@@ -76,6 +78,8 @@ export class World extends DurableObject {
         CREATE TABLE IF NOT EXISTS chunks (layer TEXT, idx INTEGER, data BLOB, PRIMARY KEY (layer, idx));
         CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, who TEXT, text TEXT);
         CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, who TEXT, op TEXT, detail TEXT);
+        CREATE TABLE IF NOT EXISTS record (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, g REAL, type TEXT, data TEXT);
+        CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, g REAL, w INTEGER, h INTEGER, names TEXT, data BLOB);
       `);
       const cols = new Set(ctx.storage.sql.exec("PRAGMA table_info(chat)").toArray().map(r => r.name));
       for (const [c, type] of [["ch", "TEXT"], ["fid", "INTEGER"], ["a", "INTEGER"], ["b", "INTEGER"]]) if (!cols.has(c)) ctx.storage.sql.exec(`ALTER TABLE chat ADD COLUMN ${c} ${type}`);
@@ -200,7 +204,7 @@ export class World extends DurableObject {
     installPower(this.sim, { scale: info.map.scale ?? 1 });
     installAutoRoads(this.sim);
     installPlanner(this.sim, { run: (nid, m) => runOrder(this.sim, nid, m), scale: info.map.scale ?? 1 });
-    installDiplomacy(this.sim, { rules: { warNotice: info.warNotice ?? info.rules?.warNotice ?? DIPLO.warNotice, maxFactionSize: info.factionSize ?? DIPLO.maxFactionSize }, saved: saved?.diplomacy ?? null, fresh: !saved });
+    installDiplomacy(this.sim, { incomeOf: n => vitalsOf(this.sim, n)?.income ?? 0, rules: { warNotice: info.warNotice ?? info.rules?.warNotice ?? DIPLO.warNotice, maxFactionSize: info.factionSize ?? DIPLO.maxFactionSize }, saved: saved?.diplomacy ?? null, fresh: !saved });
     installNotes(this.sim);
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
@@ -419,7 +423,9 @@ export class World extends DurableObject {
       nation = this.sim.addNation({ name: account.name, colour: COLOURS[this.accounts.size % COLOURS.length] });
       this.accounts.set(nation, account.id);
     }
-    server.serializeAttachment({ account: account.id, name: account.name, admin: account.admin, nation, watch });
+    const self = nation, led = nation === null ? undefined : this.sim.dip?.commanders.get(nation);
+    if (led !== undefined && this.sim.nations.get(led)?.alive) nation = led;
+    server.serializeAttachment({ account: account.id, name: account.name, admin: account.admin, nation, self, watch });
     this.updatePresence();
     const g = this.sim.grid, runs = encodeRuns(this.sim.owner);
     const terrainFrames = partFrames(MSG.TERRAIN_DIFF, join.pairs), ownerFrames = partFrames(MSG.OWNER, runs);
@@ -428,7 +434,7 @@ export class World extends DurableObject {
     const roadFrames = partFrames(MSG.ROAD, encodeRuns(this.sim.log.road));
     const depositFrames = this.info.map.kind === "test" ? partFrames(MSG.DEPOSITS, encodeDeposits(this.sim.res.dep)) : [];
     server.send(JSON.stringify({
-      t: "hello", v: PROTOCOL, you: nation, w: g.w, h: g.h, map: join.map,
+      t: "hello", v: PROTOCOL, you: nation, self, w: g.w, h: g.h, map: join.map,
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, road: roadFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       watch, defs: buildingData.buildings, purse: nation === null ? null : this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale }, powerRules: this.sim.power ? { ...this.sim.power.rules, reach: buildingData.buildings.find(d => d.id === "power_pole").pole.reach * this.sim.power.scale, scale: this.sim.power.scale } : null,
@@ -691,9 +697,13 @@ export class World extends DurableObject {
     }
     this.flushDiffs();
     if (++this.tickCount % 4 === 0) this.sendState();
+    this.historyClock = (this.historyClock ?? 0) + dt * this.speed;
+    if (this.historyClock >= rules.history.every || (this.historyRows ??= this.ctx.storage.sql.exec("SELECT COUNT(*) AS n FROM history").one().n) === 0 && [...this.sim.nations.values()].some(n => n.human && n.spawned)) { this.historyClock = 0; this.snapshot(); }
     const events = this.sim.events.splice(0);
     if (events.length) {
       recordAway(this.sim, events);
+      this.keepRecord(events);
+      for (const e of events) if ((e.type === "commander_joined" || e.type === "commander_left") && this.accounts.has(e.a)) this.reconnect(this.accounts.get(e.a));
       const shown = publicEvents(this.sim, events);
       if (shown.length) this.broadcast({ t: "events", events: shown });
       for (const e of events) {
@@ -716,8 +726,56 @@ export class World extends DurableObject {
     if (v) this.finish(v);
   }
 
+  keepRecord(events) {
+    const sql = this.ctx.storage.sql, now = Date.now();
+    for (const e of events) {
+      if (!RECORD.has(e.type)) continue;
+      const { t, type, ...data } = e;
+      sql.exec("INSERT INTO record (t, g, type, data) VALUES (?, ?, ?, ?)", now, t ?? this.sim.time, type, JSON.stringify(data));
+    }
+  }
+
+  snapshot() {
+    const s = this.sim, k = rules.history.scale, W = s.grid.w, H = s.grid.h, w = Math.ceil(W / k), h = Math.ceil(H / k), small = new Uint16Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) small[y * w + x] = s.owner[Math.min(H - 1, y * k + (k >> 1)) * W + Math.min(W - 1, x * k + (k >> 1))];
+    const ids = new Set(small);
+    ids.delete(0);
+    const names = [...ids].map(id => { const n = s.nations.get(id); return [id, n?.name ?? "?", n?.colour ?? "#888888", n?.bot ? 1 : 0]; });
+    this.ctx.storage.sql.exec("INSERT INTO history (t, g, w, h, names, data) VALUES (?, ?, ?, ?, ?, ?)", Date.now(), s.time, w, h, JSON.stringify(names), encodeRuns(small));
+    this.historyRows = (this.historyRows ?? 0) + 1;
+  }
+
+  historyOpen(admin) {
+    return !!this.sim && !!(admin || this.meta("victory") || this.meta("ended"));
+  }
+
+  history({ admin = false } = {}) {
+    if (!this.historyOpen(admin)) return { error: "the record opens when the world ends" };
+    const sql = this.ctx.storage.sql;
+    const events = sql.exec("SELECT t, g, type, data FROM record ORDER BY id DESC LIMIT ?", rules.history.events).toArray().reverse().map(r => ({ t: r.t, g: r.g, type: r.type, ...JSON.parse(r.data) }));
+    const frames = sql.exec("SELECT id, t, g FROM history ORDER BY id").toArray();
+    const nations = [...this.sim.nations.values()].filter(n => n.spawned).map(n => ({ id: n.id, name: n.name, colour: n.colour, bot: !!n.bot }));
+    return { ok: true, name: this.info.name, w: this.sim.grid.w, h: this.sim.grid.h, victory: this.meta("victory") ?? null, events, frames, nations };
+  }
+
+  historyFrame(id, { admin = false } = {}) {
+    if (!this.historyOpen(admin)) return { error: "the record opens when the world ends" };
+    const r = this.ctx.storage.sql.exec("SELECT id, t, g, w, h, names, data FROM history WHERE id = ?", Number(id)).toArray()[0];
+    if (!r) return { error: "no such picture" };
+    const bytes = new Uint8Array(r.data);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    return { ok: true, id: r.id, t: r.t, g: r.g, w: r.w, h: r.h, names: JSON.parse(r.names), runs: btoa(bin) };
+  }
+
+  reconnect(account) {
+    for (const ws of this.ctx.getWebSockets(`acc:${account}`)) try { ws.send(JSON.stringify({ v: PROTOCOL, t: "role", text: "Your role in this world changed. Reconnecting." })); ws.close(CLOSE.ROLE, "role changed"); } catch {}
+  }
+
   finish(v) {
     const info = this.meta("info") ?? {};
+    this.keepRecord([{ type: "victory", ...v }]);
+    this.snapshot();
     this.frozen = true;
     this.meta("victory", { ...v, at: Date.now() });
     this.sendState();
@@ -776,9 +834,9 @@ export class World extends DurableObject {
         if (this.frozen) return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "the world has ended" });
         const startAt = this.schedule().startAt;
         if (startAt && Date.now() < startAt && m.t !== "spawn") return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: `the world starts at ${new Date(startAt).toISOString().slice(0, 16).replace("T", " ")} UTC; until then you can only pick where to start` });
-        const r = runOrder(this.sim, me.nation, m);
+        const r = runOrder(this.sim, m.t === "diplo" && m.op === "resign" ? me.self ?? me.nation : me.nation, m);
         reply(r ?? { t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "unknown order" });
-        if (m.t === "diplo" && r?.ok && r.proposal && !this.online(r.to)) this.notify(r.to, "message", `${this.sim.nations.get(me.nation)?.name ?? "Someone"} proposes ${{ peace: "peace", alliance: "an alliance", non_aggression: "a non-aggression treaty" }[r.kind]}.`);
+        if (m.t === "diplo" && r?.ok && r.proposal && !this.online(r.to)) this.notify(r.to, "message", `${this.sim.nations.get(me.nation)?.name ?? "Someone"} ${{ peace: "proposes peace", alliance: "proposes an alliance", non_aggression: "proposes a non-aggression treaty", faction_invite: "invites you to their faction", surrender: "offers to surrender and become your vassal", commander: "invites you to command their nation" }[r.kind] ?? "has a proposal"}.`);
         if (m.t === "diplo" && r?.ok) this.sendDiplomacy();
         if (m.t === "pilot" && r?.ok) this.startPilots();
       }

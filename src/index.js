@@ -159,6 +159,13 @@ export default {
       if (!(await dir.isMember(me, statusMatch[1]))) return json({ error: "join first" }, 403);
       return json(await env.WORLD.getByName(statusMatch[1]).status());
     }
+    const historyMatch = path.match(/^\/api\/worlds\/([A-Za-z0-9_-]+)\/history(?:\/(\d+))?$/);
+    if (historyMatch) {
+      if (!(await dir.canWatch(me, historyMatch[1]))) return json({ error: "no such world" }, 404);
+      const world = env.WORLD.getByName(historyMatch[1]);
+      const r = historyMatch[2] ? await world.historyFrame(Number(historyMatch[2]), { admin: !!me.admin }) : await world.history({ admin: !!me.admin });
+      return json(r, r.error ? 403 : 200);
+    }
     const wsMatch = path.match(/^\/ws\/([A-Za-z0-9_-]+)$/);
     if (wsMatch) {
       if (request.headers.get("Upgrade") !== "websocket") return json({ error: "expected websocket" }, 426);
