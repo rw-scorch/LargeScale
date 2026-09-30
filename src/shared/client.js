@@ -100,6 +100,7 @@ export class ClientWorld {
     this.cbdRules = hello.cbdRules ?? null;
     this.tourismRules = hello.tourismRules ?? null;
     this.dipRules = hello.dipRules ?? null;
+    this.self = hello.self ?? hello.you;
     this.noteRules = hello.noteRules ?? null;
     this.setDiplomacy(hello.diplomacy ?? null);
     this.nukes = (hello.nukes ?? []).map(flightOf);
@@ -116,6 +117,8 @@ export class ClientWorld {
       embargo: new Set((d.embargo ?? []).map(([o, t]) => `${o}>${t}`)),
       factions: d.factions ?? [],
       proposals: d.proposals ?? [],
+      lords: new Map(d.vassals ?? []),
+      commanders: new Map(d.commanders ?? []),
     };
     this.dipVersion = (this.dipVersion ?? 0) + 1;
   }
@@ -127,6 +130,9 @@ export class ClientWorld {
     if (!this.dip) return { status: "war" };
     const fa = this.factionOf(a);
     if (fa && fa === this.factionOf(b)) return { status: "alliance", faction: fa.id, since: 0, startsIn: 0, treaty: 0, cooldown: 0, embargoes: false, embargoed: false };
+    const la = this.dip.lords.get(a), lb = this.dip.lords.get(b);
+    if (la === b || lb === a) return { status: "alliance", vassal: la === b ? "lord" : "vassal", since: 0, startsIn: 0, treaty: 0, cooldown: 0, embargoes: false, embargoed: false };
+    if (la !== undefined || lb !== undefined) return { ...this.relation(la ?? a, lb ?? b), through: la ?? lb };
     const now = this.simNow(), r = this.dip.rel.get(a < b ? `${a}:${b}` : `${b}:${a}`) ?? { status: this.dip.base, pendingAt: 0, treatyUntil: 0, noWarUntil: 0, since: 0 };
     const status = r.status === "war_pending" && now >= r.pendingAt ? "war" : r.status;
     return {
@@ -136,6 +142,14 @@ export class ClientWorld {
       cooldown: r.noWarUntil > now ? r.noWarUntil - now : 0,
       embargoes: this.dip.embargo.has(`${a}>${b}`), embargoed: this.dip.embargo.has(`${b}>${a}`),
     };
+  }
+
+  lordOf(nid) {
+    return this.dip?.lords.get(nid) ?? null;
+  }
+
+  commandsOf(nid) {
+    return this.dip?.commanders.get(nid) ?? null;
   }
 
   factionOf(nid) {

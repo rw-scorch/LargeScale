@@ -31,6 +31,7 @@ import { createArmyPanel } from "./ui/army.js";
 import { createLogisticsPanel } from "./ui/logistics.js";
 import { createDiplomacyPanel } from "./ui/diplomacy.js";
 import { createNoteCard } from "./ui/notes.js";
+import { createRecordPanel } from "./ui/record.js";
 import { createPlannerPanel } from "./ui/planner.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createNukePanel } from "./ui/nukes.js";
@@ -109,6 +110,7 @@ class Game {
     this.army = createArmyPanel(overlay, this);
     this.logistics = createLogisticsPanel(overlay, this);
     this.diplomacy = createDiplomacyPanel(overlay, this);
+    this.record = createRecordPanel(overlay, this);
     this.machinePanel = createMachinePanel(side, this);
     this.nationCard = createNationCard(side, this);
     this.noteCard = createNoteCard(side, this);
@@ -268,6 +270,7 @@ class Game {
     if (m.t === "reopened") note(`${m.by} reopened this world.`);
     if (m.t === "speed") note(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
     if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
+    if (m.t === "role") note(m.text ?? "Your role changed. Reconnecting.");
     if (m.t === "dipRules" && m.by && m.changed === "size") note(`${m.by} set the faction size to at most ${m.rules?.maxFactionSize} players.`);
     else if (m.t === "dipRules" && m.by) { const n = m.rules?.warNotice ?? 300; note(`${m.by} set the war notice to ${n >= 3600 ? `${n / 3600} h` : n >= 60 ? `${n / 60} min` : `${n} s`}: a declared war waits that long before the first attack.`); }
     if (m.t === "nukes") note(m.on ? `${m.by} allowed nuclear weapons in this world.` : `${m.by} turned nuclear weapons off in this world. Warheads stay in their silos but cannot be launched or built.`);
@@ -355,6 +358,11 @@ class Game {
     if (e.type === "faction_joined") say(`fj${e.faction}:${e.a}`, e.a === you ? `You joined ${fac}: its members are your allies, and you win together.` : w.factionOf?.(you)?.id === e.faction ? `${name(e.a)} joined your faction.` : `${name(e.a)} joined ${fac}.`, 0, e.a === you || w.factionOf?.(you)?.id === e.faction ? "good" : "info");
     if (e.type === "faction_left") say(`fl${e.faction}:${e.a}`, e.a === you ? (e.by !== undefined ? `${name(e.by)} expelled you from ${fac}.` : `You left ${fac}.`) : e.by !== undefined ? `${name(e.by)} expelled ${name(e.a)} from ${fac}.` : `${name(e.a)} left ${fac}${e.ended ? ", which is no more" : ""}.`, 0, e.a === you && e.by !== undefined ? "warn" : "info");
     if (e.type === "faction_renamed") say(`fr${e.faction}`, `${name(e.a)} renamed their faction ${e.name}.`, 0, "info");
+    const share = `${Math.round((w.dipRules?.tribute ?? 0.25) * 100)}%`;
+    if (e.type === "surrendered") say(`su${e.a}`, e.a === you ? `You surrendered to ${name(e.b)}: you are their vassal now, paying them ${share} of your income and following their wars.` : e.b === you ? `${name(e.a)} surrendered: they are your vassal now and pay you ${share} of their income.` : `${name(e.a)} surrendered to ${name(e.b)} and became their vassal.`, 0, e.a === you ? "warn" : e.b === you ? "good" : "info");
+    if (e.type === "vassal_freed") say(`vf${e.a}`, e.a === you ? (e.why === "fell" ? `${name(e.b)} has fallen, and you are free again.` : `${name(e.b)} set you free.`) : e.b === you ? `You set ${name(e.a)} free.` : `${name(e.a)} is no longer ${name(e.b)}'s vassal.`, 0, e.a === you ? "good" : "info");
+    if (e.type === "commander_joined") say(`cj${e.a}`, e.b === you ? `${name(e.a)} now helps command your nation.` : `${name(e.a)} now commands ${name(e.b)}'s nation.`, 0, e.b === you ? "good" : "info");
+    if (e.type === "commander_left") say(`cl${e.a}`, e.why === "fell" ? `${name(e.a)} no longer commands ${name(e.b)}'s nation, which has fallen.` : `${name(e.a)} no longer commands ${e.b === you ? "your" : `${name(e.b)}'s`} nation.`, 0, "info");
     if (e.type === "troops_home" && e.nation === you) say(`th${e.from}`, `${e.stacks} of your ${e.stacks === 1 ? "stack" : "stacks"} in ${name(e.from)}'s land went home.`, 0, "info");
     if (e.type === "nuke_launched") say(`nl${e.id}`, e.nation === you ? `You launched ${aw} ${warhead} at ${name(e.toward)}'s land. Impact in ${secs(e.seconds)}.` : e.toward === you ? `${name(e.nation)} launched ${aw} ${warhead} at your land. Impact in ${secs(e.seconds)}. ABM silos and SAM sites near the target may shoot it down.` : `${name(e.nation)} launched ${aw} ${warhead} at ${name(e.toward)}'s land. Impact in ${secs(e.seconds)}.`, 0, e.toward === you ? "danger" : "warn", e.target);
     if (e.type === "nuke_intercepted") say(`nx${e.id}`, `${e.by === you ? "Your missile defence" : `${name(e.by)}'s missile defence`} shot down ${e.nation === you ? "your" : `${name(e.nation)}'s`} ${warhead} over ${e.toward === you ? "your" : `${name(e.toward)}'s`} land.`, 0, e.nation === you ? "warn" : "good", e.target);
@@ -482,6 +490,7 @@ class Game {
       else if (this.army.open) this.toggleArmy(false);
       else if (this.logistics.open) this.toggleLogistics(false);
       else if (this.diplomacy.open) this.toggleDiplomacy(false);
+      else if (this.record.open) this.record.show(false);
       else if (this.research.open) this.toggleResearch(false);
       else if (this.planner.open) this.togglePlanner(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
@@ -555,6 +564,13 @@ class Game {
     if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.logistics.show(on && !!this.world?.purse?.trade && !!me?.spawned);
+    this.updatePanels();
+  }
+
+  openRecord() {
+    this.worldInfo.show(false);
+    this.diplomacy.show(false);
+    this.record.show(true);
     this.updatePanels();
   }
 

@@ -502,7 +502,7 @@ export class World extends DurableObject {
 
   dipRules() {
     const r = this.sim.dip.rules;
-    return { warNotice: r.warNotice, peaceMinWar: r.peaceMinWar, peaceTreaty: r.peaceTreaty, betrayalCooldown: r.betrayalCooldown, treatyMinutes: r.treatyMinutes, maxFactionSize: r.maxFactionSize, noticeChoices: r.noticeChoices, factionSizes: r.factionSizes };
+    return { warNotice: r.warNotice, peaceMinWar: r.peaceMinWar, peaceTreaty: r.peaceTreaty, betrayalCooldown: r.betrayalCooldown, treatyMinutes: r.treatyMinutes, maxFactionSize: r.maxFactionSize, noticeChoices: r.noticeChoices, factionSizes: r.factionSizes, tribute: r.tribute, maxCommanders: r.maxCommanders };
   }
 
   dipView(nation) {

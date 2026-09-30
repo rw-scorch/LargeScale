@@ -124,3 +124,20 @@ test("vassals and commanders are saved", () => {
   assert.deepEqual(d.view(w.time).vassals, [[b, a]]);
   assert.equal(d.status(b, a, w.time), "alliance");
 });
+
+test("the browser reads vassals, overlords and commanders like the server", async () => {
+  const { ClientWorld } = await import("../src/shared/client.js");
+  const { PROTOCOL } = await import("../src/shared/protocol.js");
+  const buildingData = (await import("../data/buildings.json", { with: { type: "json" } })).default;
+  const { w, g, ids: [a, b, c] } = world();
+  atWar(w, a, b);
+  run(w, a, { t: "diplo", op: "accept", id: run(w, b, { t: "diplo", op: "surrender", to: a }).proposal });
+  atWar(w, c, a);
+  const cw = new ClientWorld({ t: "hello", v: PROTOCOL, you: c, self: c, w: g.w, h: g.h, map: { kind: "test" }, hashes: {}, time: w.time, nations: [...w.nations.values()].map(o => ({ id: o.id, name: o.name })), defs: buildingData.buildings, tech: { eras: [], branches: [], nodes: [] }, diplomacy: { ...w.dip.view(w.time), proposals: [] } });
+  for (const [x, y] of [[b, a], [a, b], [c, b], [b, c], [a, c]]) assert.equal(cw.relation(x, y).status, w.dip.status(x, y, w.time), `${x} and ${y}`);
+  assert.deepEqual([cw.relation(b, a).vassal, cw.relation(a, b).vassal, cw.relation(c, b).through], ["lord", "vassal", a]);
+  assert.equal(cw.lordOf(b), a);
+  assert.equal(cw.canAttack(c, b), true, "at war with the overlord, so with the vassal too");
+  const cmd = new ClientWorld({ t: "hello", v: PROTOCOL, you: a, self: b, w: g.w, h: g.h, map: { kind: "test" }, hashes: {}, nations: [], defs: buildingData.buildings, tech: { eras: [], branches: [], nodes: [] }, diplomacy: { base: "peace", rel: [], commanders: [[b, a]] } });
+  assert.deepEqual([cmd.you, cmd.self, cmd.commandsOf(b)], [a, b, a]);
+});
