@@ -873,7 +873,10 @@ SB.ws.close();
   let EC = await connect(eid, tc);
   const eah = await waitFor(EA, m => m.t === "hello"), ebh = await waitFor(EB, m => m.t === "hello"), ech = await waitFor(EC, m => m.t === "hello");
   const say = async (who, m, ms) => { who.ws.send(JSON.stringify(m)); return nextResult(who, m.t, ms); };
-  const spawned = [await say(EA, { t: "spawn", x: 25, y: 45 }), await say(EB, { t: "spawn", x: 90, y: 45 }), await say(EC, { t: "spawn", x: 40, y: 45 })];
+  const spawned = [await say(EA, { t: "spawn", x: 25, y: 45 }), await say(EB, { t: "spawn", x: 90, y: 45 })];
+  let cAt = null;
+  for (const [x, y] of [[40, 20], [40, 70], [55, 45], [60, 20], [60, 70], [45, 30], [45, 60]]) if ((await say(EC, { t: "spawn", x, y }))?.ok) { cAt = y * 120 + x; break; }
+  spawned.push({ ok: cAt !== null });
   await adminOp(EA, { op: "speed", factor: 8 });
   await say(EA, { t: "diplo", op: "war", to: ebh.you });
   await sleep(600);
@@ -891,7 +894,7 @@ SB.ws.close();
   await sleep(600);
   let fell = null;
   for (const end = Date.now() + 60000; !fell && Date.now() < end; ) {
-    const r = await say(EA, { t: "attack", at: 45 * 120 + 40, share: 0.9 });
+    const r = await say(EA, { t: "attack", at: cAt, share: 0.9 });
     fell = await waitFor(EA, m => m.t === "events" && m.events.some(e => e.type === "eliminated" && e.nation === ech.you), r?.ok ? 8000 : 1500);
   }
   const inv = fell ? await say(EA, { t: "diplo", op: "command", to: ech.you }) : null;
