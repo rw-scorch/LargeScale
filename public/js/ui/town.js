@@ -130,8 +130,16 @@ export function createTownPanel(root, game) {
         ["Needs met", pct(t.needs)],
         ["Farms and mines", `${gold(making.producers ?? 0)} gold a second`],
         ["Shops and works", `${gold(making.town ?? 0)} gold a second`],
+        ["Tourism", `${gold(p.tourism?.perSecond ?? 0)} gold a second`],
       ];
-      lines.replaceChildren(...rows.map(([k, v]) => el("div", { class: "row spread" }, el("span", { class: "muted", text: k }), el("span", { id: `town-${k.split(" ")[0].toLowerCase()}`, text: v }))));
+      const tv = p.tourism, links = tv ? Object.entries(tv.links ?? {}).filter(([, on]) => on).map(([k]) => ({ airport: "an airport", port: "a port", rail: "rail" })[k]) : [];
+      const visitors = !tv ? "No attractions yet: parks, plazas, museums and more are in Build, Tourism." : [
+        `${tv.sites} ${tv.sites === 1 ? "attraction" : "attractions"} of ${tv.kinds} ${tv.kinds === 1 ? "kind" : "kinds"}, earning ${pct(tv.variety)} for variety`,
+        links.length ? `${Math.round((tv.reach - 1) * 100)}% more from ${links.join(", ")}` : "an airport, a port or rail would bring more visitors",
+        tv.wonders ? `${tv.wonders} ${tv.wonders === 1 ? "wonder" : "wonders"}, ${tv.wonders * 10}% more` : null,
+        ...(tv.seasons ?? []).map(([type, season, mult]) => `${game.world.defs.table[type]?.name.toLowerCase() ?? type} in ${season} at ${pct(mult)}`),
+      ].filter(Boolean).join("; ") + ".";
+      lines.replaceChildren(...rows.map(([k, v]) => el("div", { class: "row spread" }, el("span", { class: "muted", text: k }), el("span", { id: `town-${k.split(" ")[0].toLowerCase()}`, text: v }))), el("span", { id: "town-visitors", class: "muted small", text: visitors }));
       const scale = Math.max(3, t.pop * 0.05);
       bars.res.set(t.demand.res ? 1 : 0, t.demand.res ? "wanted" : "enough");
       bars.com.set(t.demand.com / scale, t.demand.com > 0 ? `${Math.ceil(t.demand.com)} ${Math.ceil(t.demand.com) === 1 ? "job" : "jobs"} wanted` : "enough");

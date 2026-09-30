@@ -483,7 +483,7 @@ This part builds on the kit's `tourism.js`.
         | 2 | 12.5 ms | 37.9 ms | 54.5 ms (fail) | 0.7 ms |
 
         The worst ticks are economy ticks. Part C's run, before the navy, had a worst of 103.6 ms from path extension. Run 2's worst without the economy was 51.1 ms.
-    - Smoke, `npm run ui` and the soak have Part D checks written but not run yet; they need the dev server:
+    - The Part D checks passed in the dev server run of 30 September 2026, on `m8-nukes`, which has Parts D and E. The numbers are under Part E. The checks are:
       - smoke: a submarine reports its depth, and a jet bases on a carrier and lands on it;
       - UI: right-clicking the carrier with a jet selected, the carrier card's plane count, and the submarine card's depth text (screens `77-carrier` and `78-submarine`);
       - soak: ship gifts and base orders.
@@ -565,7 +565,119 @@ This part builds on the kit's `tourism.js`.
       - all 16 landed;
       - the nuke module's tick: 0.01 ms at the median, 2.1 ms at worst, blasts included;
       - the whole tick: 8.5 ms median, p99 30.2 ms, worst 42.6 ms. That passes the 50 ms budget.
-    - Smoke, `npm run ui` and the soak have Part E checks written but not run yet; they need the dev server:
+    - **Dev server run (30 September 2026, on `m8-nukes`).** Ryan said go ahead.
+      - **`npm run smoke`** on the test map: 119 of 119.
+        - The first run failed the nuke check because of the test. The air check before it sets the speed back to 1, so the 61 s flight had not landed within the 40 s wait. The world still showed the warhead in flight, due 21 game seconds later.
+        - The check now launches at 8 times speed. The rerun's warhead cleared 19 plots of the friend's land and left the capital.
+      - **`npm run ui`**: 188 of 188, after two fixes.
+        - The card only relabelled Launch as "Sure? Launch now" on its next refresh, so a quick second press launched before the player saw the question. It now redraws at once.
+        - A bot retook the cleared land within seconds at 8 times speed, so the check now reads the blast's own count of cleared land.
+        - Screens `79-nuke-aim` to `82-nuke-crater` show the circles, the alert, the blast and the crater.
+        - The Part D checks: a jet right-clicks its carrier and lands on it, and the card reads "1 of 12 planes aboard". A submarine's card reads "surfaced in shallow water: anything can hit it".
+      - **`npm run soak`**, 180 s: 1,155 rounds, 24 game minutes, no tick errors, no problems.
+        - The host built 17 warheads, took 3 apart and launched 11 at the friend, who had an ABM silo.
+        - Across both players' feeds there were 20 launch, 6 interception and 14 blast events: each saw 10 launches, 3 shot down and 7 blasts.
+      - The run also found that Take apart answered "holds no warhead" for a building that is not a silo. It now checks the silo first.
+    - The checks are:
       - **smoke:** a silo builds an atomic warhead, launches at the friend's land, everyone hears it, and the blast leaves a crater and clears the land but the capital;
       - **UI:** Aim and launch, the circles and chance, the second press, the alert and the blast (screens `79-nuke-aim` to `82-nuke-crater`);
       - **soak:** silos, ABM silos, builds, checks, launches and cancels.
+- **Part F, tourism and downtowns (30 September 2026, branch `m8-tourism`, stacked on `m8-nukes`).** Built as planned on the kit's `tourism.js` and `cbd.js`, with these specifics:
+  - **Tourism buildings** (numbers 73 to 82, the Tourism tab). They are paid in gold and need no workers.
+
+    | Building | Era | Size | Gold | Visitors pay a second | Where |
+    | --- | --- | --- | --- | --- | --- |
+    | Park | Medieval | 1 by 1 | 120 | 0.25 | |
+    | Plaza | Medieval | 1 by 1 | 160 | 0.3 | |
+    | Museum | Gunpowder | 2 by 1 | 700 | 1.4 | |
+    | Zoo | Industrial | 2 by 2 | 1,400 | 2.4 | |
+    | Arena | Industrial | 2 by 2 | 1,800 | 3 | |
+    | Stadium | Modern | 3 by 3 | 4,200 | 6.5 | |
+    | Casino | Modern | 2 by 2 | 3,000 | 4.5 | |
+    | Luxury hotel | Modern | 2 by 2 | 2,400 | 3.5 | |
+    | Beach resort | Modern | 2 by 2 | 3,000 | 4.5, times 1.6 in summer and 0.3 in winter | on the coast |
+    | Ski resort | Modern | 2 by 2 | 3,000 | 4.5, times 1.8 in winter and 0.2 in summer | within 3 plots of hills or mountains |
+
+    - The Modern ones are behind Mass tourism (1,000 points).
+    - At full variety each pays for itself in 8 to 11 minutes. Producers take 3 to 6 but need workers and deposits.
+  - **Income** (`src/sim/tourism.js`, `installTourism`, every 5 s, for players):
+    - What each attraction pays, with a resort times its season at its own latitude (`world.res.seasonOf`), ...
+    - ... times variety: half is fixed, and half is the square root of kinds over attractions. Two parks earn 85% each and ten parks 66%.
+    - ... times reach: 25% more with an air base (the airport terminal, `airport` on the air base), 10% more with a port, 10% more with a station.
+    - ... times 10% more for each wonder.
+    - Away players get their usual 90%, and catch-up pays for the whole step.
+  - **Wonders** (numbers 85 to 93, the Wonders tab):
+
+    | Wonder | Era | Gold | Build time | Visitors pay a second |
+    | --- | --- | --- | --- | --- |
+    | Stone circle | Tribal | 1,200 | 15 min | 1.5 |
+    | Great pyramid | Tribal | 2,500 | 20 min | 2.5 |
+    | Colossus | Medieval | 4,000 | 20 min | 3.5 |
+    | Hanging gardens | Medieval | 5,000 | 25 min | 4 |
+    | Clock tower | Gunpowder | 8,000 | 25 min | 6 |
+    | Triumphal arch | Gunpowder | 7,000 | 25 min | 6.5 |
+    | Grand tower | Industrial | 14,000 | 30 min | 9 |
+    | Great exhibition | Industrial | 16,000 | 30 min | 10 |
+    | Observatory | Modern (Mass tourism) | 30,000 | 40 min | 14 |
+
+    - One per world. Placing one is refused when it already stands anywhere, or when you are already building it (`wonderErrorOf` in `src/shared/buildings.js`, used by the server, the build menu and the planner).
+    - Several nations can race. The first to finish owns it, and every other site is removed with its gold refunded (`wonder_lost`). A finished site is caught on the tick it finishes.
+    - `wonder_built` goes to everyone. A captured wonder changes hands with its plot, like any building.
+    - The kit's two Future wonders wait for the Future era.
+  - **Downtowns.**
+    - Skyscrapers (1,200 points, after High-rise living and Consumer society) adds two buildings:
+      - the office block (83): 1 plot and 40 jobs, drawn from the kit's three small offices;
+      - the skyscraper (84): 2 by 2 and 160 jobs, drawn from three skyscrapers.
+    - A café grows into an office block, and an office block into a skyscraper, at the town's usual upgrade chance, when two things hold (`downtownError` in `src/sim/civilians.js`, `rules.json` `downtown`):
+      - the new footprint has roads on at least 2 of its 4 sides;
+      - 6 shops of the same owner stand within 4 plots.
+    - **Added:** a growing downtown building takes in the shops of the same owner that lie wholly inside its new footprint (`absorbable`). Before, a busy downtown, full of one-plot shops by definition, never had room for a 2 by 2 skyscraper.
+  - **City cores** (`src/sim/cbd.js`, the kit's piece 19).
+    - Office blocks (value 0.6) and skyscrapers (1) are core centres.
+    - Within 14 plots times that value, land is up to 50% harder to take, falling to nothing at the edge. An attacker near its own core gets 60% of its bonus.
+    - Only Modern downtowns make cores, so earlier eras fight as before.
+    - The kit kept a full-map distance field per nation, which is 5 million entries each on the Earth map. The field now holds only the plots near a core, and is rebuilt every 5 s when the downtown changes. Capture cost skips it when neither side has a core.
+  - **The planner** proposes up to 2 kinds of attraction you do not have yet, best first, near a town. It also proposes the best wonder nobody has, near the capital.
+  - **Client.**
+    - The `tourism` art sheet is loaded now.
+    - The Tourism and Wonders tabs: each wonder's row says who has it or is building it.
+    - Building cards say what visitors pay.
+    - The Town panel has a Tourism line, and under it the attractions, kinds, variety, links, wonders and each resort's season.
+    - The land tip shows "city core, N% harder to take" (`ClientWorld.coreAt`, the same formula as the server's).
+    - Office blocks and skyscrapers pick one of their sprites by building number.
+    - The feed reports wonders built and lost. The café's description says when it grows.
+  - **Evidence:**
+    - `npm test`: 304 of 304. `test/tourism.test.js` has 8 tests:
+      - the content and its locks;
+      - income with variety, links and wonders;
+      - resorts' seasons and placement;
+      - the wonder race;
+      - downtown growth, including taking in a shop;
+      - city cores in capture cost;
+      - catch-up;
+      - the browser's core and wonder standing against the server's.
+
+      There is also a planner test. The reference tests: 95 of 95.
+    - **`npm run bench`** on mains power. Every player now gets 20 attractions, 10 skyscrapers and a great pyramid near the capital, and all 8 race for the one pyramid (`--tourism 0` leaves them out).
+      - At the midpoint: 161 attractions paid 302 gold a second in all, one pyramid was left, and 80 cores covered 18,951 plots, built in 5.1 ms.
+      - The tourism pass every 5 s: 1.5 ms on average, 4.6 ms at worst. The core refresh: at most 2 ms. Capture cost is called 231 times a tick, and the core check adds at most 70 ns each.
+      - Four full runs, alternating:
+
+        | Tourism | Median | p99 | Worst |
+        | --- | --- | --- | --- |
+        | Off | 8.5 ms | 30.1 ms | 44.9 ms |
+        | On | 9.9 ms | 32.2 ms | 43.4 ms |
+        | Off | 8.7 ms | 31.2 ms | 41.4 ms |
+        | On | 10.3 ms | 34.2 ms | 45.3 ms |
+
+        All four pass the 50 ms budget. The median is about 1.5 ms higher with tourism, but the modules account for under 0.2 ms a tick. The runs are deterministic, and with tourism the game plays out differently: the 12-hour catch-up earns 18.4 million gold instead of 8.3 million. Path extension also takes 7% longer in total with slightly fewer stacks, which is not explained yet.
+      - An earlier full run with tourism measured a worst tick of 55.8 ms, a tick with no economy pass and 1.6 ms of path work.
+    - **Dev server run (30 September 2026).** All three pass.
+      - **Smoke: 120 of 120.** A park and the stone circle are built and pay 2.12 gold a second, everyone hears of the wonder, and a second stone circle is refused with "you already have this wonder".
+      - **`npm run ui`: 190 of 190.** The Tourism and Wonders tabs are checked, and the Town panel reads "0.55 gold a second" and "2 attractions of 2 kinds" (screens `83-tourism-tab` and `84-town-tourism`).
+        - Two bugs in the test itself were fixed on the way. An edit script had turned `$$eval` into `$eval`, which left the tab's rows empty. And the museum found no room on a small spawn island, so the test now builds a plaza, kept off the park's plot.
+        - One run failed the Attack ring check on Bot 3, which depends on where the bot spawns. It passed on the next run.
+      - **Soak: 180 s, 1,200 rounds, 0 tick errors, no problems found.**
+        - The host earned 46.08 gold a second from 25 attractions of 7 kinds and 2 wonders. The friend earned 92.07 from 30 attractions of 10 kinds and 5 wonders.
+        - 52 attractions and 5 wonders were placed. Across both players, `wonder_built` was heard 16 times and `wonder_lost` twice.
+        - A first run managed only 576 rounds. Both players' tourism steps sent an admin gift through the host at once, and the soak matches answers by message type, so one of them waited out its 4 s timeout every 25 rounds. The steps now run one after the other.

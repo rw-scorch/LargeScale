@@ -6,7 +6,7 @@ const ROAD_TOOLS = [["dirt", "Tracks anyone can lay from the start. Troops and m
 
 const ZONE_TOOLS = [["res", "Residential", "Homes. Huts go up while people want them."], ["com", "Commercial", "Shops and stalls give jobs."], ["ind", "Industrial", "Workshops, from the Medieval era."], ["none", "Erase", "Removes zoning. Buildings stay."]];
 
-const CATEGORY_NAMES = { resources: "Resources", farming: "Farming", civic: "Civic", military: "Military", infrastructure: "Rail", transport: "Water", industry: "Industry", energy: "Power" };
+const CATEGORY_NAMES = { resources: "Resources", farming: "Farming", civic: "Civic", military: "Military", infrastructure: "Rail", transport: "Water", industry: "Industry", energy: "Power", tourism: "Tourism", wonders: "Wonders" };
 
 export const costText = cost => Object.entries(cost).map(([k, v]) => `${v} ${k === "money" ? "gold" : k}`).join(", ");
 
@@ -88,7 +88,8 @@ export function createBuildMenu(root, game) {
       const cats = ["zones", ...(w.roadRules ? ["roads"] : []), ...new Set(defs.map(d => d.category))];
       tab ??= "zones";
       const rows = defs.filter(d => d.category === tab).sort((a, b) => eraIdx(a.era) - eraIdx(b.era) || a.num - b.num);
-      const k = `${tab}:${game.building}:${game.zoning}:${game.roading}:${rows.map(d => why(w, d)).join("|")}:${[...w.known()].join()}:${w.purse?.autoRoads}`;
+      const wonderLine = d => { const s = d.wonder && w.wonderOf(d.id), who = id => (id === w.you ? "you" : w.nations.get(id)?.name ?? "another nation"); return !d.wonder ? null : !s ? "Nobody has built it yet." : s.standing ? `It stands in ${s.standing.owner === w.you ? "your" : `${who(s.standing.owner)}'s`} land.` : `Being built by ${who(s.site.owner)}. First to finish owns it.`; };
+      const k = `${tab}:${game.building}:${game.zoning}:${game.roading}:${rows.map(d => why(w, d)).join("|")}:${rows.map(wonderLine).join("|")}:${[...w.known()].join()}:${w.purse?.autoRoads}`;
       if (k === key) return;
       key = k;
       tabs.replaceChildren(...cats.map(c => el("button", { class: c === tab ? "on" : "", text: c === "zones" ? "Zones" : c === "roads" ? "Roads" : CATEGORY_NAMES[c] ?? c, onclick: () => { tab = c; key = ""; this.update(); } })));
@@ -123,6 +124,7 @@ export function createBuildMenu(root, game) {
           d.description ? el("span", { class: "desc", text: d.description }) : null,
           el("span", { class: "muted", text: `${costText(d.cost)}, ${d.footprint[0]} by ${d.footprint[1]}` }),
           d.producer ? el("span", { class: "muted", text: earnText(w, d) }) : null,
+          d.wonder ? el("span", { class: "muted", "data-wonder": d.id, text: wonderLine(d) }) : null,
           reason ? el("span", { class: "why", text: reason }) : null);
       }));
     },

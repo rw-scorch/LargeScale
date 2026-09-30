@@ -87,6 +87,8 @@
     {"id":"natural_gas","name":"Natural gas","branch":"economy","era":"Mo","cost":950,"requires":["modern_oil"],"unlocks":{"buildings":["gas_plant"]}},
     {"id":"automation","name":"Automation","branch":"economy","era":"Mo","cost":1200,"requires":["age_modern"],"unlocks":{"buildings":["factory_modern"],"effects":{"income":0.05}}},
     {"id":"high_rise","name":"High-rise living","branch":"civic","era":"Mo","cost":1000,"requires":["age_modern"],"unlocks":{"buildings":["apartment_block"]}},
-    {"id":"consumer_society","name":"Consumer society","branch":"civic","era":"Mo","cost":900,"requires":["high_rise"],"unlocks":{"buildings":["cafe"]}}
+    {"id":"consumer_society","name":"Consumer society","branch":"civic","era":"Mo","cost":900,"requires":["high_rise"],"unlocks":{"buildings":["cafe"]}},
+    {"id":"skyscrapers","name":"Skyscrapers","branch":"civic","era":"Mo","cost":1200,"requires":["high_rise","consumer_society"],"unlocks":{"buildings":["office_block","skyscraper"]}},
+    {"id":"mass_tourism","name":"Mass tourism","branch":"civic","era":"Mo","cost":1000,"requires":["age_modern"],"unlocks":{"buildings":["stadium","casino","luxury_hotel","beach_resort","ski_resort","wonder_observatory"]}}
   ]
 }

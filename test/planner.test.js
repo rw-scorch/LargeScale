@@ -239,3 +239,18 @@ test("a Modern plan puts an ABM silo over the capital, and none where one alread
   put("abm_silo", g.x(abms.pieces[0].at), g.y(abms.pieces[0].at));
   assert.equal(byKey(plan(), "abms"), undefined);
 });
+
+test("a plan proposes two kinds of tourism building you lack, and the best wonder nobody has yet", () => {
+  const { w, a, b, put, plan } = world({ era: "M" });
+  const list = plan(), kinds = list.filter(p => p.key.startsWith("tourism:"));
+  assert.deepEqual(kinds.map(p => p.key), ["tourism:plaza", "tourism:park"], "the best Medieval attractions first");
+  const wonder = byKey(list, "wonder:");
+  assert.equal(wonder?.key, "wonder:wonder_hanging_gardens");
+  assert.match(wonder.reason, /^One per world, owned by whoever finishes it first/);
+  for (const p of [...kinds, wonder]) assert.equal(canPlace(w, a, p.pieces[0].type, p.pieces[0].at), null, `${p.key} is placeable`);
+  put("plaza", 30, 30);
+  put("wonder_hanging_gardens", 70, 40, b);
+  const again = plan();
+  assert.deepEqual(again.filter(p => p.key.startsWith("tourism:")).map(p => p.key), ["tourism:park"], "not a second plaza");
+  assert.equal(byKey(again, "wonder:")?.key, "wonder:wonder_colossus", "the gardens already stand in B's land");
+});

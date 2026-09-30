@@ -61,6 +61,8 @@ export function buildWarhead(world, nid, bid, kind) {
 }
 
 export function cancelWarhead(world, nid, bid) {
+  const s = siloOf(world, nid, bid);
+  if (s.error) return s;
   const n = world.nations.get(nid), st = n?.nuke, have = st?.silos[bid];
   if (!have) return { error: "this silo holds no warhead" };
   const refund = Math.floor(have.paid * world.nukes.rules.cancelRefund);

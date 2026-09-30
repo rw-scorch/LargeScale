@@ -745,7 +745,7 @@ export function purseOf(n, extra = {}) {
   return { money: Math.floor(n.money), era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, autoRoads: n.autoRoads ?? null, ...extra };
 }
 
-const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink", "nuke_launched", "nuke_intercepted", "nuke_detonated"]);
+const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink", "nuke_launched", "nuke_intercepted", "nuke_detonated", "wonder_built"]);
 const QUIET = new Set(["civ_build", "civ_upgrade"]);
 
 const lowName = name => (/^[A-Z]{2}/.test(name) ? name : name.toLowerCase());

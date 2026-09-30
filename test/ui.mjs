@@ -2133,7 +2133,8 @@ const nk = await gp.evaluate(async () => {
   const d = (i, j) => Math.hypot((i % w.w) - (j % w.w), ((i / w.w) | 0) - ((j / w.w) | 0));
   const bot = [...w.nations.values()].filter(n => n.id !== w.you && n.alive && n.capital != null).sort((p, q) => d(p.capital, cap) - d(q.capital, cap))[0];
   let target = null;
-  if (bot) for (let i = 0; i < w.owner.length && target === null; i++) if (w.owner[i] === bot.id && i !== bot.capital && d(i, bot.capital) >= 2) target = i;
+  const { TERRAIN: T } = await import("/js/shared/terrain.js");
+  if (bot) for (let i = 0; i < w.owner.length && target === null; i++) if (w.owner[i] === bot.id && i !== bot.capital && d(i, bot.capital) >= 2 && T[w.terrain[i]].name !== "river") target = i;
   const mid = target === null ? cap : Math.round((((cap / w.w) | 0) + ((target / w.w) | 0)) / 2) * w.w + Math.round(((cap % w.w) + (target % w.w)) / 2);
   const { TERRAIN } = await import("/js/shared/terrain.js");
   return { crater: TERRAIN.findIndex(t => t.name === "crater"), silo: b?.building ?? null, siloAt: at, target, mid, bot: bot?.name ?? null, made: made?.error ?? null, ready: !!w.siloOf(b?.building)?.ready };
@@ -2149,7 +2150,7 @@ await gp.waitForTimeout(300);
 await gp.screenshot({ path: `${OUT}/79-nuke-aim.png` });
 check(!!siloReady && !!aimText, `a ready silo's card has Aim and launch; a click on ${nk.bot}'s land shows the blast circles and "${aimText?.slice(0, 90)}"${siloReady ? "" : ` (${JSON.stringify(nk)})`}`);
 if (aimText) await gp.click("#silo-launch");
-const launchSure = aimText ? await gp.textContent("#silo-launch").catch(() => null) : null;
+const launchSure = aimText ? await gp.waitForFunction(() => document.querySelector("#silo-launch")?.textContent === "Sure? Launch now" ? "Sure? Launch now" : null, null, { timeout: 3000 }).then(h => h.jsonValue(), () => gp.textContent("#silo-launch").catch(() => null)) : null;
 if (launchSure) await gp.click("#silo-launch");
 const alertText = await gp.waitForFunction(() => document.querySelector("#nuke-alert:not([hidden]) .nuke-row")?.textContent ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
 await gp.evaluate(({ mid }) => window.__ls.game.focus(mid, 4), nk);
@@ -2160,10 +2161,43 @@ await gp.evaluate(({ target }) => window.__ls.game.focus(target, 8), nk);
 const blast = await gp.waitForFunction(() => window.__ls.game.world.blasts?.some(b => b.kind === "blast" || b.kind === "intercept") ? window.__ls.game.world.blasts.at(-1).kind : null, null, { timeout: 40000 }).then(h => h.jsonValue(), () => null);
 await gp.waitForTimeout(700);
 await gp.screenshot({ path: `${OUT}/81-nuke-blast.png` });
-const scar = blast === "blast" && await gp.waitForFunction(([t, crater]) => { const w = window.__ls.game.world; return w.owner[t] === 0 && w.terrain[t] === crater; }, [nk.target, nk.crater], { timeout: 5000 }).then(() => true, () => false);
+const scar = blast === "blast" && await gp.waitForFunction(([t, crater]) => { const w = window.__ls.game.world, e = w.events.find(e => e.type === "nuke_detonated" && e.at === t); return e && e.cleared > 0 && w.terrain[t] === crater ? e.cleared : null; }, [nk.target, nk.crater], { timeout: 5000 }).then(h => h.jsonValue(), () => false);
 await gp.waitForTimeout(3500);
 await gp.screenshot({ path: `${OUT}/82-nuke-crater.png` });
-check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the blast is drawn, and the target plot is left unowned crater`);
+check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the blast is drawn, the target plot is left crater, and ${scar} plots of land were cleared`);
+{
+  const tw = await gp.evaluate(async () => {
+    const g = window.__ls.game, w = g.world;
+    const wait = async (f, ms = 8000) => { const end = Date.now() + ms; let v; while (!(v = f()) && Date.now() < end) await new Promise(r => setTimeout(r, 100)); return v; };
+    await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "money", amount: 20000 });
+    const cap = w.nations.get(w.you).capital;
+    const spot = (type, avoid = -1) => { for (let r = 2; r < 14; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const i = cap + dy * w.w + dx; if (i !== avoid && i >= 0 && i < w.owner.length && !w.placeError(type, i)) return i; } return null; };
+    const parkAt = spot("park"), park = await g.conn.request({ t: "build", type: "park", at: parkAt });
+    const plaza = await g.conn.request({ t: "build", type: "plaza", at: spot("plaza", parkAt) });
+    await g.conn.request({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: true });
+    await wait(() => w.buildings.get(park.building)?.state === "active" && w.buildings.get(plaza.building)?.state === "active");
+    await g.conn.request({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: false });
+    await wait(() => w.purse?.tourism?.perSecond > 0, 12000);
+    return { park: !!park.ok, plaza: !!plaza.ok, tourism: w.purse?.tourism ?? null, at: plaza.ok ? w.buildings.get(plaza.building)?.anchor : cap };
+  });
+  await gp.evaluate(() => { const g = window.__ls.game; g.selectBuilding(null); g.toggleBuildMenu(true); });
+  let rows = [];
+  for (let k = 0; k < 3 && !rows.includes("park"); k++) {
+    await gp.click("#build-menu .tabs button:has-text('Tourism')").catch(() => null);
+    rows = await gp.waitForSelector("#build-menu [data-type=park]", { timeout: 3000 }).then(() => gp.$$eval("#build-menu [data-type]", els => els.map(e => e.dataset.type)), () => []);
+  }
+  await gp.screenshot({ path: `${OUT}/83-tourism-tab.png` });
+  await gp.click("#build-menu .tabs button:has-text('Wonders')").catch(() => null);
+  await gp.waitForTimeout(300);
+  const wonderText = await gp.textContent("#build-menu [data-wonder=wonder_pyramid]").catch(() => null);
+  check(["park", "plaza", "museum", "zoo", "arena"].every(t => rows.includes(t)) && /Nobody has built it yet|stands in|Being built/.test(wonderText ?? ""), `the build menu has a Tourism tab (${rows.join(", ")}) and a Wonders tab that says who has each ("${wonderText}")`);
+  await gp.evaluate(({ at }) => { const g = window.__ls.game; g.toggleBuildMenu(false); g.town.show(true); g.focus(at, 28); }, tw);
+  const line = await gp.waitForFunction(() => { const t = document.querySelector("#town-tourism")?.textContent ?? ""; return parseFloat(t) > 0 ? [t, document.querySelector("#town-visitors")?.textContent ?? ""] : null; }, null, { timeout: 12000 }).then(h => h.jsonValue(), () => null);
+  await gp.waitForTimeout(400);
+  await gp.screenshot({ path: `${OUT}/84-town-tourism.png` });
+  check(tw.park && tw.plaza && !!line && /2 attractions of 2 kinds/.test(line[1]), `a park and a plaza pay visitors' gold: the Town panel reads "${line?.[0]}" and "${line?.[1]}"`);
+  await gp.evaluate(() => window.__ls.game.town.show(false));
+}
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await login(ip, "rw_scorch", "correct horse");
 await ip.goto(`${BASE}/#w=${indId}`);
