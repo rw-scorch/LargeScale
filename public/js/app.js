@@ -29,6 +29,7 @@ import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
 import { createLogisticsPanel } from "./ui/logistics.js";
+import { createDiplomacyPanel } from "./ui/diplomacy.js";
 import { createPlannerPanel } from "./ui/planner.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createNukePanel } from "./ui/nukes.js";
@@ -106,6 +107,7 @@ class Game {
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
     this.logistics = createLogisticsPanel(overlay, this);
+    this.diplomacy = createDiplomacyPanel(overlay, this);
     this.machinePanel = createMachinePanel(side, this);
     this.nationCard = createNationCard(side, this);
     this.tip = createTip(overlay, this);
@@ -264,6 +266,7 @@ class Game {
     if (m.t === "reopened") note(`${m.by} reopened this world.`);
     if (m.t === "speed") note(m.factor > 1 ? `${m.by} set the world to ${m.factor} times speed.` : `${m.by} set the world back to normal speed.`);
     if (m.t === "renamed") { this.name = m.name; note(`${m.by} renamed the world ${m.name}.`); }
+    if (m.t === "dipRules" && m.by) { const n = m.rules?.warNotice ?? 300; note(`${m.by} set the war notice to ${n >= 3600 ? `${n / 3600} h` : n >= 60 ? `${n / 60} min` : `${n} s`}: a declared war waits that long before the first attack.`); }
     if (m.t === "nukes") note(m.on ? `${m.by} allowed nuclear weapons in this world.` : `${m.by} turned nuclear weapons off in this world. Warheads stay in their silos but cannot be launched or built.`);
     if (m.t === "powers") { note(m.powers.length ? `${m.by} made you a helper in this world. The admin panel, top right or the backquote key, has what you can use.` : `${m.by} took your helper powers in this world.`); if (!m.powers.length) this.toggleAdmin(false); }
     if (m.t === "catchup") this.feed.push({ key: "catchup", text: m.left ? `The world is catching up on ${span(m.of)} while nobody played: ${span(m.left)} to go.` : `The world caught up ${span(m.of)} in ${((m.ms ?? 0) / 1000).toFixed(1)} s.`, tone: "info" });
@@ -335,6 +338,16 @@ class Game {
     const wonder = e.kind && w.defs.table[e.kind]?.wonder ? w.defs.table[e.kind].name : null;
     if (e.type === "wonder_built") say(`wb${e.building}`, e.nation === you ? `You finished the ${wonder}, the only one in the world: 10% more for all your tourism.` : `${name(e.nation)} finished the ${wonder}. There is one per world.`, 0, e.nation === you ? "built" : "info", e.at);
     if (e.type === "wonder_lost" && e.nation === you) say(`wl${e.kind}`, `${name(e.by)} finished the ${wonder} first. Your site was cleared and its ${fmt(e.refund)} gold refunded.`, 0, "warn", e.at);
+    const mins = k => Math.round((w.dipRules?.[k] ?? 600) / 60), pair = e.a === you || e.b === you, other = e.a === you ? e.b : e.a, both = `${name(e.a)} and ${name(e.b)}`, real = s => secs(Math.max(0, s));
+    if (e.type === "war_declared") say(`wd${e.a}:${e.b}`, e.a === you ? `You declared war on ${name(e.b)}. It starts in ${real(e.at - w.simNow())}.` : e.b === you ? `${name(e.a)} declared war on you. It starts in ${real(e.at - w.simNow())}: get your troops to the border.` : `${name(e.a)} declared war on ${name(e.b)}. It starts in ${real(e.at - w.simNow())}.`, 0, e.b === you ? "danger" : pair ? "warn" : "info", capital(e.b === you ? e.a : e.b));
+    if (e.type === "war_started") say(`ws${e.a}:${e.b}`, pair ? `You are at war with ${name(other)}.` : `${both} are at war.`, 0, pair ? "danger" : "info");
+    if (e.type === "peace_signed") say(`ps${e.a}:${e.b}`, pair ? `You made peace with ${name(other)}. Neither side can declare war for ${mins("peaceTreaty")} minutes.` : `${both} made peace.`, 0, pair ? "good" : "info");
+    if (e.type === "alliance_signed") say(`as${e.a}:${e.b}`, pair ? `You are allied with ${name(other)}: your troops may cross each other's land.` : `${both} are allied.`, 0, pair ? "good" : "info");
+    if (e.type === "alliance_left") say(`al${e.a}:${e.b}`, e.a === you ? `You left your alliance with ${name(e.b)}.` : e.b === you ? `${name(e.a)} left your alliance. They cannot declare war on you for ${mins("betrayalCooldown")} minutes.` : `${name(e.a)} left their alliance with ${name(e.b)}.`, 0, e.b === you ? "warn" : "info");
+    if (e.type === "non_aggression_signed") say(`na${e.a}:${e.b}`, pair ? `You signed a non-aggression treaty with ${name(other)} for ${e.minutes} minutes.` : `${both} signed a non-aggression treaty.`, 0, pair ? "good" : "info");
+    if (e.type === "treaty_broken") say(`tb${e.a}:${e.b}`, e.b === you ? `${name(e.a)} broke their treaty with you. They cannot declare war on you for ${mins("betrayalCooldown")} minutes.` : e.a === you ? `You broke your treaty with ${name(e.b)}.` : `${name(e.a)} broke their treaty with ${name(e.b)}.`, 0, e.b === you ? "warn" : "info");
+    if (e.type === "embargo" && pair) say(`em${e.a}:${e.b}`, e.a === you ? (e.on ? `Your embargo on ${name(e.b)} is on: their troops may not cross your land, and no trade flows between you.` : `You lifted your embargo on ${name(e.b)}.`) : e.on ? `${name(e.a)} put an embargo on you: no trade with them, and your troops may not cross their land.` : `${name(e.a)} lifted their embargo on you.`, 0, e.a === you ? "info" : e.on ? "warn" : "good");
+    if (e.type === "troops_home" && e.nation === you) say(`th${e.from}`, `${e.stacks} of your ${e.stacks === 1 ? "stack" : "stacks"} in ${name(e.from)}'s land went home.`, 0, "info");
     if (e.type === "nuke_launched") say(`nl${e.id}`, e.nation === you ? `You launched ${aw} ${warhead} at ${name(e.toward)}'s land. Impact in ${secs(e.seconds)}.` : e.toward === you ? `${name(e.nation)} launched ${aw} ${warhead} at your land. Impact in ${secs(e.seconds)}. ABM silos and SAM sites near the target may shoot it down.` : `${name(e.nation)} launched ${aw} ${warhead} at ${name(e.toward)}'s land. Impact in ${secs(e.seconds)}.`, 0, e.toward === you ? "danger" : "warn", e.target);
     if (e.type === "nuke_intercepted") say(`nx${e.id}`, `${e.by === you ? "Your missile defence" : `${name(e.by)}'s missile defence`} shot down ${e.nation === you ? "your" : `${name(e.nation)}'s`} ${warhead} over ${e.toward === you ? "your" : `${name(e.toward)}'s`} land.`, 0, e.nation === you ? "warn" : "good", e.target);
     if (e.type === "nuke_detonated") say(`nd${e.id ?? e.at}`, `${e.by === you ? "Your" : `${name(e.by)}'s`} ${warhead} struck ${e.nation === you ? "your" : `${name(e.nation)}'s`} land: ${fmt(e.troops)} troops and ${fmt(e.residents)} people lost, ${e.rubble} ${e.rubble === 1 ? "building" : "buildings"} destroyed and ${e.damaged} damaged.`, 0, e.nation === you ? "danger" : "warn", e.at);
@@ -432,6 +445,7 @@ class Game {
     if (action === "upgrade") return this.toggleUpgrade();
     if (action === "army") return this.toggleArmy();
     if (action === "logistics") return this.toggleLogistics();
+    if (action === "diplomacy") return this.toggleDiplomacy();
     if (action === "plan") return this.togglePlanner();
     if (action === "deposits") return this.toggleDeposits();
     if (action === "armies") return this.toggleArmies();
@@ -459,6 +473,7 @@ class Game {
       else if (this.upgrade.open) this.toggleUpgrade(false);
       else if (this.army.open) this.toggleArmy(false);
       else if (this.logistics.open) this.toggleLogistics(false);
+      else if (this.diplomacy.open) this.toggleDiplomacy(false);
       else if (this.research.open) this.toggleResearch(false);
       else if (this.planner.open) this.togglePlanner(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
@@ -485,19 +500,19 @@ class Game {
   }
 
   toggleSettings(on = !this.settings.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.diplomacy?.show(false); }
     this.settings.show(on);
     this.updatePanels();
   }
 
   toggleResearch(on = !this.research.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     this.research.show(on && !!this.world?.purse?.research);
     this.updatePanels();
   }
 
   toggleInfo(on = !this.worldInfo.open) {
-    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     this.worldInfo.show(on && !!this.world?.ready);
     this.updatePanels();
   }
@@ -508,29 +523,35 @@ class Game {
 
   toggleAdmin(on = !this.adminPanel?.open) {
     if (!this.adminPanel || (on && !this.canAdmin)) return;
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     this.adminPanel.show(on && !!this.world?.ready);
     this.updatePanels();
   }
 
   toggleUpgrade(on = !this.upgrade.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.upgrade.show(on && !!this.world?.purse && !!me?.spawned);
     this.updatePanels();
   }
 
   toggleArmy(on = !this.army.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); this.logistics.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.adminPanel?.show(false); this.settings.show(false); this.logistics.show(false); this.diplomacy?.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.army.show(on && !!this.world?.purse?.army && !!me?.spawned);
     this.updatePanels();
   }
 
   toggleLogistics(on = !this.logistics.open) {
-    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.adminPanel?.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.logistics.show(on && !!this.world?.purse?.trade && !!me?.spawned);
+    this.updatePanels();
+  }
+
+  toggleDiplomacy(on = !this.diplomacy.open, nation = null) {
+    if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.upgrade.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); }
+    this.diplomacy.show(on && !!this.world?.ready, nation);
     this.updatePanels();
   }
 
@@ -1314,7 +1335,7 @@ class Game {
       for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
       if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
     }
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.diplomacy, this.machinePanel, this.nationCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

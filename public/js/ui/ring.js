@@ -14,7 +14,11 @@ export function ownerItems(game, plot, sx, sy) {
     { id: "zone", label: "Zone", icon: "build_zone", run: () => game.zoneHere() },
   ];
   if (!o) return [{ id: "take", label: "Take land", note: troops, icon: "ui_flag", run: () => game.attackAt(plot) }];
-  return [{ id: "attack", label: `Attack ${w.nations.get(o)?.name ?? "them"}`, note: troops, icon: "dip_war", run: () => game.attackAt(plot) }];
+  const who = w.nations.get(o)?.name ?? "them", rel = w.relation ? w.relation(w.you, o) : { status: "open" };
+  if (rel.status === "peace") return [{ id: "declare", label: `Declare war on ${who}`, icon: "dip_declare", run: () => game.toggleDiplomacy(true, o) }, { id: "diplomacy", label: "Diplomacy", icon: "dip_alliance", run: () => game.toggleDiplomacy(true, o) }];
+  if (rel.status === "alliance") return [{ id: "diplomacy", label: `${who} is your ally`, icon: "dip_alliance", run: () => game.toggleDiplomacy(true, o) }];
+  const soon = rel.status === "war_pending" ? `the war starts in ${Math.ceil(rel.startsIn / (w.speed || 1))} s` : w.canAttack && !w.canAttack(w.you, o) ? "the peace period is still on" : null;
+  return [{ id: "attack", label: `Attack ${who}`, note: troops, icon: "dip_war", why: soon, run: () => game.attackAt(plot) }];
 }
 
 export function createRing(root, game) {

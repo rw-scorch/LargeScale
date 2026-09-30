@@ -44,6 +44,7 @@ import { installNavy } from "./sim/navy.js";
 import { installNukes, nukeView, flightsOf, NUKE_RULES } from "./sim/nukes.js";
 import { installTourism, tourismView, TOURISM_RULES } from "./sim/tourism.js";
 import { installCbd } from "./sim/cbd.js";
+import { installDiplomacy, DIPLO } from "./sim/diplomacy.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
 
 const SAVE_VERSION = 4;
@@ -196,6 +197,7 @@ export class World extends DurableObject {
     installPower(this.sim, { scale: info.map.scale ?? 1 });
     installAutoRoads(this.sim);
     installPlanner(this.sim, { run: (nid, m) => runOrder(this.sim, nid, m), scale: info.map.scale ?? 1 });
+    installDiplomacy(this.sim, { rules: { warNotice: info.warNotice ?? info.rules?.warNotice ?? DIPLO.warNotice }, saved: saved?.diplomacy ?? null, fresh: !saved });
     installBots(this.sim, makeRng(((info.seed ?? 1) + Math.floor(this.sim.time)) >>> 0), BOT);
     installGuard(this.sim, { scale: info.map.scale ?? 1 });
     installOvertime(this.sim, { every: this.schedule().shrinkEvery ?? rules.schedule.shrinkEvery });
@@ -243,6 +245,7 @@ export class World extends DurableObject {
       save: SAVE_VERSION, name: config.name ?? "World", map: base.map, w: base.w, h: base.h, landPlots: land,
       bots: cfg.bots ?? defaultBots(land, base.map.scale ?? 1), rules: config.rules ?? {}, maxCatchupHours: config.maxCatchupHours ?? 72,
       seed: crypto.getRandomValues(new Uint32Array(1))[0], id: config.id ?? null,
+      ...(DIPLO.noticeChoices.includes(config.warNotice) ? { warNotice: config.warNotice } : {}),
     };
     this.writeRows("terrain", await gzip(base.terrain));
     this.meta("info", info);
@@ -276,7 +279,7 @@ export class World extends DurableObject {
     rows += detail.state = this.meta("state", {
       time: this.sim.time, nextNation: this.sim.nextNation, nextStack: this.sim.nextStack,
       nations: [...this.sim.nations.values()], stacks: [...this.sim.stacks.values()], accounts: [...this.accounts],
-      machines: saveMachines(this.sim), savedAt: Date.now(), hashes: this.currentHashes(),
+      machines: saveMachines(this.sim), diplomacy: this.sim.dip.save(), savedAt: Date.now(), hashes: this.currentHashes(),
     });
     this.lastSave = Date.now();
     const prev = this.saveStats ?? { saves: 0, totalRows: 0, maxRows: 0 };
@@ -429,6 +432,7 @@ export class World extends DurableObject {
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen, powers: account.admin ? POWERS : this.powersOf(account.id),
       tourismRules: TOURISM_RULES, cbdRules: { ...this.sim.cbd.rules, scale: this.sim.cbd.scale },
+      diplomacy: this.dipView(nation), dipRules: this.dipRules(),
       nukes: flightsOf(this.sim), nukeRules: { warheads: NUKE_RULES.warheads, samChance: NUKE_RULES.samChance, overlap: NUKE_RULES.overlap, outerLoss: NUKE_RULES.outerLoss, scale: this.info.map.scale ?? 1 },
       plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
     }));
@@ -467,12 +471,34 @@ export class World extends DurableObject {
     return (this.told ??= this.meta("announced") ?? []);
   }
 
+  dipRules() {
+    const r = this.sim.dip.rules;
+    return { warNotice: r.warNotice, peaceMinWar: r.peaceMinWar, peaceTreaty: r.peaceTreaty, betrayalCooldown: r.betrayalCooldown, treatyMinutes: r.treatyMinutes, maxFactionSize: r.maxFactionSize, noticeChoices: r.noticeChoices };
+  }
+
+  dipView(nation) {
+    const dip = this.sim.dip;
+    return { ...dip.view(this.sim.time), proposals: nation === null || nation === undefined ? [] : dip.proposalsOf(nation) };
+  }
+
+  sendDiplomacy() {
+    const dip = this.sim.dip;
+    if (this.dipSent === dip.version) return;
+    this.dipSent = dip.version;
+    const view = dip.view(this.sim.time);
+    for (const ws of this.sockets()) {
+      const me = ws.deserializeAttachment();
+      const proposals = me?.nation === null || me?.nation === undefined ? [] : dip.proposalsOf(me.nation);
+      try { ws.send(JSON.stringify({ v: PROTOCOL, t: "diplomacy", ...view, proposals })); } catch {}
+    }
+  }
+
   worldInfo() {
     const i = this.info ?? {}, s = this.schedule();
     return {
       map: i.map?.kind ?? "test", crop: i.map?.name ?? null, detail: i.map?.scale > 1 ? "fine" : "normal", w: i.w, h: i.h, landPlots: i.landPlots, bots: i.bots,
       speed: this.speed ?? 1, rules: i.rules ?? {}, maxCatchupHours: i.maxCatchupHours ?? 72, shrinkEvery: s.shrinkEvery ?? rules.schedule.shrinkEvery,
-      offline: { defence: rules.offline.defenceMult, output: rules.offline.offlineOutputShare }, win: "last", nukes: i.nukes !== false,
+      offline: { defence: rules.offline.defenceMult, output: rules.offline.offlineOutputShare }, win: "last", nukes: i.nukes !== false, warNotice: this.sim?.dip?.rules.warNotice ?? i.warNotice ?? DIPLO.warNotice,
     };
   }
 
@@ -605,6 +631,7 @@ export class World extends DurableObject {
       this.purses.set(me.account, key);
       try { ws.send(JSON.stringify({ v: PROTOCOL, t: "purse", ...p })); } catch {}
     }
+    this.sendDiplomacy();
     const planNews = takePlanNews(this.sim);
     if (planNews) for (const ws of this.sockets()) {
       const me = ws.deserializeAttachment();
@@ -642,6 +669,10 @@ export class World extends DurableObject {
           this.notify(e.nation, "attack", `${by} is taking your land.`);
         }
         if (e.type === "eliminated" && e.nation !== undefined) this.notify(e.nation, "eliminated", "Your nation has been eliminated. You can still watch, or join a faction.");
+        if (e.type === "war_declared" && !this.online(e.b)) {
+          const by = this.sim.nations.get(e.a)?.name ?? "someone";
+          this.notify(e.b, "war", `${by} declared war on you. The war starts in ${Math.max(1, Math.round((e.at - this.sim.time) / 60))} min.`);
+        }
         if (e.type === "nuke_launched" && e.toward) {
           const by = this.sim.nations.get(e.nation)?.name ?? "someone";
           this.notify(e.toward, "missile", `${by} launched a nuclear warhead at your land. Impact in ${e.seconds} s.`);
@@ -701,6 +732,8 @@ export class World extends DurableObject {
         if (startAt && Date.now() < startAt && m.t !== "spawn") return reply({ t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: `the world starts at ${new Date(startAt).toISOString().slice(0, 16).replace("T", " ")} UTC; until then you can only pick where to start` });
         const r = runOrder(this.sim, me.nation, m);
         reply(r ?? { t: "result", of: String(m.t ?? "").slice(0, 20), ok: false, error: "unknown order" });
+        if (m.t === "diplo" && r?.ok && r.proposal && !this.online(r.to)) this.notify(r.to, "message", `${this.sim.nations.get(me.nation)?.name ?? "Someone"} proposes ${{ peace: "peace", alliance: "an alliance", non_aggression: "a non-aggression treaty" }[r.kind]}.`);
+        if (m.t === "diplo" && r?.ok) this.sendDiplomacy();
         if (m.t === "pilot" && r?.ok) this.startPilots();
       }
     }
@@ -771,6 +804,16 @@ export class World extends DurableObject {
         this.broadcast({ t: "reopened", by: me.name });
         this.startLoop();
         return { ok: true };
+      }
+      case "diplomacy": {
+        const notice = Number(m.warNotice);
+        if (!this.sim.dip.rules.noticeChoices.includes(notice)) return fail(`the war notice is one of ${this.sim.dip.rules.noticeChoices.join(", ")} seconds`);
+        this.info.warNotice = notice;
+        this.meta("info", this.info);
+        this.sim.dip.rules.warNotice = notice;
+        this.logAdmin(me, "diplomacy", { warNotice: notice });
+        this.broadcast({ t: "dipRules", rules: this.dipRules(), info: this.worldInfo(), by: me.name });
+        return { ok: true, warNotice: notice };
       }
       case "nukes": {
         if (typeof m.on !== "boolean") return fail("say on or off");

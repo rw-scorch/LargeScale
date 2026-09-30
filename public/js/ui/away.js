@@ -37,6 +37,17 @@ export function awayLines(w, s) {
   if (Object.keys(s.machinesLost).length) add("alert_attack", `Machines lost: ${counted(s.machinesLost, uName)}`, "bad");
   if (s.capitalMoved) add("alert_attack", "Your capital moved after the old one fell", "bad");
   if (s.depleted) add("res_stone", `${plural(s.depleted, "deposit")} ran out`);
+  const DIP = {
+    war_declared: (o, mine) => [mine ? `You declared war on ${o}` : `${o} declared war on you`, "dip_declare", mine ? "" : "bad"],
+    war_started: o => [`The war with ${o} started`, "dip_war", "bad"],
+    peace_signed: o => [`Peace with ${o}`, "dip_peace", "good"],
+    alliance_signed: o => [`Allied with ${o}`, "dip_alliance", "good"],
+    alliance_left: (o, mine) => [mine ? `You left your alliance with ${o}` : `${o} left your alliance`, "dip_alliance", mine ? "" : "bad"],
+    non_aggression_signed: o => [`A non-aggression treaty with ${o}`, "dip_treaty", "good"],
+    treaty_broken: (o, mine) => [mine ? `You broke your treaty with ${o}` : `${o} broke their treaty with you`, "dip_treaty", mine ? "" : "bad"],
+    embargo: (o, mine, on) => [mine ? `Your embargo on ${o} ${on ? "started" : "ended"}` : `${o} ${on ? "put an embargo on you" : "lifted their embargo on you"}`, "dip_embargo", !mine && on ? "bad" : ""],
+  };
+  for (const [type, other, mine, on] of s.diplo ?? []) { const d = DIP[type]?.(name(other), !!mine, on); if (d) add(d[1], d[0], d[2]); }
   return lines;
 }
 

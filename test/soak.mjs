@@ -27,7 +27,7 @@ async function join(world, token) {
     const m = JSON.parse(e.data);
     if (m.t === "hello") { p.cw = new ClientWorld(m); p.hello = m; return; }
     if (m.t === "result" && p.waits.has(m.of)) { const q = p.waits.get(m.of); p.waits.delete(m.of); q(m); }
-    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead|wonder/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
+    if (m.t === "events") for (const e of m.events) if (/bomb|plane|shot|sam|landed|embarked|trade_sunk|machine_destroyed|nuke|warhead|wonder|war_|peace_|alliance_|treaty|embargo|troops_home/.test(e.type)) seen.set(e.type, (seen.get(e.type) ?? 0) + 1);
     p.cw?.message(m);
   };
   ws.onclose = e => { p.closed = e.code; };
@@ -55,7 +55,7 @@ const suffix = Math.floor(Math.random() * 1e6);
 const admin = (await api("/api/login", { name: "rw_scorch", password: "correct horse" })).body;
 const friend = (await api("/api/register", { name: `soak${suffix}`, password: "soak password", invite: INVITE })).body;
 if (!admin.token || !friend.token) throw new Error("log in rw_scorch / correct horse first (run the smoke test once)");
-const made = await api("/api/worlds", { name: `Soak ${suffix}`, config: { map: "test", w: 200, h: 130, seed: SEED, bots: 8, rules: { buildSpeed: 10, produceSpeed: 5, researchSpeed: 30, trainSpeed: 5 } } }, admin.token);
+const made = await api("/api/worlds", { name: `Soak ${suffix}`, config: { map: "test", w: 200, h: 130, seed: SEED, bots: 8, rules: { buildSpeed: 10, produceSpeed: 5, researchSpeed: 30, trainSpeed: 5, warNotice: 20 } } }, admin.token);
 const wid = made.body.id;
 await api(`/api/worlds/${wid}/join`, {}, friend.token);
 const A = await join(wid, admin.token), B = await join(wid, friend.token);
@@ -85,6 +85,20 @@ async function tourism(p) {
   if (!type) return;
   note("admin give", await A.send({ t: "admin", op: "give", nation: w.you, what: "money", amount: w.defs.table[type].cost.money }));
   for (const at of mine(p).sort(() => rand() - 0.5).slice(0, 200)) if (!w.placeError(type, at)) { note(`build ${w.defs.table[type].wonder ? "wonder" : "attraction"}`, await p.send({ t: "build", type, at })); return; }
+}
+async function diplo() {
+  const [p, q] = rand() < 0.5 ? [A, B] : [B, A], to = q.cw.you, rel = p.cw.relation(p.cw.you, to);
+  const theirs = p.cw.dip?.proposals.filter(x => x.to === p.cw.you) ?? [];
+  const roll = rand();
+  let m;
+  if (theirs.length && roll < 0.4) m = { t: "diplo", op: rand() < 0.7 ? "accept" : "decline", id: pick(theirs).id };
+  else if (rel.status === "peace" && roll < 0.55) m = { t: "diplo", op: "war", to };
+  else if (rel.status === "war" || rel.status === "war_pending") m = { t: "diplo", op: "propose", to, kind: "peace" };
+  else if (rel.status === "alliance") m = rand() < 0.5 ? { t: "diplo", op: "leave", to } : { t: "diplo", op: "embargo", to, on: !rel.embargoes };
+  else if (rel.treaty && rand() < 0.3) m = { t: "diplo", op: "break", to };
+  else m = rand() < 0.5 ? { t: "diplo", op: "propose", to, kind: "alliance" } : rand() < 0.5 ? { t: "diplo", op: "propose", to, kind: "non_aggression", minutes: pick([30, 60, 120, 240]) } : { t: "diplo", op: "embargo", to, on: !rel.embargoes };
+  const r = await p.send(m);
+  note(`diplo ${m.op}${m.kind ? ` ${m.kind}` : ""}`, r);
 }
 async function nukes() {
   const w = A.cw, silos = [...w.buildings.values()].filter(b => b.owner === w.you && b.type === "missile_silo");
@@ -252,12 +266,14 @@ while (Date.now() - t0 < SECONDS * 1000) {
     note("admin give plane", await A.send({ t: "admin", op: "give", nation: A.cw.you, what: "machine", unit: pick(["biplane", "early_bomber", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane"]), amount: 2 }));
     if (rounds % 50 === 1) for (const p of [A, B]) note("admin give ship", await A.send({ t: "admin", op: "give", nation: p.cw.you, what: "machine", unit: pick(["cruiser", "battleship", "submarine", "aircraft_carrier"]), amount: 1 }));
     if (rounds % 50 === 26) await nukes();
+    if (rounds === 1) note("diplo war", await A.send({ t: "diplo", op: "war", to: B.cw.you }));
     for (const p of [A, B]) await tourism(p);
     if (rounds % 75 === 1) note("admin give sam truck", await A.send({ t: "admin", op: "give", nation: B.cw.you, what: "machine", unit: "sam_truck", amount: 1 }));
   }
   await Promise.all([act(A), act(B)]);
   if (rand() < 0.4) await Promise.all([fly(A), fly(B)]);
   if (rounds % 12 === 5) await Promise.all([planSome(A), planSome(B)]);
+  if (rounds % 10 === 7) await diplo();
   if (rounds % 20 === 0) {
     inspect(A, "host");
     inspect(B, "friend");
@@ -270,6 +286,12 @@ while (Date.now() - t0 < SECONDS * 1000) {
 const st = (await api(`/api/worlds/${wid}/status`, null, admin.token)).body;
 console.log(`\n${rounds} rounds, ${Math.round(st.time / 60)} game minutes, tick errors ${st.tickErrors ?? 0}${st.lastError ? `: ${st.lastError}` : ""}`);
 for (const [k, v] of [...tally].sort((a, b) => a[0].localeCompare(b[0]))) console.log(`${String(v).padStart(5)}  ${k}`);
+{
+  await sleep(1500);
+  const ra = A.cw.relation(A.cw.you, B.cw.you), rb = B.cw.relation(B.cw.you, A.cw.you);
+  console.log(`relation at the end: host sees ${ra.status}, friend sees ${rb.status}`);
+  if (ra.status !== rb.status) problem(`the two players see different relations: ${ra.status} and ${rb.status}`);
+}
 for (const [who, p] of [["host", A], ["friend", B]]) console.log(`${who} tourism: ${JSON.stringify(p.cw.purse?.tourism ?? null)}`);
 console.log(`\nmost planes held by the host: ${stats.planes}; most soldiers in the field: ${stats.soldiers}; most projects proposed at once: ${stats.proposals}; air events seen by both: ${JSON.stringify(Object.fromEntries(seen))}`);
 console.log(problems.length ? `\n${problems.length} problems` : "\nno problems found");

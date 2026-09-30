@@ -33,7 +33,8 @@ export function createHud(root, game) {
   const clock = el("span", { id: "world-clock" });
   const season = el("span", { id: "world-season" });
   const next = el("button", { id: "world-next", class: "next-chip", hidden: true, onclick: () => game.toggleInfo() });
-  const pill = el("header", { id: "status-pill", class: "pill" }, worldName, speed, clock, season, next, el("span", { class: "status" }, dot, status));
+  const war = el("button", { id: "war-chip", class: "next-chip danger", hidden: true, onclick: () => game.toggleDiplomacy(true) });
+  const pill = el("header", { id: "status-pill", class: "pill" }, worldName, speed, clock, season, next, war, el("span", { class: "status" }, dot, status));
 
   const iconButton = (id, ic, hint, onclick, extra = {}) => el("button", { id, class: "icon-btn", title: hint, "aria-label": hint, onclick, ...extra }, typeof ic === "string" ? icon(ic, 1.5) : ic);
   const admin = iconButton("open-admin", "ui_dev", "Admin panel (`)", () => game.toggleAdmin());
@@ -43,6 +44,7 @@ export function createHud(root, game) {
     iconButton("go-map", "ui_map", "Whole map", () => game.fit()),
     iconButton("zoom-out", "ui_zoom_out", "Zoom out (-)", () => game.zoom(1 / 1.6)),
     iconButton("zoom-in", "ui_zoom_in", "Zoom in (+)", () => game.zoom(1.6)),
+    iconButton("open-diplomacy", "dip_alliance", `Diplomacy (${keyTag("diplomacy").textContent})`, () => game.toggleDiplomacy(), { "data-count": "" }),
     iconButton("show-deposits", "ui_map_resources", `Deposits on the map (${keyTag("deposits").textContent})`, () => game.toggleDeposits()),
     full,
     iconButton("open-info", "ui_info", "World info: schedule, how to win and settings (I)", () => game.toggleInfo()),
@@ -119,6 +121,17 @@ export function createHud(root, game) {
         next.title = nl.next ? `${nl.next.name} ${when(nl.next.at)}. Click for the schedule.` : "Click for the schedule.";
       }
       corner.querySelector("#open-settings").classList.toggle("on", !!game.settings?.open);
+      const dipButton = corner.querySelector("#open-diplomacy"), asked = w?.dip?.proposals.filter(p => p.to === w.you).length ?? 0;
+      dipButton.classList.toggle("on", !!game.diplomacy?.open);
+      dipButton.dataset.count = asked ? String(asked) : "";
+      dipButton.title = asked ? `Diplomacy: ${asked} ${asked === 1 ? "proposal waits" : "proposals wait"} for your answer (${keyTag("diplomacy").textContent})` : `Diplomacy (${keyTag("diplomacy").textContent})`;
+      const pending = w?.dip ? [...w.nations.values()].filter(x => !x.bot && x.id !== w.you && x.alive).map(x => ({ x, r: w.relation(w.you, x.id) })).filter(o => o.r.status === "war_pending").sort((a, b) => a.r.startsIn - b.r.startsIn)[0] : null;
+      war.hidden = !pending;
+      if (pending) {
+        const s = Math.max(0, Math.ceil(pending.r.startsIn / (w.speed || 1)));
+        war.textContent = `War with ${pending.x.name} in ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+        war.title = "a declared war: no attack lands until the notice runs out. Click for diplomacy.";
+      }
 
       const n = w?.nations.get(w.you), v = p?.vitals;
       swatch.style.background = n?.colour ?? "transparent";

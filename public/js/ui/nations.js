@@ -1,6 +1,7 @@
 import { el, fmt } from "./dom.js";
 import { icon } from "./icons.js";
 import { isLand } from "../shared/terrain.js";
+import { relationIcon } from "./diplomacy.js";
 
 const SHOW = 8;
 
@@ -29,12 +30,13 @@ export function createNations(root, game) {
       const me = w.nations.get(w.you);
       if (me && !top.includes(me)) top.push(me);
       const share = n => { const s = land ? ((n.plots ?? 0) / land) * 100 : 0; return `${s >= 10 ? s.toFixed(0) : s >= 0.1 ? s.toFixed(1) : s.toFixed(2)}%`; };
-      const sig = top.map(n => `${n.id}:${rank.get(n.id)}:${n.plots}:${fmt(n.troops ?? 0)}:${n.era}:${n.alive}:${w.online?.has(n.id)}`).join();
+      const relOf = n => (n.bot || n.id === w.you || !w.relation ? null : w.relation(w.you, n.id));
+      const sig = w.dipVersion + top.map(n => `${relOf(n)?.status}:${n.id}:${rank.get(n.id)}:${n.plots}:${fmt(n.troops ?? 0)}:${n.era}:${n.alive}:${w.online?.has(n.id)}`).join();
       if (sig === last) return;
       last = sig;
       rows.replaceChildren(...top.map(n => el("tr", { class: `${n.id === w.you ? "me" : ""} ${n.alive === false ? "dead" : ""}`, "data-nation": n.id, onclick: () => { if (n.capital != null) game.focus(n.capital, Math.max(game.view.cam.scale / game.view.ratio, 3)); if (n.id !== w.you) game.selectNation(n.id); } },
         el("td", { class: "rank", text: rank.has(n.id) ? String(rank.get(n.id)) : "" }),
-        el("td", { class: "who" }, el("i", { class: "swatch", style: `background:${n.colour}` }), n.bot ? null : el("i", { class: `dot ${w.online?.has(n.id) ? "on" : "off"}`, title: w.online?.has(n.id) ? "online now" : "away" }), el("span", { class: "name", text: n.name, title: n.name })),
+        el("td", { class: "who" }, el("i", { class: "swatch", style: `background:${n.colour}` }), n.bot ? null : el("i", { class: `dot ${w.online?.has(n.id) ? "on" : "off"}`, title: w.online?.has(n.id) ? "online now" : "away" }), el("span", { class: "name", text: n.name, title: n.name }), relOf(n) && relationIcon(relOf(n)) ? el("span", { class: "rel", title: relOf(n).status.replace("_", " ") }, icon(relationIcon(relOf(n)), 1)) : null),
         el("td", {}, n.spawned ? icon(`era_badge_${n.era ?? "T"}`, 1) : null),
         el("td", { text: n.spawned ? share(n) : "" }),
         el("td", { text: fmt(n.troops ?? 0) }))));

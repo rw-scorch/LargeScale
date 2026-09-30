@@ -139,8 +139,17 @@ export function endAway(n) {
   n.outputMult = 1;
 }
 
+const AWAY_DIPLO = new Set(["war_declared", "war_started", "peace_signed", "alliance_signed", "alliance_left", "non_aggression_signed", "treaty_broken", "embargo"]);
+
 export function recordAway(world, events) {
   for (const e of events) {
+    if (AWAY_DIPLO.has(e.type)) {
+      for (const [me, other] of [[e.a, e.b], [e.b, e.a]]) {
+        const log = world.nations.get(me)?.away?.log;
+        if (log && (log.diplo ??= []).length < 20) log.diplo.push([e.type, other, me === e.a ? 1 : 0, e.on === undefined ? null : !!e.on]);
+      }
+      continue;
+    }
     const log = world.nations.get(e.nation)?.away?.log;
     if (!log) continue;
     const add = (k, key, by = 1) => { log[k] ??= {}; log[k][key] = (log[k][key] ?? 0) + by; };
@@ -164,7 +173,7 @@ export function awaySummary(world, n, now, rules = OFFLINE) {
   if (!a || !n.spawned) return null;
   const seconds = Math.max(0, (now - a.at) / 1000), log = a.log;
   const lost = Object.values(log.lost ?? {}).reduce((s, v) => s + v, 0);
-  const hurt = lost || log.stacksLost || log.machinesLost || log.eliminated;
+  const hurt = lost || log.stacksLost || log.machinesLost || log.eliminated || log.diplo?.some(d => d[0] === "war_declared" && !d[2]);
   if (Math.max(seconds, a.caught) < (rules.awaySummarySeconds ?? 0) && !hurt) return null;
   const stock = {};
   for (const k of new Set([...Object.keys(a.stock), ...Object.keys(n.stock ?? {})])) {
@@ -176,7 +185,7 @@ export function awaySummary(world, n, now, rules = OFFLINE) {
     gold: Math.round((n.money ?? 0) - a.money), stock,
     pop: [Math.round(a.pop), Math.round(n.pop ?? 0)], plots: [a.plots, n.plots ?? 0], troops: [Math.floor(a.troops), Math.floor(n.troops ?? 0)], era: [a.era, n.era ?? "T"],
     lost: log.lost ?? {}, built: log.built ?? {}, town: log.town ?? 0, upgraded: log.upgraded ?? 0, researched: log.researched ?? [], machines: log.machines ?? {},
-    stacksLost: log.stacksLost ?? 0, machinesLost: log.machinesLost ?? {}, depleted: log.depleted ?? 0, capitalMoved: !!log.capitalMoved, eliminated: !!log.eliminated,
+    stacksLost: log.stacksLost ?? 0, machinesLost: log.machinesLost ?? {}, depleted: log.depleted ?? 0, capitalMoved: !!log.capitalMoved, eliminated: !!log.eliminated, diplo: log.diplo ?? [],
     share: rules.offlineOutputShare, defence: rules.defenceMult,
   };
 }

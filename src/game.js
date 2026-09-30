@@ -14,6 +14,7 @@ import { takeControl, release, pilotOf } from "./sim/pilot.js";
 import { orderPlane, planeRow, planeOf } from "./sim/air.js";
 import { buildWarhead, cancelWarhead, checkLaunch, launchWarhead } from "./sim/nukes.js";
 import { planOrder } from "./sim/planner.js";
+import { diploOrder, peaceReason } from "./sim/diplomacy.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -134,7 +135,7 @@ export const ORDERS = {
     if (o) {
       const t = sim.nations.get(o);
       if (!t?.alive) return fail("that nation is gone");
-      if (!sim.hostile(nation, o)) return fail(`you are at peace with ${t.name}`);
+      if (!sim.hostile(nation, o)) return fail(peaceReason(sim, nation, o));
     }
     let from = sim.nearestOwned(nation, m.at);
     if (from === null) return fail("you hold no land");
@@ -190,7 +191,7 @@ export const ORDERS = {
     else if (m.only !== undefined && m.only !== null) {
       const t = Number.isInteger(m.only) && m.only !== nation ? sim.nations.get(m.only) : null;
       if (!t?.alive || !t.spawned) return fail("pick another nation's land");
-      if (!sim.hostile(nation, m.only)) return fail(`you are at peace with ${t.name}`);
+      if (!sim.hostile(nation, m.only)) return fail(peaceReason(sim, nation, m.only));
       only = m.only;
     }
     if (!sim.orderAdvance(s.id, only, true)) return fail("cannot advance");
@@ -357,6 +358,11 @@ export const ORDERS = {
     }
     return done ? { ok: true, done, failed: ids.length - done, error, rearming } : fail(error ?? "pick a plane");
   },
+  diplo(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    const r = diploOrder(sim, nation, m);
+    return r.error ? fail(r.error) : { ...r, ok: true, op: m.op };
+  },
   nuke(sim, nation, m) {
     if (!living(sim, nation)) return fail("spawn first");
     if (!sim.nukes) return fail("nuclear weapons are not in this world");
@@ -504,7 +510,7 @@ export const ORDERS = {
       if (!u.cargo?.troops) return fail("nothing aboard");
       if (!isPlot(sim, m.at) || !isLand(sim.terrain[m.at])) return fail("land the troops on land");
       const o = sim.owner[m.at];
-      if (o && o !== nation && !sim.passable(nation, o) && !sim.hostile(nation, o)) return fail(`you are at peace with ${sim.nations.get(o)?.name ?? "them"}`);
+      if (o && o !== nation && !sim.passable(nation, o) && !sim.hostile(nation, o)) return fail(peaceReason(sim, nation, o));
       if (sim.grid.cheb(u.at, m.at) <= 1) {
         Object.assign(u, { path: [], route: null, progress: 0, follow: null, land: m.at });
         return { ok: true };
@@ -745,7 +751,8 @@ export function purseOf(n, extra = {}) {
   return { money: Math.floor(n.money), era: n.era ?? "T", town, making, policy: policyOf(n), guard: !!n.guard, autoRoads: n.autoRoads ?? null, ...extra };
 }
 
-const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink", "nuke_launched", "nuke_intercepted", "nuke_detonated", "wonder_built"]);
+export const DIPLO_EVENTS = ["war_declared", "war_started", "peace_signed", "alliance_signed", "alliance_left", "non_aggression_signed", "treaty_broken", "embargo"];
+const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink", "nuke_launched", "nuke_intercepted", "nuke_detonated", "wonder_built", ...DIPLO_EVENTS]);
 const QUIET = new Set(["civ_build", "civ_upgrade"]);
 
 const lowName = name => (/^[A-Z]{2}/.test(name) ? name : name.toLowerCase());

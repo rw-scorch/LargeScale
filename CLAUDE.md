@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. The current milestone is in `plans/milestone-8.md`: the planner and the Modern era, agreed 29 September 2026 in six parts (the planner first, then the Modern army, air power, navy, nukes, and tourism and downtowns). Milestone seven (`plans/milestone-7.md`: gold only, individual soldiers, piloting, planes, easier crossings) is built, passed its dev server run, and waits for Ryan's check. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. On 30 September 2026 Ryan asked to keep going step by step until the project is done. The current milestone is in `plans/milestone-9.md`: diplomacy, factions and the endgame, written as a reading of what the design already settled, for Ryan to correct. Milestone eight (`plans/milestone-8.md`: the planner and the Modern era) is built and passed its dev server runs. Milestone seven (`plans/milestone-7.md`: gold only, individual soldiers, piloting, planes, easier crossings) is built, passed its dev server run, and waits for Ryan's check. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (304)
+npm test                  # unit tests (318)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -410,7 +410,22 @@ Agreed 29 September 2026 (`plans/milestone-8.md`), on branch `m8-modern`, stacke
     - `hello` carries `tourismRules` and `cbdRules`.
   - **Planner.** `planTourism` proposes new kinds of attraction and a free wonder (`planner.tourism`, `tourismNear`).
 
-Open items as of 29 September 2026, in order:
+## Milestone nine progress
+
+Written 30 September 2026 (`plans/milestone-9.md`), on branch `m9-diplomacy`, stacked on `m8-tourism`. Ryan asked to keep going until the project is done, so the plan's decisions are mine, read from the design, and wait for his word. Diplomacy goes before the Future era, because the win and war both depend on it.
+
+- **Part A, relations and war (30 September 2026).** Details and evidence are in `plans/milestone-9.md`.
+  - **`src/sim/diplomacy.js`** (the kit's module, extended; `installDiplomacy` before the bots). Only pairs of players go through it: bots are attacked without a declaration and still never attack players. New worlds start at peace; worlds saved before it keep every pair at war.
+  - **The `diplo` order:** war (after `warNotice`, 5 minutes by default), propose peace, an alliance or a treaty, accept, decline, withdraw, leave an alliance, break a treaty, and embargo. Rules are in `rules.json` `diplomacy`.
+  - **Effects.** Allies cross each other's land (`passable`); peace, a left alliance or an embargo sends stacks in the other's land home (`sendHome`); an embargo stops trade (`friendly` in `src/sim/trade.js`). Refusals give `peaceReason`.
+  - **World.** The state row carries `diplomacy`. `hello` carries `diplomacy` and `dipRules`, and `sendDiplomacy` sends changes. The admin op `diplomacy` and the world config set `warNotice`. Diplomacy events go to everyone (`DIPLO_EVENTS` in `src/game.js`) and into the away summary.
+  - **Client.** The Diplomacy panel (`public/js/ui/diplomacy.js`, J, a corner icon with a count), relations in the ring, nation card and leaderboard, the war countdown (`#war-chip`), and `ClientWorld.relation` and `canAttack`.
+
+Open items as of 30 September 2026, in order:
+
+0. Milestone nine is under way on `m9-diplomacy`: Part A is built and passed smoke (123), UI (192) and the soak. Parts B (factions, chat channels, map notes) and C (second commanders, vassals, the public record) are next. After it, in order: the Future era with cruise missiles, engineers and terrain destruction, atmosphere, and host rules with the dev panel.
+
+Earlier open items (29 September 2026):
 
 1. PRs 14 to 35 are merged. PR 35 brought `m6-industry` into `main`, and PR 30 (`m7-boats`) reached `main` with it. PRs 31 to 34 (milestone seven, Parts B to E) are merged into their stacked branches only. After PRs 41 to 44 Ryan redeploys: `git pull`, `npm test`, `npx wrangler deploy`. Smoke, soak and `npm run ui` passed for milestone seven's Parts B to E on 29 September 2026 (numbers in `plans/milestone-7.md`). Milestone seven is complete apart from Ryan's checks. Milestone eight: PRs 36 to 40 (the planner, the Modern army, air power, his asks after PR 38, bombers) are merged too. But every PR from 31 to 40 was merged into the branch below it, after that branch had gone into `main`, so `main` stopped at PRs 30 and 35. PR 41 brings `m8-bombers` into `main`: it merges cleanly, and the result is identical to `m8-bombers`. PR 42 (`m8-navy`, Part D), PR 43 (`m8-nukes`, Part E) and PR 44 (`m8-tourism`, Part F) are against `main` too, so each diff narrows to its own part once the PRs before it are in. Merge 41, 42, 43, 44 in that order. Smoke, UI and soak passed on `m8-asks` (117, 183, clean), on `m8-nukes` with Parts D and E on 30 September 2026 (119, 188, clean), and on `m8-tourism` with Part F the same day (120, 190, clean). Milestone eight is built; Ryan's check of it is next.
 2. Ryan's check of troop types, machines and the new interface (milestone three, A4, B5 and C6).
