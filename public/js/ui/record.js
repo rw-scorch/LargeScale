@@ -47,7 +47,8 @@ export function createRecordPanel(root, game) {
 
   const gameTime = g => {
     const day = (game.world?.seasonRules?.dayLengthMinutes ?? 60) * 60;
-    return `day ${Math.floor(g / day) + 1}, ${String(Math.floor(((g % day) / day) * 24)).padStart(2, "0")}:00`;
+    const m = Math.floor(((g % day) / day) * 1440);
+    return `day ${Math.floor(g / day) + 1}, ${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   };
 
   async function frame(k) {
