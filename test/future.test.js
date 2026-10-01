@@ -9,9 +9,15 @@ import { installResources, produce, goldOf } from "../src/sim/resources.js";
 import { installPower, powerTick, powerView } from "../src/sim/power.js";
 import { installEffects } from "../src/sim/effects.js";
 import { installResearch, complete, TREE } from "../src/sim/research.js";
+import { installCombat } from "../src/sim/combat.js";
+import { installTroops } from "../src/sim/troops.js";
+import { installMachines, spawnUnit, UNIT_TYPES, queueMachines, giveMachine } from "../src/sim/units.js";
+import { installAir, planeOf } from "../src/sim/air.js";
+import { runOrder } from "../src/game.js";
 import { lockMap } from "../src/shared/research.js";
 import { makeRng } from "../src/shared/rng.js";
 import { TID } from "../src/shared/terrain.js";
+import unitData from "../data/units.json" with { type: "json" };
 
 const T = BUILDINGS.table;
 
@@ -98,4 +104,61 @@ test("Future towns build dome habitats on new land, and an eco tower grows into 
   zonePlots(w, a, [g.idx(40, 2), g.idx(41, 2), g.idx(42, 2), g.idx(40, 3), g.idx(41, 3), g.idx(42, 3), g.idx(40, 4), g.idx(41, 4)], "res");
   assert.equal(tryUpgrade(w, blocked, true), false, "a plot outside the residential zone stops it");
   assert.ok(w.bld.list.has(stranger.id));
+});
+
+test("the Future army: drone operators, hover tanks and mechs are the best of their kind, each behind a node", () => {
+  const locks = lockMap(TREE), U = Object.fromEntries(unitData.units.map(u => [u.id, u]));
+  const ids = ["drone_operator", "hover_tank", "mech", "recon_drone", "strike_drone", "vtol_gunship"];
+  assert.deepEqual(ids.map(id => locks.units.get(id)), ["drones", "hover_vehicles", "exo_armour", "drones", "drones", "hover_vehicles"]);
+  assert.equal(locks.buildings.get("drone_hangar"), "drones");
+  assert.deepEqual(ids.map(id => U[id].num), [53, 54, 55, 56, 57, 58]);
+  const manifest = JSON.parse(readFileSync("public/assets/manifest.json", "utf8")), sprites = new Set(manifest.sprites.map(s => s.id));
+  assert.deepEqual(["drone_operator_e_walk1", "drone_operator_dead", "hover_tank", "hover_tank_wreck", "mech", "mech_wreck", "recon_drone_shadow", "strike_drone_shadow", "vtol_gunship_shadow", "drone_hangar"].filter(id => !sprites.has(id)), []);
+  const land = Object.values(U).filter(u => u.kind === "machine" && u.domain === "land");
+  assert.equal(Math.max(...land.map(u => u.speed)), U.hover_tank.speed, "the hover tank is the fastest land machine");
+  for (const k of ["hp", "attack", "defence"]) assert.equal(Math.max(...land.map(u => u[k])), U.mech[k], `the mech has the most ${k}`);
+  assert.ok(U.mech.speed < U.main_battle_tank.speed, "and is slow");
+  const troops = Object.values(U).filter(u => u.kind === "troop");
+  assert.equal(Math.max(...troops.map(u => u.attack + u.defence)), U.drone_operator.attack + U.drone_operator.defence);
+  for (const id of ids) for (const at of U[id].builtAt) assert.ok(at === "barracks" || T[at].builds.includes(id), `${at} builds ${id}`);
+});
+
+function airWorld() {
+  const W = 120, H = 40, terrain = new Uint8Array(W * H).fill(TID.grassland);
+  const w = new World({ w: W, h: H, terrain }, { spawnRadius: 2 });
+  installCombat(w);
+  installTroops(w);
+  installConstruction(w);
+  installMachines(w);
+  installAir(w);
+  const g = w.grid, a = w.addNation({ name: "A" }), b = w.addNation({ name: "B" });
+  w.spawn(a, 10, 20);
+  w.spawn(b, 100, 20);
+  for (let y = 0; y < H; y++) for (let x = 0; x < 50; x++) w.claim(g.idx(x, y), a);
+  for (let y = 0; y < H; y++) for (let x = 50; x < W; x++) w.claim(g.idx(x, y), b);
+  for (const id of [a, b]) Object.assign(w.nations.get(id), { troops: 20000, money: 1e6, era: "F" });
+  const hangar = addBuilding(w, { type: "drone_hangar", owner: a, anchor: g.idx(20, 20), state: "active" });
+  const until = (done, most = 4000) => { for (let k = 0; k < most; k++) { if (done()) return k; w.tick(0.25); } return -1; };
+  return { w, g, a, b, hangar, until, order: m => runOrder(w, a, m) };
+}
+
+test("a drone hangar builds drones and is their base, but no other plane can use it", () => {
+  const { w, g, a, b, hangar, until, order } = airWorld();
+  assert.deepEqual(queueMachines(w, a, hangar.id, "strike_drone"), { queued: 1 });
+  assert.match(queueMachines(w, a, hangar.id, "jet_fighter").error ?? "", /./, "it does not build jets");
+  assert.ok(until(() => w.units.list.size === 1) > 0);
+  const drone = [...w.units.list.values()][0];
+  w.tick(0.25);
+  assert.equal(planeOf(w, drone).base, hangar.id);
+  const foe = w.createStack(b, g.idx(70, 20), 500);
+  assert.equal(order({ t: "air", plane: drone.id, do: "bomb", at: g.idx(70, 20) }).ok, true);
+  assert.ok(until(() => w.events.some(e => e.type === "bombed")) > 0);
+  assert.equal(foe.troops, 500 - UNIT_TYPES.strike_drone.bomb.troops);
+  assert.equal(giveMachine(w, a, "jet_fighter"), null, "a gift of a jet finds no airfield");
+  const field = addBuilding(w, { type: "airfield", owner: a, anchor: g.idx(30, 10), state: "active" });
+  const jet = giveMachine(w, a, "jet_fighter");
+  assert.equal(planeOf(w, jet).base, field.id, "a jet's home is the airfield, even beside the hangar");
+  assert.equal(order({ t: "air", plane: jet.id, do: "base", at: g.idx(20, 20) }).error, "a drone hangar takes only recon drones, strike drones and VTOL gunships");
+  const gunship = giveMachine(w, a, "vtol_gunship");
+  assert.equal(order({ t: "air", plane: gunship.id, do: "base", at: g.idx(20, 20) }).ok, true, "a gunship may use either");
 });

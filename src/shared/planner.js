@@ -481,7 +481,7 @@ function planDefence(ctx) {
   const air = v.defs.airfield;
   if (air && !v.lockOf(air.id) && eraIdx(air.era) <= eraIdx(v.me.era ?? "T")) {
     const mid = top.border[top.border.length >> 1];
-    const near = ctx.mineBuildings.some(b => b.def.airbase && Math.hypot((b.anchor % w) - (mid % w), ((b.anchor / w) | 0) - ((mid / w) | 0)) <= L(R.airNear));
+    const near = ctx.mineBuildings.some(b => b.def.airbase && !b.def.airbase.only && Math.hypot((b.anchor % w) - (mid % w), ((b.anchor / w) | 0) - ((mid / w) | 0)) <= L(R.airNear));
     if (!near) {
       const spot = ctx.findSpot(air, mid, L(4), L(R.airNear) - 2);
       if (spot) {

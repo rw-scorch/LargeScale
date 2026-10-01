@@ -96,6 +96,9 @@
     {"id":"vertical_farming","name":"Vertical farming","branch":"economy","era":"F","cost":1800,"requires":["age_future"],"unlocks":{"buildings":["vertical_farm"]}},
     {"id":"green_cities","name":"Green cities","branch":"civic","era":"F","cost":2000,"requires":["age_future"],"unlocks":{"buildings":["eco_tower","dome_habitat"]}},
     {"id":"arcologies","name":"Arcologies","branch":"civic","era":"F","cost":2600,"requires":["green_cities","fusion_power"],"unlocks":{"buildings":["arcology"]}},
-    {"id":"space_flight","name":"Space flight","branch":"civic","era":"F","cost":3000,"requires":["age_future"],"unlocks":{"buildings":["wonder_orbital_elevator","wonder_launch_complex"]}}
+    {"id":"space_flight","name":"Space flight","branch":"civic","era":"F","cost":3000,"requires":["age_future"],"unlocks":{"buildings":["wonder_orbital_elevator","wonder_launch_complex"]}},
+    {"id":"drones","name":"Drones","branch":"military","era":"F","cost":2200,"requires":["age_future"],"unlocks":{"buildings":["drone_hangar"],"units":["drone_operator","recon_drone","strike_drone"]}},
+    {"id":"hover_vehicles","name":"Hover vehicles","branch":"military","era":"F","cost":2400,"requires":["age_future"],"unlocks":{"units":["hover_tank","vtol_gunship"]}},
+    {"id":"exo_armour","name":"Exo-armour","branch":"military","era":"F","cost":2800,"requires":["hover_vehicles"],"unlocks":{"units":["mech"]}}
   ]
 }

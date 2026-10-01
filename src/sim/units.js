@@ -722,7 +722,8 @@ export function giveMachine(world, nid, type) {
   if (def.domain === "air") {
     for (const id of world.bld?.mine.get(nid) ?? []) {
       const b = world.bld.list.get(id);
-      if (b?.state === "active" && world.bld.table[b.type]?.airbase && world.owner[b.anchor] === nid) return spawnUnit(world, nid, type, b.anchor);
+      const a = b && world.bld.table[b.type]?.airbase;
+      if (b?.state === "active" && a && (!a.only || a.only.includes(type)) && world.owner[b.anchor] === nid) return spawnUnit(world, nid, type, b.anchor);
     }
     return null;
   }

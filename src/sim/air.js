@@ -30,8 +30,13 @@ export function installAir(world, { rules: r = AIR_RULES } = {}) {
   return T;
 }
 
-function liveBase(world, b, nid) {
-  return !!b && b.owner === nid && b.state === "active" && !!world.bld.table[b.type]?.airbase && world.owner[b.anchor] === nid;
+const lowName = s => (/^[A-Z]{2}/.test(s) ? s : s.toLowerCase());
+const listOf = a => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0]);
+
+export const takesPlane =(airbase, type) => !!airbase && (!type || !airbase.only || airbase.only.includes(type));
+
+function liveBase(world, b, nid, type = null) {
+  return !!b && b.owner === nid && b.state === "active" && takesPlane(world.bld.table[b.type]?.airbase, type) && world.owner[b.anchor] === nid;
 }
 
 export function centreOf(world, b) {
@@ -39,11 +44,11 @@ export function centreOf(world, b) {
   return [g.x(b.anchor) + fp[0] / 2, g.y(b.anchor) + fp[1] / 2];
 }
 
-export function nearestBase(world, nid, x, y) {
+export function nearestBase(world, nid, x, y, type = null) {
   let best = null, bd = Infinity;
   for (const id of world.bld?.mine.get(nid) ?? []) {
     const b = world.bld.list.get(id);
-    if (!liveBase(world, b, nid)) continue;
+    if (!liveBase(world, b, nid, type)) continue;
     const [cx, cy] = centreOf(world, b), d = Math.hypot(cx - x, cy - y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -81,7 +86,7 @@ function setHome(A, home) {
 
 export function nearestHome(world, nid, x, y, plane = null) {
   let best = null, bd = Infinity;
-  const b = nearestBase(world, nid, x, y);
+  const b = nearestBase(world, nid, x, y, plane?.type);
   if (b) { const [cx, cy] = centreOf(world, b); bd = Math.hypot(cx - x, cy - y); best = { base: b.id }; }
   for (const c of world.units?.list.values() ?? []) {
     if (!liveCarrier(c, nid)) continue;
@@ -93,7 +98,9 @@ export function nearestHome(world, nid, x, y, plane = null) {
 
 function rebase(world, u, A, def, at) {
   const g = world.grid, bid = world.bld?.at.get(at), b = bid === undefined ? null : world.bld.list.get(bid);
-  let home = b && liveBase(world, b, u.owner) ? homeOf(world, { base: b.id }, u.owner) : null;
+  const only = b && liveBase(world, b, u.owner) && !liveBase(world, b, u.owner, u.type) ? world.bld.table[b.type] : null;
+  if (only) return { error: `a ${only.name.toLowerCase()} takes only ${listOf(only.airbase.only.map(t => lowName(UNIT_TYPES[t].name) + "s"))}` };
+  let home = b && liveBase(world, b, u.owner, u.type) ? homeOf(world, { base: b.id }, u.owner) : null;
   if (!home) for (const c of world.units.list.values()) {
     if (!liveCarrier(c, u.owner) || g.cheb(c.at, at) > 1) continue;
     const cap = carrierOf(c).planes;
