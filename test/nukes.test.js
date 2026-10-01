@@ -10,12 +10,12 @@ import { installRoads, setRoad } from "../src/sim/logistics.js";
 import { installMachines, spawnUnit, UNIT_TYPES } from "../src/sim/units.js";
 import { installAir, planeOf } from "../src/sim/air.js";
 import { installNavy } from "../src/sim/navy.js";
-import { installNukes, NUKE_RULES, detonate, nukeView, flightsOf } from "../src/sim/nukes.js";
+import { installNukes, NUKE_RULES, detonate, nukeView, flightsOf, defencesAt } from "../src/sim/nukes.js";
 import { initResearch, TREE } from "../src/sim/research.js";
-import { lockMap } from "../src/shared/research.js";
+import { lockMap, lockReason } from "../src/shared/research.js";
 import { runOrder, publicEvents } from "../src/game.js";
 import { POWER_OF } from "../src/admin.js";
-import { TID } from "../src/shared/terrain.js";
+import { TID, TERRAIN } from "../src/shared/terrain.js";
 
 const LAND = x => x < 110 ? TID.grassland : x < 115 ? TID.shallows : x < 125 ? TID.ocean : TID.deep_ocean;
 
@@ -52,7 +52,8 @@ test("Nuclear weapons, Thermonuclear weapons and Missile defence unlock the silo
   assert.deepEqual(TREE.nodes.find(n => n.id === "thermonuclear").requires, ["nuclear_weapons"]);
   const W = NUKE_RULES.warheads;
   assert.deepEqual([W.atomic.needs, W.atomic.cost, W.hydrogen.needs, W.hydrogen.cost], ["nuclear_weapons", 40000, "thermonuclear", 120000]);
-  assert.deepEqual(BUILDINGS.table.missile_silo.silo.warheads, ["atomic", "hydrogen"]);
+  assert.deepEqual(BUILDINGS.table.missile_silo.silo.warheads, ["atomic", "hydrogen", "cruise"]);
+  assert.deepEqual(locks.anyOf.get("missile_silo"), ["nuclear_weapons", "cruise_missiles"], "either Nuclear weapons or Cruise missiles opens the silo");
   assert.equal(BUILDINGS.table.abm_silo.abm.chance, 0.6);
   assert.equal(POWER_OF.nukes, "world", "the host switch needs the World power");
 });
@@ -65,14 +66,14 @@ test("a silo builds one warhead at a time for gold only, and loses it with the s
   A.money = 50000;
   const r = order({ op: "build", silo: silo.id, kind: "atomic" });
   assert.deepEqual([r.ok, r.seconds, A.money], [true, 900, 10000]);
-  assert.equal(order({ op: "build", silo: silo.id, kind: "atomic" }).error, "this silo is already building a warhead");
+  assert.equal(order({ op: "build", silo: silo.id, kind: "atomic" }).error, "this silo is already building a missile");
   const second = addBuilding(w, { type: "missile_silo", owner: a, anchor: g.idx(7, 5), state: "active" });
   assert.equal(order({ op: "build", silo: second.id, kind: "hydrogen" }).error, "needs Thermonuclear weapons");
   assert.equal(order({ op: "build", silo: second.id, kind: "atomic" }).error, "not enough gold: 40000 needed");
   assert.deepEqual(nukeView(w, a).silos[silo.id], ["atomic", 900, 0]);
   assert.ok(until(() => w.events.some(e => e.type === "warhead_ready"), 200, 5) > 170, "it takes 15 minutes");
   assert.deepEqual(nukeView(w, a).silos[silo.id], ["atomic", 0, 1]);
-  assert.equal(order({ op: "build", silo: silo.id, kind: "atomic" }).error, "this silo already holds a warhead");
+  assert.equal(order({ op: "build", silo: silo.id, kind: "atomic" }).error, "this silo already holds a missile");
   assert.deepEqual([order({ op: "cancel", silo: silo.id }).refund, A.money], [40000, 50000]);
   order({ op: "build", silo: silo.id, kind: "atomic" });
   silo.owner = b;
@@ -83,7 +84,7 @@ test("a silo builds one warhead at a time for gold only, and loses it with the s
 
 test("a launch is refused when nukes are off, in the peace, or at land that is not an enemy's, and everyone sees one that goes", () => {
   const { w, g, a, b, A, silo, arm, until, order } = world();
-  assert.equal(order({ op: "launch", silo: silo.id, at: g.idx(90, 30) }).error, "this silo holds no warhead");
+  assert.equal(order({ op: "launch", silo: silo.id, at: g.idx(90, 30) }).error, "this silo holds no missile");
   arm();
   w.nukes.on = false;
   assert.equal(order({ op: "launch", silo: silo.id, at: g.idx(90, 30) }).error, "nuclear weapons are off in this world");
@@ -170,4 +171,41 @@ test("a warhead in flight survives a save and lands during catch-up", () => {
   w.catchUp(300);
   const e = w.events.find(e => e.type === "nuke_detonated");
   assert.deepEqual([e?.kind, e?.radius, flightsOf(w).length], ["hydrogen", 14, 0]);
+});
+
+test("a cruise missile is conventional: cheap, quick, allowed with nukes off, and it hurts without clearing land", () => {
+  const { w, g, a, b, A, silo, until, order } = world();
+  const W = NUKE_RULES.warheads.cruise;
+  assert.deepEqual([W.needs, W.conventional, W.cost < NUKE_RULES.warheads.atomic.cost / 10], ["cruise_missiles", true, true]);
+  const locks = lockMap(TREE), known = new Set(TREE.nodes.filter(t => t.id !== "nuclear_weapons").map(t => t.id));
+  assert.equal(lockReason(locks, known, "missile_silo"), null, "Cruise missiles alone opens the silo");
+  assert.equal(lockReason(locks, new Set(), "missile_silo"), "needs Nuclear weapons or Cruise missiles research");
+  w.nukes.on = false;
+  A.money = 10000;
+  assert.match(order({ op: "build", silo: silo.id, kind: "atomic" }).error, /off in this world/);
+  assert.equal(order({ op: "build", silo: silo.id, kind: "cruise" }).ok, true, "a conventional missile needs no nuclear switch");
+  assert.equal(A.money, 10000 - W.cost);
+  until(() => A.nuke.silos[silo.id]?.ready);
+  const target = g.idx(60, 30), st = w.createStack(b, target, 2000), before = st.troops;
+  const tower = addBuilding(w, { type: "watchtower_wood", owner: b, anchor: g.idx(61, 30), state: "active" });
+  const plots = w.nations.get(b).plots;
+  const fired = order({ op: "launch", silo: silo.id, at: target });
+  assert.equal(fired.ok, true, fired.error);
+  assert.equal(w.events.find(e => e.type === "nuke_launched")?.conventional, true);
+  until(() => w.events.some(e => e.type === "nuke_detonated"));
+  const hit = w.events.find(e => e.type === "nuke_detonated");
+  assert.deepEqual([hit.conventional, hit.cleared, hit.rubble], [true, 0, 0]);
+  assert.ok(Math.abs(w.stacks.get(st.id).troops - before * (1 - W.loss)) < 1, "the company loses half its men");
+  assert.equal(w.bld.list.get(tower.id).state, "damaged");
+  assert.equal(w.nations.get(b).plots, plots, "no land is cleared");
+  assert.equal(TERRAIN[w.terrain[target]].name, TERRAIN[TID.grassland].name, "and there is no crater");
+});
+
+test("SAM sites stop a cruise missile far more often than a warhead", () => {
+  const { w, g, a, b } = world();
+  addBuilding(w, { type: "sam_site", owner: b, anchor: g.idx(60, 30), state: "active" });
+  const target = g.idx(62, 31);
+  const [nuke] = defencesAt(w, a, target, "atomic"), [cruise] = defencesAt(w, a, target, "cruise");
+  assert.deepEqual([nuke.chance, cruise.chance], [NUKE_RULES.samChance, NUKE_RULES.warheads.cruise.samChance]);
+  assert.ok(cruise.chance > nuke.chance * 2);
 });

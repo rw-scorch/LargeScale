@@ -67,7 +67,7 @@ export function createNukePanel(top, game) {
   };
 
   const updateAlert = () => {
-    const list = w()?.nukes ?? [];
+    const you = w()?.you, list = (w()?.nukes ?? []).filter(f => !f.conventional || f.nation === you || f.toward === you);
     alert.hidden = !list.length;
     for (const [id, row] of rows) if (!list.some(f => f.id === id)) { row.el.remove(); rows.delete(id); }
     if (!list.length) return;
@@ -100,12 +100,12 @@ export function createNukePanel(top, game) {
       if (!b?.def?.silo || b.owner !== w().you) { silo.hidden = true; key = ""; return; }
       silo.hidden = false;
       const st = w().siloOf(b.id), money = w().purse?.money ?? 0, on = w().info?.nukes !== false, known = w().known();
-      const kinds = b.def.silo.warheads.filter(k => W(k));
+      const kinds = b.def.silo.warheads.filter(k => W(k) && (on || W(k).conventional));
       const lockOf = k => (W(k).needs && !known.has(W(k).needs) ? `needs ${w().locks.nodes.get(W(k).needs)?.name ?? W(k).needs}` : null);
       const k = JSON.stringify([b.id, b.state, st, aim, on, w().frozen, kinds.map(k => [lockOf(k), money >= W(k).cost])]);
       if (k === key) return;
       key = k;
-      const off = !on ? "Nuclear weapons are off in this world." : w().frozen ? "The world has ended." : b.state !== "active" ? `The silo is ${b.state === "construction" ? "still being built" : b.state}: a warhead is only built or launched from a working silo.` : null;
+      const off = !on && !kinds.length ? "Nuclear weapons are off in this world." : w().frozen ? "The world has ended." : b.state !== "active" ? `The silo is ${b.state === "construction" ? "still being built" : b.state}: a warhead is only built or launched from a working silo.` : null;
       const refund = st && W(st.kind) ? `refunds ${fmt(W(st.kind).cost)} gold` : "";
       if (off) {
         text.textContent = st ? `${off} It holds ${an(W(st.kind).name)}${st.ready ? "" : ", half built"}.` : off;
@@ -113,7 +113,7 @@ export function createNukePanel(top, game) {
         return;
       }
       if (!st) {
-        text.textContent = "Empty. Pick a warhead to build; the gold is paid now.";
+        text.textContent = `Empty. Pick a missile to build; the gold is paid now.${on ? "" : " Nuclear weapons are off in this world, but cruise missiles still fly."}`;
         buttons.replaceChildren(...kinds.map(kind => {
           const lock = lockOf(kind), short = money < W(kind).cost;
           return el("button", { "data-warhead": kind, disabled: !!lock || short, title: lock ?? (short ? `you have ${fmt(money)} gold` : nukeText(w(), kind)), onclick: () => build(b, kind) }, `${W(kind).name}: ${fmt(W(kind).cost)} gold, ${span(W(kind).time)}`);

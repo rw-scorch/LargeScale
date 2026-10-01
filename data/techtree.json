@@ -80,6 +80,7 @@
     {"id":"amphibious_warfare","name":"Amphibious warfare","branch":"military","era":"Mo","cost":900,"requires":["age_modern"],"unlocks":{"units":["landing_craft"]}},
     {"id":"nuclear_weapons","name":"Nuclear weapons","branch":"military","era":"Mo","cost":1800,"requires":["rocketry","guided_missiles"],"unlocks":{"buildings":["missile_silo"]}},
     {"id":"thermonuclear","name":"Thermonuclear weapons","branch":"military","era":"Mo","cost":2000,"requires":["nuclear_weapons"]},
+    {"id":"cruise_missiles","name":"Cruise missiles","branch":"military","era":"Mo","cost":1000,"requires":["guided_missiles"],"unlocks":{"buildings":["missile_silo"]}},
     {"id":"missile_defence","name":"Missile defence","branch":"military","era":"Mo","cost":1300,"requires":["guided_missiles"],"unlocks":{"buildings":["abm_silo"]}},
     {"id":"reinforced_concrete","name":"Reinforced concrete","branch":"military","era":"Mo","cost":900,"requires":["age_modern"],"unlocks":{"buildings":["tower_concrete"]}},
     {"id":"open_pit_mining","name":"Open-pit mining","branch":"economy","era":"Mo","cost":1000,"requires":["age_modern"],"unlocks":{"buildings":["mine_openpit"]}},

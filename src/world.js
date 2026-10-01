@@ -718,7 +718,7 @@ export class World extends DurableObject {
         }
         if (e.type === "nuke_launched" && e.toward) {
           const by = this.sim.nations.get(e.nation)?.name ?? "someone";
-          this.notify(e.toward, "missile", `${by} launched a nuclear warhead at your land. Impact in ${e.seconds} s.`);
+          this.notify(e.toward, "missile", `${by} launched ${e.conventional ? "a cruise missile" : "a nuclear warhead"} at your land. Impact in ${e.seconds} s.`);
         }
       }
     }

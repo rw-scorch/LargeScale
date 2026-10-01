@@ -25,7 +25,7 @@ const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air
   return u;
 };
 
-const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner });
+const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner, conventional: !!e.conventional });
 
 export class ClientWorld {
   constructor(hello) {
