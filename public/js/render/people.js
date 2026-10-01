@@ -74,7 +74,7 @@ export class People {
       const kind = kindOf(def);
       if (kind) {
         const n = kind === "gather" ? 2 : Math.min(3, def.jobs ?? 1), count = kind === "gather" ? n : owner === s.you ? Math.max(1, Math.round(n * staffed)) : Math.min(2, n);
-        const base = kind === "forest" || kind === "gather" ? walker : kind === "mine" ? "miner" : kind === "fish" ? "fisher" : kind === "farm" ? "farmer" : "herder";
+        const base = kind === "forest" || kind === "gather" ? walker : kind === "mine" ? "miner" : kind === "fish" ? "fisher" : kind === "farm" || kind === "indoor" ? "farmer" : "herder";
         const back = kind === "forest" || kind === "gather" ? "worker_carrying" : base;
         for (let k = 0; k < count; k++) out.push({ ...pose(base, door, this.workSpot(b, kind, k, t), t, hash2(b.id, k, 43), back), owner });
         continue;

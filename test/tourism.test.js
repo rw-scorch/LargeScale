@@ -47,10 +47,10 @@ function world({ cbd = false } = {}) {
   return { w, g, a, b, A, B, put };
 }
 
-test("ten tourism buildings, nine wonders and a downtown line, each behind its era or research", () => {
+test("ten tourism buildings, eleven wonders and a downtown line, each behind its era or research", () => {
   const tourism = Object.values(T).filter(d => d.tourism && !d.wonder), wonders = Object.values(T).filter(d => d.wonder);
   assert.deepEqual(tourism.map(d => d.id), ["park", "plaza", "museum", "zoo", "arena", "stadium", "casino", "luxury_hotel", "beach_resort", "ski_resort"]);
-  assert.equal(wonders.length, 9);
+  assert.equal(wonders.length, 11);
   assert.ok(wonders.every(d => d.tourism.value > 0 && d.category === "wonders"));
   assert.deepEqual([T.cafe.next, T.office_block.next, T.office_block.downtown, T.skyscraper.core, T.air_base.airport], ["office_block", "skyscraper", true, 1, true]);
   const locks = lockMap(TREE);

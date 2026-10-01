@@ -91,13 +91,13 @@ function fits(world, nid, plots, zone, self = 0, absorb = null) {
   });
 }
 
-export function absorbable(world, b, plots) {
+export function absorbable(world, b, plots, zone = "com") {
   const bld = world.bld, inside = new Set(plots ?? []), out = new Map();
   for (const i of inside) {
     const id = bld.at.get(i);
     if (id === undefined || id === b.id || out.has(id)) continue;
     const o = bld.list.get(id), d = bld.table[o.type];
-    if (!o.civilian || o.owner !== b.owner || d.zone !== "com" || d.downtown || !o.plots.every(p => inside.has(p))) return null;
+    if (!o.civilian || o.owner !== b.owner || d.zone !== zone || d.downtown || d.absorbs || !o.plots.every(p => inside.has(p))) return null;
     out.set(id, o);
   }
   return out;
@@ -106,7 +106,7 @@ export function absorbable(world, b, plots) {
 export function bestTypeFor(zone, era, table = CIVIL, allowed = () => true) {
   let best = null;
   for (const [id, b] of Object.entries(table)) {
-    if (!b.civilian || b.zone !== zone || eraIdx(b.era) > eraIdx(era) || !allowed(id)) continue;
+    if (!b.civilian || b.zone !== zone || b.upgradeOnly || eraIdx(b.era) > eraIdx(era) || !allowed(id)) continue;
     if (!best || eraIdx(b.era) > eraIdx(table[best].era)) best = id;
   }
   return best;
@@ -162,14 +162,17 @@ export function tryUpgrade(world, b, force = false) {
   if (!def.next || b.state !== "active") return false;
   const nd = table[def.next];
   if (eraIdx(nd.era) > eraIdx(n.era) || world.unlocked?.(b.owner, def.next) === false) return false;
-  const plots = footprint(world, b.anchor, nd.fp), absorb = nd.downtown ? absorbable(world, b, plots) : null;
+  const plots = footprint(world, b.anchor, nd.fp), absorb = nd.downtown || nd.absorbs ? absorbable(world, b, plots, nd.zone) : null;
   if (!fits(world, b.owner, plots, nd.zone, b.id, absorb)) return false;
   if (nd.downtown && downtownError(world, b, plots)) return false;
   if (!force) {
     const needs = n.stats.needs ?? 0, occ = def.housing ? b.residents / def.housing : 1;
     if (needs < r.upgradeNeeds || occ < r.upgradeOccupancy * needs) return false;
   }
-  for (const id of absorb?.keys() ?? []) removeBuilding(world, id);
+  for (const [id, o] of absorb ?? []) {
+    if (nd.housing) b.residents += o.residents ?? 0;
+    removeBuilding(world, id);
+  }
   b.type = def.next;
   setPlots(world, b, plots);
   b.state = "construction";

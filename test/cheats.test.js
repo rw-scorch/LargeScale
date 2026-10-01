@@ -67,7 +67,7 @@ test("research all finishes every node in every era, and says when there is noth
   const { w, a, n } = setup();
   const r = runAdmin(w, { op: "researchAll", nation: a });
   assert.equal(r.done.length, w.research.tree.nodes.length, `${r.done.length} of ${w.research.tree.nodes.length}`);
-  assert.equal(n.era, "Mo");
+  assert.equal(n.era, "F");
   assert.equal(runAdmin(w, { op: "researchAll", nation: a }).error, "A already knows everything");
 });
 

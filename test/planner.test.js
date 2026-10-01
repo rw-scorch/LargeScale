@@ -254,3 +254,12 @@ test("a plan proposes two kinds of tourism building you lack, and the best wonde
   assert.deepEqual(again.filter(p => p.key.startsWith("tourism:")).map(p => p.key), ["tourism:park"], "not a second plaza");
   assert.equal(byKey(again, "wonder:")?.key, "wonder:wonder_colossus", "the gardens already stand in B's land");
 });
+
+test("a Future plan powers buildings off the grid with a fusion reactor", () => {
+  const { w, put, plan } = world({ era: "F" });
+  const alone = put("vehicle_factory", 40, 50);
+  powerTick(w, 5);
+  const p = byKey(plan(), `power:${alone.id}`);
+  assert.equal(p?.pieces[0].type, "fusion_reactor", JSON.stringify(p?.pieces));
+  assert.equal(p.price, 9000);
+});

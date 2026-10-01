@@ -90,6 +90,12 @@
     {"id":"high_rise","name":"High-rise living","branch":"civic","era":"Mo","cost":1000,"requires":["age_modern"],"unlocks":{"buildings":["apartment_block"]}},
     {"id":"consumer_society","name":"Consumer society","branch":"civic","era":"Mo","cost":900,"requires":["high_rise"],"unlocks":{"buildings":["cafe"]}},
     {"id":"skyscrapers","name":"Skyscrapers","branch":"civic","era":"Mo","cost":1200,"requires":["high_rise","consumer_society"],"unlocks":{"buildings":["office_block","skyscraper"]}},
-    {"id":"mass_tourism","name":"Mass tourism","branch":"civic","era":"Mo","cost":1000,"requires":["age_modern"],"unlocks":{"buildings":["stadium","casino","luxury_hotel","beach_resort","ski_resort","wonder_observatory"]}}
+    {"id":"mass_tourism","name":"Mass tourism","branch":"civic","era":"Mo","cost":1000,"requires":["age_modern"],"unlocks":{"buildings":["stadium","casino","luxury_hotel","beach_resort","ski_resort","wonder_observatory"]}},
+    {"id":"age_future","name":"Future Age","branch":"era","era":"Mo","cost":6000,"requires":["automation","skyscrapers","jet_engines","guided_missiles"],"advances":"F","need":{"nodes":14,"branches":3},"icon":"era_badge_F"},
+    {"id":"fusion_power","name":"Fusion power","branch":"economy","era":"F","cost":2200,"requires":["age_future"],"unlocks":{"buildings":["fusion_reactor"]}},
+    {"id":"vertical_farming","name":"Vertical farming","branch":"economy","era":"F","cost":1800,"requires":["age_future"],"unlocks":{"buildings":["vertical_farm"]}},
+    {"id":"green_cities","name":"Green cities","branch":"civic","era":"F","cost":2000,"requires":["age_future"],"unlocks":{"buildings":["eco_tower","dome_habitat"]}},
+    {"id":"arcologies","name":"Arcologies","branch":"civic","era":"F","cost":2600,"requires":["green_cities","fusion_power"],"unlocks":{"buildings":["arcology"]}},
+    {"id":"space_flight","name":"Space flight","branch":"civic","era":"F","cost":3000,"requires":["age_future"],"unlocks":{"buildings":["wonder_orbital_elevator","wonder_launch_complex"]}}
   ]
 }
