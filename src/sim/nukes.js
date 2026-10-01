@@ -7,6 +7,7 @@ import { UNIT_TYPES, wreck, diveOf } from "./units.js";
 import { launchers, refreshSites, down } from "./air.js";
 import { setTerrain } from "./resources.js";
 import { setRoad } from "./logistics.js";
+import { shieldsOver } from "./shields.js";
 
 export const NUKE_RULES = { crater: 1, outerLoss: 0.6, outerResidents: 0.3, outerDamage: 0.6, repairSeconds: 600, samChance: 0.15, overlap: 0.5, cancelRefund: 1, sitesEvery: 2, ...rules.nukes };
 export const WARHEADS = NUKE_RULES.warheads;
@@ -88,6 +89,8 @@ function abmSites(world) {
 export function defencesAt(world, launcher, target, kind = null) {
   const g = world.grid, sc = scaleOf(world), r = world.nukes.rules, tx = g.x(target) + 0.5, ty = g.y(target) + 0.5, out = [], sam = r.warheads[kind]?.samChance ?? r.samChance;
   const foe = o => o !== launcher && world.hostile(launcher, o);
+  for (const s of shieldsOver(world, launcher, tx, ty)) out.push({ h: s.b, key: null, owner: s.owner, chance: s.chance, x: s.x, y: s.y, kind: "shield" });
+  if (r.warheads[kind]?.shieldOnly) return overlap(out, r);
   for (const { b, abm, x, y } of abmSites(world)) {
     b.interceptors ??= abm.interceptors;
     if (foe(b.owner) && b.interceptors > 0 && Math.hypot(x - tx, y - ty) <= abm.radius * sc) out.push({ h: b, key: "interceptors", owner: b.owner, chance: abm.chance, x, y, kind: "abm" });
@@ -99,6 +102,10 @@ export function defencesAt(world, launcher, target, kind = null) {
       if (foe(L.owner) && L.h.missiles > 0 && Math.hypot(L.x - tx, L.y - ty) <= L.sam.radius * sc) out.push({ h: L.h, key: "missiles", owner: L.owner, chance: sam, x: L.x, y: L.y, kind: L.site ? "sam" : "truck" });
     }
   }
+  return overlap(out, r);
+}
+
+function overlap(out, r) {
   out.sort((a, b) => b.chance - a.chance);
   let k = 1;
   for (const d of out) { d.p = d.chance * k; k *= r.overlap; }
@@ -142,8 +149,8 @@ export function launchWarhead(world, nid, bid, target) {
 function resolve(world, owner, f) {
   const N = world.nukes;
   for (const d of defencesAt(world, owner, f.target, f.kind)) {
-    d.h[d.key]--;
-    if (d.kind !== "abm" && world.air) world.air.reloading = true;
+    if (d.key) d.h[d.key]--;
+    if ((d.kind === "sam" || d.kind === "truck") && world.air) world.air.reloading = true;
     if (N.roll() < d.p) {
       world.emit("nuke_intercepted", { id: f.id, nation: owner, by: d.owner, kind: f.kind, target: f.target, toward: f.toward, from: [Math.round(d.x * 10) / 10, Math.round(d.y * 10) / 10], with: d.kind });
       return null;

@@ -445,6 +445,7 @@ export class MapRenderer {
     this.drawNotes();
     this.drawZoneRect();
     this.drawPowerCover();
+    this.drawShieldDomes();
     this.drawRoadPlan();
     this.drawGhost();
     this.drawEffects();
@@ -511,7 +512,7 @@ export class MapRenderer {
   drawSamRing(b) {
     const s = this.state, m = this.selectedMachine != null ? s.machines?.get(this.selectedMachine) : null;
     const ghost = this.ghost?.def?.sam ? this.ghost : null, sam = ghost?.def.sam ?? (b?.state === "active" ? b.def?.sam : null) ?? (m?.state !== "wreck" ? m?.def.sam : null);
-    if (!sam) return;
+    if (!sam) return this.drawCoverRing(b);
     const R = this.ratio ?? 1, ctx = this.ctx, fp = ghost?.def.fp ?? b?.def.fp;
     const [x, y] = ghost || (b && b.def?.sam) ? this.plotToScreen(((ghost?.anchor ?? b.anchor) % s.w) + fp[0] / 2, Math.floor((ghost?.anchor ?? b.anchor) / s.w) + fp[1] / 2) : this.plotToScreen(...this.machinePoint(m));
     const r = sam.radius * (s.map?.scale ?? 1) * this.cam.scale;
@@ -526,6 +527,53 @@ export class MapRenderer {
     ctx.stroke();
     ctx.restore();
     this.label(`missiles reach ${sam.radius * (s.map?.scale ?? 1)} plots`, x, y + r + 4 * R, 12 * R, "#9fd4ff");
+  }
+
+  drawCoverRing(b) {
+    const s = this.state, ghost = this.ghost?.def?.shield || this.ghost?.def?.railgun ? this.ghost : null;
+    const def = ghost?.def ?? (b?.state === "active" ? b.def : null), cover = def?.shield ?? def?.railgun;
+    if (!cover) return;
+    const R = this.ratio ?? 1, ctx = this.ctx, at = ghost?.anchor ?? b.anchor, reach = (cover.radius ?? cover.range) * (s.map?.scale ?? 1);
+    const [x, y] = this.plotToScreen((at % s.w) + def.fp[0] / 2, Math.floor(at / s.w) + def.fp[1] / 2), r = reach * this.cam.scale;
+    const [line, fill, text, words] = def.shield ? ["rgba(110,230,230,.85)", "rgba(110,230,230,.1)", "#8ff0f0", `shield covers ${reach} plots`] : ["rgba(240,110,90,.85)", "rgba(240,110,90,.06)", "#f09080", `railgun reaches ${reach} plots`];
+    ctx.save();
+    ctx.strokeStyle = line;
+    ctx.fillStyle = fill;
+    ctx.lineWidth = 2 * R;
+    ctx.setLineDash([6 * R, 5 * R]);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    this.label(words, x, y + r + 4 * R, 12 * R, text);
+  }
+
+  drawShieldDomes() {
+    const s = this.state, now = Date.now();
+    if (!this.domes || now - this.domesAt > 1000) {
+      this.domesAt = now;
+      this.domes = [];
+      for (const b of s.buildings?.values() ?? []) if (b.def?.shield && b.state === "active") this.domes.push(b);
+    }
+    if (!this.domes.length || this.cam.scale < ZOOM.icons * (this.ratio ?? 1)) return;
+    const ctx = this.ctx, R = this.ratio ?? 1, sc = s.map?.scale ?? 1, pulse = 0.75 + 0.25 * Math.sin(now / 900);
+    ctx.save();
+    ctx.lineWidth = 1.5 * R;
+    for (const b of this.domes) {
+      const [x, y] = this.plotToScreen((b.anchor % s.w) + b.def.fp[0] / 2, Math.floor(b.anchor / s.w) + b.def.fp[1] / 2), r = b.def.shield.radius * sc * this.cam.scale;
+      if (x + r < 0 || y + r < 0 || x - r > this.canvas.width || y - r > this.canvas.height) continue;
+      const grad = ctx.createRadialGradient(x, y, r * 0.6, x, y, r);
+      grad.addColorStop(0, "rgba(110,230,230,0)");
+      grad.addColorStop(1, `rgba(110,230,230,${0.16 * pulse})`);
+      ctx.fillStyle = grad;
+      ctx.strokeStyle = `rgba(140,240,240,${0.45 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   drawGuide() {
@@ -556,7 +604,7 @@ export class MapRenderer {
       const age = now - fx.at;
       if (fx.kind === "bomb") {
         if (age > 1200) continue;
-        const n = fx.bombs ?? 1, gap = 1.5 * (s.map?.scale ?? 1), frame = `flak_burst_${Math.min(2, Math.floor(age / 400))}`, size = Math.max(40 * R, this.cam.scale * 3.2);
+        const n = fx.bombs ?? 1, gap = 1.5 * (s.map?.scale ?? 1), frame = `${fx.shielded ? "shield_impact" : "flak_burst"}_${Math.min(2, Math.floor(age / 400))}`, size = Math.max(40 * R, this.cam.scale * 3.2) * (fx.shielded ? 0.5 : 1);
         for (let k = 0; k < n; k++) {
           const off = (k - (n - 1) / 2) * gap, [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5 + Math.cos(fx.heading ?? 0) * off, ((fx.plot / s.w) | 0) + 0.5 + Math.sin(fx.heading ?? 0) * off);
           this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, size / 16);
@@ -584,6 +632,25 @@ export class MapRenderer {
           const size = Math.max(28 * R, this.cam.scale * 2);
           this.atlas.draw(this.ctx, `flak_burst_${Math.min(2, Math.floor((age - 600) / 100))}`, sx - size / 2, sy - size / 2, size / 16);
         }
+        continue;
+      }
+      if (fx.kind === "rail") {
+        if (age > 500) continue;
+        const ctx = this.ctx, [ax, ay] = this.plotToScreen(...fx.from), [bx, by] = this.plotToScreen(...fx.to), fade = 1 - age / 500;
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.strokeStyle = "#9fe8ff";
+        ctx.lineWidth = 3 * R;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.2 * R;
+        ctx.stroke();
+        ctx.restore();
+        const size = Math.max(24 * R, this.cam.scale * 1.6);
+        this.atlas.draw(ctx, `flak_burst_${Math.min(2, Math.floor(age / 170))}`, bx - size / 2, by - size / 2, size / 16);
         continue;
       }
       if (fx.kind === "chute" || fx.kind === "heli") {
@@ -634,8 +701,8 @@ export class MapRenderer {
     const centre = p => [(p % s.w) + 0.5, ((p / s.w) | 0) + 0.5];
     for (const f of s.nukes ?? []) {
       this.nukeRings(f.target, f.radius, f.inner, pulse);
-      const [ax, ay] = centre(f.from), [bx, by] = centre(f.target), span = Math.max(1, f.due - f.launched);
-      const lift = Math.hypot(bx - ax, by - ay) * 0.25 + 4, at = t => [ax + (bx - ax) * t, ay + (by - ay) * t - Math.sin(Math.PI * t) * lift];
+      const orbital = f.kind === "orbital", [ax, ay] = orbital ? [centre(f.target)[0], centre(f.target)[1] - 40] : centre(f.from), [bx, by] = centre(f.target), span = Math.max(1, f.due - f.launched);
+      const lift = orbital ? 0 : Math.hypot(bx - ax, by - ay) * 0.25 + 4, at = t => [ax + (bx - ax) * t, ay + (by - ay) * t - Math.sin(Math.PI * t) * lift];
       const t = Math.max(0, Math.min(1, (sim - f.launched) / span)), m = Math.max(R * 1.5, k / 12);
       ctx.save();
       ctx.strokeStyle = "rgba(240,240,240,.55)";
@@ -649,9 +716,9 @@ export class MapRenderer {
       const [x, y] = at(t), [x2, y2] = at(Math.min(1, t + 0.01)), [px, py] = this.plotToScreen(x, y);
       ctx.translate(px, py);
       ctx.rotate(Math.atan2(y2 - y, x2 - x));
-      this.atlas.draw(ctx, "proj_ballistic_missile", -8 * m, -8 * m, m);
+      this.atlas.draw(ctx, orbital ? "proj_plasma_bolt" : "proj_ballistic_missile", -8 * m, -8 * m, m);
       ctx.restore();
-      if (sim - f.launched < 6) {
+      if (sim - f.launched < 6 && !orbital) {
         const [lx, ly] = this.plotToScreen(ax, ay), size = Math.max(24 * R, k * 2);
         this.atlas.draw(ctx, `launch_smoke_${Math.floor((now / 200) % 3)}`, lx - size / 2, ly - size, size / 16);
       }
@@ -662,8 +729,8 @@ export class MapRenderer {
       const age = now - b.at, [sx, sy] = this.plotToScreen(...centre(b.plot));
       if (b.kind === "intercept") {
         if (age > 1500) continue;
-        const size = Math.max(40 * R, k * 4);
-        this.atlas.draw(ctx, `flak_burst_${Math.min(2, Math.floor(age / 500))}`, sx - size / 2, sy - size / 2, size / 16);
+        const size = Math.max(40 * R, k * 4) * (b.with === "shield" ? 2 : 1);
+        this.atlas.draw(ctx, `${b.with === "shield" ? "shield_impact" : "flak_burst"}_${Math.min(2, Math.floor(age / 500))}`, sx - size / 2, sy - size / 2, size / (b.with === "shield" ? 32 : 16));
         continue;
       }
       if (age < 400) {

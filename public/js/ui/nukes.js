@@ -8,7 +8,9 @@ const an = s => (/^[aeiou]/i.test(s) ? `an ${lower(s)}` : `a ${lower(s)}`);
 
 export function nukeText(w, kind) {
   const W = w.nukeRules?.warheads?.[kind], k = w.nukeRules?.scale ?? 1;
-  return W ? `Everything within ${W.inner * k} plots is flattened and its land cleared, capitals apart; out to ${W.radius * k} plots, companies lose ${Math.round((w.nukeRules.outerLoss ?? 0.6) * 100)}% and buildings are damaged.` : "";
+  if (W?.conventional) return `Companies within ${W.radius * k} plots lose ${Math.round(W.loss * 100)}% of their troops and buildings are damaged. No land is cleared.`;
+  const only = W?.shieldOnly ? " Only shields can stop it." : "";
+  return W ? `Everything within ${W.inner * k} plots is flattened and its land cleared, capitals apart; out to ${W.radius * k} plots, companies lose ${Math.round((w.nukeRules.outerLoss ?? 0.6) * 100)}% and buildings are damaged.${only}` : "";
 }
 
 export function createNukePanel(top, game) {
@@ -138,7 +140,7 @@ export function createNukePanel(top, game) {
         return;
       }
       const c = aim.check;
-      text.textContent = `Target: ${name(c.owner)}'s land. It lands ${span(c.flight / speed())} after launch, and everyone sees it coming. Chance it is shot down: ${Math.round(c.chance * 100)}%${c.defences ? `, from ${c.defences} ${c.defences === 1 ? "defence" : "defences"} in reach` : ""}. Click elsewhere to aim again.`;
+      text.textContent = `Target: ${name(c.owner)}'s land. It lands ${span(c.flight / speed())} after launch, and ${c.conventional ? "they see" : "everyone sees"} it coming. Chance it is shot down: ${Math.round(c.chance * 100)}%${c.defences ? `, from ${c.defences} ${c.defences === 1 ? "defence" : "defences"} in reach` : ""}. Click elsewhere to aim again.`;
       buttons.replaceChildren(
         el("button", { id: "silo-launch", class: "danger", text: aim.sure ? "Sure? Launch now" : "Launch", onclick: launch }),
         el("button", { text: "Cancel", onclick: cancel }));

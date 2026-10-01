@@ -7,7 +7,7 @@ export const PLAN_KINDS = ["towns", "economy", "civic", "defence"];
 export const PLAN_DEFAULTS = {
   every: 1, perTick: 6, maxPieces: 400, maxProjectPieces: 60, maxProjects: 40, keepMax: 32, keepSide: 128,
   block: 7, search: 30, freeRes: 6, freeCom: 4, freeInd: 4, indFrom: 6, towns: 6, townCell: 12,
-  farms: 12, farmRing: [3, 16], perDeposit: 12, towers: 8, airNear: 20, powerNear: 40, civicEach: 2, scale: 1, tradeMin: 12, sams: 3, samNear: 5, abms: 2, abmNear: 6, tourism: 2, tourismNear: 10,
+  farms: 12, farmRing: [3, 16], perDeposit: 12, towers: 8, airNear: 20, powerNear: 40, civicEach: 2, scale: 1, tradeMin: 12, sams: 3, samNear: 5, abms: 2, abmNear: 6, tourism: 2, tourismNear: 10, shields: 2, shieldNear: 5,
 };
 
 const EFFECT_WORDS = { income: "income", research: "research", pop_growth: "town growth", troop_cap: "troop limit", defence: "defence" };
@@ -538,6 +538,28 @@ function planMissileDefence(ctx, towns) {
   ctx.add({ key: "abms", kind: "defence", title: `${plural(pieces.length, "ABM silo")} over ${named}`, reason: `A nuclear warhead falling within ${reach} plots of an ABM silo has a ${Math.round(def.abm.chance * 100)}% chance of being shot down. Each holds ${def.abm.interceptors} interceptors and makes more for ${def.abm.reloadCost} gold each.`, price: pieces.length * (def.cost?.money ?? 0), pieces, draw, at: pieces[0].at });
 }
 
+function planShields(ctx, towns) {
+  const { v, R, L, w } = ctx, def = v.defs.shield_generator;
+  if (!def?.shield || v.lockOf(def.id) || eraIdx(def.era) > eraIdx(v.me.era ?? "T")) return;
+  const centre = (b, d = b.def) => [(b.anchor % w) + d.fp[0] / 2, ((b.anchor / w) | 0) + d.fp[1] / 2];
+  const cover = ctx.mineBuildings.filter(b => b.def.shield).map(b => [...centre(b), b.def.shield.radius * (R.scale ?? 1)]);
+  const covered = i => cover.some(([x, y, r]) => Math.hypot(x - (i % w) - 0.5, y - ((i / w) | 0) - 0.5) <= r - 1);
+  const reach = def.shield.radius * (R.scale ?? 1), pieces = [], draw = [], names = [];
+  for (const t of towns.slice(0, R.shields)) {
+    if (covered(t.centre)) continue;
+    const spot = ctx.findSpot(def, t.centre, 1, L(R.shieldNear));
+    if (!spot) continue;
+    ctx.take(spot.plots);
+    pieces.push({ t: "build", type: def.id, at: spot.anchor });
+    draw.push({ t: "build", type: def.id, plots: spot.plots });
+    names.push(t.name);
+    cover.push([...centre({ anchor: spot.anchor }, def), reach]);
+  }
+  if (!pieces.length) return;
+  const named = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+  ctx.add({ key: "shields", kind: "defence", title: `${plural(pieces.length, "shield generator")} over ${named}`, reason: `A missile or warhead falling within ${reach} plots of a shield generator is stopped ${Math.round(def.shield.chance * 100)}% of the time, and bombs there do half harm. Nothing else stops an orbital strike. It needs power.`, price: pieces.length * (def.cost?.money ?? 0), pieces, draw, at: pieces[0].at });
+}
+
 function planTourism(ctx, towns) {
   const { v, R, L } = ctx;
   if (!towns.length) return;
@@ -580,5 +602,6 @@ export function proposePlan(v, rules = {}) {
   planDefence(ctx);
   planAirDefence(ctx, towns);
   planMissileDefence(ctx, towns);
+  planShields(ctx, towns);
   return ctx.projects.slice(0, ctx.R.maxProjects);
 }

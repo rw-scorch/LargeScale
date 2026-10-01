@@ -263,3 +263,15 @@ test("a Future plan powers buildings off the grid with a fusion reactor", () => 
   assert.equal(p?.pieces[0].type, "fusion_reactor", JSON.stringify(p?.pieces));
   assert.equal(p.price, 9000);
 });
+
+test("a Future plan puts a shield generator over the capital, and none where a shield already covers it", () => {
+  const { w, g, a, put, plan } = world({ era: "F" });
+  const shields = byKey(plan(), "shields");
+  assert.deepEqual(shields?.pieces.map(p => p.type), ["shield_generator"]);
+  assert.equal(shields.title, "1 shield generator over the capital");
+  assert.match(shields.reason, /^A missile or warhead falling within 12 plots of a shield generator is stopped 80% of the time/);
+  assert.equal(canPlace(w, a, "shield_generator", shields.pieces[0].at), null);
+  assert.ok(g.cheb(shields.pieces[0].at, g.idx(19, 19)) <= 5, "beside the capital");
+  put("shield_generator", g.x(shields.pieces[0].at), g.y(shields.pieces[0].at));
+  assert.equal(byKey(plan(), "shields"), undefined);
+});
