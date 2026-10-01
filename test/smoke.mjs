@@ -1126,6 +1126,25 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   await adminOp(IN, { op: "speed", factor: 1 });
   check(ready && fired?.ok && heard && seen && scar && capitalKept,
     `after Nuclear weapons a silo builds an atomic warhead, aimed at ${foe?.name ?? "nobody"}'s land (${Math.round((aimed?.chance ?? 0) * 100)}% to be shot down, ${aimed?.flight} s); everyone hears the launch, and the blast leaves a crater and clears the land but the capital (${boom?.type ?? "no impact"}, ${boom?.cleared ?? 0} plots cleared)${fired?.ok ? "" : ` (${fired?.error ?? aimed?.error ?? made?.error ?? (siloUp ? "not ready" : "no silo")})`}`);
+  await ask({ t: "research", id: "cruise_missiles", mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  await adminOp(IN, { op: "nukes", on: false });
+  await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 5000 });
+  const cm = await ask({ t: "nuke", op: "build", silo: siloId, kind: "cruise" });
+  await adminOp(IN, { op: "cheat", nation: ih.you, cheat: "build", on: true });
+  const cmReady = cm?.ok && await until(() => IM.pump().world.siloOf(siloId)?.ready ? true : null, 10000);
+  await adminOp(IN, { op: "cheat", nation: ih.you, cheat: "build", on: false });
+  const w2 = IM.pump().world;
+  let aim2 = null;
+  if (foe) for (let i = 0; i < w2.owner.length && aim2 === null; i++) if (w2.owner[i] === foe.id && i !== foe.capital && isLand(w2.terrain[i])) aim2 = i;
+  const plots0 = w2.nations.get(foe?.id)?.plots;
+  await adminOp(IN, { op: "speed", factor: 8 });
+  const shot = cmReady && aim2 !== null ? await ask({ t: "nuke", op: "launch", silo: siloId, at: aim2 }) : null;
+  const struck = shot?.ok && await until(() => inEvents().find(e => (e.type === "nuke_detonated" || e.type === "nuke_intercepted") && e.id === shot.id), 30000);
+  await adminOp(IN, { op: "speed", factor: 1 });
+  await adminOp(IN, { op: "nukes", on: true });
+  const kept = struck?.type !== "nuke_detonated" || (struck.conventional && struck.cleared === 0 && TERRAIN[IM.pump().world.terrain[aim2]]?.name !== "crater");
+  check(cm?.ok && cmReady && shot?.ok && struck && kept, `with nukes off, Cruise missiles still lets the silo build and fire a cruise missile (${struck?.type ?? "no impact"}: ${struck?.conventional ? `${struck.troops} troops lost, ${struck.damaged} buildings damaged, ${struck.cleared} plots cleared` : "shot down"}; land before ${plots0})${shot?.ok ? "" : ` (${shot?.error ?? cm?.error ?? "not ready"})`}`);
 }
 {
   await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 20000 });

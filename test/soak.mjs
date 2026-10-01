@@ -73,7 +73,7 @@ await A.send({ t: "admin", op: "speed", factor: 8 });
 const mine = p => { const w = p.cw, out = []; for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === w.you) out.push(i); return out; };
 const near = (w, from, r) => { const x = from % w.w, y = (from / w.w) | 0; return Math.max(0, Math.min(w.h - 1, y + Math.floor(rand() * (2 * r + 1)) - r)) * w.w + Math.max(0, Math.min(w.w - 1, x + Math.floor(rand() * (2 * r + 1)) - r)); };
 
-for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles", "nuclear_weapons"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
+for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles", "nuclear_weapons", "cruise_missiles"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: A.cw.you }));
 note("research", await B.send({ t: "research", id: "missile_defence", mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: B.cw.you }));
@@ -124,7 +124,7 @@ async function nukes() {
     const st = w.siloOf(b.id);
     if (!st) {
       note("admin give", await A.send({ t: "admin", op: "give", nation: w.you, what: "money", amount: 40000 }));
-      note("nuke build", await A.send({ t: "nuke", op: "build", silo: b.id, kind: "atomic" }));
+      note("nuke build", await A.send({ t: "nuke", op: "build", silo: b.id, kind: rand() < 0.5 ? "atomic" : "cruise" }));
       note("cheat build", await A.send({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: true }));
       await sleep(800);
       note("cheat build", await A.send({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: false }));
