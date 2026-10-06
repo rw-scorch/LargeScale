@@ -158,6 +158,7 @@ test("a drone hangar builds drones and is their base, but no other plane can use
   const field = addBuilding(w, { type: "airfield", owner: a, anchor: g.idx(30, 10), state: "active" });
   const jet = giveMachine(w, a, "jet_fighter");
   assert.equal(planeOf(w, jet).base, field.id, "a jet's home is the airfield, even beside the hangar");
+  assert.equal(planeOf(w, giveMachine(w, a, "recon_drone")).base, hangar.id, "a gift of a drone goes to the building that makes it");
   assert.equal(order({ t: "air", plane: jet.id, do: "base", at: g.idx(20, 20) }).error, "a drone hangar takes only recon drones, strike drones and VTOL gunships");
   const gunship = giveMachine(w, a, "vtol_gunship");
   assert.equal(order({ t: "air", plane: gunship.id, do: "base", at: g.idx(20, 20) }).ok, true, "a gunship may use either");

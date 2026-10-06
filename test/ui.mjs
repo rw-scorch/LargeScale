@@ -2275,6 +2275,43 @@ check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the b
   check(tw.park && tw.plaza && !!line && /2 attractions of 2 kinds/.test(line[1]), `a park and a plaza pay visitors' gold: the Town panel reads "${line?.[0]}" and "${line?.[1]}"`);
   await gp.evaluate(() => window.__ls.game.town.show(false));
 }
+{
+  const fu = await gp.evaluate(async () => {
+    const g = window.__ls.game, w = g.world;
+    const wait = async (f, ms = 8000) => { const end = Date.now() + ms; let v; while (!(v = f()) && Date.now() < end) await new Promise(r => setTimeout(r, 100)); return v; };
+    for (const id of ["shields", "railguns", "orbital_weapons", "drones"]) await g.conn.request({ t: "research", id, mode: "queue" });
+    await g.conn.request({ t: "admin", op: "finish", nation: w.you });
+    await wait(() => !w.lockOf("shield_generator") && !w.lockOf("orbital_uplink"));
+    await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "money", amount: 60000 });
+    const cap = w.nations.get(w.you).capital;
+    const spot = type => { for (let r = 2; r < 18; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const i = cap + dy * w.w + dx; if (i >= 0 && i < w.owner.length && !w.placeError(type, i)) return i; } return null; };
+    const shield = await g.conn.request({ t: "build", type: "shield_generator", at: spot("shield_generator") });
+    const uplink = await g.conn.request({ t: "build", type: "orbital_uplink", at: spot("orbital_uplink") });
+    await g.conn.request({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: true });
+    await wait(() => w.buildings.get(shield.building)?.state === "active" && w.buildings.get(uplink.building)?.state === "active", 12000);
+    await g.conn.request({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: false });
+    return { era: w.purse?.era, shield: shield.building ?? null, uplink: uplink.building ?? null, at: w.buildings.get(shield.building)?.anchor ?? cap, error: shield.error ?? uplink.error ?? null };
+  });
+  await gp.evaluate(() => { const g = window.__ls.game; g.selectBuilding(null); g.toggleBuildMenu(true); });
+  let rows = [];
+  for (let k = 0; k < 3 && !rows.includes("shield_generator"); k++) {
+    await gp.click("#build-menu .tabs button:has-text('Military')").catch(() => null);
+    rows = await gp.waitForSelector("#build-menu [data-type=shield_generator]", { timeout: 3000 }).then(() => gp.$$eval("#build-menu [data-type]", els => els.map(e => e.dataset.type)), () => []);
+  }
+  await gp.screenshot({ path: `${OUT}/84b-future-military.png` });
+  check(["shield_generator", "shield_node", "railgun_battery", "orbital_uplink", "drone_hangar"].every(t => rows.includes(t)), `after the Future research the Military tab has the shields, the railgun battery, the orbital uplink and the drone hangar (${rows.filter(t => /shield|railgun|uplink|drone/.test(t)).join(", ")})`);
+  await gp.evaluate(({ shield, at }) => { const g = window.__ls.game; g.toggleBuildMenu(false); g.selectBuilding(shield); g.focus(at, 6); }, fu);
+  await gp.waitForTimeout(1500);
+  const domes = await gp.evaluate(() => window.__ls.game.view.domes?.length ?? 0);
+  await gp.screenshot({ path: `${OUT}/84c-shield-cover.png` });
+  check(fu.era === "F" && fu.shield !== null && domes >= 1, `a shield generator stands in the Future era (${fu.era}), drawn with its dome and cover ring (${domes} dome${domes === 1 ? "" : "s"})${fu.error ? ` (${fu.error})` : ""}`);
+  await gp.evaluate(({ uplink }) => window.__ls.game.selectBuilding(uplink), fu);
+  const offer = await gp.waitForFunction(() => document.querySelector("#silo-actions [data-warhead=orbital]")?.textContent ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+  const kinds = await gp.$$eval("#silo-actions [data-warhead]", els => els.map(e => e.dataset.warhead)).catch(() => []);
+  await gp.screenshot({ path: `${OUT}/84d-uplink.png` });
+  check(/^Orbital strike: /.test(offer ?? "") && kinds.length === 1, `the orbital uplink's card offers only "${offer}"`);
+  await gp.evaluate(() => window.__ls.game.selectBuilding(null));
+}
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await login(ip, "rw_scorch", "correct horse");
 await ip.goto(`${BASE}/#w=${indId}`);
