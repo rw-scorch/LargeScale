@@ -93,3 +93,57 @@ Written 8 October 2026, after milestone ten. Ryan asked to keep going until the 
 - Unit tests for each rule, and the content checks (sprites, the research tree, descriptions).
 - `npm test`, the reference tests, smoke, `npm run ui` and the soak on a dev server. The UI run goes once per milestone, because it is heavy on Ryan's machine.
 - `npm run bench` with jobs running for every player.
+
+## Progress
+
+Built 8 October 2026 on branch `m11-engineers`, stacked on `m10-future`.
+
+- **Part A, digging.** `src/sim/engineering.js` is the kit's module, extended, installed by `installDigging` in `world.js`. The engineer troop (unit 59) comes with Sappers. Rules are in `rules.json` `engineering`.
+- **Part B, building up.** Causeway, levelled ground, embankment, replant forest, clear rubble (owner only) and restore. A causeway onto water claims the new land for the builder.
+- **Part C, tunnels and the engineering vehicle.** Tunnelling (Industrial) unlocks the engineering vehicle (unit 60, vehicle factory), which works as 5 engineers.
+- **Part D, accidents.** Bombs take 30 hit points from each enemy plot they hit, and roads take half that. A battleship's shells take 2 a second from the plot under the company it is shelling. The bomb line in the feed counts broken ground and cut roads.
+
+### Where the build differs from the plan
+
+- **One order.** It is a single `dig` order with `op` dig, charge, build, tunnel or cancel, not a separate `terraform` order.
+- **Charges go off at once.** A charge is drawn as a blast, so there is no sprite for a set charge.
+- **No card.** A plot's hit points and the time left show in the hover tip.
+- **Tunnel entrances are drawn, not built.**
+  - A tunnel is a road kind (`tunnel`). It moves at 0.4 whatever the rock, and can be cut like any road.
+  - The `tunnel_entrance` sprite marks each end.
+  - It costs 150 gold a plot, paid at once, and 120 work points a plot. It is at most 40 plots long.
+  - Both ends must be open land of your own. A tunnel under someone else's land needs a war, and they are warned.
+- **Route graphs.** When digging or building changes what can be crossed, the land and water route graphs are dropped. That happens at most every 30 s (`graphEvery`), because rebuilding one on Earth takes 120 to 220 ms.
+- **Found and fixed along the way.**
+  - Cached rail paths checked one version that every road change bumped. Once bombs could cut roads, every station pair searched again constantly, and the Earth bench's median tick went from 33 ms to 80 ms.
+  - Rail paths now have their own version (`log.railVer`), bumped only when a rail plot changes: 31 ms.
+
+## Evidence
+
+The machine was busy all day: Minecraft was running, CPU load was about 40%, and the dev server sometimes took up to 10 s to serve a static file.
+
+- **Unit tests.** `npm test`: 369 of 369. `test/engineering.test.js` has 14 tests, and `test/industry.test.js` has a new rail cache test. `npm run test:reference`: 95 of 95.
+- **Smoke.** Four runs.
+  - **Engineering.** The new check passed in three of the four runs: Sappers, 5 engineers dig a hills plot (180 hit points, 36 s), a charge does 150 more, and it breaks into scree.
+    - It failed once, before its diagnostics were added, and the cause is not known. It did not recur.
+  - **Test races fixed.** Several older checks failed only because of timing in the tests themselves:
+    - The far move could pick land across water. The company then went aboard a boat and vanished from the next three checks. This was the "vanished stack" from milestone ten's first smoke run.
+    - The planner can now finish a whole block in the tick it is added, before the queue message is sent.
+    - The road check's plots could be built on by the town before the road was laid.
+  - **Last run.** 135 of 136. The one failure was the rate-limit check, which passed in the three runs before and fails when the server takes too long over each message.
+- **UI.** Not complete.
+  - Three runs were cut short when the dev server stalled and workerd dropped the worker. That resets every world to its last save (up to 30 s old), so research the test had just finished was lost and the siege workshop was refused.
+  - The test now gives gold first, waits for locks and retries on "slow down", but the engineering check at the end was never reached.
+  - It needs a run on an idle machine.
+- **Soak.** 180 s, clean.
+  - 280 rounds and 21 game minutes, with 0 tick errors.
+  - Engineering orders: 37 digs, 8 builds, 4 charges and 1 tunnel succeeded.
+  - At the end both players saw the same 28 worn plots, 5 jobs and 12 changed plots.
+- **Bench.** Only short runs (240 ticks) were possible on the busy machine. Each player had crews that dig, charge and tunnel; there were 8 crews, 8 digs, 8 charges and 1 tunnel.
+
+  | Engineering | Median tick | Worst tick | Engineering hook (median / worst) |
+  |---|---|---|---|
+  | On | 30.9 ms | 158.5 ms | 0.02 ms / 1.4 ms |
+  | Off | 33.3 ms | 229.4 ms | none |
+
+  Both fail the 50 ms worst-tick budget on this machine. The full run needs an idle machine.

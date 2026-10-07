@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. On 30 September 2026 Ryan asked to keep going step by step until the project is done. The current milestone is in `plans/milestone-10.md`: the Future era and cruise missiles, written as a reading of the design for Ryan to correct, and built. Milestone nine (`plans/milestone-9.md`: diplomacy, factions and the endgame) is built and merged. Milestone eight (`plans/milestone-8.md`: the planner and the Modern era) is built and passed its dev server runs. Milestone seven (`plans/milestone-7.md`: gold only, individual soldiers, piloting, planes, easier crossings) is built, passed its dev server run, and waits for Ryan's check. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. On 30 September 2026 Ryan asked to keep going step by step until the project is done. The current milestone is in `plans/milestone-11.md`: engineers and terrain engineering, written as a reading of the design for Ryan to correct, and built. Milestone ten (`plans/milestone-10.md`: the Future era and cruise missiles) is built and waits for its PRs to be merged. Milestone nine (`plans/milestone-9.md`: diplomacy, factions and the endgame) is built and merged. Milestone eight (`plans/milestone-8.md`: the planner and the Modern era) is built and passed its dev server runs. Milestone seven (`plans/milestone-7.md`: gold only, individual soldiers, piloting, planes, easier crossings) is built, passed its dev server run, and waits for Ryan's check. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (349)
+npm test                  # unit tests (369)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -443,6 +443,34 @@ The Future era and cruise missiles (`plans/milestone-10.md`, branch `m10-future`
 - **Hit test.** The renderer's `stackAt` also counts a click near a company's own spot (`cx`, `cy` on the markers), not only near its leader, so the middle of a big company's ranks selects it.
 - **Evidence.** `npm test` 349, smoke 135 of 135, UI 198 of 198, soak clean. The bench fails on a busy machine with or without Future content (median 36.9 ms without, 36.6 ms with); rerun it on an idle machine.
 - **Tests.** `test/future.test.js`, `test/shields.test.js`, and new planner, nukes and data tests. `npm run bench` takes `--future 1` (on by default). `npm run ui` stubs Google Fonts unless `OFFLINE_FONTS=0`, because the headless browser on Ryan's machine cannot reach them.
+
+## Milestone eleven progress
+
+Engineers and terrain engineering (`plans/milestone-11.md`, branch `m11-engineers`, stacked on `m10-future`). Ryan asked to keep going, so the plan's choices are mine and wait for his word. Details, the changes from the plan and the evidence are in the plan.
+
+- **Digging.** `src/sim/engineering.js` is the kit's module, extended.
+  - `installDigging` adds the crews (engineer soldiers within 1 plot, at most 5), saving through `bld.extra.eng`, and the `eng` message, with `hello.eng` and `engRules`.
+  - Terrain hit points by class: rock 300, hard 180, soft 90, made 40. Roads and bridges go first.
+  - The `dig` order takes `op` dig, charge (200 gold for 150 damage), build, tunnel or cancel. Foreign land needs a war, with `terrain_dug` warnings.
+  - Sappers unlocks the engineer (unit 59).
+- **Building up.** The recipes are in `rules.json` `engineering.recipes`. A causeway onto water claims the new land.
+- **Tunnels.** A road kind (`TUNNEL` in `src/shared/roads.js`) that moves at 0.4 whatever the rock, laid plot by plot by tunnel jobs. Each end is drawn as `tunnel_entrance`.
+- **Engineering vehicle** (unit 60, Tunnelling): works as 5 engineers.
+- **Route graphs.** Changes in what can be crossed set `eng.graphStale`, and the graphs are dropped at most every 30 s.
+- **Accidents.** `damageTerrain`: bombs (`air.js` `drop`) and battleship shells (`navy.js`) wear down terrain and cut roads.
+- **Client.** The ring offers dig, charge and build items next to engineers (`public/js/ui/engineering.js`). The tip shows hit points. The renderer's `drawDigs` draws worn plots and job bars.
+- **Rail cache.** Rail paths are cached against `log.railVer`, which only rail changes bump. One shared version made every road change re-search them.
+- **Evidence.**
+  - `npm test` 369, and soak clean.
+  - Smoke: 135 of 136 on the last run, with the one failure a rate-limit timing check on a busy machine.
+  - The UI run and the full bench still need an idle machine; the dev server stalled under load.
+
+Open items as of 8 October 2026, in order:
+
+0. Milestone eleven is built on `m11-engineers`; its PR is stacked on milestone ten's.
+   - Merge PR 48, then 49, then milestone eleven's.
+   - Rerun `npm run ui` and `npm run bench` on an idle machine.
+   - Next: atmosphere, then host rules with the dev panel.
 
 Open items as of 7 October 2026, in order:
 
