@@ -16,6 +16,7 @@ import { buildWarhead, cancelWarhead, checkLaunch, launchWarhead } from "./sim/n
 import { planOrder } from "./sim/planner.js";
 import { diploOrder, peaceReason } from "./sim/diplomacy.js";
 import { noteOrder } from "./sim/notes.js";
+import { digOrder } from "./sim/engineering.js";
 import { ERA_ORDER } from "./shared/buildings.js";
 import { rowOf } from "./shared/buildings.js";
 import { place, demolish, listUpgradable, bulkUpgrade } from "./sim/construction.js";
@@ -367,6 +368,11 @@ export const ORDERS = {
   diplo(sim, nation, m) {
     if (!living(sim, nation) && !["accept", "decline", "resign"].includes(m.op)) return fail(sim.nations.get(nation)?.spawned ? "your nation has fallen: a friend can invite you to command theirs" : "spawn first");
     const r = diploOrder(sim, nation, m);
+    return r.error ? fail(r.error) : { ...r, ok: true, op: m.op };
+  },
+  dig(sim, nation, m) {
+    if (!living(sim, nation)) return fail("spawn first");
+    const r = digOrder(sim, nation, m);
     return r.error ? fail(r.error) : { ...r, ok: true, op: m.op };
   },
   nuke(sim, nation, m) {
@@ -788,7 +794,7 @@ export function purseOf(n, extra = {}) {
 
 export const DIPLO_EVENTS = ["war_declared", "war_started", "peace_signed", "alliance_signed", "alliance_left", "non_aggression_signed", "treaty_broken", "embargo", "faction_created", "faction_joined", "faction_left", "faction_renamed", "surrendered", "vassal_freed", "commander_joined", "commander_left"];
 const ALWAYS = new Set(["eliminated", "victory", "era_up", "overtime_shrink", "nuke_launched", "nuke_intercepted", "nuke_detonated", "wonder_built", ...DIPLO_EVENTS]);
-const QUIET = new Set(["civ_build", "civ_upgrade"]);
+const QUIET = new Set(["civ_build", "civ_upgrade", "terrain_damaged"]);
 
 const lowName = name => (/^[A-Z]{2}/.test(name) ? name : name.toLowerCase());
 

@@ -51,7 +51,7 @@ const until = (w, done, most = 2000) => { for (let k = 0; k < most; k++) { if (d
 test("the Medieval and Gunpowder machines come from the unit registry, and research unlocks them", () => {
   const all = ["catapult", "trebuchet", "galley", "cog", "cannon", "galleon", "frigate", "ship_of_the_line", "transport_boat", "merchant_ship", "field_artillery", "early_tank", "steamship", "ironclad", "destroyer", "biplane", "early_bomber", "main_battle_tank", "apc", "rocket_artillery", "jet_fighter", "strategic_bomber", "attack_heli", "transport_heli", "transport_plane", "sam_truck", "cruiser", "battleship", "submarine", "aircraft_carrier", "landing_craft", "hover_tank", "mech", "recon_drone", "strike_drone", "vtol_gunship"];
   assert.deepEqual(Object.keys(UNIT_TYPES), all);
-  assert.ok(UNITS.troops.every(d => d.kind === "troop") && UNITS.troops.length === 22, "the troop list leaves machines out");
+  assert.ok(UNITS.troops.every(d => d.kind === "troop") && UNITS.troops.length === 23, "the troop list leaves machines out");
   const locks = lockMap(TREE);
   assert.deepEqual(all.map(id => locks.units.get(id)), ["siegecraft", "siegecraft", "harbours", "harbours", "artillery", "shipbuilding", "shipbuilding", "navigation", undefined, undefined, "field_guns", "armour", "steam_navy", "steam_navy", "destroyers", "flight", "flight", "mechanised", "mechanised", "rocketry", "jet_engines", "strategic_bombing", "helicopters", "helicopters", "airborne_forces", "guided_missiles", "modern_navy", "modern_navy", "submarines", "carriers", "amphibious_warfare", "hover_vehicles", "exo_armour", "drones", "drones", "hover_vehicles"], "the free transport boat and merchant ship need no research");
   assert.equal(locks.buildings.get("siege_workshop"), "siegecraft");

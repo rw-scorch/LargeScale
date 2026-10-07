@@ -46,6 +46,7 @@ import { installTourism, tourismView, TOURISM_RULES } from "./sim/tourism.js";
 import { installCbd } from "./sim/cbd.js";
 import { installShields } from "./sim/shields.js";
 import { installRailguns } from "./sim/railguns.js";
+import { installDigging, restoreEng, engView, takeEngNews, ENG_RULES, CLASS_OF } from "./sim/engineering.js";
 import { installDiplomacy, DIPLO } from "./sim/diplomacy.js";
 import { installNotes, notesFor, NOTES } from "./sim/notes.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
@@ -188,6 +189,8 @@ export class World extends DurableObject {
     this.landLoaded = restoreLand(this.sim, this.readRows("land"));
     installRoads(this.sim, { scale: info.map.scale ?? 1, rules: rules.roads });
     this.roadsLoaded = restoreRoads(this.sim, this.readRows("road"));
+    installDigging(this.sim, { scale: info.map.scale ?? 1 });
+    this.engLoaded = restoreEng(this.sim, this.readRows("eng"));
     installResearch(this.sim, { speed: info.rules?.researchSpeed ?? 1 });
     installEffects(this.sim);
     installMachines(this.sim, { speed: info.rules?.buildSpeed ?? 1, scale: info.map.scale ?? 1, saved: saved?.machines });
@@ -446,6 +449,7 @@ export class World extends DurableObject {
       caughtUp: this.caughtUp ?? 0, schedule: this.schedule(), info: this.worldInfo(), now: Date.now(), nations: this.nationList(), online: this.onlineList(), stacks: this.feed.snapshot(this.sim), machines: this.feed.machineSnapshot(this.sim), convoys: this.feed.convoySnapshot(this.sim), chat: this.recentChat(nation), notes: notesFor(this.sim, nation), name: this.info.name, ended: !!this.meta("ended"), speed: this.speed,
       victory: this.meta("victory"), frozen: this.frozen, powers: account.admin ? POWERS : this.powersOf(account.id),
       tourismRules: TOURISM_RULES, cbdRules: { ...this.sim.cbd.rules, scale: this.sim.cbd.scale },
+      eng: engView(this.sim), engRules: { ...ENG_RULES, classOf: CLASS_OF },
       diplomacy: this.dipView(nation), dipRules: this.dipRules(), noteRules: NOTES,
       nukes: flightsOf(this.sim), nukeRules: { warheads: NUKE_RULES.warheads, samChance: NUKE_RULES.samChance, overlap: NUKE_RULES.overlap, outerLoss: NUKE_RULES.outerLoss, scale: this.info.map.scale ?? 1 },
       plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
@@ -663,6 +667,7 @@ export class World extends DurableObject {
       try { ws.send(JSON.stringify({ v: PROTOCOL, t: "purse", ...p })); } catch {}
     }
     this.sendDiplomacy();
+    if (takeEngNews(this.sim)) this.broadcast({ t: "eng", ...engView(this.sim) });
     const noteKey = `${this.sim.notes.version}:${this.sim.dip.version}`;
     if (noteKey !== this.notesSent) {
       this.notesSent = noteKey;
@@ -719,6 +724,10 @@ export class World extends DurableObject {
         if (e.type === "war_declared" && !this.online(e.b)) {
           const by = this.sim.nations.get(e.a)?.name ?? "someone";
           this.notify(e.b, "war", `${by} declared war on you. The war starts in ${Math.max(1, Math.round((e.at - this.sim.time) / 60))} min.`);
+        }
+        if (e.type === "terrain_dug" && !e.half && e.nation && !this.online(e.nation)) {
+          const by = this.sim.nations.get(e.by)?.name ?? "someone";
+          this.notify(e.nation, "attack", `${by}'s engineers are digging into your land.`);
         }
         if (e.type === "nuke_launched" && e.toward) {
           const by = this.sim.nations.get(e.nation)?.name ?? "someone";
