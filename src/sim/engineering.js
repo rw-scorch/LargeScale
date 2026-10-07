@@ -85,7 +85,7 @@ export function startJob(world, nid, i, kind, opts = {}) {
   const why = canWork(world, nid, i, kind);
   if (why) return { error: why };
   if (kind === "build") {
-    const r = recipeOf(world, opts.recipe);
+    const r = opts.recipe === "restore" ? restoreRecipe(world, i) ?? {} : recipeOf(world, opts.recipe);
     if (!r) return { error: "unknown build" };
     const why = buildError(world, nid, i, opts.recipe, r);
     if (why) return { error: why };

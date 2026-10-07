@@ -791,10 +791,17 @@ export class MapRenderer {
 
   drawDigs() {
     const s = this.state, E = s?.eng;
-    if (!E || (!E.hp.size && !E.jobs.length && !E.roads.size)) return;
+    if (!E || (!E.hp.size && !E.jobs.length && !E.roads.size && !E.dug.size)) return;
     const ctx = this.ctx, k = this.ratio ?? 1, v = this.visibleRange(1), px = this.cam.scale, close = px >= ZOOM.sprites * k;
     if (px < ZOOM.icons * k) return;
     const inView = i => { const x = i % s.w, y = (i / s.w) | 0; return x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1; };
+    if (close) for (const [i, was] of E.dug) {
+      if (!inView(i) || TERRAIN[was]?.land || !TERRAIN[s.terrain[i]]?.land) continue;
+      const land = j => j >= 0 && j < s.terrain.length && TERRAIN[s.terrain[j]]?.land, x = i % s.w;
+      const across = (x > 0 && land(i - 1)) || (x < s.w - 1 && land(i + 1));
+      const [sx, sy] = this.plotToScreen(x, (i / s.w) | 0);
+      this.atlas.draw(ctx, across ? "causeway_h" : "causeway_v", sx, sy, px / 16);
+    }
     if (close) for (const [i, [hp, max]] of E.hp) {
       if (!inView(i)) continue;
       const f = hp / max, sprite = f > 0.6 ? "feat_rockfall" : f > 0.25 ? "feat_landslide" : "feat_rubble_pass";

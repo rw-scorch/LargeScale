@@ -166,3 +166,62 @@ test("the browser's copy counts the same engineers and reads the same hit points
   c.message({ t: "eng", ...engView(w) });
   assert.equal(c.digOf(peak).hp, 240, "the eng message updates it");
 });
+
+test("a causeway turns shallows beside land into land of your own, and the land and water graphs are rebuilt", () => {
+  const { w, g, a, A, crew, order, run } = world();
+  for (let y = 0; y < 30; y++) for (const x of [26, 27]) w.terrain[g.idx(x, y)] = TID.shallows;
+  for (let y = 0; y < 30; y++) for (const x of [26, 27]) w.claim(g.idx(x, y), 0);
+  w.coarse = null;
+  w.units = { list: new Map(), water: { stale: true } };
+  assert.equal(w.route(g.idx(20, 5), g.idx(40, 5)), null, "the strait cuts the map");
+  crew(a, 25, 5, 50);
+  assert.equal(order(a, { op: "build", at: g.idx(27, 5), recipe: "causeway" }).error, "no engineers beside that plot");
+  const r = order(a, { op: "build", at: g.idx(26, 5), recipe: "causeway" });
+  assert.deepEqual([r.ok, r.cost, r.seconds], [true, 400, 24]);
+  run(24);
+  assert.equal(TERRAIN[w.terrain[g.idx(26, 5)]].name, "cleared");
+  assert.equal(w.owner[g.idx(26, 5)], a, "the new land is the builder's");
+  assert.equal(A.money, 10000 - 400);
+  assert.equal(w.units.water, null, "ships will plan on a fresh water graph");
+  crew(a, 26, 5, 50);
+  order(a, { op: "build", at: g.idx(27, 5), recipe: "causeway" });
+  run(24);
+  assert.ok(w.route(g.idx(20, 5), g.idx(40, 5)), "two causeways bridge the strait");
+});
+
+test("levelled ground, embankments and new forest; rubble is cleared only by its owner, and nobody builds on another's land", () => {
+  const { w, g, a, b, crew, order, run } = world();
+  const [hill, field, bare, rubble, theirs] = [g.idx(5, 2), g.idx(7, 2), g.idx(9, 2), g.idx(11, 2), g.idx(30, 2)];
+  w.terrain[hill] = TID.hills;
+  w.terrain[rubble] = TID.rubble;
+  w.terrain[bare] = TID.cleared;
+  w.terrain[theirs] = TID.rubble;
+  for (const x of [6, 8, 10, 29]) crew(a, x, 3, 50);
+  assert.equal(order(a, { op: "build", at: hill, recipe: "embankment" }).error, "cannot build embankment on hills");
+  for (const [at, recipe] of [[hill, "levelled_ground"], [field, "embankment"], [bare, "reforest"], [rubble, "clear_rubble"]]) assert.equal(order(a, { op: "build", at, recipe }).ok, true, recipe);
+  assert.equal(order(a, { op: "build", at: theirs, recipe: "clear_rubble" }).error, "build terrain on your own land, or on land nobody holds");
+  w.claim(theirs, 0);
+  assert.equal(order(a, { op: "build", at: theirs, recipe: "clear_rubble" }).error, "only the owner clears rubble");
+  run(30);
+  assert.deepEqual([hill, field, bare, rubble].map(i => TERRAIN[w.terrain[i]].name), ["plains", "hills", "forest", "cleared"]);
+  assert.ok(b);
+});
+
+test("a dug mountain can be restored, for no more than the charges that broke it", () => {
+  const { w, g, a, A, crew, order, run } = world();
+  const peak = g.idx(14, 14);
+  w.terrain[peak] = TID.mountain;
+  crew(a, 13, 14, 50);
+  order(a, { op: "charge", at: peak });
+  order(a, { op: "charge", at: peak });
+  run(1);
+  assert.equal(TERRAIN[w.terrain[peak]].name, "rubble");
+  const spent = 10000 - A.money;
+  const r = order(a, { op: "build", at: peak, recipe: "restore" });
+  assert.deepEqual([r.ok, r.cost, r.seconds], [true, 200, 60]);
+  assert.ok(r.cost <= spent, `${r.cost} gold to restore, ${spent} to break`);
+  run(60);
+  assert.equal(TERRAIN[w.terrain[peak]].name, "mountain");
+  assert.equal(order(a, { op: "build", at: peak, recipe: "restore" }).error, "nothing here was dug away");
+  assert.equal(hpOf(w, peak), 300, "a restored mountain has its full hit points");
+});
