@@ -2,7 +2,7 @@
 
 Browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks. Territory is taken pixel by pixel like OpenFront, and troops are a number moved by hand as stacks. Cloudflare Worker plus one Durable Object per world, WebSockets, SQLite inside each object. No other services.
 
-Planning is finished. The job now is building the real game, one milestone at a time. On 30 September 2026 Ryan asked to keep going step by step until the project is done. The current milestone is in `plans/milestone-9.md`: diplomacy, factions and the endgame, written as a reading of what the design already settled, for Ryan to correct. Milestone eight (`plans/milestone-8.md`: the planner and the Modern era) is built and passed its dev server runs. Milestone seven (`plans/milestone-7.md`: gold only, individual soldiers, piloting, planes, easier crossings) is built, passed its dev server run, and waits for Ryan's check. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
+Planning is finished. The job now is building the real game, one milestone at a time. On 30 September 2026 Ryan asked to keep going step by step until the project is done. The current milestone is in `plans/milestone-10.md`: the Future era and cruise missiles, written as a reading of the design for Ryan to correct, and built. Milestone nine (`plans/milestone-9.md`: diplomacy, factions and the endgame) is built and merged. Milestone eight (`plans/milestone-8.md`: the planner and the Modern era) is built and passed its dev server runs. Milestone seven (`plans/milestone-7.md`: gold only, individual soldiers, piloting, planes, easier crossings) is built, passed its dev server run, and waits for Ryan's check. Milestone six (`plans/milestone-6.md`: the Industrial era) is built and waits for Ryan's check. Milestone five (`plans/milestone-5.md`: logistics, with roads, army supply, stores and convoys and sea routes) is built and waits for Ryan's check. Milestone four (`plans/milestone-4.md`, the Gunpowder era) waits only for Ryan's check. Milestone three (`plans/milestone-3.md`: troop types, machine units, the new interface) waits only for Ryan's check. Milestone two (`plans/milestone-2.md`) is done up to step 6; its steps 7 and 8 wait until after milestone three, at Ryan's choice. Milestone one is in `plans/milestone-1.md`; its last step, Ryan's playtest, is done.
 
 ## Which document wins
 
@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (333)
+npm test                  # unit tests (349)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -48,7 +48,7 @@ src/index.js       Worker: routes, static files, websocket handover
 src/directory.js   Directory object: accounts, sessions, worlds, members
 src/world.js       World object: one per world. Sockets, tick loop, saving, catch-up
 src/worldconfig.js map choice (test, earth, europe, lat/long box) and bot count validation
-src/sim/           the simulation, 33 modules, plain JavaScript
+src/sim/           the simulation, 41 modules, plain JavaScript
 src/shared/        the only code both server and client import: protocol, codec, maps, pathfinding, terrain
 public/            the client: index.html, js/app.js, js/net.js, js/input.js, js/render/, js/ui/ (one file per panel);
                    test.html is the old server test page. public/map holds the gzipped maps and public/assets the art kit, both committed
@@ -432,9 +432,25 @@ Written 30 September 2026 (`plans/milestone-9.md`), on branch `m9-diplomacy`, st
   - **Second commanders.** `command` invites an eliminated player (up to `maxCommanders`). Their socket acts for that nation (`nation` and `self` in the attachment and `hello`); `CLOSE.ROLE` (4004) makes their page reconnect when the role changes. `resign`, `dismiss`, or the nation's fall ends it.
   - **The record.** The `record` table (`keepRecord`, `RECORD`) and the `history` table of quarter-size owner pictures (`snapshot`, every game hour, `rules.json` `history`). `GET /api/worlds/:id/history[/:n]` opens when the world has ended, or to admins. The record panel is `public/js/ui/record.js`.
 
-Open items as of 30 September 2026, in order:
+## Milestone ten progress
 
-0. Milestone nine is built: Part A (`m9-diplomacy`, PR 45), Part B (`m9-factions`, PR 46) and Part C (`m9-endgame`), each stacked on the one before and each against `main`. Their last dev server runs passed smoke (123, 126, 130), UI (192, 194, 195) and the soak. Next: the Future era with cruise missiles, then engineers and terrain destruction, atmosphere, and host rules with the dev panel. After it, in order: the Future era with cruise missiles, engineers and terrain destruction, atmosphere, and host rules with the dev panel.
+The Future era and cruise missiles (`plans/milestone-10.md`, branch `m10-future`, stacked on `fix-rules-duplicate`, PR 48). Ryan asked to keep going, so the plan's choices are mine and wait for his word. Details, the changes from the plan and the evidence are in the plan.
+
+- **Part A, cruise missiles.** The `cruise` warhead (`conventional`) from the missile silo after Cruise missiles research; `lockMap` keeps `anyOf` so either node opens the silo. `strike` in `src/sim/nukes.js` hurts troops, buildings and machines but clears no land. The host's nuclear switch does not stop it, and the alert shows it only to the two sides.
+- **Part B, the Future economy.** `age_future` and five nodes. Fusion reactor (94, no upkeep), vertical farm (95, producer kind `indoor`), dome habitat (96, built on new residential land), arcology (97, grown from eco towers and domes, `absorbs` the homes inside it; `upgradeOnly` keeps it and the eco tower out of `bestTypeFor`), and two wonders (98, 99).
+- **Part C, the Future army.** Drone operators (53), hover tank (54), mech (55), recon and strike drones (56, 57), VTOL gunship (58), and the drone hangar (100), whose `airbase.only` keeps other planes out (`takesPlane` in `src/sim/air.js`). Gifted planes go to a building that makes them.
+- **Part D, shields, railguns and orbital strikes.** `src/sim/shields.js` (`installShields`): shield generator (101) and node (102) join `defencesAt` at their power and halve bomb harm (`bombCut`). `src/sim/railguns.js` (`installRailguns`): the railgun battery (103) shoots the nearest enemy company or vehicle (`railgun_fired`), looking through grid buckets (`rules.json` `railguns`). The orbital uplink (104) holds the `orbital` warhead, which only shields stop (`shieldOnly`). `planShields` in the planner; shield domes and cover rings in the renderer.
+- **Hit test.** The renderer's `stackAt` also counts a click near a company's own spot (`cx`, `cy` on the markers), not only near its leader, so the middle of a big company's ranks selects it.
+- **Evidence.** `npm test` 349, smoke 135 of 135, UI 198 of 198, soak clean. The bench fails on a busy machine with or without Future content (median 36.9 ms without, 36.6 ms with); rerun it on an idle machine.
+- **Tests.** `test/future.test.js`, `test/shields.test.js`, and new planner, nukes and data tests. `npm run bench` takes `--future 1` (on by default). `npm run ui` stubs Google Fonts unless `OFFLINE_FONTS=0`, because the headless browser on Ryan's machine cannot reach them.
+
+Open items as of 7 October 2026, in order:
+
+0. Milestone ten is built on `m10-future`. PR 48 (`fix-rules-duplicate`) removes the repeated `cbd` key that wrangler warned about when Ryan deployed on 2 October; merge it before milestone ten. Next, in order: engineers and terrain destruction, atmosphere, and host rules with the dev panel.
+1. `npm run bench` needs a run on an idle machine: on 8 October, with Minecraft running, it failed the 50 ms budget with or without Future content, on an overtime shrink (108 to 223 ms).
+2. Ryan's terminal shares the working directory, so `npx wrangler deploy` deploys whichever branch is checked out there. Deploy from `main` after merging, ideally from a separate worktree (`git worktree add ..\large-scale-deploy main`).
+
+Milestone nine's open item (30 September 2026): Part A (`m9-diplomacy`, PR 45), Part B (`m9-factions`, PR 46) and Part C (`m9-endgame`, PR 47) are merged. Their last dev server runs passed smoke (123, 126, 130), UI (192, 194, 195) and the soak.
 
 Earlier open items (29 September 2026):
 
