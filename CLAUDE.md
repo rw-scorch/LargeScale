@@ -467,8 +467,8 @@ Engineers and terrain engineering (`plans/milestone-11.md`, branch `m11-engineer
 
 Open items as of 8 October 2026, in order:
 
-0. Milestone eleven is built on `m11-engineers`; its PR is stacked on milestone ten's.
-   - Merge PR 48, then 49, then milestone eleven's.
+0. Milestone eleven is built on `m11-engineers`, PR 50 against `main`.
+   - PR 48 is merged (6 October). Merge PR 49, then PR 50.
    - Rerun `npm run ui` and `npm run bench` on an idle machine.
    - Next: atmosphere, then host rules with the dev panel.
 
