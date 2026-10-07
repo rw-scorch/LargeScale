@@ -317,8 +317,8 @@ export class MapRenderer {
     for (const st of s.stacks.values()) {
       if (!showBots && s.nations.get(st.owner)?.bot) continue;
       const state = st.id === this.selected || this.group?.has(st.id) || this.groupPreview?.has(st.id) || this.picked?.get(st.id)?.size ? "selected" : st.order === "hold" ? "idle" : "moving";
-      const [x, y] = this.leaderAt?.get(st.id) ?? this.stackPoint(st);
-      out.push({ id: st.id, owner: st.owner, x, y, troops: st.troops, soldiers: this.soldiersIn(st), era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
+      const [cx, cy] = this.stackPoint(st), [x, y] = this.leaderAt?.get(st.id) ?? [cx, cy];
+      out.push({ id: st.id, owner: st.owner, x, y, cx, cy, troops: st.troops, soldiers: this.soldiersIn(st), era: s.nations.get(st.owner)?.era ?? "T", state, xp: st.xp ?? 0 });
     }
     return out;
   }
@@ -327,8 +327,8 @@ export class MapRenderer {
     let best = null, bestD = radius;
     const lift = this.markerLift(this.cam.scale / 16);
     for (const m of this.markers()) {
-      const [mx, my] = this.plotToScreen(m.x, m.y);
-      const d = Math.min(Math.hypot(mx - sx, my - sy), Math.hypot(mx - sx, my - lift - sy));
+      const [mx, my] = this.plotToScreen(m.x, m.y), [ox, oy] = this.plotToScreen(m.cx, m.cy);
+      const d = Math.min(Math.hypot(mx - sx, my - sy), Math.hypot(mx - sx, my - lift - sy), Math.hypot(ox - sx, oy - sy));
       if (d <= bestD) { bestD = d; best = m.id; }
     }
     return best;
