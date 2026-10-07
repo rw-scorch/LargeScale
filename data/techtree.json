@@ -50,6 +50,7 @@
     {"id":"steelmaking","name":"Steelmaking","branch":"economy","era":"I","cost":440,"requires":["age_industry"],"unlocks":{"buildings":[],"effects":{"income":0.05}}},
     {"id":"steam_power","name":"Steam power","branch":"economy","era":"I","cost":520,"requires":["steelmaking"],"unlocks":{"buildings":["coal_plant","power_pole"]}},
     {"id":"railways","name":"Railways","branch":"economy","era":"I","cost":640,"requires":["steam_power"],"unlocks":{"buildings":["station_large","rail"]}},
+    {"id":"tunnelling","name":"Tunnelling","branch":"economy","era":"I","cost":600,"requires":["railways"],"unlocks":{"units":["engineering_vehicle"]}},
     {"id":"oil","name":"Oil","branch":"economy","era":"I","cost":560,"requires":["steam_power"],"unlocks":{"buildings":["oil_derrick"]}},
     {"id":"mass_production","name":"Mass production","branch":"economy","era":"I","cost":600,"requires":["steelmaking"],"unlocks":{"buildings":["factory_early","textile_mill"]}},
     {"id":"rifling","name":"Rifling","branch":"military","era":"I","cost":480,"requires":["age_industry"],"unlocks":{"units":["rifleman"]}},

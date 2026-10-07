@@ -2,6 +2,7 @@ import { TERRAIN, TID, isLand } from "../shared/terrain.js";
 import rules from "../../data/rules.json" with { type: "json" };
 import { setTerrain } from "./resources.js";
 import { setRoad } from "./logistics.js";
+import { roadLine, TUNNEL } from "../shared/roads.js";
 import { UNIT_TYPES } from "./units.js";
 
 export const ENGINEERING = {
@@ -162,6 +163,20 @@ export function tickEngineering(world, dt, nations = null) {
       if (crew > 0) job.since = world.time ?? 0;
       else if ((world.time ?? 0) - job.since > (r.idleSeconds ?? Infinity)) { eng.jobs.delete(job.id); eng.changed = true; continue; }
     }
+    if (job.kind === "tunnel") {
+      job.done += r.rebuildRate * job.engineers * dt;
+      while (job.done >= r.tunnelWork && job.k < job.plots.length) {
+        job.done -= r.tunnelWork;
+        eng.roadCut?.(job.plots[job.k], TUNNEL);
+        job.k++;
+      }
+      if (job.engineers > 0) eng.changed = true;
+      if (job.k >= job.plots.length) {
+        eng.jobs.delete(job.id);
+        world.emit("tunnel_opened", { nation: job.nation, at: job.at, to: job.to, plots: job.plots.length });
+      }
+      continue;
+    }
     if (job.kind === "dig") {
       const road = eng.roadAt?.(job.at);
       if (!road && !terrainClass(world, job.at)) { eng.jobs.delete(job.id); eng.changed = true; continue; }
@@ -247,6 +262,7 @@ export function installDigging(world, { rules: g = ENG_RULES, scale = 1 } = {}) 
     baseHp: g.baseHp, digRate: g.digRate, blastPower: g.blastPower, chargeCost: { money: g.chargeCost }, rebuildRate: g.rebuildRate,
     workRadius: g.workRadius, recipes: Object.fromEntries(Object.entries(g.recipes).map(([k, r]) => [k, { ...r, cost: { money: r.cost } }])),
     idleSeconds: g.idleSeconds, warnAt: g.warnAt, restoreShare: g.restoreShare, maxCrew: g.maxCrew, maxJobs: g.maxJobs,
+    tunnelCost: g.tunnelCost, tunnelWork: g.tunnelWork, maxTunnel: g.maxTunnel, graphEvery: g.graphEvery,
   });
   eng.scale = scale;
   const crews = { at: -1, byNation: new Map() };
@@ -272,18 +288,23 @@ export function installDigging(world, { rules: g = ENG_RULES, scale = 1 } = {}) 
     return Math.min(eng.rules.maxCrew ?? Infinity, k);
   };
   eng.roadAt = i => (world.log?.road[i] ?? 0) > 0;
-  eng.roadCut = i => setRoad(world, i, 0);
+  eng.roadCut = (i, level = 0) => setRoad(world, i, level);
   eng.apply = (i, tid) => {
     const was = world.terrain[i], passable = t => (TERRAIN[t].land ? isLand(t) : "water");
     if (world.res) setTerrain(world, i, tid);
     else world.terrain[i] = tid;
-    if (passable(was) !== passable(tid)) {
-      world.coarse = null;
-      if (world.units) world.units.water = null;
-    }
+    if (passable(was) !== passable(tid)) eng.graphStale = true;
+  };
+  eng.graphAt = -Infinity;
+  const graphs = w => {
+    if (!eng.graphStale || w.time - eng.graphAt < (eng.rules.graphEvery ?? 0)) return;
+    eng.graphStale = false;
+    eng.graphAt = w.time;
+    w.coarse = null;
+    if (w.units) w.units.water = null;
   };
   if (world.bld) (world.bld.extra ??= {}).eng = () => encodeEng(world);
-  const tick = (w, dt) => { tickEngineering(w, dt); if (eng.changed) { eng.changed = false; eng.version++; w.bld?.changed.add("eng"); } };
+  const tick = (w, dt) => { tickEngineering(w, dt); graphs(w); if (eng.changed) { eng.changed = false; eng.version++; w.bld?.changed.add("eng"); } };
   world.hooks.postTick.push(tick);
   return eng;
 }
@@ -331,11 +352,54 @@ export function digOrder(world, nid, m) {
     if (r.error) return r;
     return { ok: true, ...jobInfo(world, r.job), cost: recipe?.cost.money ?? 0 };
   }
-  return { error: "dig, charge, build or cancel" };
+  if (m.op === "tunnel") return tunnelOrder(world, nid, m, here, mine);
+  return { error: "dig, charge, build, tunnel or cancel" };
+}
+
+export function tunnelPlan(world, nid, from, to) {
+  const g = world.grid, r = world.eng.rules;
+  if (!Number.isInteger(to) || to < 0 || to >= g.size) return { error: "the far end is off the map" };
+  const line = roadLine(g.w, [from, to]), plots = line.slice(1, -1);
+  if (plots.length < 1) return { error: "a tunnel needs rock between its two ends" };
+  if (plots.length > r.maxTunnel) return { error: `a tunnel runs at most ${r.maxTunnel} plots` };
+  for (const end of [from, to]) {
+    if (!isLand(world.terrain[end]) || terrainClass(world, end) === "rock") return { error: "each end must be on open land outside the rock" };
+    if (world.owner[end] !== nid) return { error: "both ends must be on your land" };
+  }
+  for (const i of plots) {
+    const cls = terrainClass(world, i);
+    if ((cls !== "rock" && cls !== "hard") || !isLand(world.terrain[i])) return { error: `a tunnel goes through hills and mountains, not ${TERRAIN[world.terrain[i]].name.replace(/_/g, " ")}` };
+    const o = world.owner[i];
+    if (o && o !== nid && !world.hostile(nid, o)) return { error: "the tunnel would pass under land of someone you are not at war with" };
+    if (world.log?.road[i]) return { error: "a road or tunnel is already there" };
+  }
+  return { plots, cost: plots.length * r.tunnelCost, seconds: null };
+}
+
+function tunnelOrder(world, nid, m, here, mine) {
+  const eng = world.eng, n = world.nations.get(nid), r = eng.rules;
+  if (world.lockReason?.(nid, "engineering_vehicle", "units")) return { error: world.lockReason(nid, "engineering_vehicle", "units") };
+  if (here) return { error: "your engineers are already working there" };
+  if (mine.length >= (r.maxJobs ?? Infinity)) return { error: `at most ${r.maxJobs} works at a time` };
+  const plan = tunnelPlan(world, nid, m.at, m.to);
+  if (plan.error) return plan;
+  if (!(eng.crewOf(nid, m.at) > 0)) return { error: "no engineers beside the tunnel's mouth" };
+  if ((n.money ?? 0) < plan.cost) return { error: `the tunnel costs ${plan.cost} gold` };
+  n.money -= plan.cost;
+  const job = { id: eng.next++, nation: nid, at: m.at, to: m.to, kind: "tunnel", recipe: null, plots: plan.plots, k: 0, done: 0, engineers: eng.crewOf(nid, m.at), charges: 0, since: world.time ?? 0 };
+  eng.jobs.set(job.id, job);
+  eng.changed = true;
+  for (const o of new Set(plan.plots.map(i => world.owner[i]).filter(o => o && o !== nid))) world.emit("terrain_dug", { at: plan.plots.find(i => world.owner[i] === o), by: nid, nation: o, tunnel: true });
+  world.emit("engineering_started", { nation: nid, at: m.at, kind: "tunnel" });
+  return { ok: true, ...jobInfo(world, job), cost: plan.cost };
 }
 
 export function jobInfo(world, job) {
   const eng = world.eng, r = eng.rules, crew = eng.crewOf ? eng.crewOf(job.nation, job.at) : job.engineers;
+  if (job.kind === "tunnel") {
+    const left = (job.plots.length - job.k) * r.tunnelWork - job.done;
+    return { job: job.id, kind: "tunnel", plots: job.plots.length, opened: job.k, crew, seconds: crew ? Math.ceil(left / (r.rebuildRate * crew)) : null };
+  }
   if (job.kind === "dig") {
     const road = eng.roadAt?.(job.at), hp = road ? eng.roadHp.get(job.at) ?? r.baseHp.made : hpOf(world, job.at), max = road ? r.baseHp.made : maxHp(world, job.at);
     return { job: job.id, kind: "dig", target: road ? "road" : TERRAIN[world.terrain[job.at]].name, hp: Math.ceil(hp), max, crew, seconds: crew ? Math.ceil(Math.max(0, hp - r.blastPower * job.charges) / (r.digRate * crew)) : null };
@@ -350,7 +414,7 @@ export function engView(world) {
   const hp = [], roads = [], jobs = [];
   for (const [i, v] of eng.hp) hp.push([i, Math.ceil(v), maxHp(world, i)]);
   for (const [i, v] of eng.roadHp) roads.push([i, Math.ceil(v)]);
-  for (const j of eng.jobs.values()) jobs.push([j.at, j.nation, j.kind === "dig" ? 0 : 1, j.recipe, j.engineers, Math.floor(j.done)]);
+  for (const j of eng.jobs.values()) jobs.push([j.at, j.nation, j.kind === "dig" ? 0 : j.kind === "tunnel" ? 2 : 1, j.recipe, j.engineers, Math.floor(j.done), ...(j.kind === "tunnel" ? [j.to, j.k, j.plots.length] : [])]);
   return { hp, roads, jobs, dug: [...eng.original.entries()] };
 }
 

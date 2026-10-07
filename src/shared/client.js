@@ -26,7 +26,7 @@ const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air
   return u;
 };
 
-const engFrom = v => ({ hp: new Map((v?.hp ?? []).map(([i, hp, max]) => [i, [hp, max]])), roads: new Map(v?.roads ?? []), jobs: (v?.jobs ?? []).map(([at, nation, kind, recipe, crew, done]) => ({ at, nation, kind: kind ? "build" : "dig", recipe, crew, done })), dug: new Map(v?.dug ?? []) });
+const engFrom = v => ({ hp: new Map((v?.hp ?? []).map(([i, hp, max]) => [i, [hp, max]])), roads: new Map(v?.roads ?? []), jobs: (v?.jobs ?? []).map(([at, nation, kind, recipe, crew, done, to, k, total]) => ({ at, nation, kind: ["dig", "build", "tunnel"][kind] ?? "dig", recipe, crew, done, ...(kind === 2 ? { to, k, total } : {}) })), dug: new Map(v?.dug ?? []) });
 
 const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner, conventional: !!e.conventional });
 

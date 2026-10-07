@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { World } from "../src/sim/territory.js";
-import { installBuildings } from "../src/sim/buildings.js";
+import { installBuildings, BUILDINGS } from "../src/sim/buildings.js";
 import { installResources } from "../src/sim/resources.js";
 import { installRoads, setRoad } from "../src/sim/logistics.js";
 import { installDigging, hpOf, damageState, engView, encodeEng, restoreEng, ENG_RULES, CLASS_OF } from "../src/sim/engineering.js";
 import { ClientWorld } from "../src/shared/client.js";
+import { roadSprite, TUNNEL } from "../src/shared/roads.js";
+import { installMachines, spawnUnit } from "../src/sim/units.js";
 import { TREE } from "../src/sim/research.js";
 import { lockMap } from "../src/shared/research.js";
 import { runOrder, publicEvents } from "../src/game.js";
@@ -224,4 +226,39 @@ test("a dug mountain can be restored, for no more than the charges that broke it
   assert.equal(TERRAIN[w.terrain[peak]].name, "mountain");
   assert.equal(order(a, { op: "build", at: peak, recipe: "restore" }).error, "nothing here was dug away");
   assert.equal(hpOf(w, peak), 300, "a restored mountain has its full hit points");
+});
+
+test("a tunnel through a mountain wall moves like a road while the mountain stays, and its mouths are drawn as entrances", () => {
+  const { w, g, a, b, A, crew, order, run } = world();
+  for (let y = 0; y < 30; y++) for (let x = 20; x < 25; x++) w.terrain[g.idx(x, y)] = TID.mountain;
+  const [from, to] = [g.idx(19, 10), g.idx(25, 10)];
+  assert.equal(order(a, { op: "tunnel", at: from, to }).error, "no engineers beside the tunnel's mouth");
+  crew(a, 18, 10, 50);
+  assert.equal(order(a, { op: "tunnel", at: g.idx(20, 10), to }).error, "each end must be on open land outside the rock");
+  assert.equal(order(a, { op: "tunnel", at: from, to: g.idx(26, 10) }).error, "a tunnel goes through hills and mountains, not grassland");
+  const r = order(a, { op: "tunnel", at: from, to });
+  assert.deepEqual([r.ok, r.plots, r.cost, r.seconds], [true, 5, 750, 120]);
+  assert.equal(A.money, 10000 - 750);
+  run(60);
+  assert.deepEqual([20, 21, 22, 23, 24].map(x => w.log.road[g.idx(x, 10)] === TUNNEL), [true, true, false, false, false], "it opens plot by plot from the mouth");
+  run(60);
+  assert.ok([20, 21, 22, 23, 24].every(x => w.log.road[g.idx(x, 10)] === TUNNEL && w.terrain[g.idx(x, 10)] === TID.mountain));
+  assert.ok(w.events.some(e => e.type === "tunnel_opened" && e.plots === 5));
+  assert.equal(w.moveCost(g.idx(20, 10), g.idx(21, 10)), 0.4, "through the tunnel");
+  assert.equal(w.moveCost(g.idx(20, 11), g.idx(21, 11)), 3.5, "over the mountain beside it");
+  assert.deepEqual([20, 22, 24].map(x => roadSprite(w.log.road, w.terrain, g.w, g.idx(x, 10))), ["tunnel_entrance", null, "tunnel_entrance"]);
+  crew(a, 19, 11, 50);
+  assert.equal(order(a, { op: "dig", at: g.idx(20, 10) }).target, "road", "a tunnel can be blown like any road");
+  assert.ok(b);
+});
+
+test("an engineering vehicle works as five engineers, and the Tunnelling node unlocks it", () => {
+  const { w, g, a, order } = world();
+  installMachines(w);
+  const peak = g.idx(8, 8);
+  w.terrain[peak] = TID.mountain;
+  spawnUnit(w, a, "engineering_vehicle", g.idx(8, 9));
+  assert.equal(order(a, { op: "dig", at: peak }).crew, 5);
+  assert.equal(lockMap(TREE).units.get("engineering_vehicle"), "tunnelling");
+  assert.ok(BUILDINGS.table.vehicle_factory.builds.includes("engineering_vehicle"));
 });
