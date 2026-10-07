@@ -1061,10 +1061,14 @@ await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#upgrade-panel")), "Esc closes the upgrade menu");
 const barracksAt = await fix.evaluate(async () => {
   const g = window.__ls.game, w = g.world, me = w.you, cap = w.nations.get(me).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
+  await g.conn.request({ t: "admin", op: "give", nation: me, what: "money", amount: 2000 });
   for (let r = 1; r <= 9; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     const i = (cy + dy) * w.w + cx + dx;
     if (w.owner[i] !== me || w.placeError("barracks", i)) continue;
-    if ((await g.conn.request({ t: "build", type: "barracks", at: i })).ok) return i;
+    let b = await g.conn.request({ t: "build", type: "barracks", at: i });
+    for (let k = 0; k < 3 && b.error === "slow down"; k++) { await new Promise(r => setTimeout(r, 1100)); b = await g.conn.request({ t: "build", type: "barracks", at: i }); }
+    if (b.ok) return i;
+    (window.__why ??= {})[b.error] = (window.__why[b.error] ?? 0) + 1;
   }
   return null;
 });
@@ -1080,7 +1084,7 @@ const trainedUp = await fix.waitForFunction(() => (window.__ls.game.world.purse?
 await fix.waitForTimeout(400);
 const armyCount = await fix.textContent("#army-panel [data-count=club_warrior]").catch(() => "");
 const armySummary = await fix.textContent("#army-summary").catch(() => "");
-check(barracksUp && keepBox && trainedUp && /12 at home/.test(armyCount) && /Training \d/.test(armySummary) && /In the field: [\d,]+ of 1,?000 soldiers/.test(armySummary) && /Needs Stirrups research/.test(lockedKnights), `K opens the Army panel; keeping 12 club warriors trains them at the barracks: "${armyCount}" "${armySummary}"; knights say "${lockedKnights}"`);
+check(barracksUp && keepBox && trainedUp && /12 at home/.test(armyCount) && /Training \d/.test(armySummary) && /In the field: [\d,]+ of 1,?000 soldiers/.test(armySummary) && /Needs Stirrups research/.test(lockedKnights), `K opens the Army panel; keeping 12 club warriors trains them at the barracks: "${armyCount}" "${armySummary}"; knights say "${lockedKnights}"${barracksUp ? "" : ` (barracks at ${barracksAt}; refused ${await fix.evaluate(() => JSON.stringify(window.__why ?? {}))}; era ${await fix.evaluate(() => window.__ls.game.world.purse?.era)}, gold ${await fix.evaluate(() => Math.round(window.__ls.game.world.purse?.money))})`}`);
 await fix.screenshot({ path: `${OUT}/26-army.png` });
 await fix.keyboard.press("Escape");
 check(!(await fix.isVisible("#army-panel")), "Esc closes the Army panel");
@@ -1115,22 +1119,25 @@ const shop = await fix.evaluate(async () => {
   await g.conn.request({ t: "research", id: "siegecraft" });
   await g.conn.request({ t: "admin", op: "finish", nation: me });
   for (const [what, amount] of [["money", 5000]]) await g.conn.request({ t: "admin", op: "give", nation: me, what, amount });
+  for (const end = Date.now() + 5000; w.lockOf("siege_workshop") && Date.now() < end; ) await new Promise(r => setTimeout(r, 100));
   const cap = w.nations.get(me).capital, cx = cap % w.w, cy = (cap / w.w) | 0, free = i => w.owner[i] === me && !w.buildingAt(i);
   for (let r = 3; r < 12; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     const i = (cy + dy) * w.w + cx + dx;
-    if (![i, i + 1, i + w.w, i + w.w + 1].every(free)) continue;
-    const b = await g.conn.request({ t: "build", type: "siege_workshop", at: i });
+    if (![i, i + 1, i + w.w, i + w.w + 1].every(free) || w.placeError("siege_workshop", i)) continue;
+    let b = await g.conn.request({ t: "build", type: "siege_workshop", at: i });
+    for (let k = 0; k < 3 && b.error === "slow down"; k++) { await new Promise(r => setTimeout(r, 1100)); b = await g.conn.request({ t: "build", type: "siege_workshop", at: i }); }
     if (b.ok) return b.building;
+    (window.__shopWhy ??= {})[b.error] = (window.__shopWhy[b.error] ?? 0) + 1;
   }
   return null;
 });
 const shopUp = await fix.waitForFunction(id => window.__ls.game.world.buildings.get(id)?.state === "active", shop, { timeout: 15000 }).then(() => true, () => false);
-await fix.evaluate(id => { const g = window.__ls.game; g.selectBuilding(id); g.focus(g.world.buildings.get(id).anchor, 24); }, shop);
+await fix.evaluate(id => { const g = window.__ls.game, b = g.world.buildings.get(id); if (!b) return; g.selectBuilding(id); g.focus(b.anchor, 24); }, shop);
 await fix.waitForSelector("#building-make [data-make=catapult]:not([disabled])", { timeout: 5000 }).catch(() => null);
 await fix.click("#building-make [data-make=catapult]").catch(() => null);
 const makingText = await fix.waitForFunction(() => /catapult/.test(document.querySelector("#building-queue")?.textContent ?? ""), null, { timeout: 5000 }).then(() => fix.textContent("#building-queue"), () => "");
 const cat = await fix.waitForFunction(() => { const w = window.__ls.game.world; return [...w.machines.values()].find(u => u.owner === w.you && u.type === "catapult")?.id ?? null; }, null, { timeout: 15000 }).then(h => h.jsonValue(), () => null);
-check(shop && shopUp && /Building a catapult|Waiting to start a catapult/.test(makingText) && /You have \d+ of 100 tanks, guns and siege engines/.test(makingText) && cat, `a siege workshop, after Siegecraft, builds a catapult from its panel, with the limit shown ("${makingText.trim()}")`);
+check(shop && shopUp && /Building a catapult|Waiting to start a catapult/.test(makingText) && /You have \d+ of 100 tanks, guns and siege engines/.test(makingText) && cat, `a siege workshop, after Siegecraft, builds a catapult from its panel, with the limit shown ("${makingText.trim()}")${shop && shopUp ? "" : ` (shop ${shop}, up ${shopUp}; refused ${await fix.evaluate(() => JSON.stringify(window.__shopWhy ?? {}))}; locked ${await fix.evaluate(() => window.__ls.game.world.lockOf("siege_workshop"))}, gold ${await fix.evaluate(() => Math.round(window.__ls.game.world.purse?.money))})`}`);
 const cog = await fix.evaluate(async () => {
   const g = window.__ls.game, w = g.world;
   const r = await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "machine", unit: "cog", amount: 1 });
@@ -1148,7 +1155,7 @@ const between = async (a, b) => fix.evaluate(([a, b]) => {
   g.focus(y * w.w + x, 20);
 }, [a, b]);
 await fix.waitForFunction(id => window.__ls.game.world.machines.has(id), cog, { timeout: 5000 }).catch(() => null);
-await fix.evaluate(id => { const g = window.__ls.game; g.focus(g.world.machines.get(id).at, 24); }, cat);
+await fix.evaluate(id => { const g = window.__ls.game, u = g.world.machines.get(id); if (u) g.focus(u.at, 24); }, cat);
 await fix.waitForTimeout(300);
 const catSpot = await screenAt(fix, { machine: cat });
 const catUnder = catSpot && await fix.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e?.id || e?.closest("[id]")?.id || e?.tagName; }, [catSpot.x, catSpot.y]);
@@ -1184,10 +1191,10 @@ await fix.keyboard.press("k");
 const fleet = await fix.waitForSelector("#army-machines [data-machines=cog]", { timeout: 3000 }).then(() => fix.textContent("#army-machines"), () => "");
 check(/1 catapult/.test(fleet) && /1 cog(, 1 idle)?, \d+ troops aboard/.test(fleet), `the Army panel lists your machines: "${fleet}"`);
 await fix.keyboard.press("Escape");
-await fix.evaluate(id => { const g = window.__ls.game; g.focus(g.world.machines.get(id).at, 48); }, cog);
+await fix.evaluate(id => { const g = window.__ls.game, u = g.world.machines.get(id); if (u) g.focus(u.at, 48); }, cog);
 await fix.waitForTimeout(400);
 await fix.screenshot({ path: `${OUT}/28b-cog-close.png` });
-await fix.evaluate(id => { const g = window.__ls.game; g.selectMachine(id); g.focus(g.world.machines.get(id).at, 48); }, cat);
+await fix.evaluate(id => { const g = window.__ls.game, u = g.world.machines.get(id); if (!u) return; g.selectMachine(id); g.focus(u.at, 48); }, cat);
 await fix.waitForTimeout(400);
 await fix.screenshot({ path: `${OUT}/28c-catapult-close.png` });
 await fix.keyboard.press("Escape");
@@ -2316,6 +2323,44 @@ check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the b
   await gp.screenshot({ path: `${OUT}/84d-uplink.png` });
   check(/^Orbital strike: /.test(offer ?? "") && kinds.length === 1, `the orbital uplink's card offers only "${offer}"${fu.uplinkError ? ` (${fu.uplinkError})` : ""}`);
   await gp.evaluate(() => window.__ls.game.selectBuilding(null));
+}
+{
+  const en = await gp.evaluate(async () => {
+    const g = window.__ls.game, w = g.world, { TERRAIN, isLand } = await import("/js/shared/terrain.js");
+    const wait = async (f, ms = 8000) => { const end = Date.now() + ms; let v; while (!(v = f()) && Date.now() < end) await new Promise(r => setTimeout(r, 100)); return v; };
+    await g.conn.request({ t: "research", id: "sappers", mode: "queue" });
+    await g.conn.request({ t: "admin", op: "finish", nation: w.you });
+    await wait(() => !w.lockOf("engineer", "units") && w.engRules);
+    await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "unit", unit: "engineer", amount: 2000 });
+    await g.conn.request({ t: "admin", op: "give", nation: w.you, what: "money", amount: 5000 });
+    const R = w.engRules, cls = i => R.classOf[TERRAIN[w.terrain[i]].name], rank = { rock: 0, hard: 1, soft: 2 };
+    const stand = i => [i - 1, i + 1, i - w.w, i + w.w].find(j => j >= 0 && j < w.owner.length && Math.abs((j % w.w) - (i % w.w)) <= 1 && w.owner[j] === w.you && isLand(w.terrain[j]) && !cls(j) && !w.buildingAt(j) && ![...w.stacks.values()].some(s => s.pos === j));
+    let target = null;
+    for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === w.you && cls(i) in rank && TERRAIN[w.terrain[i]].name !== "rubble" && !w.buildingAt(i) && stand(i) !== undefined && (target === null || rank[cls(i)] < rank[cls(target)])) target = i;
+    if (target === null) return { error: "no rough plot on your land" };
+    const at = stand(target), st = await g.conn.request({ t: "stack", share: 0.3, at });
+    await wait(() => w.stacks.get(st.stack)?.mix?.engineer >= 50, 5000);
+    g.select(null);
+    g.focus(target, 24);
+    return { target, at, stack: st.stack ?? null, name: TERRAIN[w.terrain[target]].name, crew: w.engineersNear(target), error: st.error ?? null };
+  });
+  await gp.waitForTimeout(500);
+  let ring = [], toast = "", job = null, tip = "";
+  if (en.target !== undefined) {
+    const p = await toScreen(gp, en.target);
+    await gp.mouse.click(p.x, p.y, { button: "right" });
+    ring = await ringItems(gp);
+    if (ring.includes("dig")) await gp.click("#ring .ring-item[data-ring=dig]");
+    toast = await gp.waitForFunction(() => (document.querySelector("#toasts")?.textContent ?? "").match(/d+ engineers? starts? on the [^.]*./)?.[0] ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+    job = await gp.waitForFunction(t => window.__ls.game.world.eng.jobs.find(j => j.at === t && j.kind === "dig") ?? null, en.target, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
+    await gp.waitForTimeout(2500);
+    await gp.mouse.move(p.x, p.y);
+    tip = await gp.waitForFunction(() => { const t = document.querySelector("#plot-tip")?.textContent ?? ""; return /hit points/.test(t) ? t : null; }, null, { timeout: 4000 }).then(h => h.jsonValue(), () => "");
+    await gp.screenshot({ path: `${OUT}/85-engineers-dig.png` });
+  }
+  check(ring.includes("dig") && ring.includes("charge") && /engineers? starts? on the/.test(toast) && job && /d+ of d+ hit points/.test(tip),
+    `after Sappers, a right-click on the ${en.name ?? "rough ground"} beside ${en.crew ?? 0} engineers offers Dig here and Set a charge; digging starts ("${toast}") and the tip counts it down ("${tip}")${en.error ? ` (${en.error})` : ""}${ring.length && !ring.includes("dig") ? ` (ring: ${ring.join(", ")})` : ""}`);
+  await gp.evaluate(() => window.__ls.game.select(null));
 }
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await login(ip, "rw_scorch", "correct horse");

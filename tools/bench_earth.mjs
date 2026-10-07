@@ -24,7 +24,7 @@ import { waterOk } from "../src/sim/units.js";
 import { installPower, powerTick } from "../src/sim/power.js";
 import { decodeDeposits, cropDeposits } from "../src/shared/deposits.js";
 import { makeRng } from "../src/shared/rng.js";
-import { isLand } from "../src/shared/terrain.js";
+import { isLand, TERRAIN } from "../src/shared/terrain.js";
 import { encodeRuns, countRuns } from "../src/shared/codec.js";
 import { MSG, partFrames } from "../src/shared/protocol.js";
 import { StateFeed, BuildingFeed, publicEvents, runOrder } from "../src/game.js";
@@ -37,6 +37,7 @@ import { installSoldiers, fieldOf } from "../src/sim/soldiers.js";
 import { installAir, orderPlane, planeOf } from "../src/sim/air.js";
 import { installNavy } from "../src/sim/navy.js";
 import { installNukes, launchWarhead } from "../src/sim/nukes.js";
+import { installDigging, digOrder, CLASS_OF } from "../src/sim/engineering.js";
 import { installShields } from "../src/sim/shields.js";
 import { installRailguns } from "../src/sim/railguns.js";
 import { installTourism } from "../src/sim/tourism.js";
@@ -68,6 +69,7 @@ const { values: a } = parseArgs({ options: {
   modern: { type: "string", default: "1" },
   sams: { type: "string", default: "4" },
   future: { type: "string", default: "1" },
+  engineers: { type: "string", default: "4" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -188,6 +190,12 @@ let captureCalls = 0, hostileCalls = 0;
 const guard = installGuard(w, { scale });
 const overtime = installOvertime(w, { every: allRules.overtime.every });
 installRoads(w, { scale, rules: allRules.roads });
+const engTime = { ms: [], worst: 0 };
+if (Number(a.engineers)) {
+  installDigging(w, { scale });
+  const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k];
+  w.hooks.postTick[k] = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; engTime.ms.push(ms); engTime.worst = Math.max(engTime.worst, ms); };
+}
 installBoats(w, { scale });
 const soldiers = Number(a.companies) > 0 ? installSoldiers(w) : null;
 const air = Number(a.planes) > 0 ? installAir(w) : null, airIdx = w.hooks.postTick.length - 1;
@@ -354,6 +362,31 @@ if (Number(a.future)) for (const id of players) {
     for (let k = 0; k < 20; k++) { const u = spawnUnit(w, id, k % 2 ? "strike_drone" : "recon_drone", hangar.anchor); if (u) { if (air) planeOf(w, u); futureSetup.drones++; } }
   }
   for (const t of ["hover_tank", "hover_tank", "mech", "mech"]) if (giveMachine(w, id, t)) futureSetup.machines++;
+}
+const engSetup = { crews: 0, digs: 0, charges: 0, tunnels: 0, refused: {} };
+if (Number(a.engineers)) for (const id of players) {
+  const n = w.nations.get(id), g = w.grid, cls = i => CLASS_OF[TERRAIN[w.terrain[i]].name];
+  n.money = (n.money ?? 0) + 50000;
+  if (n.research) for (const node of ["sappers", "tunnelling"]) if (!n.research.known.includes(node)) n.research.known.push(node);
+  const rough = [];
+  for (const i of w.border.get(id) ?? []) if (rough.length < 400) for (const j of [i - 1, i + 1, i - g.w, i + g.w]) if (j >= 0 && j < g.size && w.owner[j] === id && cls(j) && cls(j) !== "made") rough.push(j);
+  for (let k = 0, made = 0; k < rough.length && made < Number(a.engineers); k += Math.max(1, Math.floor(rough.length / Number(a.engineers)))) {
+    const t = rough[k], at = [t - 1, t + 1, t - g.w, t + g.w].find(j => j >= 0 && j < g.size && w.owner[j] === id && isLand(w.terrain[j]) && !cls(j));
+    if (at === undefined) continue;
+    const s = w.createStack(id, at, 60);
+    if (!s) continue;
+    s.mix = { engineer: 60 };
+    engSetup.crews++;
+    made++;
+    const r = digOrder(w, id, { op: "dig", at: t });
+    if (r.ok) engSetup.digs++;
+    else engSetup.refused[r.error] = (engSetup.refused[r.error] ?? 0) + 1;
+    if (digOrder(w, id, { op: "charge", at: t }).ok) engSetup.charges++;
+    const d = t - at;
+    let far;
+    for (let k = 2; k <= 12 && far === undefined; k++) { const j = at + d * k; if (j < 0 || j >= g.size || w.owner[j] !== id) break; if (!cls(j) && isLand(w.terrain[j])) far = j; else if (cls(j) !== "rock" && cls(j) !== "hard") break; }
+    if (far !== undefined && cls(t) !== "soft" && digOrder(w, id, { op: "tunnel", at, to: far }).ok) engSetup.tunnels++;
+  }
 }
 let roadPlots = 0;
 for (const id of players) {
@@ -614,6 +647,7 @@ const report = {
   })(),
   tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
   future: Number(a.future) ? { ...futureSetup, railgunShots: w.railguns?.fired ?? 0, railgunTickMs: railTime.ms.length ? { p50: +[...railTime.ms].sort((x, y) => x - y)[railTime.ms.length >> 1].toFixed(2), worst: +railTime.worst.toFixed(1) } : null } : null,
+  engineering: Number(a.engineers) ? { ...engSetup, jobsNow: w.eng.jobs.size, plotsChanged: w.eng.original.size, worn: w.eng.hp.size, tickMs: engTime.ms.length ? { p50: +[...engTime.ms].sort((x, y) => x - y)[engTime.ms.length >> 1].toFixed(3), worst: +engTime.worst.toFixed(1) } : null } : null,
   tourism: w.tourism && (() => { const v = players.map(id => w.tourism.last.get(id)).filter(Boolean); const p50 = x => (x.ms.length ? +[...x.ms].sort((a, b) => a - b)[x.ms.length >> 1].toFixed(3) : null), p99 = x => (x.ms.length ? +[...x.ms].sort((a, b) => a - b)[Math.floor(x.ms.length * 0.99)].toFixed(2) : null), busy = x => { const m = x.ms.filter(v => v > 0.05); return m.length ? +(m.reduce((t, v) => t + v, 0) / m.length).toFixed(2) : null; }; return { setup: tourismSetup, mid: tourismMid, sites: v.reduce((t, x) => t + x.sites, 0), goldPerSecond: +v.reduce((t, x) => t + x.perSecond, 0).toFixed(1), wonders: [...w.bld.list.values()].filter(b => b.type === "wonder_pyramid").length, tickMs: { p50: p50(tourismTime), p99: p99(tourismTime), everyFiveSecondsAvg: busy(tourismTime), worst: +tourismTime.worst.toFixed(1) } }; })(),
   captureCallsPerTick: Math.round(captureCalls / Number(a.ticks)),
   hostileCallsPerTick: Math.round(hostileCalls / Number(a.ticks)), diplomacy: !!w.dip,

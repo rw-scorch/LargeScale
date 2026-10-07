@@ -73,10 +73,29 @@ await A.send({ t: "admin", op: "speed", factor: 8 });
 const mine = p => { const w = p.cw, out = []; for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === w.you) out.push(i); return out; };
 const near = (w, from, r) => { const x = from % w.w, y = (from / w.w) | 0; return Math.max(0, Math.min(w.h - 1, y + Math.floor(rand() * (2 * r + 1)) - r)) * w.w + Math.max(0, Math.min(w.w - 1, x + Math.floor(rand() * (2 * r + 1)) - r)); };
 
-for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles", "nuclear_weapons", "cruise_missiles", "orbital_weapons", "drones", "hover_vehicles"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
+for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles", "nuclear_weapons", "cruise_missiles", "orbital_weapons", "drones", "hover_vehicles", "sappers", "tunnelling"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: A.cw.you }));
-for (const id of ["missile_defence", "shields", "railguns"]) note("research", await B.send({ t: "research", id, mode: "queue" }));
+for (const id of ["missile_defence", "shields", "railguns", "sappers"]) note("research", await B.send({ t: "research", id, mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: B.cw.you }));
+async function dig(p) {
+  const w = p.cw, you = w.you, R = w.engRules;
+  if (!R || !w.nations.get(you)?.alive) return;
+  const crews = [...w.stacks.values()].filter(s => s.owner === you && s.mix?.engineer >= 10);
+  if (!crews.length) { note("stack engineers", await p.send({ t: "stack", share: 0.3, at: pick(mine(p)) })); return; }
+  const s = pick(crews), x = s.pos % w.w, y = (s.pos / w.w) | 0, around = [];
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && x + dx >= 0 && y + dy >= 0 && x + dx < w.w && y + dy < w.h) around.push((y + dy) * w.w + x + dx);
+  const at = pick(around), d = w.digOf(at), roll = rand();
+  let m;
+  if (d.job && roll < 0.2) m = { op: "cancel", at };
+  else if (roll < 0.5) m = { op: "dig", at };
+  else if (roll < 0.65) m = { op: "charge", at };
+  else if (roll < 0.85) { const ids = Object.entries(R.recipes).filter(([, r]) => r.from.includes(d.name)).map(([id]) => id).concat(d.dug ? ["restore"] : []); m = { op: "build", at, recipe: ids.length ? pick(ids) : "causeway" }; }
+  else m = { op: "tunnel", at, to: near(w, at, 8) };
+  if (m.op === "charge" || m.op === "build" || m.op === "tunnel") note("admin give", await A.send({ t: "admin", op: "give", nation: you, what: "money", amount: 2000 }));
+  note(`dig ${m.op}`, await p.send({ t: "dig", ...m }));
+  if (rand() < 0.15) await p.send({ t: "move", stack: s.id, to: near(w, s.pos, 6) });
+}
+
 async function tourism(p) {
   const w = p.cw;
   if (!w.purse || !w.nations.get(w.you)?.alive) return;
@@ -273,13 +292,17 @@ function inspect(p, label) {
     else if (u.air.x < 0 || u.air.y < 0 || u.air.x > w.w || u.air.y > w.h) problem(`${label}: plane ${u.id} is off the map at ${u.air.x}, ${u.air.y}`);
   }
   if (planes > 100) problem(`${label}: ${planes} planes, over 100`);
+  for (const [i, [hp, max]] of w.eng?.hp ?? []) if (!(hp > 0 && hp <= max)) problem(`${label}: plot ${i} has ${hp} of ${max} hit points`);
+  if ((w.eng?.jobs ?? []).filter(j => j.nation === w.you).length > (w.engRules?.maxJobs ?? 12)) problem(`${label}: more engineering jobs than ${w.engRules.maxJobs}`);
+  stats.jobs = Math.max(stats.jobs, (w.eng?.jobs ?? []).length);
+  stats.dug = Math.max(stats.dug, w.eng?.dug?.size ?? 0);
   const pl = purse.plan;
   if (pl && (pl.projects.length > 40 || pl.projects.reduce((s, r) => s + r[3], 0) > 400)) problem(`${label}: the plan queue holds ${pl.projects.length} projects`);
   if (pl) stats.done = Math.max(stats.done, pl.projects.reduce((s, r) => s + r[4], 0));
   stats.planes = Math.max(stats.planes, planes);
   stats.soldiers = Math.max(stats.soldiers, f?.soldiers ?? 0);
 }
-const stats = { planes: 0, soldiers: 0, proposals: 0, done: 0 };
+const stats = { planes: 0, soldiers: 0, proposals: 0, done: 0, jobs: 0, dug: 0 };
 
 const t0 = Date.now();
 let rounds = 0;
@@ -297,12 +320,14 @@ while (Date.now() - t0 < SECONDS * 1000) {
     if (rounds % 50 === 26) await nukes();
     if (rounds % 50 === 1) await future();
     if (rounds === 1) note("diplo war", await A.send({ t: "diplo", op: "war", to: B.cw.you }));
+    if (rounds % 100 === 1) for (const p of [A, B]) note("admin give engineers", await A.send({ t: "admin", op: "give", nation: p.cw.you, what: "unit", unit: "engineer", amount: 400 }));
     for (const p of [A, B]) await tourism(p);
     if (rounds % 75 === 1) note("admin give sam truck", await A.send({ t: "admin", op: "give", nation: B.cw.you, what: "machine", unit: "sam_truck", amount: 1 }));
   }
   await Promise.all([act(A), act(B)]);
   if (rand() < 0.4) await Promise.all([fly(A), fly(B)]);
   if (rounds % 12 === 5) await Promise.all([planSome(A), planSome(B)]);
+  if (rounds % 3 === 2) await Promise.all([dig(A), dig(B)]);
   if (rounds % 10 === 7) await diplo();
   if (rounds % 15 === 11) await talk();
   if (rounds % 20 === 0) {
@@ -332,6 +357,12 @@ for (const [k, v] of [...tally].sort((a, b) => a[0].localeCompare(b[0]))) consol
   const leaked = [...A.cw.chat, ...B.cw.chat].filter(c => c.ch === "private" && c.from !== A.cw.you && c.from !== B.cw.you);
   console.log(`chat: ${chats} sent, the host holds ${heard.host} and the friend ${heard.friend}; notes the host sees: ${A.cw.notes.length}`);
   if (leaked.length) problem(`private chat from a third party reached a player: ${JSON.stringify(leaked[0])}`);
+}
+{
+  const ea = JSON.stringify([...(A.cw.eng?.hp ?? [])].sort((x, y) => x[0] - y[0])), eb = JSON.stringify([...(B.cw.eng?.hp ?? [])].sort((x, y) => x[0] - y[0]));
+  const ja = (A.cw.eng?.jobs ?? []).length, jb = (B.cw.eng?.jobs ?? []).length;
+  console.log(`engineering at the end: ${A.cw.eng?.hp.size ?? 0} worn plots, ${ja} jobs, ${A.cw.eng?.dug.size ?? 0} plots changed; most jobs at once ${stats.jobs}`);
+  if (ea !== eb || ja !== jb) problem(`the two players see different engineering: ${ea.slice(0, 120)} and ${eb.slice(0, 120)}, jobs ${ja} and ${jb}`);
 }
 for (const [who, p] of [["host", A], ["friend", B]]) console.log(`${who} tourism: ${JSON.stringify(p.cw.purse?.tourism ?? null)}`);
 console.log(`\nmost planes held by the host: ${stats.planes}; most soldiers in the field: ${stats.soldiers}; most projects proposed at once: ${stats.proposals}; air events seen by both: ${JSON.stringify(Object.fromEntries(seen))}`);
