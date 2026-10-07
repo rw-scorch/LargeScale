@@ -267,7 +267,7 @@ if (air) for (const id of players) {
   }
   if (!field) continue;
   airSetup.fields++;
-  for (let k = 0; k < Number(a.planes); k++) { const u = spawnUnit(w, id, planeKinds[k % planeKinds.length], field.anchor); if (u) { planeOf(w, u); airSetup.planes++; } }
+  for (let k = 0; k < Number(a.planes) - (Number(a.future) ? 20 : 0); k++) { const u = spawnUnit(w, id, planeKinds[k % planeKinds.length], field.anchor); if (u) { planeOf(w, u); airSetup.planes++; } }
   if (Number(a.modern)) for (let k = 0; k < Number(a.sams); k++) {
     const spot = nearFree(id, cx + (k % 2 ? 12 : -12), cy + (k < 2 ? 8 : -8), "sam_site", 0);
     if (spot) { addBuilding(w, { type: "sam_site", owner: id, anchor: spot.at, plots: spot.plots, state: "active", progress: 1 }); airSetup.sams++; }
