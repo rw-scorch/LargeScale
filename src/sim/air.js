@@ -3,6 +3,7 @@ import { UNIT_TYPES, wreck, disembark, canHit } from "./units.js";
 import { touched } from "./buildings.js";
 import { isLand } from "../shared/terrain.js";
 import { bombCut } from "./shields.js";
+import { damageTerrain } from "./engineering.js";
 
 export const AIR_RULES = { rearm: 20, reserve: 1.25, orbit: 2, detect: 6, cell: 8, dogfight: 4, overlap: 0.5, stickGap: 1.5, base: { reach: 1, slots: 4 }, bomb: { defenceCut: 0.5, cutSeconds: 90, repairSeconds: 120 }, ...rules.air };
 
@@ -273,7 +274,13 @@ export function drop(world, u, x, y, emit = true) {
     const px = cx + dx, py = cy + dy;
     if (!g.inside(px, py) || Math.hypot(px + 0.5 - x, py + 0.5 - y) > R + 0.5) continue;
     const i = g.idx(px, py);
-    if (hostile(world.owner[i])) { T.bombed.set(i, until); hit.plots++; }
+    if (hostile(world.owner[i])) {
+      T.bombed.set(i, until);
+      hit.plots++;
+      const ground = world.eng?.crewOf ? damageTerrain(world, i, (world.eng.rules.bombDamage ?? 0) * cut, u.owner) : null;
+      if (ground === "broken") hit.breached = (hit.breached ?? 0) + 1;
+      if (ground === "road_broken") hit.roads = (hit.roads ?? 0) + 1;
+    }
     const bid = world.bld?.at.get(i), b = bid === undefined ? null : world.bld.list.get(bid);
     if (b && hostile(b.owner) && b.state === "active" && cut === 1) {
       b.state = "damaged";

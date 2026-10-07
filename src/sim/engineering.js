@@ -137,11 +137,11 @@ function change(world, i, tid) {
   eng.changed = true;
 }
 
-function finishDig(world, i, job = null) {
+function finishDig(world, i, job = null, cause = null) {
   const c = terrainClass(world, i);
   const before = world.terrain[i], name = TERRAIN[before].name, to = BECOMES_BY_NAME[name] ?? BECOMES[c];
   change(world, i, TID[to]);
-  world.emit("terrain_broken", { at: i, from: name, to, ...(job ? { by: job.nation, nation: world.owner[i] || null } : {}) });
+  world.emit("terrain_broken", { at: i, from: name, to, ...(job ? { by: job.nation, nation: world.owner[i] || null } : {}), ...(cause ? { cause } : {}) });
 }
 
 function finishRoad(world, job) {
@@ -149,6 +149,27 @@ function finishRoad(world, job) {
   world.eng.roadCut?.(job.at);
   world.eng.changed = true;
   world.emit("road_broken", { at: job.at, by: job.nation, nation: world.owner[job.at] || null });
+}
+
+export function damageTerrain(world, i, amount, by = null, cause = "bomb") {
+  const eng = world.eng;
+  if (!eng || !(amount > 0)) return null;
+  if (eng.roadAt?.(i)) {
+    const left = (eng.roadHp.get(i) ?? eng.rules.baseHp.made) - amount * (eng.rules.bombRoads ?? 1);
+    eng.changed = true;
+    if (left > 0) { eng.roadHp.set(i, left); return "road"; }
+    eng.roadHp.delete(i);
+    eng.roadCut?.(i);
+    world.emit("road_broken", { at: i, by, nation: world.owner[i] || null, cause });
+    return "road_broken";
+  }
+  const name = TERRAIN[world.terrain[i]].name;
+  if (!terrainClass(world, i) || NOT_DUG.has(name)) return null;
+  const left = hpOf(world, i) - amount;
+  eng.changed = true;
+  if (left > 0) { eng.hp.set(i, left); return "damaged"; }
+  finishDig(world, i, by === null ? null : { nation: by }, cause);
+  return "broken";
 }
 
 export function tickEngineering(world, dt, nations = null) {
@@ -262,7 +283,7 @@ export function installDigging(world, { rules: g = ENG_RULES, scale = 1 } = {}) 
     baseHp: g.baseHp, digRate: g.digRate, blastPower: g.blastPower, chargeCost: { money: g.chargeCost }, rebuildRate: g.rebuildRate,
     workRadius: g.workRadius, recipes: Object.fromEntries(Object.entries(g.recipes).map(([k, r]) => [k, { ...r, cost: { money: r.cost } }])),
     idleSeconds: g.idleSeconds, warnAt: g.warnAt, restoreShare: g.restoreShare, maxCrew: g.maxCrew, maxJobs: g.maxJobs,
-    tunnelCost: g.tunnelCost, tunnelWork: g.tunnelWork, maxTunnel: g.maxTunnel, graphEvery: g.graphEvery,
+    tunnelCost: g.tunnelCost, tunnelWork: g.tunnelWork, maxTunnel: g.maxTunnel, graphEvery: g.graphEvery, bombDamage: g.bombDamage, bombRoads: g.bombRoads, shellDamage: g.shellDamage,
   });
   eng.scale = scale;
   const crews = { at: -1, byNation: new Map() };
