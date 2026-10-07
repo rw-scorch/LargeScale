@@ -36,6 +36,7 @@ import { createPlannerPanel } from "./ui/planner.js";
 import { createMachinePanel } from "./ui/machine.js";
 import { createNukePanel } from "./ui/nukes.js";
 import { createRing, ownerItems } from "./ui/ring.js";
+import { createEngineering } from "./ui/engineering.js";
 import { createAttacks } from "./ui/attacks.js";
 import { createGuide } from "./ui/guide.js";
 import { createNationCard } from "./ui/nation.js";
@@ -112,6 +113,7 @@ class Game {
     this.diplomacy = createDiplomacyPanel(overlay, this);
     this.record = createRecordPanel(overlay, this);
     this.machinePanel = createMachinePanel(side, this);
+    this.engineering = createEngineering(this);
     this.nationCard = createNationCard(side, this);
     this.noteCard = createNoteCard(side, this);
     this.tip = createTip(overlay, this);
@@ -342,6 +344,11 @@ class Game {
     if (e.type === "trade_sunk" && e.by === you) say(`ts${e.machine}`, `Your submarine sank a trade ship of ${name(e.nation)}'s.`, 0, "good", e.at);
     const warhead = e.kind && w.nukeRules?.warheads?.[e.kind] ? w.nukeRules.warheads[e.kind].name.toLowerCase() : "warhead", aw = /^[aeiou]/.test(warhead) ? "an" : "a", secs = s => (s / (w.speed || 1) >= 90 ? `${Math.round(s / (w.speed || 1) / 60)} min` : `${Math.round(s / (w.speed || 1))} s`);
     const wonder = e.kind && w.defs.table[e.kind]?.wonder ? w.defs.table[e.kind].name : null;
+    const ground = e.from ? e.from.replace(/_/g, " ") : "ground";
+    if (e.type === "terrain_dug" && e.nation === you) say(`td${e.at}:${e.half ? 1 : 0}`, e.half ? `${name(e.by)}'s engineers are half way through your ${w.digOf?.(e.at)?.name?.replace(/_/g, " ") ?? "land"}.` : `${name(e.by)}'s engineers are digging into your land.`, 0, "danger", e.at);
+    if (e.type === "terrain_broken" && (e.nation === you || e.by === you) && e.by !== undefined) say(`tb${e.at}`, e.by === you ? `Your engineers broke through the ${ground}: it is ${e.to} now.` : `${name(e.by)}'s engineers broke through your ${ground}.`, 0, e.by === you ? "good" : "danger", e.at);
+    if (e.type === "road_broken" && (e.nation === you || e.by === you)) say(`rb${e.at}`, e.by === you ? "Your engineers cut the road." : `${name(e.by)}'s engineers cut your road.`, 0, e.by === you ? "good" : "danger", e.at);
+    if (e.type === "terrain_built" && e.nation === you) say(`tbu${e.at}`, `Your engineers finished: the plot is ${e.to.replace(/_/g, " ")} now.`, 0, "built", e.at);
     if (e.type === "wonder_built") say(`wb${e.building}`, e.nation === you ? `You finished the ${wonder}, the only one in the world: 10% more for all your tourism.` : `${name(e.nation)} finished the ${wonder}. There is one per world.`, 0, e.nation === you ? "built" : "info", e.at);
     if (e.type === "wonder_lost" && e.nation === you) say(`wl${e.kind}`, `${name(e.by)} finished the ${wonder} first. Your site was cleared and its ${fmt(e.refund)} gold refunded.`, 0, "warn", e.at);
     const mins = k => Math.round((w.dipRules?.[k] ?? 600) / 60), pair = e.a === you || e.b === you, other = e.a === you ? e.b : e.a, both = `${name(e.a)} and ${name(e.b)}`, real = s => secs(Math.max(0, s));
@@ -984,7 +991,8 @@ class Game {
     const w = this.world, me = w.nations.get(w.you);
     if (!me?.spawned || !me.alive || w.frozen) return this.tip.pin(sx, sy);
     const u = w.machines.get(this.selectedMachine), s = w.stacks.get(this.selected);
-    const items = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.picked ? this.soldiersPanel.ringFor(plot) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
+    const base = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.picked ? this.soldiersPanel.ringFor(plot) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
+    const items = u && u.owner === w.you ? base : [...base, ...this.engineering.ringFor(plot)];
     if (!items.length) return this.tip.pin(sx, sy);
     this.ring.show(sx, sy, [...items, { id: "info", label: "Info", icon: "ui_info", run: () => this.tip.pin(sx, sy, 5000) }]);
   }

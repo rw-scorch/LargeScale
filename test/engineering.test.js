@@ -5,7 +5,8 @@ import { World } from "../src/sim/territory.js";
 import { installBuildings } from "../src/sim/buildings.js";
 import { installResources } from "../src/sim/resources.js";
 import { installRoads, setRoad } from "../src/sim/logistics.js";
-import { installDigging, hpOf, damageState, engView, encodeEng, restoreEng, ENG_RULES } from "../src/sim/engineering.js";
+import { installDigging, hpOf, damageState, engView, encodeEng, restoreEng, ENG_RULES, CLASS_OF } from "../src/sim/engineering.js";
+import { ClientWorld } from "../src/shared/client.js";
 import { TREE } from "../src/sim/research.js";
 import { lockMap } from "../src/shared/research.js";
 import { runOrder, publicEvents } from "../src/game.js";
@@ -145,4 +146,23 @@ test("hit points, jobs and dug plots are saved and come back; idle work is dropp
   run(ENG_RULES.idleSeconds + 2);
   assert.equal(eng.jobs.size, 0, "with nobody working, the job goes");
   assert.equal(hpOf(w, peak), 250, "but the damage stays");
+});
+
+test("the browser's copy counts the same engineers and reads the same hit points as the server", () => {
+  const { w, g, a, crew, order, run } = world();
+  const peak = g.idx(10, 10);
+  w.terrain[peak] = TID.mountain;
+  const s = crew(a, 9, 10, 30);
+  order(a, { op: "dig", at: peak });
+  run(10);
+  const c = new ClientWorld({ t: "hello", v: 5, you: a, w: 60, h: 30, map: { kind: "test" }, hashes: {}, nations: [], stacks: [], chat: [], eng: engView(w), engRules: { ...ENG_RULES, classOf: CLASS_OF }, soldierRules: { troopsEach: 10 } });
+  c.terrain = w.terrain.slice();
+  c.stacks.set(s.id, { id: s.id, owner: a, pos: s.pos, troops: s.troops, mix: { engineer: 30 } });
+  assert.equal(c.engineersNear(peak), w.eng.crewOf(a, peak));
+  assert.equal(c.engineersNear(g.idx(20, 20)), 0);
+  const d = c.digOf(peak);
+  assert.deepEqual([d.name, d.cls, d.max, d.hp, d.job?.crew], ["mountain", "rock", 300, 270, 3]);
+  run(10);
+  c.message({ t: "eng", ...engView(w) });
+  assert.equal(c.digOf(peak).hp, 240, "the eng message updates it");
 });

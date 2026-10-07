@@ -442,6 +442,7 @@ export class MapRenderer {
     if (c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R && (this.showZones || this.zoneRect)) this.drawZoneFill(this.visibleRange(0));
     if (this.showDeposits && c.scale >= ZOOM.icons * R && c.scale < ZOOM.sprites * R) this.drawDepositDots(this.visibleRange(0));
     this.drawPlan();
+    this.drawDigs();
     this.drawNotes();
     this.drawZoneRect();
     this.drawPowerCover();
@@ -653,6 +654,14 @@ export class MapRenderer {
         this.atlas.draw(ctx, `flak_burst_${Math.min(2, Math.floor(age / 170))}`, bx - size / 2, by - size / 2, size / 16);
         continue;
       }
+      if (fx.kind === "charge" || fx.kind === "breach") {
+        const frames = fx.kind === "charge" ? 3 : 4, life = fx.kind === "charge" ? 600 : 900;
+        if (age > life) continue;
+        const frame = `${fx.kind === "charge" ? "charge_blast" : "explosion_small"}_${Math.min(frames - 1, Math.floor((age / life) * frames))}`, size = Math.max(28 * R, this.cam.scale * (fx.kind === "charge" ? 1.6 : 2.2));
+        const [sx, sy] = this.plotToScreen((fx.plot % s.w) + 0.5, ((fx.plot / s.w) | 0) + 0.5);
+        this.atlas.draw(this.ctx, frame, sx - size / 2, sy - size / 2, size / 16);
+        continue;
+      }
       if (fx.kind === "chute" || fx.kind === "heli") {
         if (fx.kind === "heli" || age > 3000) continue;
         const k = Math.max(R, this.cam.scale / 16), fall = 1 - age / 3000;
@@ -777,6 +786,31 @@ export class MapRenderer {
         }
         x = e;
       }
+    }
+  }
+
+  drawDigs() {
+    const s = this.state, E = s?.eng;
+    if (!E || (!E.hp.size && !E.jobs.length && !E.roads.size)) return;
+    const ctx = this.ctx, k = this.ratio ?? 1, v = this.visibleRange(1), px = this.cam.scale, close = px >= ZOOM.sprites * k;
+    if (px < ZOOM.icons * k) return;
+    const inView = i => { const x = i % s.w, y = (i / s.w) | 0; return x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1; };
+    if (close) for (const [i, [hp, max]] of E.hp) {
+      if (!inView(i)) continue;
+      const f = hp / max, sprite = f > 0.6 ? "feat_rockfall" : f > 0.25 ? "feat_landslide" : "feat_rubble_pass";
+      const [sx, sy] = this.plotToScreen(i % s.w, (i / s.w) | 0);
+      this.atlas.draw(ctx, sprite, sx, sy, px / 16);
+    }
+    for (const j of E.jobs) {
+      if (!inView(j.at)) continue;
+      const [sx, sy] = this.plotToScreen((j.at % s.w) + 0.5, ((j.at / s.w) | 0) + 0.5);
+      const d = s.digOf?.(j.at), max = j.kind === "dig" ? d?.max || 1 : s.engRules?.recipes?.[j.recipe]?.work ?? 1, f = j.kind === "dig" ? (d?.hp ?? max) / max : 1 - j.done / max;
+      const bw = Math.max(14 * k, px * 0.9), bh = Math.max(3 * k, px / 10), y = sy - Math.max(10 * k, px * 0.6);
+      ctx.fillStyle = "rgba(15,34,51,.8)";
+      ctx.fillRect(sx - bw / 2 - k, y - k, bw + 2 * k, bh + 2 * k);
+      ctx.fillStyle = j.kind === "dig" ? (j.nation === s.you ? "#e8c84a" : "#e0503a") : "#7fd07f";
+      ctx.fillRect(sx - bw / 2, y, bw * Math.max(0, Math.min(1, f)), bh);
+      if (close && j.crew > 0) this.atlas.draw(ctx, "build_hammer", sx - 6 * k, y - 14 * k, k * 0.75);
     }
   }
 

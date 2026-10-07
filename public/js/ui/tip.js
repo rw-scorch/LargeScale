@@ -2,6 +2,7 @@ import { el } from "./dom.js";
 import { TERRAIN } from "../shared/terrain.js";
 import { ERA_ORDER } from "../shared/buildings.js";
 import { roadName } from "../shared/roads.js";
+import { digText } from "./engineering.js";
 
 const pretty = s => s.replace(/_/g, " ");
 const eraRank = e => ERA_ORDER.indexOf(e);
@@ -39,8 +40,8 @@ export function createTip(root, game) {
   const describe = plot => {
     const w = game.world, t = TERRAIN[w.terrain[plot]], o = w.owner[plot], n = o ? w.nations.get(o) : null;
     const b = w.buildingAt(plot), ore = oreText(w, plot, b), fort = o ? w.fortAt(o, plot) : 1, core = o ? w.coreAt?.(o, plot) ?? 0 : 0;
-    const note = w.notes?.find(x => x.at === plot);
-    const extra = [pretty(t.name), roadName(w.roads, w.terrain, plot), b?.def?.name, ore, fort > 1 ? `fortified, defends at ${fort} times` : null, core ? `city core, ${Math.round(core * 100)}% harder to take` : null, note ? `note${note.owner === w.you ? "" : ` from ${w.nations.get(note.owner)?.name ?? "an ally"}`}: "${note.text}"` : null].filter(Boolean).join(", ");
+    const note = w.notes?.find(x => x.at === plot), dug = digText(w, plot);
+    const extra = [pretty(t.name), roadName(w.roads, w.terrain, plot), b?.def?.name, ore, fort > 1 ? `fortified, defends at ${fort} times` : null, core ? `city core, ${Math.round(core * 100)}% harder to take` : null, note ? `note${note.owner === w.you ? "" : ` from ${w.nations.get(note.owner)?.name ?? "an ally"}`}: "${note.text}"` : null, dug ? dug.replace(/.$/, "") : null].filter(Boolean).join(", ");
     if (!t.land) return { colour: null, title: "Water", extra: [pretty(t.name), ore].filter(Boolean).join(", ") };
     if (!n) return { colour: null, title: "Unclaimed", extra };
     return { colour: n.colour, title: o === w.you ? "Your land" : `${n.name}${n.bot ? " (bot)" : ""}`, extra };
