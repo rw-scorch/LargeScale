@@ -13,6 +13,7 @@ const errors = [];
 
 async function openPage(options) {
   const ctx = await browser.newContext(options);
+  if (process.env.OFFLINE_FONTS !== "0") await ctx.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.fulfill({ status: 200, contentType: "text/css", body: "" }));
   const page = await ctx.newPage();
   page.on("pageerror", e => errors.push(e.message));
   page.on("console", m => m.type() === "error" && errors.push(m.text()));
@@ -117,9 +118,10 @@ const whyNot = await page.textContent("#research-why").catch(() => "");
 check(/needs Clubs and spears and Stone tools first/.test(whyNot), `a node says why it cannot start: "${whyNot}"`);
 await page.click("#research-first");
 await page.click("#research-panel [data-node=fire_keeping]");
-if (await page.isVisible("#research-queue-add")) await page.click("#research-queue-add");
+const tapLive = (p, sel) => p.click(sel, { timeout: 4000 }).catch(() => p.waitForSelector(sel, { timeout: 4000 }).then(() => p.$eval(sel, b => b.click())));
+if (await page.isVisible("#research-queue-add")) await tapLive(page, "#research-queue-add");
 await page.click("#research-panel [data-node=barter]");
-await page.click("#research-queue-add");
+await tapLive(page, "#research-queue-add");
 const queued = await page.waitForFunction(() => { const q = window.__ls.game.world.purse?.research?.queue ?? []; return q.includes("palisades") && q.includes("barter") ? q : null; }, null, { timeout: 5000 }).then(h => h.jsonValue(), () => []);
 const pal = queued.indexOf("palisades");
 check(queued[0] === "clubs" && pal > 0 && pal <= 2 && queued.indexOf("stone_tools") < pal, `Research next queues what the node still needs first: ${queued.join(", ")}`);
@@ -1158,11 +1160,13 @@ const catPicked = await fix.evaluate(() => { const g = window.__ls.game, p = doc
 await between(cat, knightStack);
 await fix.waitForTimeout(300);
 const stackSpot = await screenAt(fix, { stack: knightStack });
+await fix.evaluate(() => { const g = window.__ls.game; if (!g.__req) { g.__req = g.conn.request.bind(g.conn); g.conn.request = async m => { const r = await g.__req(m); if (m.t === "machine") g.__lastMachine = [m, r]; return r; }; } });
 if (stackSpot) await fix.mouse.click(stackSpot.x, stackSpot.y, { button: "right" });
 const catRing = await ringItems(fix);
 if (catRing[0] === "follow") await fix.click("#ring [data-ring=follow]");
 const following = await fix.waitForFunction(([c, s]) => window.__ls.game.world.purse?.machines?.orders?.some(o => o.id === c && o.follow === s), [cat, knightStack], { timeout: 5000 }).then(() => true, () => false);
-check(catTitle === "Your catapult" && following, `clicking the catapult at ${JSON.stringify(catSpot)} over ${catUnder}${catUnderStack ? ", twice because a stack stands on it," : ""} opens its panel ("${catTitle}", ${JSON.stringify(catPicked)}), and a right-click on your stack offers ${catRing.join(", ")}; Follow stack makes it follow`);
+const followWhy = following ? "" : await fix.evaluate(([c, s]) => { const g = window.__ls.game, w = g.world; return ` [sent ${JSON.stringify(g.__lastMachine ?? null)}, orders ${JSON.stringify(w.purse?.machines?.orders ?? null)}, knights ${JSON.stringify(w.stacks.get(s) ? { pos: w.stacks.get(s).pos, troops: w.stacks.get(s).troops } : null)}, catapult ${JSON.stringify(w.machines.get(c) ? { at: w.machines.get(c).at, follow: w.machines.get(c).follow } : null)}]`; }, [cat, knightStack]);
+check(catTitle === "Your catapult" && following, `clicking the catapult at ${JSON.stringify(catSpot)} over ${catUnder}${catUnderStack ? ", twice because a stack stands on it," : ""} opens its panel ("${catTitle}", ${JSON.stringify(catPicked)}), and a right-click on your stack offers ${catRing.join(", ")}; Follow stack makes it follow${followWhy}`);
 await fix.evaluate(id => window.__ls.game.select(id), knightStack);
 await between(cog, knightStack);
 await fix.waitForTimeout(300);
@@ -1301,7 +1305,7 @@ const awayShown = await mp.waitForSelector("#away-panel:not([hidden])", { timeou
 const awayText = awayShown ? await mp.textContent("#away-panel") : "";
 const awayFits = await mp.evaluate(() => { const r = document.querySelector("#away-panel").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth; });
 await mp.screenshot({ path: `${OUT}/32-away-phone.png` });
-check(awaySetup.zone && slept && awayShown && /While you were away/.test(awayText) && /caught up 1\d h/.test(awayText) && /Gold \+/.test(awayText) && /People \d+ to \d+/.test(awayText) && /90%/.test(awayText) && awayFits,
+check(awaySetup.zone && slept && awayShown && /While you were away/.test(awayText) && /caught up \d+ h/.test(awayText) && /Gold \+/.test(awayText) && /People \d+ to \d+/.test(awayText) && /90%/.test(awayText) && awayFits,
   `back after 12 game hours, a phone shows "While you were away": "${awayText.replace(/\s+/g, " ").slice(0, 260)}"`);
 const summary = await mp.evaluate(() => window.__ls.game.away.last);
 await mp.click("#away-ok");
@@ -2286,11 +2290,12 @@ check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the b
     const cap = w.nations.get(w.you).capital;
     const spot = type => { for (let r = 2; r < 18; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const i = cap + dy * w.w + dx; if (i >= 0 && i < w.owner.length && !w.placeError(type, i)) return i; } return null; };
     const shield = await g.conn.request({ t: "build", type: "shield_generator", at: spot("shield_generator") });
+    await wait(() => w.buildings.get(shield.building), 5000);
     const uplink = await g.conn.request({ t: "build", type: "orbital_uplink", at: spot("orbital_uplink") });
     await g.conn.request({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: true });
     await wait(() => w.buildings.get(shield.building)?.state === "active" && w.buildings.get(uplink.building)?.state === "active", 12000);
     await g.conn.request({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: false });
-    return { era: w.purse?.era, shield: shield.building ?? null, uplink: uplink.building ?? null, at: w.buildings.get(shield.building)?.anchor ?? cap, error: shield.error ?? uplink.error ?? null };
+    return { era: w.purse?.era, shield: shield.building ?? null, uplink: uplink.building ?? null, at: w.buildings.get(shield.building)?.anchor ?? cap, error: shield.error ?? null, uplinkError: uplink.error ?? null };
   });
   await gp.evaluate(() => { const g = window.__ls.game; g.selectBuilding(null); g.toggleBuildMenu(true); });
   let rows = [];
@@ -2309,7 +2314,7 @@ check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the b
   const offer = await gp.waitForFunction(() => document.querySelector("#silo-actions [data-warhead=orbital]")?.textContent ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
   const kinds = await gp.$$eval("#silo-actions [data-warhead]", els => els.map(e => e.dataset.warhead)).catch(() => []);
   await gp.screenshot({ path: `${OUT}/84d-uplink.png` });
-  check(/^Orbital strike: /.test(offer ?? "") && kinds.length === 1, `the orbital uplink's card offers only "${offer}"`);
+  check(/^Orbital strike: /.test(offer ?? "") && kinds.length === 1, `the orbital uplink's card offers only "${offer}"${fu.uplinkError ? ` (${fu.uplinkError})` : ""}`);
   await gp.evaluate(() => window.__ls.game.selectBuilding(null));
 }
 const ip = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });

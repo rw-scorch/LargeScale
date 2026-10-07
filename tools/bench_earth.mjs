@@ -37,6 +37,8 @@ import { installSoldiers, fieldOf } from "../src/sim/soldiers.js";
 import { installAir, orderPlane, planeOf } from "../src/sim/air.js";
 import { installNavy } from "../src/sim/navy.js";
 import { installNukes, launchWarhead } from "../src/sim/nukes.js";
+import { installShields } from "../src/sim/shields.js";
+import { installRailguns } from "../src/sim/railguns.js";
 import { installTourism } from "../src/sim/tourism.js";
 import { installCbd, strengthAt } from "../src/sim/cbd.js";
 import { installDiplomacy } from "../src/sim/diplomacy.js";
@@ -65,6 +67,7 @@ const { values: a } = parseArgs({ options: {
   planes: { type: "string", default: "100" },
   modern: { type: "string", default: "1" },
   sams: { type: "string", default: "4" },
+  future: { type: "string", default: "1" },
 }});
 
 const DT = 0.25, SAVE_EVERY = 30;
@@ -194,6 +197,13 @@ const navyTime = { ms: [], worst: 0 };
   const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k];
   w.hooks.postTick[k] = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; navyTime.ms.push(ms); navyTime.worst = Math.max(navyTime.worst, ms); };
 }
+const railTime = { ms: [], worst: 0 };
+if (Number(a.future)) {
+  installShields(w);
+  installRailguns(w);
+  const k = w.hooks.postTick.length - 1, hook = w.hooks.postTick[k];
+  w.hooks.postTick[k] = (world, dt) => { const t0 = performance.now(); hook(world, dt); const ms = performance.now() - t0; railTime.ms.push(ms); railTime.worst = Math.max(railTime.worst, ms); };
+}
 installNukes(w);
 const nukeTime = { ms: [], worst: 0, launched: 0, detonated: 0, intercepted: 0 };
 {
@@ -218,6 +228,14 @@ const launchNukes = () => {
       n.nuke.silos[b.id] = { kind: k % 2 ? "hydrogen" : "atomic", left: 0, ready: true, paid: 0 };
       const foe = bots[rng.int(0, bots.length - 1)];
       if (launchWarhead(w, id, b.id, foe.capital + 2).ok || launchWarhead(w, id, b.id, foe.capital).ok) nukeTime.launched++;
+    }
+    const uplink = Number(a.future) && bots.length ? nearFree(id, w.grid.x(cap), w.grid.y(cap), "orbital_uplink", 4) : null;
+    if (uplink) {
+      const b = addBuilding(w, { type: "orbital_uplink", owner: id, anchor: uplink.at, plots: uplink.plots, state: "active", progress: 1 });
+      n.nuke ??= { silos: {}, flying: [], next: 1 };
+      n.nuke.silos[b.id] = { kind: "orbital", left: 0, ready: true, paid: 0 };
+      const foe = bots[rng.int(0, bots.length - 1)];
+      if (launchWarhead(w, id, b.id, foe.capital + 2).ok || launchWarhead(w, id, b.id, foe.capital).ok) { nukeTime.launched++; futureSetup.orbital++; }
     }
   }
 };
@@ -320,6 +338,22 @@ if (power) for (const id of players) {
     addBuilding(w, { type: pick[0], owner: id, anchor: i, plots, state: "active", progress: 1 });
     pick[1]--;
   }
+}
+const futureSetup = { reactors: 0, shields: 0, railguns: 0, hangars: 0, drones: 0, machines: 0, orbital: 0 };
+if (Number(a.future)) for (const id of players) {
+  const n = w.nations.get(id), cx = w.grid.x(n.capital), cy = w.grid.y(n.capital);
+  n.era = "F";
+  const put = (type, x, y, from = 0) => { const s = nearFree(id, x, y, type, from); return s ? addBuilding(w, { type, owner: id, anchor: s.at, plots: s.plots, state: "active", progress: 1 }) : null; };
+  if (put("fusion_reactor", cx, cy, 6)) futureSetup.reactors++;
+  for (const dx of [-10, 10]) if (put("shield_generator", cx + dx, cy)) futureSetup.shields++;
+  const edge = [...(w.border.get(id) ?? [])];
+  for (let k = 0; k < 4 && edge.length; k++) { const e = edge[Math.floor((k * edge.length) / 4)]; if (put("railgun_battery", w.grid.x(e), w.grid.y(e))) futureSetup.railguns++; }
+  const hangar = put("drone_hangar", cx, cy - 10);
+  if (hangar) {
+    futureSetup.hangars++;
+    for (let k = 0; k < 20; k++) { const u = spawnUnit(w, id, k % 2 ? "strike_drone" : "recon_drone", hangar.anchor); if (u) { if (air) planeOf(w, u); futureSetup.drones++; } }
+  }
+  for (const t of ["hover_tank", "hover_tank", "mech", "mech"]) if (giveMachine(w, id, t)) futureSetup.machines++;
 }
 let roadPlots = 0;
 for (const id of players) {
@@ -579,6 +613,7 @@ const report = {
     return { passMs: +ms.toFixed(1), grids: views.reduce((t, v) => t + v.grids.length, 0), plants: [...w.bld.list.values()].filter(b => b.type === "coal_plant").length, poles: [...w.bld.list.values()].filter(b => b.type === "power_pole").length, users: views.reduce((t, v) => t + Object.keys(v.users).length, 0), powered: views.reduce((t, v) => t + Object.values(v.users).filter(k => k >= 0).length, 0) };
   })(),
   tanks: [...w.units.list.values()].filter(u => u.type === "early_tank").length,
+  future: Number(a.future) ? { ...futureSetup, railgunShots: w.railguns?.fired ?? 0, railgunTickMs: railTime.ms.length ? { p50: +[...railTime.ms].sort((x, y) => x - y)[railTime.ms.length >> 1].toFixed(2), worst: +railTime.worst.toFixed(1) } : null } : null,
   tourism: w.tourism && (() => { const v = players.map(id => w.tourism.last.get(id)).filter(Boolean); const p50 = x => (x.ms.length ? +[...x.ms].sort((a, b) => a - b)[x.ms.length >> 1].toFixed(3) : null), p99 = x => (x.ms.length ? +[...x.ms].sort((a, b) => a - b)[Math.floor(x.ms.length * 0.99)].toFixed(2) : null), busy = x => { const m = x.ms.filter(v => v > 0.05); return m.length ? +(m.reduce((t, v) => t + v, 0) / m.length).toFixed(2) : null; }; return { setup: tourismSetup, mid: tourismMid, sites: v.reduce((t, x) => t + x.sites, 0), goldPerSecond: +v.reduce((t, x) => t + x.perSecond, 0).toFixed(1), wonders: [...w.bld.list.values()].filter(b => b.type === "wonder_pyramid").length, tickMs: { p50: p50(tourismTime), p99: p99(tourismTime), everyFiveSecondsAvg: busy(tourismTime), worst: +tourismTime.worst.toFixed(1) } }; })(),
   captureCallsPerTick: Math.round(captureCalls / Number(a.ticks)),
   hostileCallsPerTick: Math.round(hostileCalls / Number(a.ticks)), diplomacy: !!w.dip,
