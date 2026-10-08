@@ -73,7 +73,7 @@ await A.send({ t: "admin", op: "speed", factor: 8 });
 const mine = p => { const w = p.cw, out = []; for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === w.you) out.push(i); return out; };
 const near = (w, from, r) => { const x = from % w.w, y = (from / w.w) | 0; return Math.max(0, Math.min(w.h - 1, y + Math.floor(rand() * (2 * r + 1)) - r)) * w.w + Math.max(0, Math.min(w.w - 1, x + Math.floor(rand() * (2 * r + 1)) - r)); };
 
-for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles", "nuclear_weapons", "cruise_missiles", "orbital_weapons", "drones", "hover_vehicles", "sappers", "tunnelling"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
+for (const id of ["flight", "jet_engines", "strategic_bombing", "helicopters", "airborne_forces", "guided_missiles", "nuclear_weapons", "cruise_missiles", "orbital_weapons", "drones", "hover_vehicles", "sappers", "tunnelling", "megaton_warheads"]) note("research", await A.send({ t: "research", id, mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: A.cw.you }));
 for (const id of ["missile_defence", "shields", "railguns", "sappers"]) note("research", await B.send({ t: "research", id, mode: "queue" }));
 note("admin finish", await A.send({ t: "admin", op: "finish", nation: B.cw.you }));
@@ -153,15 +153,23 @@ async function nukes() {
   for (const type of ["missile_silo", "orbital_uplink"]) if (silos.filter(b => b.type === type).length < (type === "missile_silo" ? 2 : 1) && !w.lockOf(type)) for (const at of mine(A).sort(() => rand() - 0.5).slice(0, 300)) if (!w.placeError(type, at)) { note(`build ${type}`, await A.send({ t: "build", type, at })); break; }
   const v = B.cw;
   if (![...v.buildings.values()].some(b => b.owner === v.you && b.type === "abm_silo") && !v.lockOf("abm_silo")) for (const at of mine(B).sort(() => rand() - 0.5).slice(0, 300)) if (!v.placeError("abm_silo", at)) { note("build abm_silo", await B.send({ t: "build", type: "abm_silo", at })); break; }
+  const loaded = silos.filter(b => b.state === "active" && w.siloOf(b.id)?.ready && w.siloOf(b.id).kind !== "cruise" && b.type === "missile_silo");
+  if (loaded.length >= 2 && rand() < 0.5) {
+    const theirs = mine(B), at = theirs.length ? pick(theirs) : near(w, loaded[0].anchor, 20), ids = loaded.map(b => b.id);
+    note("nuke salvo check", await A.send({ t: "nuke", op: "check", silo: ids[0], silos: ids, at }));
+    note("nuke salvo", await A.send({ t: "nuke", op: "launch", silo: ids[0], silos: ids, at }));
+    return;
+  }
   for (const b of silos.filter(b => b.state === "active")) {
     const st = w.siloOf(b.id);
     if (!st) {
-      note("admin give", await A.send({ t: "admin", op: "give", nation: w.you, what: "money", amount: 40000 }));
-      note("nuke build", await A.send({ t: "nuke", op: "build", silo: b.id, kind: b.type === "orbital_uplink" ? "orbital" : rand() < 0.5 ? "atomic" : "cruise" }));
+      note("admin give", await A.send({ t: "admin", op: "give", nation: w.you, what: "money", amount: 300000 }));
+      note("nuke build", await A.send({ t: "nuke", op: "build", silo: b.id, kind: b.type === "orbital_uplink" ? "orbital" : rand() < 0.4 ? "atomic" : rand() < 0.5 ? "megaton" : "cruise" }));
       note("cheat build", await A.send({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: true }));
       await sleep(800);
       note("cheat build", await A.send({ t: "admin", op: "cheat", nation: w.you, cheat: "build", on: false }));
     } else if (st.ready) {
+      if (silos.some(o => o.type === "missile_silo" && o.id !== b.id && w.siloOf(o.id) && !w.siloOf(o.id).ready) && rand() < 0.8) continue;
       const theirs = mine(B), at = theirs.length ? pick(theirs) : near(w, b.anchor, 20);
       note("nuke check", await A.send({ t: "nuke", op: "check", silo: b.id, at }));
       note(rand() < 0.2 ? "nuke cancel" : "nuke launch", await A.send(rand() < 0.2 ? { t: "nuke", op: "cancel", silo: b.id } : { t: "nuke", op: "launch", silo: b.id, at }));

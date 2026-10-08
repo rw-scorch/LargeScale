@@ -12,7 +12,7 @@ import { trainRow, tradePerSecond } from "./sim/trade.js";
 import { fieldError, companyError, detachSoldiers } from "./sim/soldiers.js";
 import { takeControl, release, pilotOf } from "./sim/pilot.js";
 import { orderPlane, planeRow, planeOf } from "./sim/air.js";
-import { buildWarhead, cancelWarhead, checkLaunch, launchWarhead } from "./sim/nukes.js";
+import { buildWarhead, cancelWarhead, checkLaunch, launchWarhead, checkSalvo, launchSalvo } from "./sim/nukes.js";
 import { planOrder } from "./sim/planner.js";
 import { diploOrder, peaceReason } from "./sim/diplomacy.js";
 import { noteOrder } from "./sim/notes.js";
@@ -380,8 +380,9 @@ export const ORDERS = {
     if (!sim.nukes) return fail("nuclear weapons are not in this world");
     if (!Number.isInteger(m.silo)) return fail("pick one of your missile silos");
     const aim = f => (isPlot(sim, m.at) ? f(sim, nation, m.silo, m.at) : { error: "that spot is off the map" });
+    const salvo = Array.isArray(m.silos) && m.silos.length > 1 ? (f => (isPlot(sim, m.at) ? f(sim, nation, m.silos, m.at) : { error: "that spot is off the map" })) : null;
     const r = m.op === "build" ? buildWarhead(sim, nation, m.silo, m.kind) : m.op === "cancel" ? cancelWarhead(sim, nation, m.silo)
-      : m.op === "check" ? aim(checkLaunch) : m.op === "launch" ? aim(launchWarhead) : { error: "the order is build, cancel, check or launch" };
+      : m.op === "check" ? (salvo ? salvo(checkSalvo) : aim(checkLaunch)) : m.op === "launch" ? (salvo ? salvo(launchSalvo) : aim(launchWarhead)) : { error: "the order is build, cancel, check or launch" };
     return r.error ? fail(r.error) : { ...r, ok: true, op: m.op };
   },
   pilot(sim, nation, m) {

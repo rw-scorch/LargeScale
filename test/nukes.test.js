@@ -52,7 +52,7 @@ test("Nuclear weapons, Thermonuclear weapons and Missile defence unlock the silo
   assert.deepEqual(TREE.nodes.find(n => n.id === "thermonuclear").requires, ["nuclear_weapons"]);
   const W = NUKE_RULES.warheads;
   assert.deepEqual([W.atomic.needs, W.atomic.cost, W.hydrogen.needs, W.hydrogen.cost], ["nuclear_weapons", 40000, "thermonuclear", 120000]);
-  assert.deepEqual(BUILDINGS.table.missile_silo.silo.warheads, ["atomic", "hydrogen", "cruise"]);
+  assert.deepEqual(BUILDINGS.table.missile_silo.silo.warheads, ["atomic", "hydrogen", "megaton", "strategic", "doomsday", "cruise"]);
   assert.deepEqual(locks.anyOf.get("missile_silo"), ["nuclear_weapons", "cruise_missiles"], "either Nuclear weapons or Cruise missiles opens the silo");
   assert.equal(BUILDINGS.table.abm_silo.abm.chance, 0.6);
   assert.equal(POWER_OF.nukes, "world", "the host switch needs the World power");
@@ -208,4 +208,65 @@ test("SAM sites stop a cruise missile far more often than a warhead", () => {
   const [nuke] = defencesAt(w, a, target, "atomic"), [cruise] = defencesAt(w, a, target, "cruise");
   assert.deepEqual([nuke.chance, cruise.chance], [NUKE_RULES.samChance, NUKE_RULES.warheads.cruise.samChance]);
   assert.ok(cruise.chance > nuke.chance * 2);
+});
+
+test("megaton, strategic and doomsday warheads blast 50, 100 and 200 plots across, each behind its own research", () => {
+  const W = NUKE_RULES.warheads, node = id => TREE.nodes.find(n => n.id === id);
+  assert.deepEqual(["megaton", "strategic", "doomsday"].map(k => [W[k].radius * 2, W[k].needs, W[k].cost]), [[50, "megaton_warheads", 250000], [100, "strategic_warheads", 600000], [200, "doomsday_device", 1500000]]);
+  assert.deepEqual([node("megaton_warheads").era, node("megaton_warheads").requires, node("strategic_warheads").era, node("doomsday_device").requires], ["Mo", ["thermonuclear"], "F", ["strategic_warheads", "space_flight"]]);
+  const { w, g, a, B, silo, arm, until, order } = world();
+  initResearch(w.nations.get(a));
+  arm("megaton");
+  w.nations.get(a).research = undefined;
+  const c = order({ op: "check", silo: silo.id, at: g.idx(70, 30) });
+  assert.deepEqual([c.ok, c.radius, c.inner], [true, 25, 9]);
+  order({ op: "launch", silo: silo.id, at: g.idx(70, 30) });
+  until(() => w.events.some(e => e.type === "nuke_detonated"));
+  const boom = w.events.find(e => e.type === "nuke_detonated");
+  assert.ok(Math.abs(boom.plots - Math.PI * 25 * 25) < 80, `about 1,963 plots in reach: ${boom.plots}`);
+  assert.ok(Math.abs(boom.cleared - Math.PI * 9 * 9) < 30, `about 254 cleared: ${boom.cleared}`);
+  assert.equal(TERRAIN[w.terrain[g.idx(70, 30)]].name, "crater");
+  assert.equal(TERRAIN[w.terrain[g.idx(72, 30)]].name, "crater", "a bigger warhead leaves a bigger crater");
+  assert.ok(B.plots > 0);
+});
+
+test("a salvo fires several silos at one spot and lands as one blast, with the areas added", () => {
+  const { w, g, a, silo, arm, until, order } = world();
+  const silos = [silo, ...[15, 25, 35].map(y => addBuilding(w, { type: "missile_silo", owner: a, anchor: g.idx(5, y), state: "active" }))];
+  for (const s of silos) arm("megaton", s);
+  const at = g.idx(70, 30), ids = silos.map(s => s.id);
+  const c = order({ op: "check", silo: silo.id, silos: ids, at });
+  assert.deepEqual([c.ok, c.count, c.radius, c.inner], [true, 4, 50, 18], "four 25-plot blasts make one of 50");
+  const r = order({ op: "launch", silo: silo.id, silos: ids, at });
+  assert.equal(r.count, 4);
+  assert.equal(Object.keys(w.nations.get(a).nuke.silos).length, 0, "every silo fired");
+  const launched = w.events.find(e => e.type === "nuke_launched");
+  assert.deepEqual([launched.count, launched.radius], [4, 50]);
+  until(() => w.events.some(e => e.type === "nuke_detonated"));
+  const boom = w.events.find(e => e.type === "nuke_detonated");
+  assert.deepEqual([boom.radius, boom.count], [50, 4]);
+  for (const s of silos) arm("doomsday", s);
+  for (let k = 0; k < 8; k++) { const s = addBuilding(w, { type: "missile_silo", owner: a, anchor: g.idx(15, 5 + 6 * k), state: "active" }); arm("doomsday", s); ids.push(s.id); }
+  const far = g.idx(100, 52), big = order({ op: "check", silo: silo.id, silos: ids, at: far });
+  assert.deepEqual([big.count, big.radius, big.capped], [12, NUKE_RULES.maxRadius, true], "twelve doomsday bombs stop at the cap");
+  assert.deepEqual(order({ op: "check", silo: silo.id, silos: [silo.id], at: far }).radius, 100, "one silo in the list is a plain launch");
+  arm("cruise", silos[1]);
+  assert.equal(order({ op: "check", silo: silo.id, silos: [silo.id, silos[1].id], at: far }).error, "only nuclear warheads join a salvo");
+  delete w.nations.get(a).nuke.silos[silos[1].id];
+  assert.match(order({ op: "check", silo: silo.id, silos: [silo.id, silos[1].id], at: far }).error, /^every silo in a salvo needs a ready warhead/);
+});
+
+test("defences shoot at each warhead of a salvo, and only those that get through add to the blast", () => {
+  const { w, g, a, b, silo, arm, until, order } = world();
+  const abm = addBuilding(w, { type: "abm_silo", owner: b, anchor: g.idx(80, 30), state: "active" });
+  const silos = [silo, ...[15, 25, 35].map(y => addBuilding(w, { type: "missile_silo", owner: a, anchor: g.idx(5, y), state: "active" }))];
+  for (const s of silos) arm("megaton", s);
+  let k = 0;
+  w.nukes.roll = () => (k++ < 2 ? 0 : 0.99);
+  order({ op: "launch", silo: silo.id, silos: silos.map(s => s.id), at: g.idx(85, 30) });
+  until(() => w.events.some(e => e.type === "nuke_detonated"));
+  const shot = w.events.filter(e => e.type === "nuke_intercepted");
+  assert.deepEqual([shot.length, shot.every(e => e.partial && e.with === "abm"), abm.interceptors], [2, true, 0], "the ABM silo's two interceptors each stop one");
+  const boom = w.events.find(e => e.type === "nuke_detonated");
+  assert.deepEqual([boom.count, Math.round(boom.radius * 10) / 10], [2, Math.round(Math.hypot(25, 25) * 10) / 10], "two get through: a blast of about 35 plots");
 });

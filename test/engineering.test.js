@@ -303,3 +303,17 @@ test("bombs wear down hills, forests, towns and roads on enemy land, and a battl
   assert.ok(w.events.some(e => e.type === "terrain_broken" && e.at === hill && e.cause === "shell"), "the hills give way after 90 s");
   assert.ok(UNIT_TYPES.battleship.shell);
 });
+
+test("worn hit points go when anything else changes the terrain, such as a nuclear blast", async () => {
+  const { w, g, a, crew, order, run } = world();
+  const { setTerrain } = await import("../src/sim/resources.js");
+  const wood = g.idx(10, 10);
+  w.terrain[wood] = TID.forest;
+  crew(a, 9, 10, 50);
+  order(a, { op: "dig", at: wood });
+  run(5);
+  assert.ok(hpOf(w, wood) < 90 && w.eng.hp.has(wood));
+  setTerrain(w, wood, TID.scorched);
+  assert.equal(w.eng.hp.has(wood), false);
+  assert.ok(engView(w).hp.every(([, hp, max]) => hp > 0 && hp <= max));
+});

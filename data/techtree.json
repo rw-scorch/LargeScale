@@ -82,6 +82,7 @@
     {"id":"amphibious_warfare","name":"Amphibious warfare","branch":"military","era":"Mo","cost":900,"requires":["age_modern"],"unlocks":{"units":["landing_craft"]}},
     {"id":"nuclear_weapons","name":"Nuclear weapons","branch":"military","era":"Mo","cost":1800,"requires":["rocketry","guided_missiles"],"unlocks":{"buildings":["missile_silo"]}},
     {"id":"thermonuclear","name":"Thermonuclear weapons","branch":"military","era":"Mo","cost":2000,"requires":["nuclear_weapons"]},
+    {"id":"megaton_warheads","name":"Megaton warheads","branch":"military","era":"Mo","cost":2600,"requires":["thermonuclear"]},
     {"id":"cruise_missiles","name":"Cruise missiles","branch":"military","era":"Mo","cost":1000,"requires":["guided_missiles"],"unlocks":{"buildings":["missile_silo"]}},
     {"id":"missile_defence","name":"Missile defence","branch":"military","era":"Mo","cost":1300,"requires":["guided_missiles"],"unlocks":{"buildings":["abm_silo"]}},
     {"id":"reinforced_concrete","name":"Reinforced concrete","branch":"military","era":"Mo","cost":900,"requires":["age_modern"],"unlocks":{"buildings":["tower_concrete"]}},
@@ -104,6 +105,8 @@
     {"id":"exo_armour","name":"Exo-armour","branch":"military","era":"F","cost":2800,"requires":["hover_vehicles"],"unlocks":{"units":["mech"]}},
     {"id":"shields","name":"Energy shields","branch":"military","era":"F","cost":2600,"requires":["age_future"],"unlocks":{"buildings":["shield_node","shield_generator"]}},
     {"id":"railguns","name":"Railguns","branch":"military","era":"F","cost":2600,"requires":["age_future"],"unlocks":{"buildings":["railgun_battery"]}},
+    {"id":"strategic_warheads","name":"Strategic warheads","branch":"military","era":"F","cost":4200,"requires":["megaton_warheads","age_future"]},
+    {"id":"doomsday_device","name":"Doomsday device","branch":"military","era":"F","cost":6000,"requires":["strategic_warheads","space_flight"]},
     {"id":"orbital_weapons","name":"Orbital weapons","branch":"military","era":"F","cost":4000,"requires":["space_flight","railguns"],"unlocks":{"buildings":["orbital_uplink"]}}
   ]
 }

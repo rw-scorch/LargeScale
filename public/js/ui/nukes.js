@@ -48,12 +48,32 @@ export function createNukePanel(top, game) {
     key = "";
   };
 
+  const nuclear = kind => W(kind) && !W(kind).conventional && !W(kind).shieldOnly;
+  const readySilos = () => [...w().buildings.values()].filter(b => b.owner === w().you && b.def?.silo && b.state === "active" && w().siloOf(b.id)?.ready && nuclear(w().siloOf(b.id).kind));
+  const salvoOf = () => (aim?.silos?.length > 1 ? { silos: aim.silos } : {});
+  const recheck = async () => {
+    if (!aim?.plot && aim?.plot !== 0) return;
+    const r = await ask({ op: "check", silo: aim.silo, at: aim.plot, ...salvoOf() });
+    if (!aim) return;
+    if (!r.ok) { game.toast(r.error ?? "you cannot aim there"); return; }
+    aim = { ...aim, check: r, sure: false };
+    if (game.view) game.view.nukeAim = { plot: aim.plot, radius: r.radius, inner: r.inner };
+    key = "";
+  };
+  const together = on => {
+    if (!aim) return;
+    const max = w().nukeRules?.salvoMax ?? 12, others = readySilos().filter(b => b.id !== aim.silo).map(b => b.id);
+    aim = { ...aim, silos: on ? [aim.silo, ...others].slice(0, max) : null, check: aim.check, sure: false };
+    key = "";
+    recheck();
+  };
+
   const pick = async plot => {
     if (!aim) return;
-    const r = await ask({ op: "check", silo: aim.silo, at: plot });
+    const r = await ask({ op: "check", silo: aim.silo, at: plot, ...salvoOf() });
     if (!aim) return;
     if (!r.ok) return game.toast(r.error ?? "you cannot aim there");
-    aim = { silo: aim.silo, plot, check: r, sure: false };
+    aim = { silo: aim.silo, silos: aim.silos ?? null, plot, check: r, sure: false };
     if (game.view) game.view.nukeAim = { plot, radius: r.radius, inner: r.inner };
     key = "";
   };
@@ -61,11 +81,11 @@ export function createNukePanel(top, game) {
   const launch = async () => {
     if (!aim?.check) return;
     if (!aim.sure) { aim.sure = true; key = ""; game.updatePanels(); return; }
-    const { silo: id, plot } = aim;
+    const { silo: id, plot } = aim, more = salvoOf();
     cancel();
-    const r = await ask({ op: "launch", silo: id, at: plot });
+    const r = await ask({ op: "launch", silo: id, at: plot, ...more });
     if (!r.ok) return game.toast(r.error ?? "the launch failed");
-    game.toast(`Launched. Impact in ${span(r.seconds / speed())}.`);
+    game.toast(r.count > 1 ? `A salvo of ${r.count} warheads launched together. Impact in ${span(r.seconds / speed())}: one blast ${Math.round(r.radius * 2)} plots across if they all get through.` : `Launched. Impact in ${span(r.seconds / speed())}.`);
   };
 
   const updateAlert = () => {
@@ -83,7 +103,8 @@ export function createNukePanel(top, game) {
         alert.append(row.el);
       }
       const left = Math.max(0, Math.ceil((f.due - now) / speed())), who = f.nation === w().you ? "You" : name(f.nation);
-      const t = `${who} launched ${an(W(f.kind)?.name ?? "warhead")} at ${f.toward === w().you ? "your" : `${name(f.toward)}'s`} land. Impact in ${clock(left)}.`;
+      const what = f.count > 1 ? `a salvo of ${f.count - (f.shot ?? 0)} warheads` : an(W(f.kind)?.name ?? "warhead");
+      const t = `${who} launched ${what} at ${f.toward === w().you ? "your" : `${name(f.toward)}'s`} land. Impact in ${clock(left)}.`;
       if (row.line.textContent !== t) row.line.textContent = t;
     }
   };
@@ -104,7 +125,7 @@ export function createNukePanel(top, game) {
       const st = w().siloOf(b.id), money = w().purse?.money ?? 0, on = w().info?.nukes !== false, known = w().known();
       const kinds = b.def.silo.warheads.filter(k => W(k) && (on || W(k).conventional));
       const lockOf = k => (W(k).needs && !known.has(W(k).needs) ? `needs ${w().locks.nodes.get(W(k).needs)?.name ?? W(k).needs}` : null);
-      const k = JSON.stringify([b.id, b.state, st, aim, on, w().frozen, kinds.map(k => [lockOf(k), money >= W(k).cost])]);
+      const k = JSON.stringify([b.id, b.state, st, aim, on, w().frozen, readySilos().length, kinds.map(k => [lockOf(k), money >= W(k).cost])]);
       if (k === key) return;
       key = k;
       const off = !on && !kinds.length ? "Nuclear weapons are off in this world." : w().frozen ? "The world has ended." : b.state !== "active" ? `The silo is ${b.state === "construction" ? "still being built" : b.state}: a warhead is only built or launched from a working silo.` : null;
@@ -134,16 +155,20 @@ export function createNukePanel(top, game) {
           el("button", { id: "silo-cancel", text: "Take apart", title: refund, onclick: () => takeApart(b) }));
         return;
       }
+      const others = readySilos().filter(o => o.id !== b.id).length, joined = aim.silos?.length > 1;
+      const salvoButton = others ? el("button", { id: "silo-salvo", class: joined ? "on" : "", title: "Fire the other ready silos at the same spot. Their blasts merge into one: the areas add up.", onclick: () => together(!joined) }, joined ? `Salvo of ${aim.silos.length}: fire this one alone` : `Fire with ${others} more ${others === 1 ? "silo" : "silos"}`) : null;
       if (!aim.check) {
-        text.textContent = "Click enemy land to aim at. The circles show the blast. Esc cancels.";
-        buttons.replaceChildren(el("button", { text: "Cancel", onclick: cancel }));
+        text.textContent = `Click enemy land to aim at. The circles show the blast. Esc cancels.${joined ? ` ${aim.silos.length} silos fire together as one blast.` : ""}`;
+        buttons.replaceChildren(...[salvoButton, el("button", { text: "Cancel", onclick: cancel })].filter(Boolean));
         return;
       }
       const c = aim.check;
-      text.textContent = `Target: ${name(c.owner)}'s land. It lands ${span(c.flight / speed())} after launch, and ${c.conventional ? "they see" : "everyone sees"} it coming. Chance it is shot down: ${Math.round(c.chance * 100)}%${c.defences ? `, from ${c.defences} ${c.defences === 1 ? "defence" : "defences"} in reach` : ""}. Click elsewhere to aim again.`;
-      buttons.replaceChildren(
-        el("button", { id: "silo-launch", class: "danger", text: aim.sure ? "Sure? Launch now" : "Launch", onclick: launch }),
-        el("button", { text: "Cancel", onclick: cancel }));
+      const salvo = c.count > 1 ? `A salvo of ${c.count} warheads lands as one blast ${Math.round(c.radius * 2)} plots across${c.capped ? " (the most a blast can reach)" : ""}, if all get through; each one shot down makes it smaller. ` : "";
+      text.textContent = `${salvo}Target: ${name(c.owner)}'s land. It lands ${span(c.flight / speed())} after launch, and ${c.conventional ? "they see" : "everyone sees"} it coming. Chance ${c.count > 1 ? "each warhead" : "it"} is shot down: ${Math.round(c.chance * 100)}%${c.defences ? `, from ${c.defences} ${c.defences === 1 ? "defence" : "defences"} in reach` : ""}. Click elsewhere to aim again.`;
+      buttons.replaceChildren(...[
+        el("button", { id: "silo-launch", class: "danger", text: aim.sure ? "Sure? Launch now" : c.count > 1 ? `Launch all ${c.count}` : "Launch", onclick: launch }),
+        salvoButton,
+        el("button", { text: "Cancel", onclick: cancel })].filter(Boolean));
     },
   };
 }
