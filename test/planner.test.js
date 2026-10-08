@@ -275,3 +275,77 @@ test("a Future plan puts a shield generator over the capital, and none where a s
   put("shield_generator", g.x(shields.pieces[0].at), g.y(shields.pieces[0].at));
   assert.equal(byKey(plan(), "shields"), undefined);
 });
+
+const district = list => list.find(p => p.key.startsWith("district:"));
+
+test("a district lays a street grid with 3 by 3 lots: housing near the town, shops, then works on the far side", () => {
+  const { w, g, a, plan } = world({ era: "M" });
+  const list = plan(), d = district(list);
+  assert.ok(d, `a district is offered: ${list.map(p => p.key).join(", ")}`);
+  const G = Number(d.key.split(":")[2]), zones = d.pieces.filter(p => p.t === "zone"), roads = d.pieces.filter(p => p.t === "road");
+  assert.ok(G >= 2 && G <= 4);
+  assert.equal(zones.length, G * G, "one zone piece a lot");
+  assert.ok(zones.every(z => z.w === 3 && z.h === 3), "every lot is 3 by 3, room for a home to grow");
+  assert.equal(roads.filter(r => r.via).length, 2 * (G + 1), "a street on every side of every lot");
+  const kinds = zones.map(z => z.zone), count = k => kinds.filter(x => x === k).length;
+  assert.ok(count("res") > count("com") && count("com") >= 1 && (G < 3 || count("ind") >= 1), JSON.stringify(kinds));
+  const cap = g.idx(20, 20), dist = z => Math.hypot(z.x + 1 - 20, z.y + 1 - 20), far = Math.max(...zones.map(dist));
+  assert.ok(zones.filter(z => z.zone === "ind").every(z => dist(z) >= far - 4 * Math.SQRT2 - 1e-9), "works on the far side");
+  const view = { w: g.w, h: g.h, defs: w.bld.table, buildings: [] }, lots = new Set(zones.flatMap(z => piecePlots(view, z))), streets = roads.filter(r => r.via).flatMap(r => piecePlots(view, r));
+  assert.ok(streets.every(i => !lots.has(i)), "streets never cross a lot");
+  assert.ok([...lots, ...streets].every(i => w.owner[i] === a && !w.bld.at.has(i)), "all on the nation's open land");
+  assert.ok(d.reason.includes("room to grow"), d.reason);
+  assert.ok(!lots.has(cap));
+});
+
+test("the server runs a district to the end: every lot zoned and every street laid", () => {
+  const { w, g, a, n, plan } = world({ era: "M" });
+  const d = district(plan());
+  assert.equal(runOrder(w, a, { t: "plan", op: "add", project: { key: d.key, kind: d.kind, name: d.title, pieces: d.pieces } }).ok, true);
+  n.money = 1e6;
+  for (let k = 0; k < 10 && n.plan.length; k++) planTick(w, 60);
+  assert.equal(n.plan.length, 0, n.planWhy ?? "done");
+  const codes = { res: 1, com: 2, ind: 3 };
+  for (const z of d.pieces.filter(p => p.t === "zone")) assert.equal(w.bld.zone[g.idx(z.x + 1, z.y + 1)], codes[z.zone]);
+  for (const r of d.pieces.filter(p => p.t === "road" && p.via)) assert.ok(r.via.every(i => w.log.road[i] > 0));
+});
+
+test("a new city is offered on open land far from every town, joined to the capital's roads", () => {
+  const { w, g, a, plan } = world({ era: "M" });
+  for (let x = 14; x <= 26; x++) w.log.road[g.idx(x, 24)] = 1;
+  const list = plan(), city = list.find(p => p.key.startsWith("city:"));
+  assert.ok(city, `a new city: ${list.map(p => p.key).join(", ")}`);
+  const centre = city.at;
+  assert.ok(Math.hypot(g.x(centre) - 20, g.y(centre) - 20) >= PLAN_RULES.newCityGap, `${g.x(centre)}, ${g.y(centre)} is far from the capital`);
+  assert.ok(city.pieces.some(p => p.t === "road" && p.from !== undefined), "a road joins it to the capital's");
+  assert.match(city.title, /^A new city at \d+, \d+$/);
+  const small = world({ era: "M", W: 40, H: 30 });
+  assert.equal(small.plan().find(p => p.key.startsWith("city:")), undefined, "not on a small nation");
+});
+
+test("main roads join mines, ports and other towns to the capital's roads in one project", () => {
+  const dep = [[40, 50, "iron"]];
+  const { w, g, a, put, plan } = world({ era: "M", dep });
+  for (let x = 14; x <= 26; x++) w.log.road[g.idx(x, 24)] = 1;
+  for (let y = 19; y <= 24; y++) w.log.road[g.idx(21, y)] = 1;
+  put("mine_pit", 40, 50);
+  const roads = byKey(plan(), "roads:main");
+  assert.ok(roads, "a main roads project");
+  assert.match(roads.reason, /join 1 mine to the capital's roads/);
+  const path = roads.draw[0].plots;
+  assert.ok(g.cheb(path[0], g.idx(40, 50)) <= 1 && w.log.road[path.at(-1)] > 0, "from beside the mine to the road network");
+});
+
+test("farms keep clear of the town's room to grow, and an airfield goes where the air base will fit", () => {
+  const { w, g, a, n, put, plan } = world({ era: "I" });
+  for (let y = 16; y <= 24; y++) for (let x = 14; x <= 26; x++) if (!w.bld.at.has(g.idx(x, y))) w.bld.zone[g.idx(x, y)] = 1;
+  const list = plan(), farms = byKey(list, "farms:"), room = PLAN_RULES.growRoom;
+  assert.ok(farms?.pieces.length > 0, list.map(p => p.key).join(", "));
+  for (const f of farms.pieces) assert.ok(g.x(f.at) < 14 - room || g.x(f.at) > 26 + room || g.y(f.at) < 16 - room || g.y(f.at) > 24 + room, `a field at ${g.x(f.at)}, ${g.y(f.at)} keeps ${room} plots from the zones`);
+  const af = list.find(p => p.key.startsWith("airfield:"));
+  assert.ok(af, "an airfield facing the neighbour");
+  const at = af.pieces[0].at, base = w.bld.table.air_base, others = new Set(list.filter(p => p !== af).flatMap(p => p.draw.flatMap(d => d.plots)));
+  const plots = [];
+  for (let dy = 0; dy < base.footprint[1]; dy++) for (let dx = 0; dx < base.footprint[0]; dx++) plots.push(g.idx(g.x(at) + dx, g.y(at) + dy));
+  assert.ok(plots.every(i => w.owner[i] === a && !w.bld.at.has(i) && !others.has(i)), "the 5 by 3 air base fits where the airfield goes, and nothing else is planned there");
+});
