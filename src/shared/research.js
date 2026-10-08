@@ -1,18 +1,21 @@
 import { ERA_NAMES, eraIdx } from "./buildings.js";
 
 export function lockMap(tree) {
-  const buildings = new Map(), zones = new Map(), units = new Map();
+  const buildings = new Map(), zones = new Map(), units = new Map(), anyOf = new Map();
   for (const n of tree.nodes) {
-    for (const b of n.unlocks?.buildings ?? []) if (!buildings.has(b)) buildings.set(b, n.id);
+    for (const b of n.unlocks?.buildings ?? []) { if (!buildings.has(b)) buildings.set(b, n.id); else anyOf.set(b, [...(anyOf.get(b) ?? [buildings.get(b)]), n.id]); }
     for (const z of n.unlocks?.zones ?? []) if (!zones.has(z)) zones.set(z, n.id);
     for (const u of n.unlocks?.units ?? []) if (!units.has(u)) units.set(u, n.id);
   }
-  return { buildings, zones, units, nodes: new Map(tree.nodes.map(n => [n.id, n])) };
+  return { buildings, zones, units, anyOf, nodes: new Map(tree.nodes.map(n => [n.id, n])) };
 }
 
 export function lockReason(locks, known, id, kind = "buildings") {
   const node = locks[kind].get(id);
-  return node && !known.has(node) ? `needs ${locks.nodes.get(node).name} research` : null;
+  if (!node || known.has(node)) return null;
+  const any = kind === "buildings" ? locks.anyOf?.get(id) : null;
+  if (any?.some(k => known.has(k))) return null;
+  return any ? `needs ${any.map(k => locks.nodes.get(k).name).join(" or ")} research` : `needs ${locks.nodes.get(node).name} research`;
 }
 
 export function eraProgress(tree, known, era) {

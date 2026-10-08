@@ -25,7 +25,7 @@ const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air
   return u;
 };
 
-const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner });
+const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner, conventional: !!e.conventional });
 
 export class ClientWorld {
   constructor(hello) {
@@ -453,14 +453,15 @@ export class ClientWorld {
         if (e.type === "spawn" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.y * this.w + e.x;
         if (e.type === "capital_moved" && this.nations.has(e.nation)) this.nations.get(e.nation).capital = e.to;
         if (e.type === "deposit_depleted") this.depleted.add(e.at);
-        if (e.type === "bombed") this.effects.push({ kind: "bomb", plot: e.at, at: Date.now(), bombs: e.bombs ?? 1, heading: this.machines.get(e.machine)?.air?.heading ?? 0 });
+        if (e.type === "bombed") this.effects.push({ kind: "bomb", plot: e.at, at: Date.now(), bombs: e.bombs ?? 1, heading: this.machines.get(e.machine)?.air?.heading ?? 0, shielded: !!e.shielded });
         if (e.type === "nuke_launched") { this.nukes = this.nukes.filter(f => f.id !== e.id); this.nukes.push(flightOf(e)); }
         if (e.type === "nuke_intercepted" || e.type === "nuke_detonated") {
           const f = this.nukes.find(f => f.id === e.id);
           this.nukes = this.nukes.filter(f => f.id !== e.id);
-          this.blasts.push({ kind: e.type === "nuke_detonated" ? "blast" : "intercept", plot: e.type === "nuke_detonated" ? e.at : e.target, radius: e.radius ?? f?.radius ?? 8, inner: e.inner ?? f?.inner ?? 3, by: e.by, at: Date.now() });
+          this.blasts.push({ kind: e.type === "nuke_detonated" ? "blast" : "intercept", plot: e.type === "nuke_detonated" ? e.at : e.target, radius: e.radius ?? f?.radius ?? 8, inner: e.inner ?? f?.inner ?? 3, by: e.by, with: e.with ?? null, orbital: f?.kind === "orbital" || e.kind === "orbital", at: Date.now() });
         }
         if (e.type === "sam_fired" && e.from && e.to) this.effects.push({ kind: "sam", from: e.from, to: e.to, at: Date.now() });
+        if (e.type === "railgun_fired" && e.from && e.to) this.effects.push({ kind: "rail", from: e.from, to: e.to, at: Date.now() });
         if (e.type === "landed" && this.machines.get(e.machine)?.def.domain === "air") this.effects.push({ kind: this.machines.get(e.machine).def.paraOnly ? "chute" : "heli", plot: e.at, at: Date.now(), n: Math.max(1, Math.min(6, Math.round(e.troops / 30))) });
         if (e.type === "era_up" && this.nations.has(e.nation)) {
           const n = this.nations.get(e.nation);

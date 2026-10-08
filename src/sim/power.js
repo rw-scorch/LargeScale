@@ -36,7 +36,7 @@ export function powerTick(world, dt) {
       const plants = g.nodes.filter(v => v.make > 0), need = g.users.reduce((s, u) => s + u.uses, 0);
       let make = 0;
       for (const v of plants) {
-        v.fuel = (n.money ?? 0) > 0;
+        v.fuel = !bld.table[v.b.type].power.upkeep || (n.money ?? 0) > 0;
         if (v.fuel) make += v.make;
       }
       const share = need ? Math.min(1, make / need) : 0, load = make ? Math.min(1, need / make) : 0;

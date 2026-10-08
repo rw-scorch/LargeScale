@@ -720,11 +720,15 @@ export function giveMachine(world, nid, type) {
   const def = UNIT_TYPES[type], n = world.nations.get(nid);
   if (!def || !n?.spawned || n.capital === undefined) return null;
   if (def.domain === "air") {
+    let best = null;
     for (const id of world.bld?.mine.get(nid) ?? []) {
       const b = world.bld.list.get(id);
-      if (b?.state === "active" && world.bld.table[b.type]?.airbase && world.owner[b.anchor] === nid) return spawnUnit(world, nid, type, b.anchor);
+      const a = b && world.bld.table[b.type]?.airbase;
+      if (b?.state !== "active" || !a || (a.only && !a.only.includes(type)) || world.owner[b.anchor] !== nid) continue;
+      if (def.builtAt.includes(b.type)) { best = b; break; }
+      best ??= b;
     }
-    return null;
+    return best ? spawnUnit(world, nid, type, best.anchor) : null;
   }
   if (def.domain === "sea") {
     let best = null, most = -1;

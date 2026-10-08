@@ -1126,6 +1126,25 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   await adminOp(IN, { op: "speed", factor: 1 });
   check(ready && fired?.ok && heard && seen && scar && capitalKept,
     `after Nuclear weapons a silo builds an atomic warhead, aimed at ${foe?.name ?? "nobody"}'s land (${Math.round((aimed?.chance ?? 0) * 100)}% to be shot down, ${aimed?.flight} s); everyone hears the launch, and the blast leaves a crater and clears the land but the capital (${boom?.type ?? "no impact"}, ${boom?.cleared ?? 0} plots cleared)${fired?.ok ? "" : ` (${fired?.error ?? aimed?.error ?? made?.error ?? (siloUp ? "not ready" : "no silo")})`}`);
+  await ask({ t: "research", id: "cruise_missiles", mode: "queue" });
+  await adminOp(IN, { op: "finish", nation: ih.you });
+  await adminOp(IN, { op: "nukes", on: false });
+  await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 5000 });
+  const cm = await ask({ t: "nuke", op: "build", silo: siloId, kind: "cruise" });
+  await adminOp(IN, { op: "cheat", nation: ih.you, cheat: "build", on: true });
+  const cmReady = cm?.ok && await until(() => IM.pump().world.siloOf(siloId)?.ready ? true : null, 10000);
+  await adminOp(IN, { op: "cheat", nation: ih.you, cheat: "build", on: false });
+  const w2 = IM.pump().world;
+  let aim2 = null;
+  if (foe) for (let i = 0; i < w2.owner.length && aim2 === null; i++) if (w2.owner[i] === foe.id && i !== foe.capital && isLand(w2.terrain[i])) aim2 = i;
+  const plots0 = w2.nations.get(foe?.id)?.plots;
+  await adminOp(IN, { op: "speed", factor: 8 });
+  const shot = cmReady && aim2 !== null ? await ask({ t: "nuke", op: "launch", silo: siloId, at: aim2 }) : null;
+  const struck = shot?.ok && await until(() => inEvents().find(e => (e.type === "nuke_detonated" || e.type === "nuke_intercepted") && e.id === shot.id), 30000);
+  await adminOp(IN, { op: "speed", factor: 1 });
+  await adminOp(IN, { op: "nukes", on: true });
+  const kept = struck?.type !== "nuke_detonated" || (struck.conventional && struck.cleared === 0 && TERRAIN[IM.pump().world.terrain[aim2]]?.name !== "crater");
+  check(cm?.ok && cmReady && shot?.ok && struck && kept, `with nukes off, Cruise missiles still lets the silo build and fire a cruise missile (${struck?.type ?? "no impact"}: ${struck?.conventional ? `${struck.troops} troops lost, ${struck.damaged} buildings damaged, ${struck.cleared} plots cleared` : "shot down"}; land before ${plots0})${shot?.ok ? "" : ` (${shot?.error ?? cm?.error ?? "not ready"})`}`);
 }
 {
   await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 20000 });
@@ -1140,6 +1159,41 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   const taken = await ask({ t: "build", type: "wonder_stone_circle", at: spotFor("zoo", inCap, 4, 20) });
   check(parkId !== null && standing && heard && paying && /already have this wonder/.test(taken?.error ?? ""),
     `a park and the stone circle are built; everyone hears of the wonder, tourism pays ${paying?.perSecond} gold a second from ${paying?.sites} attractions, and a second circle is refused ("${taken?.error}")`);
+}
+{
+  for (const id of ["orbital_weapons", "shields", "fusion_power", "drones"]) await ask({ t: "research", id, mode: "queue" });
+  const fin = await adminOp(IN, { op: "finish", nation: ih.you });
+  const future = await until(() => inPurse()?.era === "F" && !IM.pump().world.lockOf("orbital_uplink") ? true : null, 8000);
+  check(fin?.ok && fin.done.includes("age_future") && future, `the queue reaches the Future Age and its nodes (${fin?.done?.length} nodes, ending ${fin?.done?.slice(-4).join(", ")})`);
+  await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 150000 });
+  await adminOp(IN, { op: "cheat", nation: ih.you, cheat: "build", on: true });
+  const reactorId = await buildAt("fusion_reactor", spotFor("fusion_reactor", inCap, 3, 24));
+  const reactorAt = reactorId ? IM.world.buildings.get(reactorId).anchor : null;
+  const shieldId = await buildAt("shield_generator", reactorAt === null ? null : spotFor("shield_generator", reactorAt, 3, 7));
+  const hangarId = await buildAt("drone_hangar", spotFor("drone_hangar", inCap, 2, 24));
+  const uplinkId = await buildAt("orbital_uplink", spotFor("orbital_uplink", inCap, 2, 26));
+  const up = await until(() => [reactorId, shieldId, hangarId, uplinkId].every(id => IM.pump().world.buildings.get(id)?.state === "active"), 20000);
+  const grid = up && await until(() => { const p = inPurse()?.power; return p?.users?.[shieldId] >= 0 && p.plants?.[reactorId]?.[0] === 1 && p.grids?.[p.users[shieldId]]?.[2] === 100 ? p.grids[p.users[shieldId]] : null; }, 15000);
+  check(up && grid, `a fusion reactor runs a shield generator on full power (grid ${JSON.stringify(grid)}: made, used, % met), beside a drone hangar and an orbital uplink`);
+  const gift = await adminOp(IN, { op: "give", nation: ih.you, what: "machine", unit: "strike_drone", amount: 1 });
+  const drone = await until(() => [...IM.pump().world.machines.values()].find(u => u.owner === ih.you && u.type === "strike_drone" && u.air?.landed), 8000);
+  const hangar = IM.world.buildings.get(hangarId);
+  const atHangar = drone && hangar && hangar.plots.includes(drone.at);
+  const other = [...IM.world.machines.values()].find(u => u.owner === ih.you && u.def.domain === "air" && !hangar?.def.airbase.only.includes(u.type) && u.state !== "wreck");
+  const refused = other && hangar ? await ask({ t: "air", plane: other.id, do: "base", at: hangar.anchor }) : null;
+  check(gift?.ok && atHangar && /takes only/.test(refused?.error ?? ""), `a strike drone is given at the drone hangar, and a ${other?.def.name ?? "plane"} may not base there ("${refused?.error}")`);
+  const made = await ask({ t: "nuke", op: "build", silo: uplinkId, kind: "orbital" });
+  const ready = made?.ok && await until(() => IM.pump().world.siloOf(uplinkId)?.ready ? true : null, 10000);
+  await adminOp(IN, { op: "cheat", nation: ih.you, cheat: "build", on: false });
+  const w = IM.pump().world, foe = [...w.nations.values()].find(n => n.id !== ih.you && n.plots > 5 && n.capital != null);
+  let target = null;
+  if (foe) for (let i = 0; i < w.owner.length && target === null; i++) if (w.owner[i] === foe.id && i !== foe.capital && isLand(w.terrain[i])) target = i;
+  const aimed = ready && target !== null ? await ask({ t: "nuke", op: "check", silo: uplinkId, at: target }) : null;
+  const inEvents = () => IN.json.filter(m => m.t === "events").flatMap(m => m.events);
+  const fired = aimed?.ok ? await ask({ t: "nuke", op: "launch", silo: uplinkId, at: target }) : null;
+  const t0 = Date.now();
+  const boom = fired?.ok && await until(() => inEvents().find(e => (e.type === "nuke_detonated" || e.type === "nuke_intercepted") && e.id === fired.id), 20000);
+  check(ready && aimed?.flight === 10 && fired?.ok && boom?.kind === "orbital", `an orbital strike called down on ${foe?.name ?? "nobody"}'s land lands ${aimed?.flight} s after launch (${((Date.now() - t0) / 1000).toFixed(1)} s real time; ${boom?.type ?? "no impact"}, ${boom?.cleared ?? 0} plots cleared)${fired?.ok ? "" : ` (${fired?.error ?? aimed?.error ?? made?.error ?? "not ready"})`}`);
 }
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;

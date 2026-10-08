@@ -7,6 +7,7 @@ import { UNIT_TYPES, wreck, diveOf } from "./units.js";
 import { launchers, refreshSites, down } from "./air.js";
 import { setTerrain } from "./resources.js";
 import { setRoad } from "./logistics.js";
+import { shieldsOver } from "./shields.js";
 
 export const NUKE_RULES = { crater: 1, outerLoss: 0.6, outerResidents: 0.3, outerDamage: 0.6, repairSeconds: 600, samChance: 0.15, overlap: 0.5, cancelRefund: 1, sitesEvery: 2, ...rules.nukes };
 export const WARHEADS = NUKE_RULES.warheads;
@@ -37,8 +38,8 @@ export function warheadLock(world, n, kind) {
   return null;
 }
 
-function allowed(world) {
-  if (!world.nukes.on) return "nuclear weapons are off in this world";
+function allowed(world, W = null) {
+  if (!world.nukes.on && !W?.conventional) return "nuclear weapons are off in this world";
   if (world.peace) return "no launches during the peace";
   return null;
 }
@@ -46,13 +47,13 @@ function allowed(world) {
 export function buildWarhead(world, nid, bid, kind) {
   const n = world.nations.get(nid), s = siloOf(world, nid, bid);
   if (s.error) return s;
-  if (!world.nukes.on) return { error: "nuclear weapons are off in this world" };
+  if (!world.nukes.on && !world.nukes.rules.warheads[kind]?.conventional) return { error: "nuclear weapons are off in this world" };
   if (s.b.state !== "active") return { error: "the silo is not working" };
   if (!s.silo.warheads.includes(kind)) return { error: "this silo cannot hold that warhead" };
   const lock = warheadLock(world, n, kind);
   if (lock) return { error: lock };
   const st = stateOf(n), have = st.silos[bid];
-  if (have) return { error: have.ready ? "this silo already holds a warhead" : "this silo is already building a warhead" };
+  if (have) return { error: have.ready ? "this silo already holds a missile" : "this silo is already building a missile" };
   const W = world.nukes.rules.warheads[kind];
   if ((n.money ?? 0) < W.cost) return { error: `not enough gold: ${W.cost} needed` };
   n.money -= W.cost;
@@ -85,9 +86,11 @@ function abmSites(world) {
   return N.abms;
 }
 
-export function defencesAt(world, launcher, target) {
-  const g = world.grid, sc = scaleOf(world), r = world.nukes.rules, tx = g.x(target) + 0.5, ty = g.y(target) + 0.5, out = [];
+export function defencesAt(world, launcher, target, kind = null) {
+  const g = world.grid, sc = scaleOf(world), r = world.nukes.rules, tx = g.x(target) + 0.5, ty = g.y(target) + 0.5, out = [], sam = r.warheads[kind]?.samChance ?? r.samChance;
   const foe = o => o !== launcher && world.hostile(launcher, o);
+  for (const s of shieldsOver(world, launcher, tx, ty)) out.push({ h: s.b, key: null, owner: s.owner, chance: s.chance, x: s.x, y: s.y, kind: "shield" });
+  if (r.warheads[kind]?.shieldOnly) return overlap(out, r);
   for (const { b, abm, x, y } of abmSites(world)) {
     b.interceptors ??= abm.interceptors;
     if (foe(b.owner) && b.interceptors > 0 && Math.hypot(x - tx, y - ty) <= abm.radius * sc) out.push({ h: b, key: "interceptors", owner: b.owner, chance: abm.chance, x, y, kind: "abm" });
@@ -96,9 +99,13 @@ export function defencesAt(world, launcher, target) {
     refreshSites(world);
     for (const L of launchers(world)) {
       L.h.missiles ??= L.sam.missiles;
-      if (foe(L.owner) && L.h.missiles > 0 && Math.hypot(L.x - tx, L.y - ty) <= L.sam.radius * sc) out.push({ h: L.h, key: "missiles", owner: L.owner, chance: r.samChance, x: L.x, y: L.y, kind: L.site ? "sam" : "truck" });
+      if (foe(L.owner) && L.h.missiles > 0 && Math.hypot(L.x - tx, L.y - ty) <= L.sam.radius * sc) out.push({ h: L.h, key: "missiles", owner: L.owner, chance: sam, x: L.x, y: L.y, kind: L.site ? "sam" : "truck" });
     }
   }
+  return overlap(out, r);
+}
+
+function overlap(out, r) {
   out.sort((a, b) => b.chance - a.chance);
   let k = 1;
   for (const d of out) { d.p = d.chance * k; k *= r.overlap; }
@@ -110,10 +117,10 @@ export const interceptChance = list => 1 - list.reduce((q, d) => q * (1 - d.p), 
 export function checkLaunch(world, nid, bid, target) {
   const n = world.nations.get(nid), s = siloOf(world, nid, bid);
   if (s.error) return s;
-  const no = allowed(world);
-  if (no) return { error: no };
   const have = n.nuke?.silos[bid];
-  if (!have?.ready) return { error: have ? "the warhead is not ready yet" : "this silo holds no warhead" };
+  const no = allowed(world, have ? world.nukes.rules.warheads[have.kind] : null);
+  if (no) return { error: no };
+  if (!have?.ready) return { error: have ? "the missile is not ready yet" : "this silo holds no missile" };
   if (s.b.state !== "active") return { error: "the silo is not working" };
   const g = world.grid;
   if (!Number.isInteger(target) || target < 0 || target >= g.size) return { error: "that spot is off the map" };
@@ -124,8 +131,8 @@ export function checkLaunch(world, nid, bid, target) {
   const W = world.nukes.rules.warheads[have.kind], sc = scaleOf(world);
   const [fx, fy] = [g.x(s.b.anchor), g.y(s.b.anchor)], dist = Math.hypot(g.x(target) - fx, g.y(target) - fy);
   const flight = Math.round(W.flight + (dist / sc) * W.perPlot);
-  const defences = defencesAt(world, nid, target);
-  return { ok: true, kind: have.kind, flight, owner, chance: Math.round(interceptChance(defences) * 100) / 100, defences: defences.length, radius: W.radius * sc, inner: W.inner * sc, from: s.b.anchor };
+  const defences = defencesAt(world, nid, target, have.kind);
+  return { ok: true, kind: have.kind, conventional: !!W.conventional, flight, owner, chance: Math.round(interceptChance(defences) * 100) / 100, defences: defences.length, radius: W.radius * sc, inner: W.inner * sc, from: s.b.anchor };
 }
 
 export function launchWarhead(world, nid, bid, target) {
@@ -133,7 +140,7 @@ export function launchWarhead(world, nid, bid, target) {
   if (c.error) return c;
   const st = stateOf(world.nations.get(nid));
   delete st.silos[bid];
-  const f = { id: nid * 100000 + st.next++, kind: c.kind, from: c.from, target, launched: world.time, due: world.time + c.flight, toward: c.owner, radius: c.radius, inner: c.inner };
+  const f = { id: nid * 100000 + st.next++, kind: c.kind, from: c.from, target, launched: world.time, due: world.time + c.flight, toward: c.owner, radius: c.radius, inner: c.inner, ...(c.conventional ? { conventional: true } : {}) };
   st.flying.push(f);
   world.emit("nuke_launched", { nation: nid, ...f, seconds: c.flight });
   return { ok: true, id: f.id, kind: c.kind, seconds: c.flight, chance: c.chance };
@@ -141,9 +148,9 @@ export function launchWarhead(world, nid, bid, target) {
 
 function resolve(world, owner, f) {
   const N = world.nukes;
-  for (const d of defencesAt(world, owner, f.target)) {
-    d.h[d.key]--;
-    if (d.kind !== "abm" && world.air) world.air.reloading = true;
+  for (const d of defencesAt(world, owner, f.target, f.kind)) {
+    if (d.key) d.h[d.key]--;
+    if ((d.kind === "sam" || d.kind === "truck") && world.air) world.air.reloading = true;
     if (N.roll() < d.p) {
       world.emit("nuke_intercepted", { id: f.id, nation: owner, by: d.owner, kind: f.kind, target: f.target, toward: f.toward, from: [Math.round(d.x * 10) / 10, Math.round(d.y * 10) / 10], with: d.kind });
       return null;
@@ -165,8 +172,52 @@ function ruin(world, b) {
   return lost;
 }
 
+export function strike(world, m) {
+  const r = world.nukes?.rules ?? NUKE_RULES, W = r.warheads[m.kind], g = world.grid, sc = scaleOf(world), R = W.radius * sc;
+  const tx = g.x(m.target) + 0.5, ty = g.y(m.target) + 0.5, near = (x, y) => Math.hypot(x - tx, y - ty) <= R;
+  const hit = { plots: 0, damaged: 0, stacks: 0, troops: 0, machines: 0, residents: 0 }, seen = new Set();
+  for (let y = Math.floor(ty - R); y <= Math.ceil(ty + R); y++)
+    for (let x = Math.floor(tx - R); x <= Math.ceil(tx + R); x++) {
+      if (!g.inside(x, y) || !near(x + 0.5, y + 0.5)) continue;
+      hit.plots++;
+      const bid = world.bld?.at.get(g.idx(x, y));
+      if (bid === undefined || seen.has(bid)) continue;
+      seen.add(bid);
+      const b = world.bld.list.get(bid);
+      if (!b || b.state !== "active") continue;
+      const before = b.residents ?? 0;
+      if (before) b.residents = before * (1 - W.residents);
+      hit.residents += before - (b.residents ?? 0);
+      Object.assign(b, { state: "damaged", repairAt: world.time + r.repairSeconds });
+      world.air?.repairs.add(b.id);
+      touched(world, b);
+      hit.damaged++;
+    }
+  for (const s of [...world.stacks.values()]) {
+    if (!near(g.x(s.pos) + 0.5, g.y(s.pos) + 0.5)) continue;
+    const loss = s.troops * W.loss;
+    world.loseTroops(s, loss);
+    hit.troops += loss;
+    hit.stacks++;
+    if (s.troops < 1) { world.stacks.delete(s.id); world.emit("stack_destroyed", { stack: s.id, nation: s.owner, at: s.pos, by: m.owner }); }
+  }
+  for (const u of [...(world.units?.list.values() ?? [])]) {
+    if (u.wreck || u.air?.landed === false) continue;
+    const def = UNIT_TYPES[u.type];
+    if (u.air || !near(g.x(u.at) + 0.5, g.y(u.at) + 0.5) || diveOf(world, u) === 2) continue;
+    u.hp -= def.hp * W.damage;
+    u.hitBy = m.owner;
+    if (u.hp <= 0) { hit.machines++; wreck(world, u); }
+  }
+  hit.troops = Math.round(hit.troops);
+  hit.residents = Math.round(hit.residents);
+  world.emit("nuke_detonated", { id: m.id ?? null, by: m.owner, nation: m.toward ?? null, at: m.target, kind: m.kind, radius: R, inner: 0, conventional: true, rubble: 0, cleared: 0, ...hit });
+  return hit;
+}
+
 export function detonate(world, m) {
   const r = world.nukes?.rules ?? NUKE_RULES, W = r.warheads[m.kind], g = world.grid, sc = scaleOf(world);
+  if (W.conventional) return strike(world, m);
   const R = W.radius * sc, inner = W.inner * sc, crater = r.crater * sc, rr = Math.ceil(R);
   const cx = g.x(m.target), cy = g.y(m.target), tx = cx + 0.5, ty = cy + 0.5;
   const capitals = new Set();

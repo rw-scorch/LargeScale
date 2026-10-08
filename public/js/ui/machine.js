@@ -48,7 +48,7 @@ export function createMachinePanel(root, game) {
   const baseAt = (u, plot, sx, sy) => {
     const c = w().machines.get(game.view?.machineAt(sx, sy)), b = w().buildingAt?.(plot);
     if (c && c !== u && c.owner === w().you && c.def.carrier && c.state !== "wreck") return { at: c.at, label: "Base on this carrier", note: `${planesOn(c)} of ${c.def.carrier.planes}` };
-    if (b && b.owner === w().you && b.def?.airbase && b.state === "active") return { at: plot, label: "Base here" };
+    if (b && b.owner === w().you && b.def?.airbase && b.state === "active" && (!b.def.airbase.only || b.def.airbase.only.includes(u.def.id))) return { at: plot, label: "Base here" };
     return null;
   };
   const flyText = { base: "flies to its new base", bomb: "flies to bomb that spot", patrol: "flies to patrol there", strike: "flies there to hover and fire on enemy troops and vehicles", drop: "flies there to drop its paratroopers", land: "flies there to set its troops down" };

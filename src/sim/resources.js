@@ -160,6 +160,8 @@ export function produce(world, dt) {
       got = want * fert * (SEASON_YIELD[res.seasonOf(b.anchor)] ?? 1) * (b.weatherMult ?? 1);
     } else if (p.kind === "pasture") {
       got = want * (res.seasonOf(b.anchor) === "winter" ? r.winterPasture : 1);
+    } else if (p.kind === "indoor") {
+      got = want;
     }
     got *= 1 + effectOf(world, n, `${kind}_rate`);
     b.idle = got <= 1e-9;

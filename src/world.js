@@ -44,6 +44,8 @@ import { installNavy } from "./sim/navy.js";
 import { installNukes, nukeView, flightsOf, NUKE_RULES } from "./sim/nukes.js";
 import { installTourism, tourismView, TOURISM_RULES } from "./sim/tourism.js";
 import { installCbd } from "./sim/cbd.js";
+import { installShields } from "./sim/shields.js";
+import { installRailguns } from "./sim/railguns.js";
 import { installDiplomacy, DIPLO } from "./sim/diplomacy.js";
 import { installNotes, notesFor, NOTES } from "./sim/notes.js";
 import { postWebhook, directMessage, mention } from "./discord.js";
@@ -194,6 +196,8 @@ export class World extends DurableObject {
     installPilot(this.sim);
     installAir(this.sim);
     installNavy(this.sim);
+    installShields(this.sim);
+    installRailguns(this.sim);
     installNukes(this.sim, { speed: info.rules?.buildSpeed ?? 1, rng: makeRng((info.seed ?? 1) + 13) }).on = info.nukes !== false;
     installTourism(this.sim);
     installCbd(this.sim, { scale: info.map.scale ?? 1 });
@@ -718,7 +722,7 @@ export class World extends DurableObject {
         }
         if (e.type === "nuke_launched" && e.toward) {
           const by = this.sim.nations.get(e.nation)?.name ?? "someone";
-          this.notify(e.toward, "missile", `${by} launched a nuclear warhead at your land. Impact in ${e.seconds} s.`);
+          this.notify(e.toward, "missile", `${by} launched ${NUKE_RULES.warheads[e.kind] ? `${/^[aeiou]/i.test(NUKE_RULES.warheads[e.kind].name) ? "an" : "a"} ${NUKE_RULES.warheads[e.kind].name.toLowerCase()}` : "a missile"} at your land. Impact in ${e.seconds} s.`);
         }
       }
     }

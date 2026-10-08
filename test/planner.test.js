@@ -254,3 +254,24 @@ test("a plan proposes two kinds of tourism building you lack, and the best wonde
   assert.deepEqual(again.filter(p => p.key.startsWith("tourism:")).map(p => p.key), ["tourism:park"], "not a second plaza");
   assert.equal(byKey(again, "wonder:")?.key, "wonder:wonder_colossus", "the gardens already stand in B's land");
 });
+
+test("a Future plan powers buildings off the grid with a fusion reactor", () => {
+  const { w, put, plan } = world({ era: "F" });
+  const alone = put("vehicle_factory", 40, 50);
+  powerTick(w, 5);
+  const p = byKey(plan(), `power:${alone.id}`);
+  assert.equal(p?.pieces[0].type, "fusion_reactor", JSON.stringify(p?.pieces));
+  assert.equal(p.price, 9000);
+});
+
+test("a Future plan puts a shield generator over the capital, and none where a shield already covers it", () => {
+  const { w, g, a, put, plan } = world({ era: "F" });
+  const shields = byKey(plan(), "shields");
+  assert.deepEqual(shields?.pieces.map(p => p.type), ["shield_generator"]);
+  assert.equal(shields.title, "1 shield generator over the capital");
+  assert.match(shields.reason, /^A missile or warhead falling within 12 plots of a shield generator is stopped 80% of the time/);
+  assert.equal(canPlace(w, a, "shield_generator", shields.pieces[0].at), null);
+  assert.ok(g.cheb(shields.pieces[0].at, g.idx(19, 19)) <= 5, "beside the capital");
+  put("shield_generator", g.x(shields.pieces[0].at), g.y(shields.pieces[0].at));
+  assert.equal(byKey(plan(), "shields"), undefined);
+});

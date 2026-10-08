@@ -2,6 +2,7 @@ import rules from "../../data/rules.json" with { type: "json" };
 import { UNIT_TYPES, wreck, disembark, canHit } from "./units.js";
 import { touched } from "./buildings.js";
 import { isLand } from "../shared/terrain.js";
+import { bombCut } from "./shields.js";
 
 export const AIR_RULES = { rearm: 20, reserve: 1.25, orbit: 2, detect: 6, cell: 8, dogfight: 4, overlap: 0.5, stickGap: 1.5, base: { reach: 1, slots: 4 }, bomb: { defenceCut: 0.5, cutSeconds: 90, repairSeconds: 120 }, ...rules.air };
 
@@ -30,8 +31,13 @@ export function installAir(world, { rules: r = AIR_RULES } = {}) {
   return T;
 }
 
-function liveBase(world, b, nid) {
-  return !!b && b.owner === nid && b.state === "active" && !!world.bld.table[b.type]?.airbase && world.owner[b.anchor] === nid;
+const lowName = s => (/^[A-Z]{2}/.test(s) ? s : s.toLowerCase());
+const listOf = a => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a.at(-1)}` : a[0]);
+
+export const takesPlane =(airbase, type) => !!airbase && (!type || !airbase.only || airbase.only.includes(type));
+
+function liveBase(world, b, nid, type = null) {
+  return !!b && b.owner === nid && b.state === "active" && takesPlane(world.bld.table[b.type]?.airbase, type) && world.owner[b.anchor] === nid;
 }
 
 export function centreOf(world, b) {
@@ -39,11 +45,11 @@ export function centreOf(world, b) {
   return [g.x(b.anchor) + fp[0] / 2, g.y(b.anchor) + fp[1] / 2];
 }
 
-export function nearestBase(world, nid, x, y) {
+export function nearestBase(world, nid, x, y, type = null) {
   let best = null, bd = Infinity;
   for (const id of world.bld?.mine.get(nid) ?? []) {
     const b = world.bld.list.get(id);
-    if (!liveBase(world, b, nid)) continue;
+    if (!liveBase(world, b, nid, type)) continue;
     const [cx, cy] = centreOf(world, b), d = Math.hypot(cx - x, cy - y);
     if (d < bd) { bd = d; best = b; }
   }
@@ -81,7 +87,7 @@ function setHome(A, home) {
 
 export function nearestHome(world, nid, x, y, plane = null) {
   let best = null, bd = Infinity;
-  const b = nearestBase(world, nid, x, y);
+  const b = nearestBase(world, nid, x, y, plane?.type);
   if (b) { const [cx, cy] = centreOf(world, b); bd = Math.hypot(cx - x, cy - y); best = { base: b.id }; }
   for (const c of world.units?.list.values() ?? []) {
     if (!liveCarrier(c, nid)) continue;
@@ -93,7 +99,9 @@ export function nearestHome(world, nid, x, y, plane = null) {
 
 function rebase(world, u, A, def, at) {
   const g = world.grid, bid = world.bld?.at.get(at), b = bid === undefined ? null : world.bld.list.get(bid);
-  let home = b && liveBase(world, b, u.owner) ? homeOf(world, { base: b.id }, u.owner) : null;
+  const only = b && liveBase(world, b, u.owner) && !liveBase(world, b, u.owner, u.type) ? world.bld.table[b.type] : null;
+  if (only) return { error: `a ${only.name.toLowerCase()} takes only ${listOf(only.airbase.only.map(t => lowName(UNIT_TYPES[t].name) + "s"))}` };
+  let home = b && liveBase(world, b, u.owner, u.type) ? homeOf(world, { base: b.id }, u.owner) : null;
   if (!home) for (const c of world.units.list.values()) {
     if (!liveCarrier(c, u.owner) || g.cheb(c.at, at) > 1) continue;
     const cap = carrierOf(c).planes;
@@ -259,7 +267,7 @@ export function drop(world, u, x, y, emit = true) {
   if (!def?.bomb || !(A.bombs > 0)) return null;
   A.bombs--;
   const R = def.bomb.radius * scaleOf(world), rr = Math.ceil(R), cx = Math.floor(x), cy = Math.floor(y), until = world.time + r.bomb.cutSeconds;
-  const hostile = o => !!o && o !== u.owner && world.hostile(u.owner, o);
+  const hostile = o => !!o && o !== u.owner && world.hostile(u.owner, o), cut = bombCut(world, u.owner, x, y);
   const hit = { plots: 0, troops: 0, stacks: 0, buildings: 0, machines: 0 };
   for (let dy = -rr; dy <= rr; dy++) for (let dx = -rr; dx <= rr; dx++) {
     const px = cx + dx, py = cy + dy;
@@ -267,7 +275,7 @@ export function drop(world, u, x, y, emit = true) {
     const i = g.idx(px, py);
     if (hostile(world.owner[i])) { T.bombed.set(i, until); hit.plots++; }
     const bid = world.bld?.at.get(i), b = bid === undefined ? null : world.bld.list.get(bid);
-    if (b && hostile(b.owner) && b.state === "active") {
+    if (b && hostile(b.owner) && b.state === "active" && cut === 1) {
       b.state = "damaged";
       b.repairAt = world.time + r.bomb.repairSeconds;
       T.repairs.add(b.id);
@@ -277,7 +285,7 @@ export function drop(world, u, x, y, emit = true) {
   }
   for (const s of [...world.stacks.values()]) {
     if (!hostile(s.owner) || Math.hypot(g.x(s.pos) + 0.5 - x, g.y(s.pos) + 0.5 - y) > R + 0.5) continue;
-    const loss = Math.min(s.troops, def.bomb.troops);
+    const loss = Math.min(s.troops, def.bomb.troops * cut);
     world.loseTroops(s, loss);
     hit.troops += loss;
     hit.stacks++;
@@ -285,13 +293,13 @@ export function drop(world, u, x, y, emit = true) {
   }
   for (const m of [...world.units.list.values()]) {
     if (m.wreck || isPlane(m) || !hostile(m.owner) || UNIT_TYPES[m.type]?.domain !== "land" || Math.hypot(g.x(m.at) + 0.5 - x, g.y(m.at) + 0.5 - y) > R + 0.5) continue;
-    m.hp -= def.bomb.machine ?? 0;
+    m.hp -= (def.bomb.machine ?? 0) * cut;
     m.hitBy = u.owner;
     hit.machines++;
     if (m.hp <= 0) wreck(world, m);
   }
   const at = g.idx(Math.max(0, Math.min(g.w - 1, cx)), Math.max(0, Math.min(g.h - 1, cy)));
-  if (emit) world.emit("bombed", { by: u.owner, at, nation: world.owner[at] || null, machine: u.id, ...hit, troops: Math.round(hit.troops) });
+  if (emit) world.emit("bombed", { by: u.owner, at, nation: world.owner[at] || null, machine: u.id, ...hit, troops: Math.round(hit.troops), ...(cut < 1 ? { shielded: true } : {}) });
   return hit;
 }
 
