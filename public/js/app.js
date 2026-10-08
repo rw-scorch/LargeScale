@@ -347,7 +347,7 @@ class Game {
     if (e.type === "trade_sunk" && e.by === you) say(`ts${e.machine}`, `Your submarine sank a trade ship of ${name(e.nation)}'s.`, 0, "good", e.at);
     const warhead = e.kind && w.nukeRules?.warheads?.[e.kind] ? w.nukeRules.warheads[e.kind].name.toLowerCase() : "warhead", aw = /^[aeiou]/.test(warhead) ? "an" : "a", secs = s => (s / (w.speed || 1) >= 90 ? `${Math.round(s / (w.speed || 1) / 60)} min` : `${Math.round(s / (w.speed || 1))} s`);
     const wonder = e.kind && w.defs.table[e.kind]?.wonder ? w.defs.table[e.kind].name : null;
-    const ground = e.from ? e.from.replace(/_/g, " ") : "ground";
+    const ground = typeof e.from === "string" ? e.from.replace(/_/g, " ") : "ground";
     if (e.type === "terrain_dug" && e.nation === you) say(`td${e.at}:${e.half ? 1 : 0}`, e.half ? `${name(e.by)}'s engineers are half way through your ${w.digOf?.(e.at)?.name?.replace(/_/g, " ") ?? "land"}.` : `${name(e.by)}'s engineers are digging into your land.`, 0, "danger", e.at);
     const who = e.cause === "shell" ? "shells" : "engineers";
     if (e.type === "terrain_broken" && e.cause !== "bomb" && (e.nation === you || e.by === you) && e.by !== undefined) say(`tb${e.at}`, e.by === you ? `Your ${who} broke through the ${ground}: it is ${e.to} now.` : `${name(e.by)}'s ${who} broke through your ${ground}.`, 0, e.by === you ? "good" : "danger", e.at);
