@@ -451,7 +451,7 @@ export class World extends DurableObject {
       tourismRules: TOURISM_RULES, cbdRules: { ...this.sim.cbd.rules, scale: this.sim.cbd.scale },
       eng: engView(this.sim), engRules: { ...ENG_RULES, classOf: CLASS_OF },
       diplomacy: this.dipView(nation), dipRules: this.dipRules(), noteRules: NOTES,
-      nukes: flightsOf(this.sim), nukeRules: { warheads: NUKE_RULES.warheads, samChance: NUKE_RULES.samChance, overlap: NUKE_RULES.overlap, outerLoss: NUKE_RULES.outerLoss, scale: this.info.map.scale ?? 1 },
+      nukes: flightsOf(this.sim), nukeRules: { warheads: NUKE_RULES.warheads, samChance: NUKE_RULES.samChance, overlap: NUKE_RULES.overlap, outerLoss: NUKE_RULES.outerLoss, salvoMax: NUKE_RULES.salvoMax, maxRadius: NUKE_RULES.maxRadius, scale: this.info.map.scale ?? 1 },
       plan: nation === null ? [] : planQueue(this.sim.nations.get(nation)), planRules: { ...PLAN_RULES, scale: this.info.map.scale ?? 1, tradeMin: rules.trade.minPlots * (this.info.map.scale ?? 1) },
     }));
     for (const f of terrainFrames) server.send(f);

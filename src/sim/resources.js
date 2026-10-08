@@ -81,6 +81,7 @@ export function depositAt(world, i) {
 export function setTerrain(world, i, tid) {
   const res = world.res;
   world.terrain[i] = tid;
+  if (world.eng?.hp.delete(i)) world.eng.changed = true;
   res.edits.set(i, tid);
   res.terrainNews.add(i);
   world.bld.changed.add("land");

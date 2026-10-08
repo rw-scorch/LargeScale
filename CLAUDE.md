@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (375)
+npm test                  # unit tests (379)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -495,6 +495,24 @@ The rules are in `rules.json` `planner` (`district`, `growRoom`, `newCityGap`, `
 
 - `npm run ui` deletes the worlds it makes unless `KEEP_WORLDS=1`.
 - The local dev state had 1,575 test worlds, which slowed the world list.
+
+**Bigger nukes and salvos (9 October 2026, branch `big-nukes`, stacked on `planner-cities`).** Ryan asked for nukes "way stronger, like 50x50 tiles", or nukes that combine.
+
+- **New warheads** in the missile silo:
+
+  | Warhead | Radius | Gold | Research |
+  |---|---|---|---|
+  | `megaton` | 25 | 250,000 | Megaton warheads (Modern) |
+  | `strategic` | 50 | 600,000 | Strategic warheads (Future) |
+  | `doomsday` | 100 | 1.5 million | Doomsday device (Future) |
+
+- **Salvos** (`checkSalvo`, `launchSalvo` in `src/sim/nukes.js`). The `nuke` order with `silos` fires 2 to `salvoMax` (12) silos at one spot as one flight.
+  - The blast areas add up: the radius is the square root of the sum of the squares, capped at `maxRadius` 200 times the map scale.
+  - `resolveSalvo` rolls the defences for each warhead (`nuke_intercepted` with `partial`), and only the warheads that get through make the blast.
+  - The silo card has "Fire with N more silos".
+- **Craters** grow with the warhead (`craterShare` of the inner radius).
+- **Timing:** a radius-100 blast takes about 10 ms in one tick, and the radius-200 cap about 23 ms.
+- **Fixed:** `setTerrain` drops worn engineering hit points, so a plot changed by a blast no longer reports hit points out of 0.
 
 Open items as of 8 October 2026, in order:
 

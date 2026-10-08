@@ -28,7 +28,7 @@ const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air
 
 const engFrom = v => ({ hp: new Map((v?.hp ?? []).map(([i, hp, max]) => [i, [hp, max]])), roads: new Map(v?.roads ?? []), jobs: (v?.jobs ?? []).map(([at, nation, kind, recipe, crew, done, to, k, total]) => ({ at, nation, kind: ["dig", "build", "tunnel"][kind] ?? "dig", recipe, crew, done, ...(kind === 2 ? { to, k, total } : {}) })), dug: new Map(v?.dug ?? []) });
 
-const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner, conventional: !!e.conventional });
+const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner, conventional: !!e.conventional, count: e.count ?? 1 });
 
 export class ClientWorld {
   constructor(hello) {
@@ -490,7 +490,11 @@ export class ClientWorld {
         if (e.type === "deposit_depleted") this.depleted.add(e.at);
         if (e.type === "bombed") this.effects.push({ kind: "bomb", plot: e.at, at: Date.now(), bombs: e.bombs ?? 1, heading: this.machines.get(e.machine)?.air?.heading ?? 0, shielded: !!e.shielded });
         if (e.type === "nuke_launched") { this.nukes = this.nukes.filter(f => f.id !== e.id); this.nukes.push(flightOf(e)); }
-        if (e.type === "nuke_intercepted" || e.type === "nuke_detonated") {
+        if (e.type === "nuke_intercepted" && e.partial) {
+          const f = this.nukes.find(f => f.id === e.id);
+          if (f) f.shot = (f.shot ?? 0) + 1;
+          this.blasts.push({ kind: "intercept", plot: e.target, radius: 4, inner: 1, by: e.by, with: e.with ?? null, orbital: false, at: Date.now() });
+        } else if (e.type === "nuke_intercepted" || e.type === "nuke_detonated") {
           const f = this.nukes.find(f => f.id === e.id);
           this.nukes = this.nukes.filter(f => f.id !== e.id);
           this.blasts.push({ kind: e.type === "nuke_detonated" ? "blast" : "intercept", plot: e.type === "nuke_detonated" ? e.at : e.target, radius: e.radius ?? f?.radius ?? 8, inner: e.inner ?? f?.inner ?? 3, by: e.by, with: e.with ?? null, orbital: f?.kind === "orbital" || e.kind === "orbital", at: Date.now() });

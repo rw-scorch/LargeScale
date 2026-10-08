@@ -9,7 +9,7 @@ import { setTerrain } from "./resources.js";
 import { setRoad } from "./logistics.js";
 import { shieldsOver } from "./shields.js";
 
-export const NUKE_RULES = { crater: 1, outerLoss: 0.6, outerResidents: 0.3, outerDamage: 0.6, repairSeconds: 600, samChance: 0.15, overlap: 0.5, cancelRefund: 1, sitesEvery: 2, ...rules.nukes };
+export const NUKE_RULES = { crater: 1, craterShare: 0.25, salvoMax: 12, maxRadius: 200, outerLoss: 0.6, outerResidents: 0.3, outerDamage: 0.6, repairSeconds: 600, samChance: 0.15, overlap: 0.5, cancelRefund: 1, sitesEvery: 2, ...rules.nukes };
 export const WARHEADS = NUKE_RULES.warheads;
 
 const scaleOf = world => world.machines?.scale ?? 1;
@@ -135,6 +135,38 @@ export function checkLaunch(world, nid, bid, target) {
   return { ok: true, kind: have.kind, conventional: !!W.conventional, flight, owner, chance: Math.round(interceptChance(defences) * 100) / 100, defences: defences.length, radius: W.radius * sc, inner: W.inner * sc, from: s.b.anchor };
 }
 
+const blend = (parts, cap) => Math.min(cap, Math.hypot(...parts));
+
+export function checkSalvo(world, nid, bids, target) {
+  const r = world.nukes.rules, ids = [...new Set(bids)];
+  if (!Array.isArray(bids) || ids.length < 2 || ids.length > r.salvoMax || !ids.every(Number.isInteger)) return { error: `a salvo is 2 to ${r.salvoMax} silos` };
+  const n = world.nations.get(nid), sc = scaleOf(world), parts = [];
+  let first = null;
+  for (const bid of ids) {
+    const c = checkLaunch(world, nid, bid, target);
+    if (c.error) return { error: c.error === "the missile is not ready yet" || c.error === "this silo holds no missile" ? `every silo in a salvo needs a ready warhead: ${c.error}` : c.error };
+    const W = r.warheads[c.kind];
+    if (W.conventional || W.shieldOnly) return { error: "only nuclear warheads join a salvo" };
+    parts.push({ bid, kind: c.kind, flight: c.flight, radius: c.radius, inner: c.inner });
+    first ??= c;
+  }
+  parts.sort((a, b) => b.radius - a.radius);
+  const cap = r.maxRadius * sc, radius = blend(parts.map(p => p.radius), cap), inner = blend(parts.map(p => p.inner), cap * 0.36);
+  return { ...first, kind: parts[0].kind, kinds: parts.map(p => p.kind), silos: parts.map(p => p.bid), count: parts.length, flight: Math.max(...parts.map(p => p.flight)), radius: Math.round(radius * 10) / 10, inner: Math.round(inner * 10) / 10, capped: Math.hypot(...parts.map(p => p.radius)) > cap, from: world.bld.list.get(parts[0].bid).anchor };
+}
+
+export function launchSalvo(world, nid, bids, target) {
+  const c = checkSalvo(world, nid, bids, target);
+  if (c.error) return c;
+  const st = stateOf(world.nations.get(nid));
+  for (const bid of c.silos) delete st.silos[bid];
+  const sc = scaleOf(world), W = world.nukes.rules.warheads;
+  const f = { id: nid * 100000 + st.next++, kind: c.kind, kinds: c.kinds, count: c.count, parts: c.kinds.map(k => [W[k].radius * sc, W[k].inner * sc]), from: c.from, target, launched: world.time, due: world.time + c.flight, toward: c.owner, radius: c.radius, inner: c.inner };
+  st.flying.push(f);
+  world.emit("nuke_launched", { nation: nid, ...f, seconds: c.flight });
+  return { ok: true, id: f.id, kind: c.kind, count: c.count, seconds: c.flight, chance: c.chance, radius: c.radius };
+}
+
 export function launchWarhead(world, nid, bid, target) {
   const c = checkLaunch(world, nid, bid, target);
   if (c.error) return c;
@@ -148,6 +180,7 @@ export function launchWarhead(world, nid, bid, target) {
 
 function resolve(world, owner, f) {
   const N = world.nukes;
+  if (f.kinds) return resolveSalvo(world, owner, f);
   for (const d of defencesAt(world, owner, f.target, f.kind)) {
     if (d.key) d.h[d.key]--;
     if ((d.kind === "sam" || d.kind === "truck") && world.air) world.air.reloading = true;
@@ -157,6 +190,27 @@ function resolve(world, owner, f) {
     }
   }
   return detonate(world, { owner, ...f });
+}
+
+function resolveSalvo(world, owner, f) {
+  const N = world.nukes, through = [];
+  f.kinds.forEach((kind, k) => {
+    for (const d of defencesAt(world, owner, f.target, kind)) {
+      if (d.key) d.h[d.key]--;
+      if ((d.kind === "sam" || d.kind === "truck") && world.air) world.air.reloading = true;
+      if (N.roll() < d.p) {
+        world.emit("nuke_intercepted", { id: f.id, nation: owner, by: d.owner, kind, target: f.target, toward: f.toward, from: [Math.round(d.x * 10) / 10, Math.round(d.y * 10) / 10], with: d.kind, partial: true, left: f.kinds.length - k - 1 + through.length });
+        return;
+      }
+    }
+    through.push(f.parts[k]);
+  });
+  if (!through.length) {
+    world.emit("nuke_intercepted", { id: f.id, nation: owner, by: null, kind: f.kind, target: f.target, toward: f.toward, salvo: true, count: f.count });
+    return null;
+  }
+  const cap = N.rules.maxRadius * scaleOf(world);
+  return detonate(world, { owner, ...f, count: through.length, radius: blend(through.map(p => p[0]), cap), inner: blend(through.map(p => p[1]), cap * 0.36) });
 }
 
 function worse(map, id, level) {
@@ -218,7 +272,7 @@ export function strike(world, m) {
 export function detonate(world, m) {
   const r = world.nukes?.rules ?? NUKE_RULES, W = r.warheads[m.kind], g = world.grid, sc = scaleOf(world);
   if (W.conventional) return strike(world, m);
-  const R = W.radius * sc, inner = W.inner * sc, crater = r.crater * sc, rr = Math.ceil(R);
+  const R = m.radius ?? W.radius * sc, inner = m.inner ?? W.inner * sc, crater = Math.max(r.crater * sc, inner * (r.craterShare ?? 0)), rr = Math.ceil(R);
   const cx = g.x(m.target), cy = g.y(m.target), tx = cx + 0.5, ty = cy + 0.5;
   const capitals = new Set();
   for (const n of world.nations.values()) if (n.capital != null) capitals.add(n.capital);
@@ -283,7 +337,7 @@ export function detonate(world, m) {
   }
   hit.troops = Math.round(hit.troops);
   hit.residents = Math.round(hit.residents);
-  world.emit("nuke_detonated", { id: m.id ?? null, by: m.owner, nation: m.toward ?? null, at: m.target, kind: m.kind, radius: R, inner, ...hit });
+  world.emit("nuke_detonated", { id: m.id ?? null, by: m.owner, nation: m.toward ?? null, at: m.target, kind: m.kind, radius: R, inner, ...(m.count > 1 ? { count: m.count } : {}), ...hit });
   return hit;
 }
 
