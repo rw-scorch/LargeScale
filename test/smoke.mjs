@@ -255,22 +255,23 @@ check(aSpawn >= 0, "player spawns on land");
   const zoneFrames = () => B.binary.filter(f => f[0] === MSG.ZONE_DIFF).length;
   check(await until(() => zoneFrames() > 0, 3000), `the friend receives the zone changes (${zoneFrames()} frames)`);
   const rr = async (kind, via) => { A.ws.send(JSON.stringify({ t: "road", kind, via })); return nextResult(A, "road"); };
-  const runNear = () => {
-    const free = i => cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && !cw.zone[i];
-    for (const [du, dv] of [[1, M.w], [M.w, 1]])
-      for (let a = -12; a <= 12; a++) {
-        let run = [];
-        for (let b = -14; b <= 14; b++) {
-          const i = (cy * M.w + cx) + a * dv + b * du;
-          if (i >= 0 && i < cw.owner.length && free(i)) { run.push(i); if (run.length >= 6) return run; } else run = [];
-        }
-      }
+  const runNear = (zoned = false) => {
+    const free = i => cw.owner[i] === you && !cw.buildingAt(i) && isLand(cw.terrain[i]) && (zoned || !cw.zone[i]) && !cw.roads[i];
+    const near = i => Math.abs((i % M.w) - cx) + Math.abs(Math.floor(i / M.w) - cy);
+    const starts = [];
+    for (let i = 0; i < cw.owner.length; i++) if (free(i)) starts.push(i);
+    starts.sort((p, q) => near(p) - near(q));
+    for (const i of starts) for (const d of [1, M.w]) {
+      if (d === 1 && (i % M.w) + 5 >= M.w) continue;
+      const run = [0, 1, 2, 3, 4, 5].map(k => i + k * d);
+      if (run.every(j => j < cw.owner.length && free(j))) return run;
+    }
     return null;
   };
   let run = null, laid = null, gold0 = cw.purse.money;
   for (let k = 0; k < 3 && !laid?.ok; k++) {
     view.pump();
-    run = runNear();
+    run = runNear() ?? runNear(true);
     gold0 = cw.purse.money;
     laid = run && await rr("dirt", [run[0], run[5]]);
   }
