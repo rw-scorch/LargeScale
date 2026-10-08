@@ -52,7 +52,9 @@ export function createSettings(root, game) {
       el("label", { class: "row" }, "Placing a building:", place),
       el("label", { class: "row" }, paint, "Paint: drag to place a building on every free spot you pass. The same switch sits in the building bar."));
     const cross = el("input", { type: "checkbox", id: "set-crosshair", checked: !!prefs.crosshair, onchange: () => game.setPref("crosshair", cross.checked) });
-    access.replaceChildren(el("label", { class: "row" }, cross, "Crosshair: act at the middle of the screen and aim by moving the view. Select and Orders buttons appear; on a keyboard the arrow keys move, Space selects and E opens the orders."));
+    const tapRing = el("input", { type: "checkbox", id: "set-tap-ring", checked: prefs.tapRing !== false, onchange: () => game.setPref("tapRing", tapRing.checked) });
+    access.replaceChildren(el("label", { class: "row" }, cross, "Crosshair: act at the middle of the screen and aim by moving the view. Select and Orders buttons appear; on a keyboard the arrow keys move, Space selects and E opens the orders."),
+      el("label", { class: "row" }, tapRing, "On a touch screen, a tap on the map opens the orders ring, like a right-click. Off: a tap shows what is there, and holding a finger opens the ring."));
     said.textContent = note;
     keys.replaceChildren(...Object.entries(ACTIONS).filter(([a]) => a !== "admin" || game.canAdmin).map(([a, def]) => el("div", { class: "key-row" },
       el("span", { text: def.label }),

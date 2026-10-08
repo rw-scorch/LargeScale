@@ -7,11 +7,10 @@ const words = s => s.replace(/_/g, " ");
 export function digText(w, plot) {
   const d = w.digOf?.(plot);
   if (!d || (!d.cls && !d.road) || d.hp >= d.max && !d.job && !d.others.length) return "";
-  const what = d.road ? "Road" : words(d.name).replace(/^./, c => c.toUpperCase());
   const crew = d.job?.crew ?? 0, R = w.engRules;
   const left = crew ? `, ${span(d.hp / (R.digRate * crew))} left with ${crew} at work` : "";
   const by = d.others.length ? `, dug by ${d.others.map(j => w.nations.get(j.nation)?.name ?? "someone").join(" and ")}` : "";
-  return `${what}: ${Math.ceil(d.hp)} of ${d.max} hit points${left}${by}.`;
+  return `${d.road ? "Road: " : ""}${Math.ceil(d.hp)} of ${d.max} hit points${left}${by}.`;
 }
 
 export function createEngineering(game) {

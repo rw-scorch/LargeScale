@@ -37,7 +37,7 @@ export function createRing(root, game) {
   const close = () => { back.hidden = dot.hidden = ring.hidden = true; items = []; centre = null; };
   const choose = it => { if (!it || it.why) return; close(); it.run(); };
   const canvasAt = e => { const r = game.canvas.getBoundingClientRect(), k = game.view?.ratio ?? 1; return [(e.clientX - r.left) * k, (e.clientY - r.top) * k]; };
-  back.addEventListener("contextmenu", e => e.preventDefault());
+  for (const e of [back, dot, ring]) e.addEventListener("contextmenu", ev => ev.preventDefault());
   back.addEventListener("pointerdown", e => {
     e.preventDefault();
     close();

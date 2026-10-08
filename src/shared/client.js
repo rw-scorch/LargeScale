@@ -1,7 +1,7 @@
 import { PROTOCOL, MSG, ORDER_CODES, readFrame, applyPairs, pairs, PartCollector } from "./protocol.js";
 import { decodeRuns, gunzip } from "./codec.js";
 import { baseLayer } from "./maps.js";
-import { tableFrom, decodeRows, footprintAt, placeError, costError, STATES } from "./buildings.js";
+import { tableFrom, decodeRows, footprintAt, placeError, costError, growError, STATES } from "./buildings.js";
 import { emptyDeposits, decodeDeposits, cropDeposits, depositIndex } from "./deposits.js";
 import { lockMap, lockReason, researchError } from "./research.js";
 import { ERA_ORDER } from "./buildings.js";
@@ -350,12 +350,21 @@ export class ClientWorld {
     return id === undefined ? null : this.buildings.get(id);
   }
 
+  placeView() {
+    return { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, zone: this.zone, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id), road: this.roads, buildingList: () => this.buildings.values(), nameOf: id => this.nations.get(id)?.name ?? "another nation" };
+  }
+
   placeError(type, anchor) {
     const def = this.defs.table[type], me = this.nations.get(this.you);
     if (!def || !me) return "unknown building";
-    const view = { w: this.w, h: this.h, terrain: this.terrain, owner: this.owner, occupant: i => { const b = this.buildingAt(i); return b && b.state !== "rubble" ? b.id : 0; }, deposit: i => this.depositAt(i), lockOf: id => this.lockOf(id), road: this.roads, buildingList: () => this.buildings.values(), nameOf: id => this.nations.get(id)?.name ?? "another nation" };
     const nation = { id: this.you, era: this.purse?.era ?? "T", money: this.purse?.money ?? 0 };
-    return placeError(view, nation, def, anchor) ?? costError(def, nation);
+    return placeError(this.placeView(), nation, def, anchor) ?? costError(def, nation);
+  }
+
+  growError(b, view = this.placeView()) {
+    const next = b?.def?.next && this.defs.table[b.def.next];
+    if (!next) return "already top level";
+    return growError(view, { id: this.you, era: this.purse?.era ?? "T" }, { id: b.id, anchor: b.anchor, civilian: !!b.def.civilian }, next, this.zone);
   }
 
   planView(extra = {}) {

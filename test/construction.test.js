@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { World } from "../src/sim/territory.js";
-import { installConstruction, canPlace, place, demolish } from "../src/sim/construction.js";
+import { installConstruction, canPlace, place, demolish, placeView } from "../src/sim/construction.js";
 import { installEconomy } from "../src/sim/economy.js";
 import { buildingAt } from "../src/sim/buildings.js";
 import { runOrder, BuildingFeed, purseOf } from "../src/game.js";
 import { ClientWorld } from "../src/shared/client.js";
-import { encodeRows, decodeRows, planBatch } from "../src/shared/buildings.js";
+import { encodeRows, decodeRows, planBatch, growError } from "../src/shared/buildings.js";
 import { installResearch } from "../src/sim/research.js";
 import { frame, MSG, PROTOCOL } from "../src/shared/protocol.js";
 import { TID, TERRAIN } from "../src/shared/terrain.js";
@@ -250,4 +250,27 @@ test("the client greys out what the player cannot afford, with the reason", () =
   assert.equal(client.costError("watchtower_wood"), null);
   assert.equal(client.costError("harbour"), "needs 580 gold, you have 101");
   assert.equal(TERRAIN[TID.grassland].build, true);
+});
+
+test("a building with no room for its next level is not picked, and the order says so", () => {
+  const { w, a, g, n } = setup();
+  Object.assign(n, { era: "I", money: 1e6 });
+  const cramped = place(w, a, "town_hall", g.idx(19, 9)), roomy = place(w, a, "town_hall", g.idx(19, 17));
+  place(w, a, "watchtower_wood", g.idx(21, 10));
+  for (let t = 0; t < 400; t++) w.tick(1);
+  assert.ok([cramped, roomy].every(b => b.state === "active"));
+  const view = placeView(w, a), next = w.bld.table.parliament;
+  assert.equal(growError(view, n, cramped, next, w.bld.zone), "no room to grow", "a tower stands where the parliament would reach");
+  assert.equal(growError(view, n, roomy, next, w.bld.zone), null);
+  const client = new ClientWorld({ w: g.w, h: g.h, you: a, map: { kind: "test" }, hashes: {}, nations: [...w.nations.values()], defs: data.buildings, purse: purseOf(n), frames: { buildings: 1 } });
+  client.terrain = w.terrain.slice();
+  client.owner.set(w.owner);
+  client.ready = client.ownerReady = true;
+  client.frame(frame(MSG.BUILDINGS, encodeRows(new BuildingFeed().rows(w))));
+  assert.deepEqual([client.growError(client.buildings.get(cramped.id)), client.growError(client.buildings.get(roomy.id))], ["no room to grow", null], "the menu sees the same");
+  const r = runOrder(w, a, { t: "upgrade", picks: [["town_hall", 2]] });
+  assert.deepEqual({ done: r.done, missing: r.missing, skipped: r.skipped }, { done: 1, missing: 1, skipped: {} });
+  assert.deepEqual([cramped.type, roomy.type], ["town_hall", "parliament"]);
+  assert.equal(runOrder(w, a, { t: "upgrade", picks: [["town_hall", 1]] }).error, "none of those have room to grow");
+  assert.deepEqual(runOrder(w, a, { t: "upgrade", ids: [cramped.id] }).skipped, { "no room to grow": 1 }, "naming it still explains why");
 });

@@ -91,7 +91,10 @@ export function attachInput(canvas, view, { onTap, onSecondary, onHover, onChang
     if (g.line) return onTraceEnd?.(g.multi ? null : g.line);
     if (g.paint && !g.multi) return onDragEnd?.(g.start, at(e));
     if (g.swipe && !g.multi && far(g)) return onSwipeEnd?.(g.swipe, g.trail);
-    if (!g.multi && g.moved < 8 * ratio() && performance.now() - g.t < 500) onTap?.(...at(e));
+    if (!g.multi && g.moved < 8 * ratio() && performance.now() - g.t < 500) {
+      if (e.pointerType === "touch") swallow = true;
+      onTap?.(...at(e));
+    }
   };
   canvas.addEventListener("pointerup", end);
   canvas.addEventListener("touchend", e => { if (swallow) { swallow = false; e.preventDefault(); } }, { passive: false });

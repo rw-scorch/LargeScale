@@ -28,6 +28,7 @@ import { createTip } from "./ui/tip.js";
 import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
+import { createTroopsPanel } from "./ui/troops.js";
 import { createLogisticsPanel } from "./ui/logistics.js";
 import { createDiplomacyPanel } from "./ui/diplomacy.js";
 import { createNoteCard } from "./ui/notes.js";
@@ -106,6 +107,7 @@ class Game {
     this.buildingPanel = createBuildingPanel(side, this);
     this.town = createTownPanel(side, this);
     this.planner = createPlannerPanel(side, this);
+    this.troops = createTroopsPanel(side, this);
     this.research = createResearchPanel(overlay, this);
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
@@ -345,7 +347,7 @@ class Game {
     if (e.type === "trade_sunk" && e.by === you) say(`ts${e.machine}`, `Your submarine sank a trade ship of ${name(e.nation)}'s.`, 0, "good", e.at);
     const warhead = e.kind && w.nukeRules?.warheads?.[e.kind] ? w.nukeRules.warheads[e.kind].name.toLowerCase() : "warhead", aw = /^[aeiou]/.test(warhead) ? "an" : "a", secs = s => (s / (w.speed || 1) >= 90 ? `${Math.round(s / (w.speed || 1) / 60)} min` : `${Math.round(s / (w.speed || 1))} s`);
     const wonder = e.kind && w.defs.table[e.kind]?.wonder ? w.defs.table[e.kind].name : null;
-    const ground = e.from ? e.from.replace(/_/g, " ") : "ground";
+    const ground = typeof e.from === "string" ? e.from.replace(/_/g, " ") : "ground";
     if (e.type === "terrain_dug" && e.nation === you) say(`td${e.at}:${e.half ? 1 : 0}`, e.half ? `${name(e.by)}'s engineers are half way through your ${w.digOf?.(e.at)?.name?.replace(/_/g, " ") ?? "land"}.` : `${name(e.by)}'s engineers are digging into your land.`, 0, "danger", e.at);
     const who = e.cause === "shell" ? "shells" : "engineers";
     if (e.type === "terrain_broken" && e.cause !== "bomb" && (e.nation === you || e.by === you) && e.by !== undefined) say(`tb${e.at}`, e.by === you ? `Your ${who} broke through the ${ground}: it is ${e.to} now.` : `${name(e.by)}'s ${who} broke through your ${ground}.`, 0, e.by === you ? "good" : "danger", e.at);
@@ -474,6 +476,7 @@ class Game {
     if (action === "plan") return this.togglePlanner();
     if (action === "deposits") return this.toggleDeposits();
     if (action === "armies") return this.toggleArmies();
+    if (action === "troops") return this.toggleTroops();
     if (action === "pilot") return this.pilotSelected();
     if (this.picked && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.soldiersPanel.act[action](); return this.updatePanels(); }
     if (this.group && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.groupPanel.act[action](); return this.updatePanels(); }
@@ -502,6 +505,7 @@ class Game {
       else if (this.record.open) this.record.show(false);
       else if (this.research.open) this.toggleResearch(false);
       else if (this.planner.open) this.togglePlanner(false);
+      else if (this.troops.open) this.toggleTroops(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
       else if (this.soldiersPanel.choosing) { this.soldiersPanel.cancel(); }
@@ -559,6 +563,12 @@ class Game {
     if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.upgrade.show(on && !!this.world?.purse && !!me?.spawned);
+    this.updatePanels();
+  }
+
+  toggleTroops(on = !this.troops.open) {
+    const me = this.world?.nations.get(this.world.you);
+    this.troops.show(on && !!me?.spawned && me.alive && !this.world.frozen);
     this.updatePanels();
   }
 
@@ -996,6 +1006,8 @@ class Game {
     const base = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.picked ? this.soldiersPanel.ringFor(plot) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
     const items = u && u.owner === w.you ? base : [...base, ...this.engineering.ringFor(plot)];
     if (!items.length) return this.tip.pin(sx, sy);
+    const o = w.owner[plot], them = o && o !== w.you ? w.nations.get(o) : null;
+    if (them) items.push({ id: "nation", label: them.name, icon: "dip_alliance", run: () => this.selectNation(o, plot) });
     this.ring.show(sx, sy, [...items, { id: "info", label: "Info", icon: "ui_info", run: () => this.tip.pin(sx, sy, 5000) }]);
   }
 
@@ -1051,7 +1063,8 @@ class Game {
     }
     const me = w.nations.get(w.you);
     if (me && !me.spawned && !w.frozen) return this.spawn.tryAt(x, y);
-    const b = w.buildingAt(plot);
+    const b = w.buildingAt(plot), ordering = this.selected !== null || this.selectedMachine !== null || this.group || this.picked;
+    if (this.lastPointer !== "mouse" && this.prefs.tapRing !== false && me?.alive && !w.frozen && (ordering || !b)) return this.secondary(sx, sy);
     if (b) return this.selectBuilding(b.id);
     this.selectGroup(null);
     this.select(null);
@@ -1375,7 +1388,7 @@ class Game {
       for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
       if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
     }
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.diplomacy, this.machinePanel, this.nationCard, this.noteCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.troops, this.research, this.upgrade, this.army, this.logistics, this.diplomacy, this.machinePanel, this.nationCard, this.noteCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

@@ -1,4 +1,4 @@
-import { placeError, costError, eraIdx, levelsOf, priceOf as sharedPrice } from "../shared/buildings.js";
+import { placeError, costError, eraIdx, levelsOf, growError, priceOf as sharedPrice } from "../shared/buildings.js";
 import { ERA_ORDER, BUILDINGS, installBuildings, footprint, addBuilding, removeBuilding, setPlots, buildingAt, touched } from "./buildings.js";
 import rules from "../../data/rules.json" with { type: "json" };
 
@@ -129,14 +129,15 @@ function levelOf(table, type) {
   return levels.get(table).get(type);
 }
 
-export function listUpgradable(world, nid, { filter = "all", category = null } = {}) {
-  const rows = [], bld = world.bld, table = bld.table;
+export function listUpgradable(world, nid, { filter = "all", category = null, room = false } = {}) {
+  const rows = [], bld = world.bld, table = bld.table, view = room ? placeView(world, nid) : null, n = world.nations.get(nid);
   for (const id of bld.mine.get(nid) ?? []) {
     const b = bld.list.get(id), def = table[b.type], civilian = b.civilian;
     if (b.owner !== nid || b.state !== "active" || !def.next) continue;
     if (filter === "civilian" && !civilian) continue;
     if (filter === "player" && civilian) continue;
     if (category && (def.cat ?? def.zone) !== category) continue;
+    if (room && eraIdx(table[def.next].era) <= eraIdx(n.era ?? "T") && !world.lockReason?.(nid, def.next) && growError(view, n, b, table[def.next], bld.zone)) continue;
     const lv = levelOf(table, b.type);
     rows.push({ id: b.id, civilian, type: b.type, next: def.next, level: lv.level, chain: lv.base, era: def.era });
   }
@@ -163,11 +164,8 @@ export function bulkUpgrade(world, nid, picks) {
     if (eraIdx(nd.era) > eraIdx(n.era ?? "T")) { skipped.push([p.id, "era locked"]); continue; }
     const locked = world.lockReason?.(nid, next);
     if (locked) { skipped.push([p.id, locked]); continue; }
+    if (growError(view, n, b, nd, bld.zone)) { skipped.push([p.id, "no room to grow"]); continue; }
     const plots = footprint(world, b.anchor, nd.fp);
-    let bad = !plots;
-    if (!bad && b.civilian) bad = plots.some(i => { const o = view.occupant(i); return world.owner[i] !== nid || (o && o !== b.id) || bld.zone[i] !== bld.zone[b.anchor]; });
-    if (!bad && !b.civilian) bad = !!canPlace(world, nid, next, b.anchor, b.id);
-    if (bad) { skipped.push([p.id, "no room to grow"]); continue; }
     const price = priceOf(nd.cost, n, premium, world.cons?.rules);
     if ((n.money ?? 0) < price.money) { skipped.push([p.id, "not enough money"]); continue; }
     charge(n, price);

@@ -37,11 +37,17 @@ export function createUpgradePanel(root, game) {
 
   const groupsOf = w => {
     levels ??= levelsOf(w.defs.table);
-    const count = new Map();
-    for (const b of w.buildings.values()) if (b.owner === w.you && b.state === "active" && b.def?.next) count.set(b.type, (count.get(b.type) ?? 0) + 1);
-    return [...count].map(([type, n]) => {
-      const def = w.defs.table[type], next = w.defs.table[def.next], lv = levels.get(type);
-      return { type, def, next, count: n, level: lv.level, base: lv.base, civilian: !!def.civilian, why: upgradeLock(w, next) };
+    const count = new Map(), view = w.placeView();
+    for (const b of w.buildings.values()) {
+      if (b.owner !== w.you || b.state !== "active" || !b.def?.next) continue;
+      const c = count.get(b.type) ?? count.set(b.type, { room: 0, cramped: 0 }).get(b.type);
+      if (upgradeLock(w, w.defs.table[b.def.next]) || !w.growError(b, view)) c.room++;
+      else c.cramped++;
+    }
+    return [...count].map(([type, c]) => {
+      const def = w.defs.table[type], next = w.defs.table[def.next], lv = levels.get(type), lock = upgradeLock(w, next);
+      const why = lock ?? (c.room ? null : `no room to grow: something stands where the ${next.name.toLowerCase()} would go`);
+      return { type, def, next, count: lock || c.room ? c.room : c.cramped, cramped: lock ? 0 : c.cramped, level: lv.level, base: lv.base, civilian: !!def.civilian, why };
     }).sort((a, b) => a.civilian - b.civilian || a.level - b.level || eraIdx(a.def.era) - eraIdx(b.def.era) || a.base.localeCompare(b.base) || a.type.localeCompare(b.type));
   };
 
@@ -91,7 +97,7 @@ export function createUpgradePanel(root, game) {
       row.classList.toggle("on", n > 0);
       if (document.activeElement !== val) val.value = String(n);
       val.max = String(g.count);
-      have.textContent = ` You have ${g.count}. Each: ${eachText(g.next)}.`;
+      have.textContent = ` You have ${g.count}${g.cramped ? ` with room to grow, and ${g.cramped} without` : ""}. Each: ${eachText(g.next)}.`;
     }
     const p = plan();
     const money = w.purse?.money ?? 0;

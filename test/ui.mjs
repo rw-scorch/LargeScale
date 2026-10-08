@@ -389,7 +389,17 @@ const ringAt = async (p, plot) => {
 const ownRing = await ringAt(page, capital);
 await page.screenshot({ path: `${OUT}/5b-ring-own-${MAP}.png` });
 check(ownRing.join() === "form,build,zone,note,info", `with nothing selected, a right-click on your land opens the ring: ${ownRing.join(", ")}, with Form stack in the centre`);
+const menuBlocked = await page.evaluate(() => [...document.querySelectorAll("#ring .ring-item, #ring, #ring-dot")].map(e => !e.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }))));
+check(menuBlocked.length >= 2 && menuBlocked.every(Boolean), `the browser's own menu cannot open over the ring, which sits under the pointer when the button comes up (${menuBlocked.filter(Boolean).length} of ${menuBlocked.length} parts block it)`);
 await page.keyboard.press("Escape");
+await page.click("#pick-armies");
+const troopRows = await page.waitForSelector("#troops-panel:not([hidden]) .troops-row", { timeout: 3000 }).then(() => page.$$eval("#troops-list .troops-row", r => r.length), () => 0);
+const myCompanies = await page.evaluate(() => window.__ls.game.world.myStacks().length);
+await page.click("#troops-select");
+const allChosen = await page.evaluate(() => { const g = window.__ls.game; return g.group ? g.group.size : g.selected !== null ? 1 : 0; });
+await page.screenshot({ path: `${OUT}/5f-all-troops-${MAP}.png` });
+check(myCompanies > 0 && troopRows === myCompanies && allChosen === Math.min(myCompanies, 100), `the Armies button opens the all-troops panel with your ${troopRows} of ${myCompanies} companies, and Select all picks ${allChosen}`);
+await page.evaluate(() => { const g = window.__ls.game; g.toggleTroops(false); g.selectGroup(null); g.select(null); });
 check(await page.evaluate(() => document.querySelector("#ring").hidden), "Esc closes the ring");
 const ringSpots = await page.evaluate(() => {
   const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
@@ -411,7 +421,7 @@ const attackLabel = await page.textContent("#ring [data-ring=attack] .label").ca
 await page.screenshot({ path: `${OUT}/5c-ring-attack-${MAP}.png` });
 if (foeRing[0] === "attack") await page.click("#ring [data-ring=attack]");
 const attacking = await page.waitForFunction(id => { const w = window.__ls.game.world; return (w.purse?.orders ?? []).some(o => o.only === id) || w.myMachines().some(u => u.type === "transport_boat"); }, ringSpots.foeId, { timeout: 5000 }).then(() => true, () => false);
-check(foeRing.join() === "attack,note,info" && attackLabel === `Attack ${ringSpots.foeName}` && attacking, `on ${ringSpots.foeName}'s land the ring offers "${attackLabel}", which forms a stack at your nearest land that advances into that nation only`);
+check(foeRing.join() === "attack,note,nation,info" && attackLabel === `Attack ${ringSpots.foeName}` && attacking, `on ${ringSpots.foeName}'s land the ring offers "${attackLabel}", which forms a stack at your nearest land that advances into that nation only`);
 await page.keyboard.press("Escape");
 const cardSpot = await page.evaluate(([foe, id]) => {
   const g = window.__ls.game, w = g.world, v = g.view;
@@ -576,6 +586,25 @@ await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }
 const heldRing = await ringItems(phone);
 await phone.screenshot({ path: `${OUT}/8b-phone-ring-${MAP}.png` });
 check(heldRing[0] === "form" && heldRing.includes("info"), `on a phone, holding a finger on your land opens the ring (${heldRing.join(", ")})`);
+await phone.touchscreen.tap(150, 150);
+await phone.waitForTimeout(200);
+const tapSpot = await phone.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, v = g.view, cap = w.nations.get(w.you).capital;
+  g.select(null);
+  g.focus(cap, 16);
+  await new Promise(r => setTimeout(r, 300));
+  for (let r = 1; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const i = cap + dy * w.w + dx;
+    if (w.owner[i] !== w.you || w.buildingAt(i)) continue;
+    const [x, y] = v.plotToScreen((i % w.w) + 0.5, ((i / w.w) | 0) + 0.5);
+    if (x < 200 || y < 120 || x > v.canvas.width - 400 || y > v.canvas.height - 200 || v.stackAt(x, y) !== null || v.machineAt(x, y) !== null) continue;
+    return { x: x / v.ratio, y: y / v.ratio };
+  }
+  return null;
+});
+if (tapSpot) await phone.touchscreen.tap(tapSpot.x, tapSpot.y);
+const tappedRing = await ringItems(phone);
+check(tappedRing[0] === "form" && tappedRing.includes("info"), `on a phone, a tap on your land opens the same ring as a right-click (${tappedRing.join(", ")})`);
 await phone.touchscreen.tap(150, 150);
 await phone.waitForTimeout(200);
 check(await phone.evaluate(() => document.querySelector("#ring").hidden), "a tap outside the ring closes it");
@@ -2325,9 +2354,20 @@ check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the b
   await gp.evaluate(() => window.__ls.game.selectBuilding(null));
 }
 {
+  const engId = await newWorld(gp, "UI engineers", { map: "test", w: 160, h: 100, seed: 4, bots: 0 });
+  await gp.goto(`${BASE}/#w=${engId}`);
+  await gp.reload();
+  await ready(gp);
   const en = await gp.evaluate(async () => {
     const g = window.__ls.game, w = g.world, { TERRAIN, isLand } = await import("/js/shared/terrain.js");
     const wait = async (f, ms = 8000) => { const end = Date.now() + ms; let v; while (!(v = f()) && Date.now() < end) await new Promise(r => setTimeout(r, 100)); return v; };
+    const roughAt = i => ["hills", "mountain", "forest", "pine_forest", "jungle", "swamp"].includes(TERRAIN[w.terrain[i]].name);
+    spawning: for (let y = 10; y < w.h - 10; y++) for (let x = 10; x < w.w - 10; x++) {
+      const i = y * w.w + x;
+      if (!isLand(w.terrain[i]) || roughAt(i) || ![i - 2, i + 2, i - 2 * w.w, i + 2 * w.w].some(roughAt)) continue;
+      if ((await g.conn.request({ t: "spawn", x, y })).ok) break spawning;
+    }
+    await wait(() => w.nations.get(w.you)?.spawned && w.purse);
     await g.conn.request({ t: "research", id: "sappers", mode: "queue" });
     await g.conn.request({ t: "admin", op: "finish", nation: w.you });
     await wait(() => !w.lockOf("engineer", "units") && w.engRules);
@@ -2336,8 +2376,9 @@ check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the b
     const R = w.engRules, cls = i => R.classOf[TERRAIN[w.terrain[i]].name], rank = { rock: 0, hard: 1, soft: 2 };
     const stand = i => [i - 1, i + 1, i - w.w, i + w.w].find(j => j >= 0 && j < w.owner.length && Math.abs((j % w.w) - (i % w.w)) <= 1 && w.owner[j] === w.you && isLand(w.terrain[j]) && !cls(j) && !w.buildingAt(j) && ![...w.stacks.values()].some(s => s.pos === j));
     let target = null;
-    for (let i = 0; i < w.owner.length; i++) if (w.owner[i] === w.you && cls(i) in rank && TERRAIN[w.terrain[i]].name !== "rubble" && !w.buildingAt(i) && stand(i) !== undefined && (target === null || rank[cls(i)] < rank[cls(target)])) target = i;
-    if (target === null) return { error: "no rough plot on your land" };
+    for (let i = 0; i < w.owner.length; i++) if ((w.owner[i] === w.you || !w.owner[i]) && cls(i) in rank && TERRAIN[w.terrain[i]].name !== "rubble" && !w.buildingAt(i) && stand(i) !== undefined && (target === null || rank[cls(i)] < rank[cls(target)])) target = i;
+    if (target === null) for (let i = 0; i < w.owner.length && target === null; i++) if (w.owner[i] === w.you && w.roads?.[i] && !w.buildingAt(i) && stand(i) !== undefined) target = i;
+    if (target === null) return { error: "no rough plot or road on or beside your land" };
     const at = stand(target), st = await g.conn.request({ t: "stack", share: 0.3, at });
     await wait(() => w.stacks.get(st.stack)?.mix?.engineer >= 50, 5000);
     g.select(null);
@@ -2351,14 +2392,14 @@ check(blast === "intercept" || !!scar, `the warhead comes down (${blast}): the b
     await gp.mouse.click(p.x, p.y, { button: "right" });
     ring = await ringItems(gp);
     if (ring.includes("dig")) await gp.click("#ring .ring-item[data-ring=dig]");
-    toast = await gp.waitForFunction(() => (document.querySelector("#toasts")?.textContent ?? "").match(/d+ engineers? starts? on the [^.]*./)?.[0] ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
+    toast = await gp.waitForFunction(() => (document.querySelector("#toasts")?.textContent ?? "").match(/\d+ engineers? starts? on the [^.]*\./)?.[0] ?? null, null, { timeout: 5000 }).then(h => h.jsonValue(), () => "");
     job = await gp.waitForFunction(t => window.__ls.game.world.eng.jobs.find(j => j.at === t && j.kind === "dig") ?? null, en.target, { timeout: 5000 }).then(h => h.jsonValue(), () => null);
     await gp.waitForTimeout(2500);
     await gp.mouse.move(p.x, p.y);
     tip = await gp.waitForFunction(() => { const t = document.querySelector("#plot-tip")?.textContent ?? ""; return /hit points/.test(t) ? t : null; }, null, { timeout: 4000 }).then(h => h.jsonValue(), () => "");
     await gp.screenshot({ path: `${OUT}/85-engineers-dig.png` });
   }
-  check(ring.includes("dig") && ring.includes("charge") && /engineers? starts? on the/.test(toast) && job && /d+ of d+ hit points/.test(tip),
+  check(ring.includes("dig") && ring.includes("charge") && /engineers? starts? on the/.test(toast) && job && /\d+ of \d+ hit points/.test(tip),
     `after Sappers, a right-click on the ${en.name ?? "rough ground"} beside ${en.crew ?? 0} engineers offers Dig here and Set a charge; digging starts ("${toast}") and the tip counts it down ("${tip}")${en.error ? ` (${en.error})` : ""}${ring.length && !ring.includes("dig") ? ` (ring: ${ring.join(", ")})` : ""}`);
   await gp.evaluate(() => window.__ls.game.select(null));
 }
@@ -2515,10 +2556,11 @@ for (const k of ["d", "a", "w", "s"]) {
 }
 const endAt = await gp.evaluate(id => window.__ls.game.world.pilotAt(`s:${id}`), company.id);
 const steered = endAt && startAt ? Math.hypot(endAt[0] - startAt[0], endAt[1] - startAt[1]) : 0;
+const pilotWhy = steered > 1 ? "" : await gp.evaluate(id => { const g = window.__ls.game, a = document.activeElement; return " [focus " + a?.tagName + "#" + a?.id + ", piloting " + JSON.stringify(g.piloting) + ", sent " + g.pilotSent?.json + ", row " + JSON.stringify(g.world.pilots.get("s:" + id)) + "]"; }, company.id);
 await gp.screenshot({ path: `${OUT}/70-pilot.png` });
 await gp.keyboard.press("Escape");
 const letGo = await gp.waitForFunction(id => !window.__ls.game.piloting && !window.__ls.game.world.pilots.has(`s:${id}`), company.id, { timeout: 5000 }).then(() => true, () => false);
-check(/^Piloting your company/.test(piloting) && steered > 1 && letGo, `P pilots the selected company; holding ${steerKey.toUpperCase()} walks it ${steered.toFixed(1)} plots, and Esc lets go`);
+check(/^Piloting your company/.test(piloting) && steered > 1 && letGo, `P pilots the selected company; holding ${steerKey.toUpperCase()} walks it ${steered.toFixed(1)} plots, and Esc lets go${pilotWhy}`);
 const pp = await openPage({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
 await login(pp, "rw_scorch", "correct horse");
 await pp.goto(`${BASE}/#w=${solId}`);

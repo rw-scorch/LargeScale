@@ -74,7 +74,7 @@ export function createGroupPanel(root, game) {
       const troops = list.reduce((t, s) => t + s.troops, 0), moving = list.filter(s => s.order !== "hold").length;
       title.textContent = `${list.length} stacks, ${fmt(troops)} troops`;
       info.textContent = moving ? `${moving} on the move, ${list.length - moving} holding` : "all holding";
-      hint.textContent = mode === "move" ? "Click where to go; they keep their places around that spot." : mode === "nation" ? "Click the land of the nation to take from." : "Right-click or hold a finger on the map for their orders.";
+      hint.textContent = mode === "move" ? "Click where to go; they keep their places around that spot." : mode === "nation" ? "Click the land of the nation to take from." : "Right-click or tap the map for their orders.";
       const shared = list.every(s => (s.standing ?? "hold") === (list[0].standing ?? "hold")) ? list[0].standing ?? "hold" : null;
       if (document.activeElement !== standing && shared) standing.value = shared;
       const k = `${mode}:${performance.now() - disbandAt < 4000}`;
