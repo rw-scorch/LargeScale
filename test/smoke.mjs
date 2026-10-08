@@ -267,8 +267,13 @@ check(aSpawn >= 0, "player spawns on land");
       }
     return null;
   };
-  const run = runNear(), gold0 = cw.purse.money;
-  const laid = run && await rr("dirt", [run[0], run[5]]);
+  let run = null, laid = null, gold0 = cw.purse.money;
+  for (let k = 0; k < 3 && !laid?.ok; k++) {
+    view.pump();
+    run = runNear();
+    gold0 = cw.purse.money;
+    laid = run && await rr("dirt", [run[0], run[5]]);
+  }
   const roadSeen = laid?.ok && await until(() => { view.pump(); return run.every(i => cw.roads[i] === 1); }, 3000);
   const friendRoad = await until(() => B.binary.some(f => f[0] === MSG.ROAD_DIFF), 3000);
   const foreign = cw.owner.findIndex((o, i) => o !== you && isLand(cw.terrain[i]) && isLand(cw.terrain[i + 1]) && cw.owner[i + 1] !== you);
@@ -386,15 +391,18 @@ check(sought, `with the unclaimed land around it taken, the stack goes looking f
   await until(() => { view.pump(); return false; }, 800);
   const t0 = performance.now(), plan = proposePlan(cw.planView(), cw.planRules ?? {}), ms = performance.now() - t0;
   const pick = plan.find(p => p.key.startsWith("block:")) ?? plan.find(p => p.price <= (cw.purse?.money ?? 0));
+  const mark = A.json.length;
   if (pick) A.ws.send(JSON.stringify({ t: "plan", op: "add", project: { key: pick.key, kind: pick.kind, name: pick.title, pieces: pick.pieces } }));
   const queued = pick && await nextResult(A, "plan");
-  const inQueue = queued?.ok && await until(() => A.json.some(m => m.t === "plan" && m.queue?.some(q => q.key === pick.key)), 3000);
-  const finished = inQueue && await until(() => A.json.some(m => m.t === "events" && m.events.some(e => e.type === "plan_done" && e.name === pick.title)), 20000);
+  const doneEvent = () => A.json.some(m => m.t === "events" && m.events.some(e => e.type === "plan_done" && e.name === pick.title));
+  const inQueue = queued?.ok && await until(() => A.json.some(m => m.t === "plan" && m.queue?.some(q => q.key === pick.key)) || doneEvent(), 3000);
+  const finished = inQueue && await until(doneEvent, 20000);
   const zone = pick?.pieces.find(p => p.t === "zone");
   const cleared = finished && await until(() => { view.pump(); return (cw.purse?.plan?.projects?.length ?? 1) === 0; }, 3000);
+  view.pump();
   const painted = !zone || cw.zone[zone.y * M.w + zone.x] === ["none", "res", "com", "ind", "farm"].indexOf(zone.zone);
   check(plan.length && finished && painted && cleared,
-    `the planner proposes ${plan.length} projects in ${ms.toFixed(0)} ms (${plan.map(p => p.key.split(":")[0]).join(", ")}); "${pick?.title}" (${pick?.price} gold) is queued, reaches the host's queue, and is built with nothing else pressed`);
+    `the planner proposes ${plan.length} projects in ${ms.toFixed(0)} ms (${plan.map(p => p.key.split(":")[0]).join(", ")}); "${pick?.title}" (${pick?.price} gold) is queued, reaches the host's queue, and is built with nothing else pressed${finished && painted && cleared ? "" : ` (queued ${queued?.ok ?? queued?.error}, in queue ${!!inQueue}, done ${!!finished}, painted ${painted}, cleared ${!!cleared}; left ${JSON.stringify(cw.purse?.plan ?? null)}; since: ${A.json.length - mark} messages, ${A.json.slice(mark).filter(m => m.t === "purse").length} purses, plan messages ${JSON.stringify(A.json.slice(mark).filter(m => m.t === "plan" && !m.ok && m.queue).map(m => m.queue.map(q => q.key)))}, events ${JSON.stringify(A.json.slice(mark).filter(m => m.t === "events").flatMap(m => m.events).filter(e => /^plan/.test(e.type)))}, pieces ${JSON.stringify(pick?.pieces)}, status ${JSON.stringify((({ time, looping, tickErrors, lastError }) => ({ time, looping, tickErrors, lastError }))((await api(`/api/worlds/${wid}/status`, null, ta)).body))})`}`);
 }
 A.ws.send(JSON.stringify({ t: "stack", share: 0.3 }));
 const st2 = await nextResult(A, "stack");
@@ -427,6 +435,9 @@ let moved = null;
 const far = Math.min(250 * K, Math.floor(hello.w / 3));
 for (const i of land.filter((_, k) => k % 211 === 0)) {
   if (from === undefined || Math.abs((i % hello.w) - (from % hello.w)) + Math.abs(Math.floor(i / hello.w) - Math.floor(from / hello.w)) < far) continue;
+  A.ws.send(JSON.stringify({ t: "route", stack: st2.stack, to: i }));
+  const way = await nextResult(A, "route");
+  if (!way?.ok || way.boat) continue;
   const sent = Date.now();
   A.ws.send(JSON.stringify({ t: "move", stack: st2.stack, to: i }));
   if ((await nextResult(A, "move"))?.ok) { moved = { to: i, ms: Date.now() - sent }; break; }
@@ -1194,6 +1205,33 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
   const t0 = Date.now();
   const boom = fired?.ok && await until(() => inEvents().find(e => (e.type === "nuke_detonated" || e.type === "nuke_intercepted") && e.id === fired.id), 20000);
   check(ready && aimed?.flight === 10 && fired?.ok && boom?.kind === "orbital", `an orbital strike called down on ${foe?.name ?? "nobody"}'s land lands ${aimed?.flight} s after launch (${((Date.now() - t0) / 1000).toFixed(1)} s real time; ${boom?.type ?? "no impact"}, ${boom?.cleared ?? 0} plots cleared)${fired?.ok ? "" : ` (${fired?.error ?? aimed?.error ?? made?.error ?? "not ready"})`}`);
+}
+{
+  for (const id of ["sappers", "tunnelling"]) await ask({ t: "research", id, mode: "queue" });
+  const fin = await adminOp(IN, { op: "finish", nation: ih.you });
+  const given = await adminOp(IN, { op: "give", nation: ih.you, what: "unit", unit: "engineer", amount: 3000 });
+  await adminOp(IN, { op: "give", nation: ih.you, what: "money", amount: 20000 });
+  const opened = await until(() => !IM.pump().world.lockOf("engineer", "units") && IM.world.engRules ? true : null, 8000);
+  const w = IM.pump().world, R = w.engRules, cls = i => R.classOf[TERRAIN[w.terrain[i]].name];
+  const nb = i => [i - 1, i + 1, i - w.w, i + w.w, i - w.w - 1, i - w.w + 1, i + w.w - 1, i + w.w + 1].filter(j => j >= 0 && j < w.terrain.length && Math.abs((j % w.w) - (i % w.w)) <= 1);
+  const stand = i => nb(i).find(j => w.owner[j] === ih.you && isLand(w.terrain[j]) && !cls(j) && !w.buildingAt(j));
+  const rank = { rock: 0, hard: 1, soft: 2 };
+  let target = null;
+  for (let i = 0; i < w.owner.length; i++) {
+    if (w.owner[i] !== ih.you || !(cls(i) in rank) || TERRAIN[w.terrain[i]].name === "rubble" || stand(i) === undefined || w.buildingAt(i)) continue;
+    if (target === null || rank[cls(i)] < rank[cls(target)]) target = i;
+  }
+  const at = target === null ? null : stand(target);
+  const crew = at === null || at === undefined ? null : await ask({ t: "stack", share: 0.3, at });
+  const before = target === null ? null : TERRAIN[w.terrain[target]].name;
+  const dug = crew?.ok ? await ask({ t: "dig", op: "dig", at: target }) : null;
+  const seen = dug?.ok && await until(() => IM.pump().world.eng?.jobs.some(j => j.at === target && j.kind === "dig") ? true : null, 5000);
+  const charged = dug?.ok ? await ask({ t: "dig", op: "charge", at: target }) : null;
+  const inEvents = () => IN.json.filter(m => m.t === "events").flatMap(m => m.events);
+  const broke = dug?.ok && await until(() => inEvents().find(e => e.type === "terrain_broken" && e.at === target), 30000);
+  const after = TERRAIN[IM.pump().world.terrain[target ?? 0]].name;
+  check(fin?.ok && given?.ok && opened && dug?.ok && seen && charged?.ok && broke && after === broke.to && after !== before,
+    `Sappers opens engineers; ${dug?.crew} of them dig a ${before ?? "rough plot"} (${dug?.max} hit points, ${dug?.seconds} s), a charge takes ${R?.blastPower} more, and it breaks into ${after}${dug?.ok ? "" : ` (${dug?.error ?? crew?.error ?? (target === null ? "no rough plot on the host's land" : "no stack")})`}${dug?.ok && !(seen && charged?.ok && broke) ? ` (seen ${!!seen}, charge ${charged?.ok ?? charged?.error}, broke ${JSON.stringify(broke)}, eng ${JSON.stringify(IM.world.eng?.jobs)}, hp ${JSON.stringify(IM.world.digOf(target))}, crew stack ${JSON.stringify(IM.world.stacks.get(crew.stack) ?? null)}, money ${inPurse()?.money})` : ""}`);
 }
 IN.ws.close();
 const dLog = (await api("/api/admin/log", null, ta)).body;

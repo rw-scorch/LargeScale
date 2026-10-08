@@ -8,6 +8,7 @@ import { ERA_ORDER } from "./buildings.js";
 import { unitTable, mixFromRow, mixParts, powerOf } from "./units.js";
 import { piecePlots } from "./planner.js";
 import { coreCentre, coreStrength } from "./tourism.js";
+import { TERRAIN } from "./terrain.js";
 
 const LEVY_ONLY = [{ id: "levy", num: 1, name: "Levies", kind: "troop", era: "T", attack: 1, defence: 1, speed: 1, capture: 1 }];
 
@@ -24,6 +25,8 @@ const machineFromRow = ([id, owner, num, at, hp, state, cargo, follow, face, air
   if (air) u.air = { x: air[0] / 10, y: air[1] / 10, heading: air[2] / 100, landed: !!air[3], bombs: air[4], fuel: air[5], mission: MISSIONS[air[6]] ?? null, rearm: air[7] ?? 0, queued: !!air[8], target: air.length > 10 ? [air[9] / 10, air[10] / 10] : null };
   return u;
 };
+
+const engFrom = v => ({ hp: new Map((v?.hp ?? []).map(([i, hp, max]) => [i, [hp, max]])), roads: new Map(v?.roads ?? []), jobs: (v?.jobs ?? []).map(([at, nation, kind, recipe, crew, done, to, k, total]) => ({ at, nation, kind: ["dig", "build", "tunnel"][kind] ?? "dig", recipe, crew, done, ...(kind === 2 ? { to, k, total } : {}) })), dug: new Map(v?.dug ?? []) });
 
 const flightOf = e => ({ id: e.id, nation: e.nation, kind: e.kind, from: e.from, target: e.target, launched: e.launched, due: e.due, toward: e.toward, radius: e.radius, inner: e.inner, conventional: !!e.conventional });
 
@@ -62,6 +65,9 @@ export class ClientWorld {
     this.pilotRules = hello.pilotRules ?? null;
     this.planRules = hello.planRules ?? null;
     this.planQueue = hello.plan ?? [];
+    this.eng = engFrom(hello.eng);
+    this.engRules = hello.engRules ?? null;
+    this.engVersion = 0;
     this.pilots = new Map();
     this.shots = [];
     this.setPilots(hello.pilots ?? [], []);
@@ -199,6 +205,25 @@ export class ClientWorld {
   }
 
   myMachines() { return [...this.machines.values()].filter(u => u.owner === this.you); }
+
+  engineersNear(i, nid = this.you) {
+    const R = this.engRules, each = this.soldierRules?.troopsEach ?? 10, w = this.w, x = i % w, y = (i / w) | 0;
+    if (!R) return 0;
+    const near = p => Math.max(Math.abs((p % w) - x), Math.abs(((p / w) | 0) - y)) <= R.workRadius;
+    let k = 0;
+    for (const s of this.stacks.values()) if (s.owner === nid && s.mix?.engineer && near(s.pos)) k += Math.floor(s.mix.engineer / each);
+    for (const u of this.machines.values()) if (u.owner === nid && u.def?.dig && u.state !== "wreck" && !u.air && near(u.at)) k += u.def.dig;
+    return Math.min(R.maxCrew ?? Infinity, k);
+  }
+
+  digOf(i) {
+    const R = this.engRules;
+    if (!R) return null;
+    const t = TERRAIN[this.terrain[i]], cls = R.classOf[t.name] ?? null, road = this.roads[i] > 0;
+    const max = road ? R.baseHp.made : cls ? R.baseHp[cls] : 0, hp = road ? this.eng.roads.get(i) ?? max : this.eng.hp.get(i)?.[0] ?? max;
+    const job = this.eng.jobs.find(j => j.at === i && j.nation === this.you) ?? null;
+    return { name: t.name, cls, road, max, hp, job, others: this.eng.jobs.filter(j => j.at === i && j.nation !== this.you), dug: this.eng.dug.has(i) ? TERRAIN[this.eng.dug.get(i)]?.name : null };
+  }
 
   samOf(kind, id) {
     const r = this.purse?.sams?.find(r => r[0] === kind && r[1] === id);
@@ -437,6 +462,7 @@ export class ClientWorld {
     if (m.t === "purse") this.purse = { money: m.money, era: m.era, town: m.town, making: m.making ?? {}, season: m.season ?? null, research: m.research ?? null, orders: m.orders ?? [], army: m.army ?? null, field: m.field ?? null, machines: m.machines ?? null, vitals: m.vitals ?? null, policy: m.policy ?? null, guard: !!m.guard, autoRoads: m.autoRoads ?? null, trade: m.trade ?? null, power: m.power ?? null, plan: m.plan ?? null, sams: m.sams ?? null, cheats: m.cheats ?? null, nukes: m.nukes ?? null, tourism: m.tourism ?? null };
     if (m.t === "presence") this.online = new Set(m.online ?? []);
     if (m.t === "plan") this.planQueue = m.queue ?? [];
+    if (m.t === "eng") { this.eng = engFrom(m); this.engVersion++; }
     if (m.t === "pilots") this.setPilots(m.p ?? [], m.shots ?? []);
     if (m.t === "schedule") { this.schedule = m.schedule ?? {}; if (m.info) this.info = m.info; }
     if (m.t === "phase") this.lastPhase = m;
@@ -460,6 +486,8 @@ export class ClientWorld {
           this.nukes = this.nukes.filter(f => f.id !== e.id);
           this.blasts.push({ kind: e.type === "nuke_detonated" ? "blast" : "intercept", plot: e.type === "nuke_detonated" ? e.at : e.target, radius: e.radius ?? f?.radius ?? 8, inner: e.inner ?? f?.inner ?? 3, by: e.by, with: e.with ?? null, orbital: f?.kind === "orbital" || e.kind === "orbital", at: Date.now() });
         }
+        if (e.type === "charge_detonated") this.effects.push({ kind: "charge", plot: e.at, at: Date.now() });
+        if (e.type === "terrain_broken" || e.type === "road_broken") this.effects.push({ kind: "breach", plot: e.at, at: Date.now() });
         if (e.type === "sam_fired" && e.from && e.to) this.effects.push({ kind: "sam", from: e.from, to: e.to, at: Date.now() });
         if (e.type === "railgun_fired" && e.from && e.to) this.effects.push({ kind: "rail", from: e.from, to: e.to, at: Date.now() });
         if (e.type === "landed" && this.machines.get(e.machine)?.def.domain === "air") this.effects.push({ kind: this.machines.get(e.machine).def.paraOnly ? "chute" : "heli", plot: e.at, at: Date.now(), n: Math.max(1, Math.min(6, Math.round(e.troops / 30))) });

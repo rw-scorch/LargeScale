@@ -6,10 +6,10 @@ import { installTroops, trainTick } from "../src/sim/troops.js";
 import { addBuilding } from "../src/sim/buildings.js";
 import { installConstruction, canPlace } from "../src/sim/construction.js";
 import { installResources } from "../src/sim/resources.js";
-import { installRoads } from "../src/sim/logistics.js";
+import { installRoads, setRoad } from "../src/sim/logistics.js";
 import { installMachines, queueMachines, produce } from "../src/sim/units.js";
 import { installEffects } from "../src/sim/effects.js";
-import { installTrade, tripPay } from "../src/sim/trade.js";
+import { installTrade, tripPay, railPath } from "../src/sim/trade.js";
 import { ROAD_TYPES } from "../src/shared/roads.js";
 import { TREE } from "../src/sim/research.js";
 import { lockMap, planPath } from "../src/shared/research.js";
@@ -132,4 +132,17 @@ test("rail needs Railways and costs 12 gold a plot; trains run between two stati
   w.claim(g.idx(25, 8), w.addNation({ name: "C", human: true }));
   for (let k = 0; k < 40; k++) w.tick(1);
   assert.equal(w.trade.trains.size, 0, "rail cut by another nation stops the trains");
+});
+
+test("a rail path stays cached when an ordinary road changes, and is searched again when rail changes", () => {
+  const { w, g, a, put } = field();
+  runOrder(w, a, { t: "road", kind: "rail", via: [g.idx(13, 8), g.idx(39, 8)] });
+  const A = put("station_large", 10, 8), B = put("station_large", 40, 8);
+  const first = railPath(w, a, A, B);
+  assert.ok(first?.length > 20);
+  setRoad(w, g.idx(20, 14), 1);
+  setRoad(w, g.idx(20, 14), 0);
+  assert.equal(railPath(w, a, A, B), first, "a dirt road elsewhere keeps the cached path");
+  setRoad(w, g.idx(25, 8), 0);
+  assert.equal(railPath(w, a, A, B), null, "cutting the rail is seen at once");
 });

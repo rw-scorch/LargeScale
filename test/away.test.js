@@ -103,7 +103,7 @@ test("the away record counts what happened, and the summary reports it", () => {
     { type: "plot_lost", nation: 42, by: a }, { type: "built", nation: b, kind: "school" },
   ]);
   runCatchUp(planCatchUp(3 * 3600, RULES), dt => w.catchUp(dt), Infinity);
-  const s = awaySummary(w, n, Date.now(), RULES);
+  const s = awaySummary(w, n, t0 + 3 * 3600 * 1000, RULES);
   assert.equal(s.seconds, 3 * 3600);
   assert.deepEqual(s.lost, { [b]: 2, 9: 3 });
   assert.deepEqual(s.built, { bank: 1 });

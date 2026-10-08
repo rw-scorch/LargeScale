@@ -1,7 +1,7 @@
 import { TERRAIN } from "../shared/terrain.js";
 import { findPath, costField } from "../shared/pathfind.js";
 import { encodeRuns, decodeRuns } from "../shared/codec.js";
-import { ROAD_TYPES, ROAD_MULT, ROAD_RULES, roadPlan, routePlan, roadSprite } from "../shared/roads.js";
+import { ROAD_TYPES, ROAD_MULT, ROAD_RULES, TUNNEL, roadPlan, routePlan, roadSprite } from "../shared/roads.js";
 
 export { ROAD_MULT };
 export const ROADS = Object.fromEntries(ROAD_TYPES.map((k, i) => [k, i]));
@@ -30,7 +30,7 @@ export function installRoads(world, opts = {}) {
   log.count = new Uint32Array(ROAD_TYPES.length);
   log.count[0] = log.road.length;
   const base = world.moveCost.bind(world);
-  world.moveCost = (a, b) => base(a, b) * ROAD_MULT[log.road[b]];
+  world.moveCost = (a, b) => (log.road[b] === TUNNEL ? (TERRAIN[world.terrain[b]].land ? ROAD_MULT[TUNNEL] : Infinity) : base(a, b) * ROAD_MULT[log.road[b]]);
   world.pathMinStep = () => {
     let low = 1;
     for (let k = 1; k < log.count.length; k++) if (log.count[k]) low = Math.min(low, ROAD_MULT[k]);
@@ -47,6 +47,7 @@ export function setRoad(world, i, level) {
   log.count[level]++;
   log.road[i] = level;
   log.ver = (log.ver ?? 0) + 1;
+  if (ROAD_TYPES[was] === "rail" || ROAD_TYPES[level] === "rail") log.railVer = (log.railVer ?? 0) + 1;
   log.news.add(i);
   world.bld?.changed.add("road");
 }

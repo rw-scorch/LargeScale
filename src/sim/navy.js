@@ -1,4 +1,5 @@
 import { UNIT_TYPES, NAVY_RULES, diveOf } from "./units.js";
+import { damageTerrain } from "./engineering.js";
 
 export function installNavy(world, { rules: r = NAVY_RULES } = {}) {
   if (world.navy) return world.navy;
@@ -46,6 +47,7 @@ export function navyTick(world, dt) {
     u.shelling = best ? best.pos : null;
     if (!best) continue;
     world.loseTroops(best, Math.min(best.troops, S.troops * dt));
+    if (world.eng?.crewOf && world.owner[best.pos] !== u.owner) damageTerrain(world, best.pos, (world.eng.rules.shellDamage ?? 0) * dt, u.owner, "shell");
     if (best.troops <= 0.5) {
       world.stacks.delete(best.id);
       world.emit("stack_destroyed", { stack: best.id, nation: best.owner, at: best.pos, by: u.owner });

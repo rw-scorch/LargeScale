@@ -153,7 +153,7 @@ function shipsTick(world) {
 }
 
 export function railPath(world, nid, a, b) {
-  const t = world.trade, key = `${nid}:${a.id}:${b.id}`, ver = world.log?.ver ?? 0, hit = t.paths.get(key);
+  const t = world.trade, key = `${nid}:${a.id}:${b.id}`, ver = world.log?.railVer ?? 0, hit = t.paths.get(key);
   if (hit && hit.ver === ver && (!hit.path || hit.path.every(i => ownOrAlly(world, nid, i)))) return hit.path;
   const road = world.log?.road, rail = ROAD_TYPES.indexOf("rail"), ends = new Set([...(a.plots ?? [a.anchor]), ...(b.plots ?? [b.anchor])]);
   const cost = (p, i) => (ends.has(i) || (road?.[i] === rail && ownOrAlly(world, nid, i)) ? ROAD_MULT[rail] : Infinity);
