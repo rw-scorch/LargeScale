@@ -1235,6 +1235,40 @@ check(stationsUp && rail?.ok && rail.laid > 8 && train && earned,
     `Sappers opens engineers; ${dug?.crew} of them dig a ${before ?? "rough plot"} (${dug?.max} hit points, ${dug?.seconds} s), a charge takes ${R?.blastPower} more, and it breaks into ${after}${dug?.ok ? "" : ` (${dug?.error ?? crew?.error ?? (target === null ? "no rough plot on the host's land" : "no stack")})`}${dug?.ok && !(seen && charged?.ok && broke) ? ` (seen ${!!seen}, charge ${charged?.ok ?? charged?.error}, broke ${JSON.stringify(broke)}, eng ${JSON.stringify(IM.world.eng?.jobs)}, hp ${JSON.stringify(IM.world.digOf(target))}, crew stack ${JSON.stringify(IM.world.stacks.get(crew.stack) ?? null)}, money ${inPurse()?.money})` : ""}`);
 }
 IN.ws.close();
+{
+  const cityWorld = await api("/api/worlds", { name: "City test", config: { w: 160, h: 100, seed: 4, bots: 0, rules: { buildSpeed: 60 } } }, ta);
+  const CT = await connect(cityWorld.body.id, ta), ch = await waitFor(CT, m => m.t === "hello"), CM = await new Mirror(CT, ch).load();
+  const cask = async m => { CT.ws.send(JSON.stringify(m)); return nextResult(CT, m.t, 8000); };
+  const open = (() => {
+    const v = CM.world, out = [];
+    for (let y = 12; y < v.h - 12; y += 3) for (let x = 12; x < v.w - 12; x += 3) {
+      if (!isLand(v.terrain[y * v.w + x])) continue;
+      let n = 0;
+      for (let dy = -10; dy <= 10; dy++) for (let dx = -10; dx <= 10; dx++) if (TERRAIN[v.terrain[(y + dy) * v.w + x + dx]].build) n++;
+      out.push([x, y, n]);
+    }
+    return out.sort((p, q) => q[2] - p[2]);
+  })();
+  let spawned = false;
+  for (const [x, y] of open.slice(0, 10)) if ((spawned = !!(await cask({ t: "spawn", x, y }))?.ok)) break;
+  await adminOp(CT, { op: "speed", factor: 8 });
+  await adminOp(CT, { op: "give", nation: ch.you, what: "troops", amount: 9500 });
+  await adminOp(CT, { op: "give", nation: ch.you, what: "money", amount: 50000 });
+  const st = await cask({ t: "stack", share: 0.9 });
+  await cask({ t: "advance", stack: st?.stack, only: "free" });
+  const grown = await until(() => CM.pump().world.owner.reduce((t, o) => t + (o === ch.you), 0) >= 900 ? true : null, 120000);
+  const w = CM.pump().world, list = proposePlan(w.planView(), w.planRules ?? {});
+  const city = list.find(p => p.key.startsWith("district:") || p.key.startsWith("city:"));
+  const added = city ? await cask({ t: "plan", op: "add", project: { key: city.key, kind: city.kind, name: city.title, pieces: city.pieces } }) : null;
+  const events = () => CT.json.filter(m => m.t === "events").flatMap(m => m.events);
+  const done = added?.ok && await until(() => events().find(e => e.type === "plan_done" && e.name === city.title), 30000);
+  const zones = city?.pieces.filter(p => p.t === "zone") ?? [], codes = { res: 1, com: 2, ind: 3 };
+  const painted = done && await until(() => { const v = CM.pump().world; return zones.every(z => v.zone[(z.y + 1) * v.w + z.x + 1] === codes[z.zone]) ? true : null; }, 5000);
+  const streets = !!done && city.pieces.filter(p => p.t === "road" && p.via).every(p => p.via.every(i => CM.world.roads[i] > 0));
+  check(spawned && grown && city && added?.ok && done && painted && streets,
+    `once the land has grown, the planner offers "${city?.title}": ${zones.length} lots of 3 by 3 with streets, queued and laid out with nothing else pressed${city ? "" : ` (land ${CM.world.owner.reduce((t, o) => t + (o === ch.you), 0)} plots; proposals: ${list.map(p => p.key).join(", ")})`}${added && !added.ok ? ` (${added.error})` : ""}${added?.ok && !done ? ` (left: ${JSON.stringify(CM.world.purse?.plan)})` : ""}`);
+  CT.ws.close();
+}
 const dLog = (await api("/api/admin/log", null, ta)).body;
 check(["delete world", "remove account", "set password", "remove player", "rename world"].every(op => dLog.some(e => e.op === op)), `the admin log records it all: ${dLog.slice(0, 6).map(e => e.op).join(", ")}`);
 console.log(failures ? `${failures} checks failed` : "all checks passed");

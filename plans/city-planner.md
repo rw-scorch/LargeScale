@@ -46,3 +46,42 @@ New values go in `rules.json` `planner`:
   - the server running a district to the end
 - **Smoke** queues a district and sees it built.
 - **UI** shows the district outline in the planner.
+
+## Built (8 October 2026)
+
+Built on branch `planner-cities`, stacked on `fix-controls` (PR 51).
+
+### Changes from the plan
+
+- **Districts and the new city come last.** The other projects are smaller and are placed first. They are proposed before districts and the new city, which take the land left over. The list is then sorted by kind, so towns projects are not cut by the 40-project limit.
+- **Patchy ground.**
+  - Streets may run over any of your land, rough ground included; rough ground costs more to lay road on.
+  - A lot that is not all buildable is left empty, and a district needs three quarters of its lots good.
+  - Districts keep off deposits, which are left for mines.
+- **Main roads start from the capital itself** when it has no roads yet.
+- **Smoke, not UI.** The district check is in the smoke test, in a world of its own grown to 900 plots. The UI test's world is still about 30 plots when the planner is checked.
+- **Tests that differ from the list.**
+  - Room for a next size is tested with an airfield and its air base, not a harbour.
+  - No test yet checks a district reusing a road that is already there.
+
+### Speed
+
+- **Search.** Districts search a window around each town, and the new city a window around its 600 nearest candidate spots. Two running sums do the work: one for street ground and one for lot ground.
+- **Main roads** make at most 12 tries, each with a smaller search budget (8,000 nodes).
+- **Earth bench.** Proposing takes 31 to 118 ms a player, against 20 to 67 ms before. The browser does it every 5 s while the planner card is open.
+
+## Evidence
+
+- `npm test` 375, with 5 new planner tests.
+- **Smoke:** 137 of 137. In its own world a district is offered, queued and laid out with nothing else pressed.
+- **UI:** 202 of 202.
+- **Soak:** clean, with 39 plan projects added.
+- **Full Earth bench on an idle machine.** Every run fails the 50 ms worst-tick budget.
+
+  | Run | Median tick | 99th percentile | Worst tick |
+  |---|---|---|---|
+  | This branch | 15.7 ms | 52.9 ms | 82.2 ms |
+  | This branch, engineering off | 17.3 ms | 58.1 ms | 90.2 ms |
+  | `main`, before this work | 15.6 ms | 54.2 ms | 79.2 ms |
+
+  The failure is older than this work: no single system the bench times passes 50 ms.

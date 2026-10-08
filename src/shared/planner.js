@@ -280,7 +280,7 @@ function okGrid(ctx, x0, y0, x1, y1) {
     let row = 0, lrow = 0;
     for (let x = 0; x < W; x++) {
       const i = (y + y0) * w + x + x0, t = TERRAIN[v.terrain[i]];
-      if (v.owner[i] === me && t.land && (t.build || v.road[i]) && !v.zone[i] && !v.occupant(i) && !ctx.busy(i) && !v.deposit?.(i)) {
+      if (v.owner[i] === me && t.land && !v.zone[i] && !v.occupant(i) && !ctx.busy(i) && !v.deposit?.(i)) {
         row++;
         if (t.build && !v.road[i]) lrow++;
       }
@@ -300,12 +300,14 @@ function districtAt(ctx, g, x0, y0, G) {
   if (ax < 0 || ay < 0 || ax + S > g.W || ay + S > g.H) return false;
   const W1 = g.W + 1, area = (t, x, y, n) => t[(y + n) * W1 + x + n] - t[y * W1 + x + n] - t[(y + n) * W1 + x] + t[y * W1 + x];
   if (area(g.sum, ax, ay, S) !== S * S) return false;
-  for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) if (area(g.lot, ax + 1 + 4 * c, ay + 1 + 4 * r, 3) !== 9) return false;
+  const good = new Set();
+  for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) if (area(g.lot, ax + 1 + 4 * c, ay + 1 + 4 * r, 3) === 9) good.add(r * G + c);
+  if (good.size < Math.ceil(G * G * 0.75)) return false;
   for (let dy = 0; dy < S; dy++) for (let dx = 0; dx < S; dx++) if (ctx.busy((y0 + dy) * w + x0 + dx)) return false;
-  return true;
+  return good;
 }
 
-function layDistrict(ctx, x0, y0, G, near, zones) {
+function layDistrict(ctx, x0, y0, G, near, zones, good) {
   const { v, w, h } = ctx, kind = ctx.roadKind(), S = 4 * G + 1, pieces = [], draw = [], streets = [], lots = [];
   if (kind) for (let k = 0; k <= G; k++) for (const [a, e] of [[(y0 + 4 * k) * w + x0, (y0 + 4 * k) * w + x0 + S - 1], [y0 * w + x0 + 4 * k, (y0 + S - 1) * w + x0 + 4 * k]]) {
     const line = roadLine(w, [a, e]);
@@ -315,12 +317,13 @@ function layDistrict(ctx, x0, y0, G, near, zones) {
     draw.push({ t: "road", plots: line });
   }
   for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) {
+    if (!good.has(r * G + c)) continue;
     const lx = x0 + 1 + 4 * c, ly = y0 + 1 + 4 * r;
     lots.push({ x: lx, y: ly, d: Math.hypot(lx + 1 - (near % w), ly + 1 - ((near / w) | 0)) });
   }
   lots.sort((a, b) => b.d - a.d);
   const count = { res: 0, com: 0, ind: 0 }, zoned = [];
-  const nInd = zones.ind && G >= 3 ? Math.max(1, Math.round(G * G * 0.2)) : 0, nCom = zones.com ? Math.max(1, Math.round(G * G * 0.25)) : 0;
+  const nInd = zones.ind && G >= 3 ? Math.max(1, Math.round(lots.length * 0.2)) : 0, nCom = zones.com ? Math.max(1, Math.round(lots.length * 0.25)) : 0;
   lots.forEach((lot, k) => {
     const zone = k < nInd ? "ind" : k < nInd + nCom ? "com" : "res";
     count[zone]++;
@@ -375,12 +378,13 @@ function planDistricts(ctx, towns) {
       const half = (4 * G + 1) >> 1;
       for (const p of ring(w, h, t.centre, half + 2, L(R.search) + half)) {
         const x0 = (p % w) - half, y0 = ((p / w) | 0) - half;
-        if (districtAt(ctx, grid, x0, y0, G)) { found = { x0, y0, G }; break; }
+        const good = districtAt(ctx, grid, x0, y0, G);
+        if (good) { found = { x0, y0, G, good }; break; }
       }
     }
     if (!found) continue;
-    const d = layDistrict(ctx, found.x0, found.y0, found.G, t.centre, zones), text = districtText(d);
-    ctx.add({ key: `district:${found.x0},${found.y0}:${found.G}`, kind: "towns", title: `A district of ${found.G * found.G} blocks by ${t.name}`, reason: text[0].toUpperCase() + text.slice(1), price: d.price, pieces: d.pieces, draw: d.draw, at: d.at });
+    const d = layDistrict(ctx, found.x0, found.y0, found.G, t.centre, zones, found.good), text = districtText(d);
+    ctx.add({ key: `district:${found.x0},${found.y0}:${found.G}`, kind: "towns", title: `A district of ${found.good.size} blocks by ${t.name}`, reason: text[0].toUpperCase() + text.slice(1), price: d.price, pieces: d.pieces, draw: d.draw, at: d.at });
   }
 }
 
@@ -402,8 +406,9 @@ function planNewCity(ctx, towns) {
   const grid = okGrid(ctx, bx0 - half, by0 - half, bx1 + half, by1 + half);
   for (const c of near) {
     const x0 = (c % w) - half, y0 = ((c / w) | 0) - half;
-    if (!districtAt(ctx, grid, x0, y0, G)) continue;
-    const d = layDistrict(ctx, x0, y0, G, c, zonesOpen(ctx));
+    const good = districtAt(ctx, grid, x0, y0, G);
+    if (!good) continue;
+    const d = layDistrict(ctx, x0, y0, G, c, zonesOpen(ctx), good);
     ctx.add({ key: `city:${x0},${y0}`, kind: "towns", title: `A new city at ${c % w}, ${(c / w) | 0}`, reason: `Open land ${Math.round(dist(c, cap))} plots from the capital: ${districtText(d)}`, price: d.price, pieces: d.pieces, draw: d.draw, at: d.at });
     return;
   }
@@ -416,6 +421,7 @@ function planRoadways(ctx, towns) {
   const capB = ctx.mineBuildings.find(b => b.plots.includes(cap)), seeds = [];
   for (const i of capB?.plots ?? [cap]) for (const j of nb(i)) if (v.owner[j] === me && v.road[j]) seeds.push(j);
   for (let r = 1; r <= 4 && !seeds.length; r++) for (const i of ring(w, h, cap, r, r)) if (v.owner[i] === me && v.road[i]) { seeds.push(i); break; }
+  if (!seeds.length) for (const i of capB?.plots ?? [cap]) for (const j of nb(i)) if (v.owner[j] === me && !v.occupant(j) && TERRAIN[v.terrain[j]].land) seeds.push(j);
   if (!seeds.length) return;
   const net = new Set(seeds), todo = [...seeds];
   while (todo.length && net.size < 60000) {

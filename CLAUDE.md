@@ -24,7 +24,7 @@ Ryan is on Windows with PowerShell. Give him commands in PowerShell form.
 
 ```powershell
 npm install
-npm test                  # unit tests (369)
+npm test                  # unit tests (375)
 npm run test:reference    # the kit's 95 example tests, kept green as a regression check
 npm run bench             # Earth benchmark: 10 game minutes, 400 bots, 8 players with 2,000 buildings each, fails if a tick is over 50 ms
 npm run bench -- --map public/map/fine --crop europe --bots auto   # fine Europe
@@ -465,11 +465,43 @@ Engineers and terrain engineering (`plans/milestone-11.md`, branch `m11-engineer
   - Smoke: 135 of 136 on the last run, with the one failure a rate-limit timing check on a busy machine.
   - The UI run and the full bench still need an idle machine; the dev server stalled under load.
 
+## After milestone eleven (8 October 2026)
+
+**Ryan's fixes (branch `fix-controls`, PR 51).**
+
+- **Right-click.** The ring blocks the browser's context menu: the menu used to open with Inspect over the ring.
+- **Phones.**
+  - A tap on the map opens the ring. This is `prefs.tapRing`, which Settings can turn off.
+  - The canvas cancels the browser's own click after a tap, which used to choose the ring's centre item.
+- **Armies.** The Armies button and Q open the all-troops panel (`public/js/ui/troops.js`), which sends group orders to every company. Picking soldiers is V.
+- **Upgrades.** `growError` in `src/shared/buildings.js` is one room-to-grow check for the server, the upgrade menu, the building card and the planner.
+- **The feed** no longer throws on events with a numeric `from`.
+
+**The planner's cities (branch `planner-cities`, stacked on PR 51; plan and evidence in `plans/city-planner.md`).** These are new in `src/shared/planner.js`:
+
+- **Districts:** grids of 3 by 3 lots with streets on every side.
+- **New cities** on open land 24 plots from every town.
+- **Main roads** to towns, ports, stations, airfields and mines.
+- **Growth room** that farms and power plants keep clear.
+- **Next-size room** for buildings that grow when upgraded.
+
+The rules are in `rules.json` `planner` (`district`, `growRoom`, `newCityGap`, `newCityMin`, `mainRoads`).
+
+**Evidence on an idle machine:** `npm test` 375, smoke 137 of 137, UI 202 of 202, soak clean.
+
+**Bench.** The full Earth bench was idle-machine, and on `main` it gives a median tick of 15.6 ms, a 99th percentile of 54.2 ms and a worst of 79.2 ms. It fails the 50 ms worst-tick budget before this work too, and no system it times reaches 50 ms on its own. Overtime now peaks at 32 ms.
+
+**Test hygiene.**
+
+- `npm run ui` deletes the worlds it makes unless `KEEP_WORLDS=1`.
+- The local dev state had 1,575 test worlds, which slowed the world list.
+
 Open items as of 8 October 2026, in order:
 
 0. Milestone eleven is built on `m11-engineers`, PR 50 against `main`.
    - PR 48 is merged (6 October). Merge PR 49, then PR 50.
-   - Rerun `npm run ui` and `npm run bench` on an idle machine.
+   - Merge PR 51 (fixes), then the planner PR.
+   - Find what makes the bench's worst tick 80 ms on an idle machine. The bench does not time it, so it needs a tick-level breakdown.
    - Next: atmosphere, then host rules with the dev panel.
 
 Open items as of 7 October 2026, in order:

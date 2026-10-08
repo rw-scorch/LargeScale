@@ -69,10 +69,11 @@ await ready(page);
 check(await page.isVisible("#spawn-hint"), `a ${MAP} world opens and asks where to start`);
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${OUT}/1-world-${MAP}.png` });
+const made = [];
 const newWorld = (p, name, config) => p.evaluate(async ([name, config]) => {
   const r = await fetch("/api/worlds", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${localStorage.getItem("ls_token")}` }, body: JSON.stringify({ name, config }) });
   return (await r.json()).id;
-}, [name, config]);
+}, [name, config]).then(id => { made.push(id); return id; });
 const playId = await newWorld(page, `UI ${MAP} play`, { map: MAP, rules: { buildSpeed: 10, researchSpeed: 40 } });
 await page.goto(`${BASE}/#w=${playId}`);
 await page.reload();
@@ -291,17 +292,6 @@ await page.keyboard.press("Escape");
   check(queuedUi && built, `Build queues "${first?.title}", and it is built with nothing else pressed; the feed says it is finished`);
   await page.keyboard.press("o");
   check(!(await page.isVisible("#planner-panel")) && !(await page.evaluate(() => window.__ls.game.view.plan)), "O again closes the planner and clears its outlines");
-  await page.evaluate(() => window.__ls.game.conn.request({ t: "admin", op: "give", nation: window.__ls.game.world.you, what: "money", amount: 20000 }));
-  await page.keyboard.press("o");
-  await page.waitForFunction(() => document.querySelectorAll("#planner-list .plan-item").length || null, null, { timeout: 5000 }).catch(() => {});
-  const city = await page.evaluate(() => { const list = window.__ls.game.planner.proposals, p = list.find(p => p.key.startsWith("district:") || p.key.startsWith("city:")); return p ? { key: p.key, title: p.title, lots: p.pieces.filter(q => q.t === "zone").length } : { keys: list.map(p => p.key).join(", ") }; });
-  if (city.key) await page.click(`#planner-list .plan-item[data-key="${city.key}"] .plan-build`);
-  const cityBuilt = city.key && await page.waitForFunction(t => [...document.querySelectorAll("#feed-list .item")].some(e => e.textContent.includes(`Plan finished: ${t}`)), city.title, { timeout: 45000 }).then(() => true, () => false);
-  await page.evaluate(c => window.__ls.game.focus(c, 8), await page.evaluate(() => window.__ls.game.world.nations.get(window.__ls.game.world.you).capital));
-  await page.waitForTimeout(600);
-  await page.screenshot({ path: `${OUT}/2r-district-${MAP}.png` });
-  check(city.key && cityBuilt, `the planner offers "${city.title}" (${city.lots} lots of 3 by 3 with streets around each), and it is laid out with nothing else pressed${city.key ? "" : ` (proposals: ${city.keys})`}`);
-  await page.keyboard.press("o");
 }
 await page.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 6));
 
@@ -1247,7 +1237,7 @@ await fix.locator("#accounts-panel h2").first().scrollIntoViewIfNeeded();
 await fix.screenshot({ path: `${OUT}/22-accounts.png` });
 const doomed = await newWorld(fix, "UI delete me", { map: "test", w: 100, h: 80, bots: 0 });
 await fix.reload();
-await fix.waitForSelector(`[data-delete="${doomed}"]`, { timeout: 5000 });
+await fix.waitForSelector(`[data-delete="${doomed}"]`, { timeout: 20000 });
 await fix.click(`[data-delete="${doomed}"]`);
 const sure = await fix.textContent(`[data-delete="${doomed}"]`);
 await fix.click(`[data-delete="${doomed}"]`);
@@ -2616,6 +2606,12 @@ await pp.close();
 }
 
 check(errors.length === 0, `no page errors${errors.length ? ": " + errors.slice(0, 3).join(" | ") : ""}`);
+if (process.env.KEEP_WORLDS !== "1") {
+  const tidy = await openPage({ viewport: { width: 800, height: 600 } });
+  await login(tidy, "rw_scorch", "correct horse");
+  const gone = await tidy.evaluate(async ids => { let n = 0; for (const id of ids) { const r = await fetch(`/api/admin/worlds/${id}/delete`, { method: "POST", headers: { authorization: `Bearer ${localStorage.getItem("ls_token")}` } }); if (r.ok) n++; } return n; }, made);
+  console.log(`deleted ${gone} of the ${made.length} worlds this run made (KEEP_WORLDS=1 keeps them)`);
+}
 await browser.close();
 console.log(failures ? `${failures} checks failed` : "all checks passed");
 process.exit(failures ? 1 : 0);
