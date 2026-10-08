@@ -28,6 +28,7 @@ import { createTip } from "./ui/tip.js";
 import { createAdminPanel } from "./ui/admin.js";
 import { createUpgradePanel } from "./ui/upgrade.js";
 import { createArmyPanel } from "./ui/army.js";
+import { createTroopsPanel } from "./ui/troops.js";
 import { createLogisticsPanel } from "./ui/logistics.js";
 import { createDiplomacyPanel } from "./ui/diplomacy.js";
 import { createNoteCard } from "./ui/notes.js";
@@ -106,6 +107,7 @@ class Game {
     this.buildingPanel = createBuildingPanel(side, this);
     this.town = createTownPanel(side, this);
     this.planner = createPlannerPanel(side, this);
+    this.troops = createTroopsPanel(side, this);
     this.research = createResearchPanel(overlay, this);
     this.upgrade = createUpgradePanel(overlay, this);
     this.army = createArmyPanel(overlay, this);
@@ -474,6 +476,7 @@ class Game {
     if (action === "plan") return this.togglePlanner();
     if (action === "deposits") return this.toggleDeposits();
     if (action === "armies") return this.toggleArmies();
+    if (action === "troops") return this.toggleTroops();
     if (action === "pilot") return this.pilotSelected();
     if (this.picked && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.soldiersPanel.act[action](); return this.updatePanels(); }
     if (this.group && ["advance", "claim", "target", "move", "disband"].includes(action)) { this.groupPanel.act[action](); return this.updatePanels(); }
@@ -502,6 +505,7 @@ class Game {
       else if (this.record.open) this.record.show(false);
       else if (this.research.open) this.toggleResearch(false);
       else if (this.planner.open) this.togglePlanner(false);
+      else if (this.troops.open) this.toggleTroops(false);
       else if (this.buildMenu.open) this.toggleBuildMenu(false);
       else if (this.placing) this.togglePlacing(false);
       else if (this.soldiersPanel.choosing) { this.soldiersPanel.cancel(); }
@@ -559,6 +563,12 @@ class Game {
     if (on) { this.away.show(false); this.worldInfo.show(false); this.research.show(false); this.army.show(false); this.logistics.show(false); this.adminPanel?.show(false); this.settings.show(false); this.diplomacy?.show(false); }
     const me = this.world?.nations.get(this.world.you);
     this.upgrade.show(on && !!this.world?.purse && !!me?.spawned);
+    this.updatePanels();
+  }
+
+  toggleTroops(on = !this.troops.open) {
+    const me = this.world?.nations.get(this.world.you);
+    this.troops.show(on && !!me?.spawned && me.alive && !this.world.frozen);
     this.updatePanels();
   }
 
@@ -1378,7 +1388,7 @@ class Game {
       for (const id of this.picked.keys()) if (this.world.stacks.get(id)?.owner !== this.world.you) this.picked.delete(id);
       if (!this.picked.size) { this.picked = null; if (this.view) this.view.picked = null; }
     }
-    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.research, this.upgrade, this.army, this.logistics, this.diplomacy, this.machinePanel, this.nationCard, this.noteCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
+    for (const p of [this.hud, this.spawn, this.guide, this.nations, this.feed, this.attacks, this.stack, this.groupPanel, this.soldiersPanel, this.pilotPanel, this.notices, this.buildMenu, this.buildingPanel, this.nukePanel, this.town, this.planner, this.troops, this.research, this.upgrade, this.army, this.logistics, this.diplomacy, this.machinePanel, this.nationCard, this.noteCard, this.aim, this.tip, this.adminPanel, this.worldInfo]) p?.update();
   }
 
   leave() {

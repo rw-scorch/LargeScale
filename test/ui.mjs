@@ -389,7 +389,17 @@ const ringAt = async (p, plot) => {
 const ownRing = await ringAt(page, capital);
 await page.screenshot({ path: `${OUT}/5b-ring-own-${MAP}.png` });
 check(ownRing.join() === "form,build,zone,note,info", `with nothing selected, a right-click on your land opens the ring: ${ownRing.join(", ")}, with Form stack in the centre`);
+const menuBlocked = await page.evaluate(() => [...document.querySelectorAll("#ring .ring-item, #ring, #ring-dot")].map(e => !e.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }))));
+check(menuBlocked.length >= 2 && menuBlocked.every(Boolean), `the browser's own menu cannot open over the ring, which sits under the pointer when the button comes up (${menuBlocked.filter(Boolean).length} of ${menuBlocked.length} parts block it)`);
 await page.keyboard.press("Escape");
+await page.click("#pick-armies");
+const troopRows = await page.waitForSelector("#troops-panel:not([hidden]) .troops-row", { timeout: 3000 }).then(() => page.$$eval("#troops-list .troops-row", r => r.length), () => 0);
+const myCompanies = await page.evaluate(() => window.__ls.game.world.myStacks().length);
+await page.click("#troops-select");
+const allChosen = await page.evaluate(() => { const g = window.__ls.game; return g.group ? g.group.size : g.selected !== null ? 1 : 0; });
+await page.screenshot({ path: `${OUT}/5f-all-troops-${MAP}.png` });
+check(myCompanies > 0 && troopRows === myCompanies && allChosen === Math.min(myCompanies, 100), `the Armies button opens the all-troops panel with your ${troopRows} of ${myCompanies} companies, and Select all picks ${allChosen}`);
+await page.evaluate(() => { const g = window.__ls.game; g.toggleTroops(false); g.selectGroup(null); g.select(null); });
 check(await page.evaluate(() => document.querySelector("#ring").hidden), "Esc closes the ring");
 const ringSpots = await page.evaluate(() => {
   const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital, cx = cap % w.w, cy = (cap / w.w) | 0;
@@ -576,6 +586,16 @@ await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }
 const heldRing = await ringItems(phone);
 await phone.screenshot({ path: `${OUT}/8b-phone-ring-${MAP}.png` });
 check(heldRing[0] === "form" && heldRing.includes("info"), `on a phone, holding a finger on your land opens the ring (${heldRing.join(", ")})`);
+await phone.touchscreen.tap(150, 150);
+await phone.waitForTimeout(200);
+const tapSpot = await phone.evaluate(() => {
+  const g = window.__ls.game, w = g.world, cap = w.nations.get(w.you).capital;
+  for (let r = 2; r < 6; r++) for (const d of [r, -r, r * w.w, -r * w.w]) { const i = cap + d; if (w.owner[i] === w.you && !w.buildingAt(i) && ![...w.stacks.values()].some(s => s.pos === i)) { const [x, y] = g.view.plotToScreen((i % w.w) + 0.5, ((i / w.w) | 0) + 0.5); return { x: x / g.view.ratio, y: y / g.view.ratio }; } }
+  return null;
+});
+if (tapSpot) await phone.touchscreen.tap(tapSpot.x, tapSpot.y);
+const tappedRing = await ringItems(phone);
+check(tappedRing[0] === "form" && tappedRing.includes("info"), `on a phone, a tap on your land opens the same ring as a right-click (${tappedRing.join(", ")})`);
 await phone.touchscreen.tap(150, 150);
 await phone.waitForTimeout(200);
 check(await phone.evaluate(() => document.querySelector("#ring").hidden), "a tap outside the ring closes it");
