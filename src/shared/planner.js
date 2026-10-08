@@ -8,6 +8,7 @@ export const PLAN_DEFAULTS = {
   every: 1, perTick: 6, maxPieces: 400, maxProjectPieces: 60, maxProjects: 40, keepMax: 32, keepSide: 128,
   block: 7, search: 30, freeRes: 6, freeCom: 4, freeInd: 4, indFrom: 6, towns: 6, townCell: 12,
   farms: 12, farmRing: [3, 16], perDeposit: 12, towers: 8, airNear: 20, powerNear: 40, civicEach: 2, scale: 1, tradeMin: 12, sams: 3, samNear: 5, abms: 2, abmNear: 6, tourism: 2, tourismNear: 10, shields: 2, shieldNear: 5,
+  district: [2, 4], growRoom: 5, newCityGap: 24, newCityMin: 400, mainRoads: 12,
 };
 
 const EFFECT_WORDS = { income: "income", research: "research", pop_growth: "town growth", troop_cap: "troop limit", defence: "defence" };
@@ -67,8 +68,10 @@ function context(v, rules) {
     if (wet) shore.push(i);
   }
   const mineBuildings = v.buildings.filter(b => b.owner === me && b.state !== "rubble");
+  const later = { ...v, lockOf: () => null }, laterMe = { ...v.me, era: "F" };
+  let growth = null;
   const ctx = {
-    v, R, L, me, w, h, taken, kept, busy, mine, shore, contact, roads, mineBuildings, projects: [],
+    v, R, L, me, w, h, taken, kept, busy, mine, shore, contact, roads, mineBuildings, projects: [], planned: [],
     free: i => v.owner[i] === me && TERRAIN[v.terrain[i]].land && TERRAIN[v.terrain[i]].build && !v.zone[i] && !v.road[i] && !v.occupant(i) && !busy(i),
     take: plots => { for (const i of plots) taken.add(i); },
     placeOk(def, anchor, zoned = false) {
@@ -76,13 +79,49 @@ function context(v, rules) {
       if (!plots || plots.some(i => busy(i) || (!zoned && v.zone[i]))) return null;
       return placeError(v, v.me, def, anchor) ? null : plots;
     },
-    findSpot(def, centre, r0, r1) {
-      const [fw, fh] = def.fp;
-      for (const p of ring(w, h, centre, r0, r1)) {
-        const ax = (p % w) - (fw >> 1), ay = ((p / w) | 0) - (fh >> 1);
-        if (ax < 0 || ay < 0) continue;
-        const anchor = ay * w + ax, plots = this.placeOk(def, anchor);
-        if (plots) return { anchor, plots };
+    roomFor(def, anchor) {
+      const next = def.next && v.defs[def.next];
+      if (!next || next.fp[0] * next.fp[1] <= def.fp[0] * def.fp[1]) return [];
+      const plots = footprintAt(w, h, anchor, next.fp);
+      if (!plots || plots.some(i => busy(i) || v.zone[i])) return null;
+      return placeError(later, laterMe, next, anchor) ? null : plots;
+    },
+    growth() {
+      if (growth) return growth;
+      growth = new Set();
+      const g = L(R.growRoom), seeds = [...this.planned];
+      for (const i of mine) if (v.zone[i]) seeds.push(i);
+      for (const b of mineBuildings) if (b.def.civilian) seeds.push(...b.plots);
+      let edge = seeds.filter(i => !growth.has(i) && growth.add(i));
+      for (let d = 0; d < g && edge.length; d++) {
+        const next = [];
+        for (const i of edge) {
+          const x = i % w;
+          for (const j of [i - w, i + w, x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, x > 0 ? i - w - 1 : -1, x < w - 1 ? i - w + 1 : -1, x > 0 ? i + w - 1 : -1, x < w - 1 ? i + w + 1 : -1]) {
+            if (j < 0 || j >= size || growth.has(j) || v.owner[j] !== me) continue;
+            growth.add(j);
+            next.push(j);
+          }
+        }
+        edge = next;
+      }
+      return growth;
+    },
+    findSpot(def, centre, r0, r1, { away = false } = {}) {
+      const [fw, fh] = def.fp, grows = !!def.next && (v.defs[def.next]?.fp ?? [0, 0]).reduce((a, b) => a * b) > fw * fh;
+      for (const roomy of grows ? [true, false] : [false]) {
+        for (const p of ring(w, h, centre, r0, r1)) {
+          const ax = (p % w) - (fw >> 1), ay = ((p / w) | 0) - (fh >> 1);
+          if (ax < 0 || ay < 0) continue;
+          const anchor = ay * w + ax, plots = this.placeOk(def, anchor);
+          if (!plots || (away && plots.some(i => this.growth().has(i)))) continue;
+          if (roomy) {
+            const room = this.roomFor(def, anchor);
+            if (!room) continue;
+            this.take(room);
+          }
+          return { anchor, plots };
+        }
       }
       return null;
     },
@@ -105,9 +144,9 @@ function context(v, rules) {
       const level = ROAD_TYPES.indexOf(kind), need = plots.filter(i => v.road[i] < level);
       return need.length ? roadPrice(kind, v.terrain, need, v.roadRules, R.scale).cost.money ?? 0 : 0;
     },
-    route(kind, starts, isGoal, avoid = () => false) {
+    route(kind, starts, isGoal, avoid = () => false, nodes = 20000) {
       const view = { w, terrain: v.terrain, road: v.road, owner: v.owner, blocked: i => !!v.occupant(i) || kept(i) || avoid(i) };
-      return roadRoute(view, me, starts, isGoal, kind, { ...v.roadRules, routeNodes: Math.min(v.roadRules?.routeNodes ?? 40000, 20000) });
+      return roadRoute(view, me, starts, isGoal, kind, { ...v.roadRules, routeNodes: Math.min(v.roadRules?.routeNodes ?? 40000, nodes) });
     },
     add(p) {
       if (v.skip?.has(p.key) || !p.pieces.length) return false;
@@ -206,6 +245,7 @@ function planTowns(ctx, towns) {
       }
       ctx.take(plots);
       ctx.take(streets);
+      ctx.planned.push(...plots);
       if (kind && streets.length && ctx.roads > 0) {
         const own = new Set(streets), inBlock = i => { const x = i % w, y = (i / w) | 0; return x >= b.x0 && y >= b.y0 && x < b.x0 + b.B && y < b.y0 + b.B; };
         const path = ctx.route(kind, streets, i => v.road[i] > 0 && !inBlock(i), i => (!own.has(i) && ctx.taken.has(i)) || (!!v.zone[i] && !inBlock(i)));
@@ -226,30 +266,198 @@ function planTowns(ctx, towns) {
       break;
     }
   }
-  if (!kind || ctx.roads === 0 || towns.length < 2) return;
-  const capTown = towns.find(t => t.capital);
-  if (!capTown) return;
-  const near = (c, r) => { for (const i of ring(w, h, c, 0, r)) if (v.owner[i] === me && v.road[i]) return i; return null; };
-  const reach = start => {
-    const seen = new Set([start]), todo = [start];
-    while (todo.length && seen.size < 20000) {
-      const i = todo.pop(), x = i % w;
-      for (const j of [i - w, i + w, x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1]) if (j >= 0 && j < w * h && v.road[j] && v.owner[j] === me && !seen.has(j)) { seen.add(j); todo.push(j); }
+}
+
+function okGrid(ctx, x0, y0, x1, y1) {
+  const { v, w, h, me } = ctx;
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(w - 1, x1); y1 = Math.min(h - 1, y1);
+  const key = `${x0},${y0},${x1},${y1}`, cache = (ctx.okGrids ??= new Map());
+  if (cache.has(key)) return cache.get(key);
+  const W = x1 - x0 + 1, H = y1 - y0 + 1;
+  if (!(W > 0 && H > 0) || W * H > 4e6) { cache.set(key, null); return null; }
+  const sum = new Int32Array((W + 1) * (H + 1)), lot = new Int32Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) {
+    let row = 0, lrow = 0;
+    for (let x = 0; x < W; x++) {
+      const i = (y + y0) * w + x + x0, t = TERRAIN[v.terrain[i]];
+      if (v.owner[i] === me && t.land && (t.build || v.road[i]) && !v.zone[i] && !v.occupant(i) && !ctx.busy(i) && !v.deposit?.(i)) {
+        row++;
+        if (t.build && !v.road[i]) lrow++;
+      }
+      sum[(y + 1) * (W + 1) + x + 1] = sum[y * (W + 1) + x + 1] + row;
+      lot[(y + 1) * (W + 1) + x + 1] = lot[y * (W + 1) + x + 1] + lrow;
     }
-    return seen;
-  };
-  const capRoad = near(capTown.centre, 4);
-  if (capRoad === null) return;
-  const capNet = reach(capRoad);
-  for (const t of towns) {
-    if (t === capTown) continue;
-    const start = near(t.centre, 6);
-    if (start === null || capNet.has(start)) continue;
-    const path = ctx.route(kind, [start], i => capNet.has(i), i => ctx.taken.has(i) || !!v.zone[i]);
-    if (!path) continue;
-    ctx.take(path);
-    ctx.add({ key: `link:${t.centre}`, kind: "towns", title: `A road from ${t.name} to the capital`, reason: `${plural(path.length, "plot")} of ${kind} road joins its streets to the capital's.`, price: ctx.roadCost(kind, path), pieces: [{ t: "road", kind, from: path[0], to: path[path.length - 1] }], draw: [{ t: "road", plots: path }], at: start });
   }
+  const g = { x0, y0, W, H, sum, lot };
+  cache.set(key, g);
+  return g;
+}
+
+function districtAt(ctx, g, x0, y0, G) {
+  const { w } = ctx, S = 4 * G + 1;
+  if (!g) return false;
+  const ax = x0 - g.x0, ay = y0 - g.y0;
+  if (ax < 0 || ay < 0 || ax + S > g.W || ay + S > g.H) return false;
+  const W1 = g.W + 1, area = (t, x, y, n) => t[(y + n) * W1 + x + n] - t[y * W1 + x + n] - t[(y + n) * W1 + x] + t[y * W1 + x];
+  if (area(g.sum, ax, ay, S) !== S * S) return false;
+  for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) if (area(g.lot, ax + 1 + 4 * c, ay + 1 + 4 * r, 3) !== 9) return false;
+  for (let dy = 0; dy < S; dy++) for (let dx = 0; dx < S; dx++) if (ctx.busy((y0 + dy) * w + x0 + dx)) return false;
+  return true;
+}
+
+function layDistrict(ctx, x0, y0, G, near, zones) {
+  const { v, w, h } = ctx, kind = ctx.roadKind(), S = 4 * G + 1, pieces = [], draw = [], streets = [], lots = [];
+  if (kind) for (let k = 0; k <= G; k++) for (const [a, e] of [[(y0 + 4 * k) * w + x0, (y0 + 4 * k) * w + x0 + S - 1], [y0 * w + x0 + 4 * k, (y0 + S - 1) * w + x0 + 4 * k]]) {
+    const line = roadLine(w, [a, e]);
+    streets.push(...line);
+    if (line.every(i => v.road[i] >= ROAD_TYPES.indexOf(kind))) continue;
+    pieces.push({ t: "road", kind, via: [a, e] });
+    draw.push({ t: "road", plots: line });
+  }
+  for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) {
+    const lx = x0 + 1 + 4 * c, ly = y0 + 1 + 4 * r;
+    lots.push({ x: lx, y: ly, d: Math.hypot(lx + 1 - (near % w), ly + 1 - ((near / w) | 0)) });
+  }
+  lots.sort((a, b) => b.d - a.d);
+  const count = { res: 0, com: 0, ind: 0 }, zoned = [];
+  const nInd = zones.ind && G >= 3 ? Math.max(1, Math.round(G * G * 0.2)) : 0, nCom = zones.com ? Math.max(1, Math.round(G * G * 0.25)) : 0;
+  lots.forEach((lot, k) => {
+    const zone = k < nInd ? "ind" : k < nInd + nCom ? "com" : "res";
+    count[zone]++;
+    pieces.push({ t: "zone", zone, x: lot.x, y: lot.y, w: 3, h: 3 });
+    const plots = rectPlots(w, h, [lot.x, lot.y, 3, 3]);
+    draw.push({ t: "zone", zone, plots });
+    zoned.push(...plots);
+  });
+  ctx.take(zoned);
+  ctx.take(streets);
+  ctx.planned.push(...zoned);
+  let price = kind ? ctx.roadCost(kind, [...new Set(streets)]) : 0, linked = null;
+  if (kind && ctx.roads > 0) {
+    const inside = i => { const x = i % w, y = (i / w) | 0; return x >= x0 && y >= y0 && x < x0 + S && y < y0 + S; };
+    const own = new Set(streets);
+    const path = ctx.route(kind, streets, i => v.road[i] > 0 && !inside(i), i => (!own.has(i) && ctx.taken.has(i)) || (!!v.zone[i] && !inside(i)), 8000);
+    if (path && path.length > 1) {
+      const line = path.filter(i => !inside(i));
+      pieces.push({ t: "road", kind, from: path[0], to: path[path.length - 1] });
+      draw.push({ t: "road", plots: line });
+      price += ctx.roadCost(kind, line);
+      ctx.take(line);
+      linked = line.length;
+    }
+  }
+  return { pieces, draw, price, count, linked, kind, at: (y0 + (S >> 1)) * w + x0 + (S >> 1) };
+}
+
+function zonesOpen(ctx) {
+  const { v } = ctx;
+  return { com: !v.lockOf("com", "zones"), ind: (v.me.era ?? "T") !== "T" && !v.lockOf("ind", "zones") };
+}
+
+function districtText(d) {
+  const parts = [["res", "housing"], ["com", "shops"], ["ind", "works"]].filter(([z]) => d.count[z]).map(([z, word]) => `${d.count[z] * 9} plots of ${word}`);
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
+  const roads = !d.kind ? " Streets come once a road type is open." : d.linked ? ` ${plural(d.linked, "plot")} of road joins it to your roads.` : "";
+  return `${list}, in lots of 3 by 3 with a street on every side, so homes have room to grow into bigger buildings.${roads}`;
+}
+
+function planDistricts(ctx, towns) {
+  const { v, w, h, R, L } = ctx, demand = v.town?.demand ?? {};
+  if (v.lockOf("res", "zones")) return;
+  let freeRes = 0;
+  for (const i of ctx.mine) if (v.zone[i] === 1 && !v.occupant(i)) freeRes++;
+  if (freeRes >= R.freeRes * 3 && !((demand.res ?? 0) > 0)) return;
+  const [g0, g1] = R.district, zones = zonesOpen(ctx);
+  for (const t of towns.slice(0, 2)) {
+    let found = null;
+    const reach = L(R.search) + 4 * g1 + 2, cx = t.centre % w, cy = (t.centre / w) | 0, grid = okGrid(ctx, cx - reach, cy - reach, cx + reach, cy + reach);
+    for (let G = g1; G >= g0 && !found; G--) {
+      const half = (4 * G + 1) >> 1;
+      for (const p of ring(w, h, t.centre, half + 2, L(R.search) + half)) {
+        const x0 = (p % w) - half, y0 = ((p / w) | 0) - half;
+        if (districtAt(ctx, grid, x0, y0, G)) { found = { x0, y0, G }; break; }
+      }
+    }
+    if (!found) continue;
+    const d = layDistrict(ctx, found.x0, found.y0, found.G, t.centre, zones), text = districtText(d);
+    ctx.add({ key: `district:${found.x0},${found.y0}:${found.G}`, kind: "towns", title: `A district of ${found.G * found.G} blocks by ${t.name}`, reason: text[0].toUpperCase() + text.slice(1), price: d.price, pieces: d.pieces, draw: d.draw, at: d.at });
+  }
+}
+
+function planNewCity(ctx, towns) {
+  const { v, w, R, L } = ctx, cap = v.me.capital, dist = (a, b) => Math.hypot((a % w) - (b % w), ((a / w) | 0) - ((b / w) | 0));
+  if (ctx.mine.length < L(Math.sqrt(R.newCityMin)) ** 2 || towns.length >= R.towns || v.lockOf("res", "zones")) return;
+  const gap = L(R.newCityGap), G = Math.max(R.district[0], Math.min(3, R.district[1])), half = (4 * G + 1) >> 1;
+  const spots = [], tx = towns.map(t => [t.centre % w, (t.centre / w) | 0]), cx = cap % w, cy = (cap / w) | 0, gap2 = gap * gap;
+  for (const i of ctx.mine) {
+    const x = i % w, y = (i / w) | 0;
+    if (x % 3 || y % 3 || tx.some(([a, b]) => (x - a) ** 2 + (y - b) ** 2 < gap2)) continue;
+    spots.push([i, (x - cx) ** 2 + (y - cy) ** 2]);
+  }
+  spots.sort((a, b) => a[1] - b[1]);
+  const near = spots.slice(0, 600).map(([i]) => i);
+  if (!near.length) return;
+  let bx0 = Infinity, by0 = Infinity, bx1 = -1, by1 = -1;
+  for (const c of near) { const x = c % w, y = (c / w) | 0; bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
+  const grid = okGrid(ctx, bx0 - half, by0 - half, bx1 + half, by1 + half);
+  for (const c of near) {
+    const x0 = (c % w) - half, y0 = ((c / w) | 0) - half;
+    if (!districtAt(ctx, grid, x0, y0, G)) continue;
+    const d = layDistrict(ctx, x0, y0, G, c, zonesOpen(ctx));
+    ctx.add({ key: `city:${x0},${y0}`, kind: "towns", title: `A new city at ${c % w}, ${(c / w) | 0}`, reason: `Open land ${Math.round(dist(c, cap))} plots from the capital: ${districtText(d)}`, price: d.price, pieces: d.pieces, draw: d.draw, at: d.at });
+    return;
+  }
+}
+
+function planRoadways(ctx, towns) {
+  const { v, w, h, me, R } = ctx, kind = ctx.roadKind(), cap = v.me.capital, size = w * h;
+  if (!kind) return;
+  const nb = i => { const x = i % w; return [i - w, i + w, x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1].filter(j => j >= 0 && j < size); };
+  const capB = ctx.mineBuildings.find(b => b.plots.includes(cap)), seeds = [];
+  for (const i of capB?.plots ?? [cap]) for (const j of nb(i)) if (v.owner[j] === me && v.road[j]) seeds.push(j);
+  for (let r = 1; r <= 4 && !seeds.length; r++) for (const i of ring(w, h, cap, r, r)) if (v.owner[i] === me && v.road[i]) { seeds.push(i); break; }
+  if (!seeds.length) return;
+  const net = new Set(seeds), todo = [...seeds];
+  while (todo.length && net.size < 60000) {
+    const i = todo.pop();
+    for (const j of nb(i)) if (v.road[j] && v.owner[j] === me && !net.has(j)) { net.add(j); todo.push(j); }
+  }
+  const dist = i => Math.hypot((i % w) - (cap % w), ((i / w) | 0) - ((cap / w) | 0));
+  const targets = [];
+  for (const t of towns) {
+    if (t.capital) continue;
+    let road = null;
+    for (const i of ring(w, h, t.centre, 0, 6)) if (v.owner[i] === me && v.road[i]) { road = i; break; }
+    if (road !== null) targets.push({ what: "town", plots: [road], at: road });
+  }
+  for (const b of ctx.mineBuildings) {
+    const d = b.def;
+    if (d.port || d.station || (d.airbase && !d.airbase.only) || d.producer?.kind === "deposit") targets.push({ what: d.port ? "port" : d.station ? "station" : d.airbase ? "airfield" : "mine", plots: b.plots, at: b.anchor });
+  }
+  const touches = plots => plots.some(i => net.has(i) || nb(i).some(j => net.has(j)));
+  const pieces = [], draw = [], joined = { town: 0, port: 0, station: 0, airfield: 0, mine: 0 };
+  let price = 0, tries = 0;
+  for (const tg of targets.filter(t => !touches(t.plots)).sort((a, b) => dist(a.at) - dist(b.at))) {
+    if (tries >= R.mainRoads) break;
+    if (touches(tg.plots)) continue;
+    tries++;
+    const own = new Set(tg.plots);
+    const starts = tg.what === "town" ? [tg.at] : [...new Set(tg.plots.flatMap(nb))].filter(j => !own.has(j) && v.owner[j] === me && !v.occupant(j) && TERRAIN[v.terrain[j]].land);
+    if (!starts.length) continue;
+    const path = ctx.route(kind, starts, i => net.has(i), i => ctx.taken.has(i) || !!v.zone[i], 8000);
+    if (!path || path.length < 2) continue;
+    for (const i of path) net.add(i);
+    ctx.take(path);
+    pieces.push({ t: "road", kind, from: path[0], to: path[path.length - 1] });
+    draw.push({ t: "road", plots: path });
+    price += ctx.roadCost(kind, path);
+    joined[tg.what]++;
+  }
+  if (!pieces.length) return;
+  const words = { town: ["town", "towns"], port: ["port", "ports"], station: ["station", "stations"], airfield: ["airfield", "airfields"], mine: ["mine", "mines"] };
+  const list = Object.entries(joined).filter(([, n]) => n).map(([k, n]) => plural(n, ...words[k]));
+  const said = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0];
+  ctx.add({ key: "roads:main", kind: "towns", title: "Main roads", reason: `${kind[0].toUpperCase()}${kind.slice(1)} roads join ${said} to the capital's roads, so towns grow along them and stacks move faster.`, price, pieces, draw, at: draw[0].plots[0] });
 }
 
 function planDeposits(ctx) {
@@ -296,17 +504,17 @@ function planFarms(ctx, towns) {
   const { v, R, L } = ctx, t = v.town ?? {}, idle = (t.workers ?? 0) - (t.jobs ?? 0);
   const def = ctx.best(d => d.producer?.kind === "farm");
   if (!def || !towns.length || idle < (def.jobs ?? 1)) return;
-  const count = Math.min(R.farms, Math.floor(idle / (def.jobs ?? 1))), pieces = [], draw = [];
-  for (const p of ring(ctx.w, ctx.h, towns[0].centre, L(R.farmRing[0]), L(R.farmRing[1]))) {
+  const count = Math.min(R.farms, Math.floor(idle / (def.jobs ?? 1))), pieces = [], draw = [], grow = ctx.growth();
+  for (const p of ring(ctx.w, ctx.h, towns[0].centre, L(R.farmRing[0]), L(R.farmRing[1]) + 2 * L(R.growRoom))) {
     if (pieces.length >= count) break;
-    if (!ctx.free(p)) continue;
+    if (!ctx.free(p) || grow.has(p)) continue;
     const plots = ctx.placeOk(def, p);
-    if (!plots) continue;
+    if (!plots || plots.some(i => grow.has(i))) continue;
     ctx.take(plots);
     pieces.push({ t: "build", type: def.id, at: p });
     draw.push({ t: "build", type: def.id, plots });
   }
-  ctx.add({ key: `farms:${towns[0].centre}`, kind: "economy", title: `${plural(pieces.length, lower(def.name))} by ${towns[0].name}`, reason: `${plural(Math.floor(idle), "worker")} ${Math.floor(idle) === 1 ? "has" : "have"} no job. Fields give them work and earn gold.`, price: pieces.length * (def.cost?.money ?? 0), pieces, draw, at: pieces[0]?.at });
+  ctx.add({ key: `farms:${towns[0].centre}`, kind: "economy", title: `${plural(pieces.length, lower(def.name))} by ${towns[0].name}`, reason: `${plural(Math.floor(idle), "worker")} ${Math.floor(idle) === 1 ? "has" : "have"} no job. Fields give them work and earn gold, and keep ${L(R.growRoom)} plots clear of the town so it can grow.`, price: pieces.length * (def.cost?.money ?? 0), pieces, draw, at: pieces[0]?.at });
 }
 
 function planPower(ctx) {
@@ -330,7 +538,8 @@ function planPower(ctx) {
       ctx.take(plan.poles);
       ctx.add({ key: `power:${head.id}`, kind: "economy", title, reason: `${reason} A line of ${plural(plan.poles.length, "pole")} joins ${lower(node.def.name)}'s grid.`, price: plan.poles.length * (pole.cost?.money ?? 0), pieces: [{ t: "poles", via: [node.anchor, head.anchor] }], draw: [{ t: "pole", plots: plan.poles }], at: head.anchor });
     } else if (plant) {
-      const spot = ctx.findSpot(plant, head.anchor, 1, Math.max(2, Math.floor(plant.power.reach * (R.scale ?? 1)) - 2));
+      const reach = Math.max(2, Math.floor(plant.power.reach * (R.scale ?? 1)) - 2);
+      const spot = ctx.findSpot(plant, head.anchor, 1, reach, { away: true }) ?? ctx.findSpot(plant, head.anchor, 1, reach);
       if (!spot) continue;
       ctx.take(spot.plots);
       ctx.add({ key: `power:${head.id}`, kind: "economy", title, reason: `${reason} A ${lower(plant.name)} beside them powers them.`, price: plant.cost?.money ?? 0, pieces: [{ t: "build", type: plant.id, at: spot.anchor }], draw: [{ t: "build", type: plant.id, plots: spot.plots }], at: spot.anchor });
@@ -341,7 +550,8 @@ function planPower(ctx) {
     if (!(row[2] < 100) || !row[1]) continue;
     const user = ctx.mineBuildings.find(b => P.users?.[b.id] === g);
     if (!user) continue;
-    const spot = ctx.findSpot(plant, user.anchor, 1, Math.max(2, Math.floor(plant.power.reach * (R.scale ?? 1)) - 2));
+    const reach = Math.max(2, Math.floor(plant.power.reach * (R.scale ?? 1)) - 2);
+    const spot = ctx.findSpot(plant, user.anchor, 1, reach, { away: true }) ?? ctx.findSpot(plant, user.anchor, 1, reach);
     if (!spot) continue;
     ctx.take(spot.plots);
     ctx.add({ key: `plant:${g}:${user.id}`, kind: "economy", title: `Another ${lower(plant.name)}`, reason: `A grid makes ${row[0]} power of the ${row[1]} its buildings need, so they run at ${row[2]}%.`, price: plant.cost?.money ?? 0, pieces: [{ t: "build", type: plant.id, at: spot.anchor }], draw: [{ t: "build", type: plant.id, plots: spot.plots }], at: spot.anchor });
@@ -596,6 +806,7 @@ export function proposePlan(v, rules = {}) {
   planPower(ctx);
   planPorts(ctx);
   planRail(ctx, towns);
+  planRoadways(ctx, towns);
   planCivic(ctx, towns);
   planTourism(ctx, towns);
   planUpgrades(ctx);
@@ -603,5 +814,8 @@ export function proposePlan(v, rules = {}) {
   planAirDefence(ctx, towns);
   planMissileDefence(ctx, towns);
   planShields(ctx, towns);
-  return ctx.projects.slice(0, ctx.R.maxProjects);
+  planDistricts(ctx, towns);
+  planNewCity(ctx, towns);
+  const order = p => { const k = PLAN_KINDS.indexOf(p.kind); return k < 0 ? PLAN_KINDS.length : k; };
+  return ctx.projects.map((p, k) => [p, k]).sort((a, b) => order(a[0]) - order(b[0]) || a[1] - b[1]).map(([p]) => p).slice(0, ctx.R.maxProjects);
 }

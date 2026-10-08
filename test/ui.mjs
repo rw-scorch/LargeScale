@@ -291,6 +291,17 @@ await page.keyboard.press("Escape");
   check(queuedUi && built, `Build queues "${first?.title}", and it is built with nothing else pressed; the feed says it is finished`);
   await page.keyboard.press("o");
   check(!(await page.isVisible("#planner-panel")) && !(await page.evaluate(() => window.__ls.game.view.plan)), "O again closes the planner and clears its outlines");
+  await page.evaluate(() => window.__ls.game.conn.request({ t: "admin", op: "give", nation: window.__ls.game.world.you, what: "money", amount: 20000 }));
+  await page.keyboard.press("o");
+  await page.waitForFunction(() => document.querySelectorAll("#planner-list .plan-item").length || null, null, { timeout: 5000 }).catch(() => {});
+  const city = await page.evaluate(() => { const list = window.__ls.game.planner.proposals, p = list.find(p => p.key.startsWith("district:") || p.key.startsWith("city:")); return p ? { key: p.key, title: p.title, lots: p.pieces.filter(q => q.t === "zone").length } : { keys: list.map(p => p.key).join(", ") }; });
+  if (city.key) await page.click(`#planner-list .plan-item[data-key="${city.key}"] .plan-build`);
+  const cityBuilt = city.key && await page.waitForFunction(t => [...document.querySelectorAll("#feed-list .item")].some(e => e.textContent.includes(`Plan finished: ${t}`)), city.title, { timeout: 45000 }).then(() => true, () => false);
+  await page.evaluate(c => window.__ls.game.focus(c, 8), await page.evaluate(() => window.__ls.game.world.nations.get(window.__ls.game.world.you).capital));
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${OUT}/2r-district-${MAP}.png` });
+  check(city.key && cityBuilt, `the planner offers "${city.title}" (${city.lots} lots of 3 by 3 with streets around each), and it is laid out with nothing else pressed${city.key ? "" : ` (proposals: ${city.keys})`}`);
+  await page.keyboard.press("o");
 }
 await page.evaluate(() => window.__ls.game.focus(window.__ls.game.world.nations.get(window.__ls.game.world.you).capital, 6));
 
