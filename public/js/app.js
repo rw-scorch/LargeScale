@@ -1006,11 +1006,22 @@ class Game {
     if (!me?.spawned || !me.alive || w.frozen) return this.tip.pin(sx, sy);
     const u = w.machines.get(this.selectedMachine), s = w.stacks.get(this.selected);
     const base = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.picked ? this.soldiersPanel.ringFor(plot) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
-    const items = u && u.owner === w.you ? base : [...base, ...this.engineering.ringFor(plot)];
+    const items = [...(u && u.owner === w.you ? base : [...base, ...this.engineering.ringFor(plot)]), ...(this.lastPointer !== "mouse" ? this.belowItems(plot, sx, sy) : [])];
     if (!items.length) return this.tip.pin(sx, sy);
     const o = w.owner[plot], them = o && o !== w.you ? w.nations.get(o) : null;
     if (them) items.push({ id: "nation", label: them.name, icon: "dip_alliance", run: () => this.selectNation(o, plot) });
     this.ring.show(sx, sy, [...items, { id: "info", label: "Info", icon: "ui_info", run: () => this.tip.pin(sx, sy, 5000) }]);
+  }
+
+  belowItems(plot, sx, sy) {
+    const w = this.world, v = this.view, whose = o => (o === w.you ? "your" : `${w.nations.get(o)?.name ?? "someone"}'s`);
+    const s = w.stacks.get(v.stackAt(sx, sy)), u = w.machines.get(v.machineAt(sx, sy)), b = w.buildingAt(plot);
+    const pick = run => () => { if (this.group) this.selectGroup(null); if (this.picked) this.pickSoldiers(null); run(); };
+    return [
+      ...(s && s.id !== this.selected ? [{ id: "select-stack", label: `Select ${whose(s.owner)} company`, note: fmt(s.troops), icon: "cursor_select", run: pick(() => this.select(s.id)) }] : []),
+      ...(u?.def && u.id !== this.selectedMachine ? [{ id: "select-machine", label: `Select ${whose(u.owner)} ${u.def.name.toLowerCase()}`, icon: "cursor_select", run: pick(() => this.selectMachine(u.id)) }] : []),
+      ...(b?.def && b.state !== "rubble" && b.id !== this.selectedBuilding ? [{ id: "select-building", label: `Select ${b.def.name}`, icon: "cursor_select", run: pick(() => this.selectBuilding(b.id)) }] : []),
+    ];
   }
 
   async attackAt(plot) {

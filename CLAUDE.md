@@ -473,6 +473,7 @@ Engineers and terrain engineering (`plans/milestone-11.md`, branch `m11-engineer
 - **Phones.**
   - A tap on the map opens the ring. This is `prefs.tapRing`, which Settings can turn off.
   - The canvas cancels the browser's own click after a tap, which used to choose the ring's centre item.
+  - A ring opened by a finger offers Select for the company, machine or building under it (`belowItems` in `public/js/app.js`), so a tap with a company selected can still pick the building it lands on.
 - **Armies.** The Armies button and Q open the all-troops panel (`public/js/ui/troops.js`), which sends group orders to every company. Picking soldiers is V.
 - **Upgrades.** `growError` in `src/shared/buildings.js` is one room-to-grow check for the server, the upgrade menu, the building card and the planner.
 - **The feed** no longer throws on events with a numeric `from`.
