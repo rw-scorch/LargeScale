@@ -101,7 +101,7 @@ export function createSoldiersPanel(root, game) {
       const n = count(list);
       title.textContent = `${fmt(n)} ${n === 1 ? "soldier" : "soldiers"} picked`;
       info.textContent = `${pickedText(w, list)}, from ${list.length} ${list.length === 1 ? "company" : "companies"}`;
-      hint.textContent = mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : game.armies ? "Swipe to pick again; tap a picked soldier to pick all of its kind on screen. Right-click or hold a finger for orders." : "Right-click or hold a finger on the map for their orders.";
+      hint.textContent = mode === "move" ? "Click where to go." : mode === "nation" ? "Click the land of the nation to take from." : game.armies ? "Swipe to pick again; tap a picked soldier to pick all of its kind on screen. Right-click or hold a finger for orders." : "Right-click or tap the map for their orders.";
       const k = `${mode}:${performance.now() - disbandAt < 4000}`;
       if (k === key) return;
       key = k;

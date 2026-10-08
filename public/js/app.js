@@ -996,6 +996,8 @@ class Game {
     const base = u && u.owner === w.you ? this.machinePanel.ringFor(plot, sx, sy) : this.picked ? this.soldiersPanel.ringFor(plot) : this.group ? this.groupPanel.ringFor(plot) : s && s.owner === w.you ? this.stack.ringFor(plot, sx, sy) : ownerItems(this, plot, sx, sy);
     const items = u && u.owner === w.you ? base : [...base, ...this.engineering.ringFor(plot)];
     if (!items.length) return this.tip.pin(sx, sy);
+    const o = w.owner[plot], them = o && o !== w.you ? w.nations.get(o) : null;
+    if (them) items.push({ id: "nation", label: them.name, icon: "dip_alliance", run: () => this.selectNation(o, plot) });
     this.ring.show(sx, sy, [...items, { id: "info", label: "Info", icon: "ui_info", run: () => this.tip.pin(sx, sy, 5000) }]);
   }
 
@@ -1051,7 +1053,8 @@ class Game {
     }
     const me = w.nations.get(w.you);
     if (me && !me.spawned && !w.frozen) return this.spawn.tryAt(x, y);
-    const b = w.buildingAt(plot);
+    const b = w.buildingAt(plot), ordering = this.selected !== null || this.selectedMachine !== null || this.group || this.picked;
+    if (this.lastPointer !== "mouse" && this.prefs.tapRing !== false && me?.alive && !w.frozen && (ordering || !b)) return this.secondary(sx, sy);
     if (b) return this.selectBuilding(b.id);
     this.selectGroup(null);
     this.select(null);
