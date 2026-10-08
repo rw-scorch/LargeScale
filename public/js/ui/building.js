@@ -135,7 +135,7 @@ export function createBuildingPanel(root, game) {
       queue.textContent = builds.length ? `${queueText(w, q)} ${limitText(w, builds)}`.trim() : "";
       queue.hidden = !queue.textContent;
       const next = yours && b.state === "active" && !w.frozen && b.def.next ? w.defs.table[b.def.next] : null;
-      const lock = next && upgradeLock(w, next), price = next && !lock ? upgradePrice(w, next.cost) : null;
+      const lock = next && (upgradeLock(w, next) ?? (w.growError(b) ? "no room to grow here" : null)), price = next && !lock ? upgradePrice(w, next.cost) : null;
       upg.textContent = !next ? "" : lock ? `Upgrade to ${next.name}: ${lock}.` : `Upgrade to ${next.name} now for ${fmt(Math.ceil(price.money))} gold${price.money > (w.purse?.money ?? 0) ? `; you have ${fmt(w.purse?.money ?? 0)} gold` : ""}.`;
       upg.hidden = !upg.textContent;
       const paid = b.def.cost;

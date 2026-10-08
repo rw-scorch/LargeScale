@@ -274,11 +274,11 @@ export const ORDERS = {
       want.set(p[0], (want.get(p[0]) ?? 0) + p[1]);
     }
     const picks = [];
-    for (const r of listUpgradable(sim, nation, { filter })) {
+    for (const r of listUpgradable(sim, nation, { filter, room: true })) {
       const left = want.get(r.type) ?? 0;
       if (left > 0) { picks.push({ id: r.id, civilian: r.civilian }); want.set(r.type, left - 1); }
     }
-    if (!picks.length) return fail("none of those can be upgraded now");
+    if (!picks.length) return fail(listUpgradable(sim, nation, { filter }).some(r => want.has(r.type)) ? "none of those have room to grow" : "none of those can be upgraded now");
     return finish(picks, [...want.values()].reduce((s, v) => s + v, 0));
   },
   road(sim, nation, m) {

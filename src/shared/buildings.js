@@ -71,6 +71,13 @@ export function placeError(v, nation, def, anchor, self = 0) {
   return def.producer ? producerError(v, def.producer, plots) : null;
 }
 
+export function growError(v, nation, b, next, zone = v.zone ?? null) {
+  const plots = footprintAt(v.w, v.h, b.anchor, next.fp);
+  if (!plots) return "no room to grow";
+  if (b.civilian) return plots.some(i => { const o = v.occupant(i); return v.owner[i] !== nation.id || (o && o !== b.id) || (zone && zone[i] !== zone[b.anchor]); }) ? "no room to grow" : null;
+  return placeError(v, nation, next, b.anchor, b.id) ? "no room to grow" : null;
+}
+
 export function nearTerrain(v, plots, near) {
   const names = new Set(near.terrain), r = near.within;
   for (const i of plots) {

@@ -1,5 +1,5 @@
 import { TERRAIN } from "./terrain.js";
-import { footprintAt, placeError, areaAround, eraIdx, wonderErrorOf } from "./buildings.js";
+import { footprintAt, placeError, areaAround, eraIdx, wonderErrorOf, growError } from "./buildings.js";
 import { roadRoute, roadPrice, roadLine, ROAD_TYPES } from "./roads.js";
 import { polePlan } from "./power.js";
 
@@ -439,7 +439,7 @@ function planUpgrades(ctx) {
   let price = 0;
   for (const b of ctx.mineBuildings) {
     const d = b.def, nd = d.next && v.defs[d.next];
-    if (d.civilian || b.state !== "active" || !nd || eraIdx(nd.era) > eraIdx(v.me.era ?? "T") || v.lockOf(nd.id)) continue;
+    if (d.civilian || b.state !== "active" || !nd || eraIdx(nd.era) > eraIdx(v.me.era ?? "T") || v.lockOf(nd.id) || growError(v, v.me, { id: b.id, anchor: b.anchor, civilian: false }, nd)) continue;
     if (ids.length >= 60) break;
     ids.push(b.id);
     draw.push({ t: "upgrade", plots: b.plots });
