@@ -609,6 +609,28 @@ check(tappedRing[0] === "form" && tappedRing.includes("info"), `on a phone, a ta
 await phone.touchscreen.tap(150, 150);
 await phone.waitForTimeout(200);
 check(await phone.evaluate(() => document.querySelector("#ring").hidden), "a tap outside the ring closes it");
+const under = await phone.evaluate(async () => {
+  const g = window.__ls.game, w = g.world, v = g.view, cap = w.nations.get(w.you).capital;
+  let id = w.myStacks()[0]?.id ?? null;
+  if (id === null) { const r = await g.conn.request({ t: "stack", share: 0.1, at: cap }); id = r.ok ? r.stack : null; }
+  if (id === null) return null;
+  for (const b of w.buildings.values()) {
+    if (b.owner !== w.you || b.state === "rubble") continue;
+    g.select(id);
+    g.focus(b.anchor, 16);
+    await new Promise(r => setTimeout(r, 300));
+    const [x, y] = v.plotToScreen((b.anchor % w.w) + 0.5, ((b.anchor / w.w) | 0) + 0.5);
+    if (v.stackAt(x, y) === null && v.machineAt(x, y) === null) return { x: x / v.ratio, y: y / v.ratio, b: b.id, s: id };
+  }
+  return null;
+});
+if (under) await phone.touchscreen.tap(under.x, under.y);
+const underRing = under ? await ringItems(phone) : [];
+if (underRing.includes("select-building")) await phone.tap('#ring [data-ring="select-building"]');
+await phone.waitForTimeout(300);
+const underPicked = await phone.evaluate(() => ({ b: window.__ls.game.selectedBuilding, s: window.__ls.game.selected }));
+check(under && underRing.includes("move") && underRing.includes("select-building") && underPicked.b === under.b && underPicked.s === null, `on a phone with a company selected, a tap on your building opens its orders with Select for the building, which selects it (${underRing.join(", ")}; ${JSON.stringify(underPicked)})`);
+await phone.evaluate(() => window.__ls.game.selectBuilding(null));
 await phone.evaluate(() => { const g = window.__ls.game, w = g.world; g.setPref("crosshair", true); g.focus(w.nations.get(w.you).capital, 8); });
 await phone.waitForTimeout(400);
 const phoneAim = await phone.isVisible("#aim-orders");
