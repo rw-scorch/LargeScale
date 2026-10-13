@@ -258,6 +258,7 @@ class Game {
     else this.fit();
     this.view.clampCamera();
     this.updatePanels();
+    if (m.full) this.toast("This world has no nation places left, so you are watching.");
   }
 
   onMessage(m) {

@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { playerColour, MAX_NATION_ID } from "./colours.js";
 import { World as Sim } from "./sim/territory.js";
 import { makeTestMap } from "./shared/testmap.js";
 import { isLand } from "./shared/terrain.js";
@@ -57,7 +58,6 @@ const LOADS = [2, 3, 4];
 const ROW_BYTES = 1_000_000;
 const SAVE_EVERY_MS = 30000;
 const SEASON_SECONDS = rules.seasons.dayLengthMinutes * 60 * rules.seasons.daysPerSeason;
-const COLOURS = ["#e0413a", "#f08a24", "#d63fbf", "#f2d02b", "#8e4fe0", "#f4f4f4", "#ff7ab8", "#1f1f1f"];
 
 const RECORD = new Set([...DIPLO_EVENTS, "eliminated", "era_up", "wonder_built", "nuke_launched", "nuke_detonated", "capital_moved", "victory"]);
 
@@ -417,7 +417,7 @@ export class World extends DurableObject {
       this.meta("info", this.info);
     }
     const account = { id: Number(request.headers.get("X-Account")), name: request.headers.get("X-Name"), admin: request.headers.get("X-Admin") === "1" };
-    const watch = request.headers.get("X-Watch") === "1";
+    let watch = request.headers.get("X-Watch") === "1";
     const [client, server] = Object.values(new WebSocketPair());
     if (Number(new URL(request.url).searchParams.get("v")) !== PROTOCOL) {
       server.accept();
@@ -436,8 +436,10 @@ export class World extends DurableObject {
       try { old.send(JSON.stringify({ t: "replaced", v: PROTOCOL, text: "This game was opened somewhere else." })); old.close(CLOSE.REPLACED, "opened somewhere else"); } catch {}
     }
     let nation = watch ? null : [...this.accounts].find(([, a]) => a === account.id)?.[0] ?? null;
+    const full = nation === null && !watch && this.sim.nextNation > MAX_NATION_ID;
+    if (full) watch = true;
     if (nation === null && !watch) {
-      nation = this.sim.addNation({ name: account.name, colour: COLOURS[this.accounts.size % COLOURS.length] });
+      nation = this.sim.addNation({ name: account.name, colour: playerColour(this.accounts.size) });
       this.accounts.set(nation, account.id);
     }
     const self = nation, led = nation === null ? undefined : this.sim.dip?.commanders.get(nation);
@@ -451,7 +453,7 @@ export class World extends DurableObject {
     const roadFrames = partFrames(MSG.ROAD, encodeRuns(this.sim.log.road));
     const depositFrames = ["test", "custom"].includes(this.info.map.kind) ? partFrames(MSG.DEPOSITS, encodeDeposits(this.sim.res.dep)) : [];
     server.send(JSON.stringify({
-      t: "hello", v: PROTOCOL, you: nation, self, w: g.w, h: g.h, map: join.map,
+      t: "hello", v: PROTOCOL, you: nation, self, w: g.w, h: g.h, map: join.map, full: full || undefined,
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, road: roadFrames.length, deposits: depositFrames.length },
       depositIds: DEPOSIT_IDS, depositNames: DEPOSIT_TABLE.map(d => d.name ?? d.id), depleted: depletedPlots(this.sim), tech: TREE,
       watch, defs: buildingData.buildings, purse: nation === null ? null : this.purse(this.sim.nations.get(nation)), consRules: { demolishRefund: this.sim.cons.rules.demolishRefund, refundOnCancel: this.sim.cons.rules.refundOnCancel, instantPremium: this.sim.cons.rules.instantPremium, moneyForMissing: this.sim.cons.rules.moneyForMissing }, disbandLoss: this.sim.rules.disbandLoss, roadRules: { ...this.sim.log.rules, scale: this.sim.log.scale }, powerRules: this.sim.power ? { ...this.sim.power.rules, reach: buildingData.buildings.find(d => d.id === "power_pole").pole.reach * this.sim.power.scale, scale: this.sim.power.scale } : null,

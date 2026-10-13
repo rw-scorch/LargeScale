@@ -158,6 +158,15 @@ const outsiderOpened = await new Promise(res => {
 });
 check(!outsiderOpened, "non-members cannot connect");
 check((await api(`/api/worlds/${wid}/join`, {}, tb)).status === 200, "friend joins the world");
+{
+  const extra = [];
+  for (let k = 0; k < 10; k++) {
+    const r = await api("/api/register", { name: `crowd${k}${suffix}`, password: "crowd password", invite: INVITE });
+    extra.push(r.body.token && (await api(`/api/worlds/${wid}/join`, {}, r.body.token)).status);
+  }
+  const listed = (await api("/api/worlds", null, ta)).body?.find(w => w.id === wid);
+  check(extra.every(s => s === 200) && listed?.players === 12, `ten more players join, past the old cap of eight: ${listed?.players} members`);
+}
 const A = await connect(wid, ta), B = await connect(wid, tb);
 const hello = await waitFor(A, m => m.t === "hello");
 check(hello && hello.w === M.w && hello.h === M.h && hello.v === PROTOCOL, `hello has the map size and protocol version ${hello?.v}`);

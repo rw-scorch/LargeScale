@@ -220,7 +220,7 @@ export class Directory extends DurableObject {
     ).toArray().map(w => ({ ...w, schedule: w.schedule ? JSON.parse(w.schedule) : null }));
   }
 
-  joinWorld(account, id, maxPlayers = 8) {
+  joinWorld(account, id, maxPlayers = rules.world.maxPlayers ?? Infinity) {
     const w = this.ctx.storage.sql.exec("SELECT id FROM worlds WHERE id = ?", id).toArray()[0];
     if (!w) return { error: "no such world" };
     if (this.ctx.storage.sql.exec("SELECT 1 FROM bans WHERE world = ? AND account = ?", id, account.id).toArray().length) return { error: "the host removed you from this world" };
