@@ -16,6 +16,7 @@
     "bench": "node --expose-gc tools/bench_earth.mjs",
     "test:reference": "node --test \"reference/tasks/**/*.test.js\" \"reference/shared/*.test.js\"",
     "ui": "node test/ui.mjs",
+    "ui:maker": "node test/ui_maker.mjs",
     "map:deposits": "node tools/build_deposits.mjs",
     "soak": "node test/soak.mjs"
   },
