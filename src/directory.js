@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import rules from "../data/rules.json" with { type: "json" };
-import { readMapFile } from "./shared/mapfile.js";
 import { hashPassword, randomToken, sha256, sameText, validName } from "./auth.js";
+import { readMapFile } from "./shared/mapfile.js";
 
 const SESSION_DAYS = 30;
 

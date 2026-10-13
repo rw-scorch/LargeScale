@@ -158,6 +158,16 @@ const outsiderOpened = await new Promise(res => {
 });
 check(!outsiderOpened, "non-members cannot connect");
 check((await api(`/api/worlds/${wid}/join`, {}, tb)).status === 200, "friend joins the world");
+const A = await connect(wid, ta), B = await connect(wid, tb);
+const hello = await waitFor(A, m => m.t === "hello");
+check(hello && hello.w === M.w && hello.h === M.h && hello.v === PROTOCOL, `hello has the map size and protocol version ${hello?.v}`);
+const mirror = await new Mirror(A, hello).load();
+check(mirror.terrainDone && mirror.ownerDone && mirror.versionOk, `join arrives as ${hello.frames.terrain} terrain difference and ${hello.frames.owner} owner frames, all tagged with the protocol version`);
+check(mirror.baseHashOk, `the static map file matches the server's base map (${hello.map.baseHash ?? "generated test map"})`);
+check(hashBytes(mirror.terrain) === hello.hashes.terrain, `terrain rebuilt from the base map plus differences matches the server (${hello.hashes.terrain})`);
+check(hashRuns(mirror.owner) === hello.hashes.owner, "owner layer decoded from the snapshot matches the server");
+const joinBytes = hello._bytes + mirror.joinFrameBytes;
+check(joinBytes < 1_000_000, `join transferred ${joinBytes} bytes over the socket (hello ${hello._bytes}, frames ${mirror.joinFrameBytes}); static terrain file ${mirror.staticBytes ?? 0} bytes, cacheable`);
 {
   const terrain = makeTestMap(150, 110, 11).terrain;
   for (let x = 30; x < 120; x++) terrain[55 * 150 + x] = TID.mountain;
@@ -187,16 +197,6 @@ check((await api(`/api/worlds/${wid}/join`, {}, tb)).status === 200, "friend joi
   check((await fetch(BASE + "/api/worlds/nosuchworld/terrain.bin.gz")).status === 404 && (await fetch(BASE + `/api/worlds/${wid}/terrain.bin.gz`)).status === 404, "only saved-map worlds serve a base file");
   C.ws.close();
 }
-const A = await connect(wid, ta), B = await connect(wid, tb);
-const hello = await waitFor(A, m => m.t === "hello");
-check(hello && hello.w === M.w && hello.h === M.h && hello.v === PROTOCOL, `hello has the map size and protocol version ${hello?.v}`);
-const mirror = await new Mirror(A, hello).load();
-check(mirror.terrainDone && mirror.ownerDone && mirror.versionOk, `join arrives as ${hello.frames.terrain} terrain difference and ${hello.frames.owner} owner frames, all tagged with the protocol version`);
-check(mirror.baseHashOk, `the static map file matches the server's base map (${hello.map.baseHash ?? "generated test map"})`);
-check(hashBytes(mirror.terrain) === hello.hashes.terrain, `terrain rebuilt from the base map plus differences matches the server (${hello.hashes.terrain})`);
-check(hashRuns(mirror.owner) === hello.hashes.owner, "owner layer decoded from the snapshot matches the server");
-const joinBytes = hello._bytes + mirror.joinFrameBytes;
-check(joinBytes < 1_000_000, `join transferred ${joinBytes} bytes over the socket (hello ${hello._bytes}, frames ${mirror.joinFrameBytes}); static terrain file ${mirror.staticBytes ?? 0} bytes, cacheable`);
 const terrain = mirror.terrain;
 const land = [];
 for (let i = 0; i < terrain.length; i++) if (terrain[i] >= 11 && terrain[i] <= 15) land.push(i);
