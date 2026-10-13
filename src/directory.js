@@ -1,4 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
+import rules from "../data/rules.json" with { type: "json" };
+import { readMapFile } from "./shared/mapfile.js";
 import { hashPassword, randomToken, sha256, sameText, validName } from "./auth.js";
 
 const SESSION_DAYS = 30;
@@ -16,6 +18,7 @@ export class Directory extends DurableObject {
         CREATE TABLE IF NOT EXISTS notify (account INTEGER PRIMARY KEY, discord TEXT, prefs TEXT);
         CREATE TABLE IF NOT EXISTS links (code TEXT PRIMARY KEY, account INTEGER, expires INTEGER);
         CREATE TABLE IF NOT EXISTS bans (world TEXT, account INTEGER, t INTEGER, PRIMARY KEY (world, account));
+        CREATE TABLE IF NOT EXISTS maps (id TEXT PRIMARY KEY, owner INTEGER, name TEXT, w INTEGER, h INTEGER, land INTEGER, hash TEXT, created INTEGER, file BLOB);
         CREATE TABLE IF NOT EXISTS admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER, who TEXT, op TEXT, detail TEXT);
       `);
     });
@@ -163,6 +166,51 @@ export class Directory extends DurableObject {
     this.ctx.storage.sql.exec("DELETE FROM accounts WHERE id = ?", id);
     this.log(who, "remove account", { account: id, name: acc.name, worlds: worlds.length });
     return { ok: true, name: acc.name, worlds };
+  }
+
+  listMaps(account) {
+    const maps = this.ctx.storage.sql.exec(
+      "SELECT m.id, m.name, m.w, m.h, m.land, m.hash, m.created, LENGTH(m.file) AS bytes, a.name AS author, m.owner = ? AS mine FROM maps m LEFT JOIN accounts a ON a.id = m.owner ORDER BY m.created DESC",
+      account.id,
+    ).toArray().map(m => ({ ...m, mine: !!m.mine }));
+    return { maps, limits: rules.maps, admin: !!account.admin };
+  }
+
+  async saveMap(account, bytes, replace = null) {
+    const L = rules.maps;
+    if (bytes.length > L.maxFileBytes) return { error: `the map file is ${bytes.length} bytes, over the ${L.maxFileBytes} limit` };
+    const r = await readMapFile(bytes, L);
+    if (r.error) return r;
+    const sql = this.ctx.storage.sql;
+    if (replace) {
+      const old = sql.exec("SELECT owner FROM maps WHERE id = ?", replace).toArray()[0];
+      if (!old) return { error: "no such map" };
+      if (old.owner !== account.id) return { error: "only its maker can change a map" };
+      sql.exec("UPDATE maps SET name = ?, w = ?, h = ?, land = ?, hash = ?, created = ?, file = ? WHERE id = ?", r.map.name, r.map.w, r.map.h, r.land, r.hash, Date.now(), bytes, replace);
+      return { ok: true, id: replace, name: r.map.name, w: r.map.w, h: r.map.h, land: r.land };
+    }
+    if (sql.exec("SELECT COUNT(*) AS n FROM maps WHERE owner = ?", account.id).one().n >= L.perAccount) return { error: `you have ${L.perAccount} maps saved; delete one first` };
+    const id = randomToken(9);
+    sql.exec("INSERT INTO maps (id, owner, name, w, h, land, hash, created, file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", id, account.id, r.map.name, r.map.w, r.map.h, r.land, r.hash, Date.now(), bytes);
+    return { ok: true, id, name: r.map.name, w: r.map.w, h: r.map.h, land: r.land };
+  }
+
+  hasWorld(id) {
+    return this.ctx.storage.sql.exec("SELECT 1 FROM worlds WHERE id = ?", id).toArray().length > 0;
+  }
+
+  mapFile(id) {
+    const row = this.ctx.storage.sql.exec("SELECT file FROM maps WHERE id = ?", id).toArray()[0];
+    return row ? new Uint8Array(row.file) : null;
+  }
+
+  deleteMap(account, id) {
+    const row = this.ctx.storage.sql.exec("SELECT owner, name FROM maps WHERE id = ?", id).toArray()[0];
+    if (!row) return { error: "no such map" };
+    if (row.owner !== account.id && !account.admin) return { error: "only its maker or the host can delete a map" };
+    this.ctx.storage.sql.exec("DELETE FROM maps WHERE id = ?", id);
+    if (row.owner !== account.id) this.log(account, "delete map", { id, name: row.name });
+    return { ok: true, name: row.name };
   }
 
   listWorlds(account) {

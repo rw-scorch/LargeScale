@@ -1,4 +1,5 @@
-import { isLand, TERRAIN } from "../src/shared/terrain.js";
+import { isLand, TERRAIN, TID } from "../src/shared/terrain.js";
+import { writeMapFile, readMapFile } from "../src/shared/mapfile.js";
 const BASE = process.env.BASE ?? "http://127.0.0.1:8787";
 const INVITE = process.env.INVITE ?? "test-invite";
 const ADMIN = process.env.ADMIN ?? "rw_scorch";
@@ -157,6 +158,35 @@ const outsiderOpened = await new Promise(res => {
 });
 check(!outsiderOpened, "non-members cannot connect");
 check((await api(`/api/worlds/${wid}/join`, {}, tb)).status === 200, "friend joins the world");
+{
+  const terrain = makeTestMap(150, 110, 11).terrain;
+  for (let x = 30; x < 120; x++) terrain[55 * 150 + x] = TID.mountain;
+  const file = await writeMapFile({ name: "Smoke isles", w: 150, h: 110, terrain, north: 52, south: 41 });
+  const upload = async (bytes, token, path = "/api/maps") => { const r = await fetch(BASE + path, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/octet-stream" }, body: bytes }); return { status: r.status, body: await r.json() }; };
+  const junk = await upload(new Uint8Array([31, 139, 8, 0, 1, 2, 3]), tb);
+  const sea = await upload(await writeMapFile({ name: "All sea", w: 100, h: 100, terrain: new Uint8Array(10000).fill(TID.ocean) }), tb);
+  check(junk.status === 400 && sea.status === 400 && /land plots/.test(sea.body.error), `the server refuses a broken file ("${junk.body.error}") and a map with no land ("${sea.body.error}")`);
+  const up = await upload(file, tb);
+  const listed = (await api("/api/maps", null, ta)).body.maps?.find(m => m.id === up.body.id);
+  check(up.status === 200 && listed?.author === "friend" + suffix && listed.w === 150 && !listed.mine, `a friend publishes a 150 by 110 map (${file.length} bytes); the host sees it in the list, made by ${listed?.author}`);
+  const back = await readMapFile(new Uint8Array(await (await fetch(BASE + `/api/maps/${up.body.id}/file`, { headers: { authorization: `Bearer ${ta}` } })).arrayBuffer()));
+  check(hashBytes(back.map?.terrain ?? []) === hashBytes(terrain) && back.map.north === 52, "the saved map downloads unchanged");
+  const notYours = await upload(file, ta, `/api/maps/${up.body.id}`);
+  check(notYours.status === 400 && /only its maker/.test(notYours.body.error), `someone else cannot overwrite it: "${notYours.body.error}"`);
+  const cw = await api("/api/worlds", { name: "Smoke custom", config: { map: `custom:${up.body.id}`, bots: 4 } }, ta);
+  check(cw.status === 200 && cw.body.map === "custom" && cw.body.w === 150 && cw.body.h === 110 && cw.body.bots === 4, `the host makes a world from it: ${cw.body.map} ${cw.body.w} by ${cw.body.h}, ${cw.body.bots} bots`);
+  const gone = await api("/api/worlds", { name: "x", config: { map: "custom:nosuchmap" } }, ta);
+  check(gone.status === 400 && /gone/.test(gone.body.error), `a missing saved map is refused: "${gone.body.error}"`);
+  await api(`/api/worlds/${cw.body.id}/join`, {}, tb);
+  const del = await api(`/api/maps/${up.body.id}/delete`, {}, tb);
+  check(del.body.ok && !(await api("/api/maps", null, ta)).body.maps.some(m => m.id === up.body.id), "its maker deletes the saved map");
+  const C = await connect(cw.body.id, tb), ch = await waitFor(C, m => m.t === "hello");
+  const cm = await new Mirror(C, ch).load();
+  check(ch.map.kind === "custom" && cm.baseHashOk && hashBytes(cm.terrain) === ch.hashes.terrain && hashBytes(cm.terrain) === hashBytes(terrain), `the world still joins after the map is deleted: base from the world itself (${cm.staticBytes} bytes), terrain matches the drawn map, wall of mountains and all`);
+  check(ch.frames.deposits > 0 && cm.world.deposits?.plots?.length > 0, `deposits are made from the drawn terrain: ${cm.world.deposits?.plots?.length} plots`);
+  check((await fetch(BASE + "/api/worlds/nosuchworld/terrain.bin.gz")).status === 404 && (await fetch(BASE + `/api/worlds/${wid}/terrain.bin.gz`)).status === 404, "only saved-map worlds serve a base file");
+  C.ws.close();
+}
 const A = await connect(wid, ta), B = await connect(wid, tb);
 const hello = await waitFor(A, m => m.t === "hello");
 check(hello && hello.w === M.w && hello.h === M.h && hello.v === PROTOCOL, `hello has the map size and protocol version ${hello?.v}`);
