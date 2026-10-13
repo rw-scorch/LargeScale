@@ -68,7 +68,7 @@ export function depositIndex(dep, plot) {
 }
 
 export function latitudeOf(map, h, plot, w) {
-  if (!map || map.kind === "test") return 45;
+  if (!map || map.kind === "test" || (map.kind === "custom" && map.north === undefined)) return 45;
   const north = map.north ?? 84, south = map.south ?? -60, srcH = map.srcH ?? h;
   const y = Math.floor(plot / w) + (map.rect?.y ?? 0);
   return north - ((y + 0.5) * (north - south)) / srcH;

@@ -4,6 +4,7 @@ import { World as Sim } from "./sim/territory.js";
 import { makeTestMap } from "./shared/testmap.js";
 import { isLand } from "./shared/terrain.js";
 import { cropRect, cropLayer, baseLayer, terrainDiff } from "./shared/maps.js";
+import { readMapFile } from "./shared/mapfile.js";
 import { PROTOCOL, MSG, CLOSE, frame, partFrames } from "./shared/protocol.js";
 import { encodeRuns, decodeRuns, splitParts, joinParts, gzip, gunzip, hashBytes, hashRuns } from "./shared/codec.js";
 import { parseWorldConfig, defaultBots, scaledRules, MIN_MAP_SIDE, MAX_PLOTS, BASE_WIDTH } from "./worldconfig.js";
@@ -118,10 +119,17 @@ export class World extends DurableObject {
   }
 
   async baseTerrain(dir = "map") {
+    if (this.info?.map.kind === "custom") return gunzip(this.readRows("base"));
     return gunzip(new Uint8Array(await (await this.asset(`${dir}/terrain.bin.gz`)).arrayBuffer()));
   }
 
-  async buildMap(map) {
+  async buildMap(map, file, id) {
+    if (map.kind === "custom") {
+      const r = file ? await readMapFile(file, rules.maps) : { error: "the saved map was not sent" };
+      if (r.error) return r;
+      const m = r.map, latitudes = m.north !== undefined ? { north: m.north, south: m.south } : {};
+      return { map: { ...map, name: m.name, dir: `api/worlds/${id}`, baseHash: r.hash, srcW: m.w, srcH: m.h, scale: 1, ...latitudes }, w: m.w, h: m.h, terrain: m.terrain };
+    }
     if (map.kind === "test") return { map, w: map.w, h: map.h, terrain: makeTestMap(map.w, map.h, map.seed).terrain };
     const dir = map.dir ?? "map";
     const meta = await (await this.asset(`${dir}/meta.json`)).json();
@@ -138,6 +146,7 @@ export class World extends DurableObject {
   async loadDeposits(info, terrain) {
     const map = info.map;
     if (map.kind === "test") return generateDeposits({ w: info.w, h: info.h, terrain }, makeRng(map.seed ?? 1));
+    if (map.kind === "custom") return generateDeposits({ w: info.w, h: info.h, terrain: await gunzip(this.readRows("base")) }, makeRng(parseInt(map.baseHash, 16)));
     try {
       const dep = decodeDeposits(await gunzip(new Uint8Array(await (await this.asset(`${map.dir ?? "map"}/deposits.bin.gz`)).arrayBuffer())));
       return map.rect ? cropDeposits(dep, map.srcW, map.rect) : dep;
@@ -246,13 +255,13 @@ export class World extends DurableObject {
     return { terrain: hashBytes(terrain), owner: hashRuns(this.sim.owner), zone: hashRuns(bld.zone), wood: hashRuns(bld.wood), buildings: hashBytes(encodeBuildings(bld)), land: hashBytes(encodeLand(this.sim)), road: hashRuns(this.sim.log.road) };
   }
 
-  async init(config) {
+  async init(config, file = null) {
     if (this.deleted) return { error: "this world was deleted" };
     if (this.meta("info")) return { ok: true, existed: true };
     const cfg = parseWorldConfig(config);
     if (cfg.error) return { error: cfg.error };
     let base;
-    try { base = await this.buildMap(cfg.map); } catch (e) { return { error: `map files are missing: ${e.message}` }; }
+    try { base = await this.buildMap(cfg.map, file, config.id); } catch (e) { return { error: `map files are missing: ${e.message}` }; }
     if (base.error) return base;
     let land = 0;
     for (const t of base.terrain) if (isLand(t)) land++;
@@ -263,6 +272,7 @@ export class World extends DurableObject {
       ...(DIPLO.noticeChoices.includes(config.warNotice) ? { warNotice: config.warNotice } : {}),
     };
     this.writeRows("terrain", await gzip(base.terrain));
+    if (base.map.kind === "custom") this.writeRows("base", await gzip(base.terrain));
     this.meta("info", info);
     await this.load();
     const bots = spawnBots(this.sim, info.bots, makeRng(info.seed)).length;
@@ -441,7 +451,7 @@ export class World extends DurableObject {
     const buildingFrames = partFrames(MSG.BUILDINGS, encodeRows(this.bfeed.rows(this.sim)));
     const zoneFrames = partFrames(MSG.ZONE, encodeRuns(this.sim.bld.zone));
     const roadFrames = partFrames(MSG.ROAD, encodeRuns(this.sim.log.road));
-    const depositFrames = this.info.map.kind === "test" ? partFrames(MSG.DEPOSITS, encodeDeposits(this.sim.res.dep)) : [];
+    const depositFrames = ["test", "custom"].includes(this.info.map.kind) ? partFrames(MSG.DEPOSITS, encodeDeposits(this.sim.res.dep)) : [];
     server.send(JSON.stringify({
       t: "hello", v: PROTOCOL, you: nation, self, w: g.w, h: g.h, map: join.map, full: full || undefined,
       hashes: { terrain: this.currentHashes().terrain, owner: hashBytes(runs) }, frames: { terrain: terrainFrames.length, owner: ownerFrames.length, buildings: buildingFrames.length, zone: zoneFrames.length, road: roadFrames.length, deposits: depositFrames.length },
@@ -1081,6 +1091,11 @@ export class World extends DurableObject {
   async webSocketError(ws) {
     this.updatePresence(ws);
     if (this.sockets().filter(s => s !== ws).length === 0) this.stopLoop();
+  }
+
+  baseFile() {
+    const info = this.meta("info");
+    return info?.map.kind === "custom" ? this.readRows("base") : null;
   }
 
   async status() {

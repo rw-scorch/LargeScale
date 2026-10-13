@@ -7,6 +7,7 @@ import { verifyRequest, handleInteraction, message, optionValue, userIdOf, COMMA
 
 export { Directory, World };
 
+const bin = (bytes, cache) => new Response(bytes, { headers: { "content-type": "application/octet-stream", "cache-control": cache } });
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
 function bearer(request, url) {
@@ -118,6 +119,12 @@ export default {
       const r = await dir.login(b.name, b.password);
       return json(r, r.error ? 401 : 200);
     }
+    if (path === "/api/maps/limits") return json(rules.maps);
+    const baseMatch = path.match(/^\/api\/worlds\/([A-Za-z0-9_-]+)\/terrain\.bin\.gz$/);
+    if (baseMatch) {
+      const gz = (await dir.hasWorld(baseMatch[1])) ? await env.WORLD.getByName(baseMatch[1]).baseFile() : null;
+      return gz ? bin(gz, "public, max-age=31536000, immutable") : json({ error: "not found" }, 404);
+    }
     const token = bearer(request, url);
     const me = await dir.session(token);
     if (!me) return json({ error: "log in first" }, 401);
@@ -130,14 +137,29 @@ export default {
     }
     if (path === "/api/link-code" && request.method === "POST") return json(await dir.linkCode(me));
     if (path === "/api/notify" && request.method === "POST") return json(await dir.setPrefs(me.id, (await body(request)) ?? {}));
+    if (path === "/api/maps" && request.method === "GET") return json(await dir.listMaps(me));
+    const mapMatch = path.match(/^\/api\/maps(?:\/([A-Za-z0-9_-]+))?(?:\/(file|delete))?$/);
+    if (mapMatch && request.method === "POST" && mapMatch[2] !== "file") {
+      if (mapMatch[2] === "delete") return json(await dir.deleteMap(me, mapMatch[1]));
+      if (Number(request.headers.get("content-length") ?? 0) > rules.maps.maxFileBytes) return json({ error: "the map file is too large" }, 413);
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      const r = await dir.saveMap(me, bytes, mapMatch[1] ?? null);
+      return json(r, r.error ? 400 : 200);
+    }
+    if (mapMatch && mapMatch[2] === "file") {
+      const file = await dir.mapFile(mapMatch[1]);
+      return file ? bin(file, "no-store") : json({ error: "no such map" }, 404);
+    }
     if (path === "/api/worlds" && request.method === "GET") return json(await dir.listWorlds(me));
     if (path === "/api/worlds" && request.method === "POST") {
       if (!me.admin) return json({ error: "only the host can create worlds" }, 403);
       const b = (await body(request)) ?? {};
       const bad = parseWorldConfig(b.config ?? {}).error ?? (b.config?.schedule ? cleanSchedule(b.config.schedule, Date.now(), rules.schedule, {}).error : null);
       if (bad) return json({ error: bad }, 400);
+      const saved = parseWorldConfig(b.config ?? {}).map.kind === "custom" ? await dir.mapFile(b.config.map.slice(7)) : undefined;
+      if (saved === null) return json({ error: "that saved map is gone" }, 400);
       const { id } = await dir.createWorld(me, b.name ?? "New world", b.config ?? {});
-      const r = await env.WORLD.getByName(id).init({ name: b.name, ...(b.config ?? {}), id });
+      const r = await env.WORLD.getByName(id).init({ name: b.name, ...(b.config ?? {}), id }, saved);
       if (r.error) {
         await dir.removeWorld(id);
         return json({ error: r.error }, 500);

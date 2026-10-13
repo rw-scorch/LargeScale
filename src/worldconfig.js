@@ -18,13 +18,15 @@ export function parseWorldConfig(c = {}) {
     map = { kind: "earth" };
   } else if (typeof m === "string" && Object.hasOwn(CROPS, m)) {
     map = { kind: "crop", name: m, box: { ...CROPS[m] } };
+  } else if (typeof m === "string" && /^custom:[A-Za-z0-9_-]{1,32}$/.test(m)) {
+    map = { kind: "custom", id: m.slice(7) };
   } else if (m && typeof m === "object") {
     const { west, east, north, south } = m;
     const ok = [west, east, north, south].every(Number.isFinite) && west >= -180 && east <= 180 && west < east && south >= -90 && north <= 90 && south < north;
     if (!ok) return { error: "a crop needs west < east and south < north, in degrees" };
     map = { kind: "crop", name: "custom", box: { west, east, north, south } };
   } else {
-    return { error: `unknown map, use test, earth, ${Object.keys(CROPS).join(", ")} or a box` };
+    return { error: `unknown map, use test, earth, ${Object.keys(CROPS).join(", ")}, a box or a saved map` };
   }
   const detail = c.detail ?? (map.kind === "crop" ? "fine" : "normal");
   if (detail !== "fine" && detail !== "normal") return { error: "detail must be fine or normal" };

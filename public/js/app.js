@@ -236,7 +236,7 @@ class Game {
     try {
       art = await loadAssets();
       await world.loadBase(() => terrainGz(m.map.dir ?? "map", m.map.baseHash ?? "test"));
-      if (m.map.kind !== "test") {
+      if (!["test", "custom"].includes(m.map.kind)) {
         const gz = await depositsGz(m.map.dir ?? "map", m.map.baseHash);
         if (gz) world.loadDeposits(await gunzip(gz));
       }

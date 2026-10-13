@@ -51,6 +51,10 @@ export async function showWorlds(root, account, { onOpen, onLogout, live }) {
     syncBots();
   };
   map.onchange();
+  if (account.admin) api("/api/maps").then(r => {
+    if (!r.maps?.length) return;
+    map.append(el("optgroup", { label: "Saved maps" }, ...r.maps.map(m => el("option", { value: `custom:${m.id}`, text: `${m.name} (${m.w} by ${m.h}, by ${m.author ?? "someone gone"})` }))));
+  });
   const plan = scheduleFields("new-sched");
   let shown = [];
 
@@ -72,7 +76,7 @@ export async function showWorlds(root, account, { onOpen, onLogout, live }) {
         await refresh();
       } }), el("button", { class: "ghost", text: "Cancel", onclick: e => { e.stopPropagation(); form.hidden = true; } })),
       note) : null;
-    const tags = [MAPS[w.map] ?? null, w.host ? "yours" : null].filter(Boolean);
+    const tags = [MAPS[w.map] ?? (w.map?.startsWith("custom:") ? "Saved map" : null), w.host ? "yours" : null].filter(Boolean);
     const c = el("div", { class: `world${live?.watching === w.id ? " on" : ""}`, "data-id": w.id, title: "Watch this world", onclick: () => watch(w) },
       el("div", { class: "world-main" },
         el("div", { class: "row" }, el("b", { class: "world-name", text: w.name }), ...tags.map(t => el("span", { class: "tag", text: t }))),
@@ -125,6 +129,7 @@ export async function showWorlds(root, account, { onOpen, onLogout, live }) {
       el("span", {}, el("span", { class: "muted", text: "Ruling as " }), el("b", { text: account.name })),
       el("span", { class: "row wrap" },
         accounts ? el("button", { id: "open-accounts", class: "ghost", onclick: () => accounts.toggle(), text: "Accounts" }) : null,
+        el("button", { id: "open-maker", class: "ghost", onclick: () => location.assign("/maker.html"), text: "Map maker" }),
         el("button", { id: "open-password", class: "ghost", onclick: () => password.toggle(), text: "Password" }),
         el("button", { class: "ghost", onclick: onLogout, text: "Log out" }))),
     password.el,
