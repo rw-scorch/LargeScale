@@ -6,7 +6,7 @@ Paste this file into a new chat to carry the project over. It is the whole state
 
 ## The game
 
-A browser strategy game for Ryan and up to seven friends. One persistent world on a real Earth map, running for days or weeks, with territory taken pixel by pixel like OpenFront, troops as a number moved by hand as stacks, civilians who build and upgrade their own homes in zones the player paints, six eras on branching upgrade trees, physical goods moved by road, rail and sea, a market of player listings, alliances and factions, and a last-player-or-faction-standing win.
+A browser strategy game for Ryan and his friends, with no cap on players. One persistent world on a real Earth map, running for days or weeks, with territory taken pixel by pixel like OpenFront, troops as a number moved by hand as stacks, civilians who build and upgrade their own homes in zones the player paints, six eras on branching upgrade trees, physical goods moved by road, rail and sea, a market of player listings, alliances and factions, and a last-player-or-faction-standing win.
 
 Built on Cloudflare: one Worker serving the client, one Durable Object per world running the simulation over WebSockets, SQLite inside each object for saves. No other service is needed.
 
