@@ -1,7 +1,7 @@
 export const WORLD_SCHEMA = {
   name: { type: "string", min: 3, max: 40, default: "New world" },
   map: { type: "enum", values: ["earth", "test_small", "test_medium"], default: "test_small" },
-  maxPlayers: { type: "int", min: 2, max: 8, default: 8 },
+  maxPlayers: { type: "int", min: 0, max: 65000, default: 0 },
   bots: { type: "int", min: 0, max: 60, default: 12 },
   botsAttackPlayers: { type: "bool", default: false },
   speed: { type: "number", min: 0.25, max: 4, default: 1 },
