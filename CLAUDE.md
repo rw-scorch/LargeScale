@@ -32,6 +32,7 @@ npm run dev               # wrangler dev on http://localhost:8787
 $env:INVITE = "code-from-.dev.vars"; $env:MAP = "europe"; npm run smoke   # MAP is test, europe (fine), europe-normal or earth
 $env:RECHECK = "1"; npm run smoke   # after restarting npm run dev: the last smoke world reloads identically
 $env:MAP = "europe"; npm run ui     # headless browser session with screenshots in .screens; needs Playwright
+npm run ui:maker          # the map maker in a headless browser: draw, save, publish, play on it
 $env:SOAK_SECONDS = "180"; npm run soak   # two players give random orders; reports tick errors and stock that does not match the stores
 ```
 
@@ -45,13 +46,13 @@ $env:SOAK_SECONDS = "180"; npm run soak   # two players give random orders; repo
 
 ```
 src/index.js       Worker: routes, static files, websocket handover
-src/directory.js   Directory object: accounts, sessions, worlds, members
+src/directory.js   Directory object: accounts, sessions, worlds, members, saved maps
 src/world.js       World object: one per world. Sockets, tick loop, saving, catch-up
-src/worldconfig.js map choice (test, earth, europe, lat/long box) and bot count validation
+src/worldconfig.js map choice (test, earth, europe, lat/long box, saved map) and bot count validation
 src/sim/           the simulation, 41 modules, plain JavaScript
 src/shared/        the only code both server and client import: protocol, codec, maps, pathfinding, terrain
 public/            the client: index.html, js/app.js, js/net.js, js/input.js, js/render/, js/ui/ (one file per panel);
-                   test.html is the old server test page. public/map holds the gzipped maps and public/assets the art kit, both committed
+                   maker.html and js/maker/ are the map maker; test.html is the old server test page. public/map holds the gzipped maps and public/assets the art kit, both committed
 data/              stat files. Tuning numbers live in data/rules.json
 tools/             build_earth.py, bench_earth.mjs, one-off scripts
 test/              node --test unit tests plus smoke.mjs
@@ -522,6 +523,15 @@ Open items as of 8 October 2026, in order:
    - Merge PR 51 (fixes), then the planner PR.
    - Find what makes the bench's worst tick 80 ms on an idle machine. The bench does not time it, so it needs a tick-level breakdown.
    - Next: atmosphere, then host rules with the dev panel.
+
+## Map maker (13 October 2026)
+
+Details and evidence are in `plans/map-maker.md`.
+
+- `/maker.html`, opened from the Map maker button on the world list. Start from empty ocean, random islands or a lat/long box of the Earth (fine or normal detail). Brush, fill, pick and move tools, brush size, paint over anything, land only or water only, undo and redo, and a draft kept in the browser.
+- A map is one `.lsmap` file (`src/shared/mapfile.js`): gzipped, a short JSON header (name, size, optional latitudes) and one terrain byte per plot. Save file and Open file share it; Publish stores it in the Directory's `maps` table. Limits are `maps` in `data/rules.json`.
+- Any account can publish (20 maps each); the host picks a saved map when making a world (`map: "custom:<id>"`). The world keeps its own copy of the base terrain in a `base` row and serves it at `/api/worlds/<id>/terrain.bin.gz`, so deleting a saved map never breaks a world made from it. Deposits are generated from the drawn terrain, like the test map.
+- Not built yet: placing deposits by hand and spawn markers.
 
 Open items as of 7 October 2026, in order:
 
